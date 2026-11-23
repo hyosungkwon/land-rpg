@@ -9,6 +9,9 @@ import { expNeed, skillEffect, shardPrice } from './state.js';
 import {
   CITIES, LAND, portfolioOf, computeBuffs, buffProgress, formatGold, priceInfo,
 } from './land.js';
+import {
+  PETS, DUNGEON, petDef, petProgress, jobOf, jobProgress, dungeonState,
+} from './meta.js';
 
 const esc = (v) =>
   String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -17,6 +20,10 @@ const fmt = (n) => Math.floor(Number(n) || 0).toLocaleString('ko-KR');
 const pct = (v) => `${Math.max(0, Math.min(100, v)).toFixed(0)}%`;
 const hhmmss = (d = new Date()) =>
   [d.getHours(), d.getMinutes(), d.getSeconds()].map((v) => String(v).padStart(2, '0')).join(':');
+const mmss = (ms) => {
+  const sec = Math.max(0, Math.ceil((Number(ms) || 0) / 1000));
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+};
 
 export class UI {
   constructor(app) {
@@ -128,6 +135,9 @@ export class UI {
       case 'land-sort': actions.landSort(v); break;
       case 'land-tier': actions.landTier(v); break;
       case 'claim-rent': actions.claimRent(); break;
+      case 'promote': actions.promoteJob(); break;
+      case 'pet-equip': actions.equipPet(v); break;
+      case 'dungeon': actions.enterDungeon(v); break;
       case 'reset': actions.resetGame(); break;
       case 'close-modal': this.closeModal(); break;
       default: break;
@@ -258,6 +268,20 @@ export class UI {
         el.disabled = left > 0;
       } else if (k === 'dps') {
         el.textContent = fmt(b ? b.stats.dps : 0);
+      } else if (k === 'dungeon-cd') {
+        const ds = dungeonState(s, now);
+        el.textContent = ds.ready ? '무료 입장 가능' : `무료까지 ${mmss(ds.leftMs)}`;
+      } else if (k === 'dungeon-free') {
+        const ds = dungeonState(s, now);
+        el.disabled = !ds.ready || !!(b && b.dungeon);
+      } else if (k === 'dungeon-run') {
+        const d = b && b.dungeon;
+        const last = s.dungeon && s.dungeon.last;
+        el.innerHTML = d
+          ? `<b style="color:var(--gold)">진행 중</b> · 남은 ${(Math.max(0, d.ends - now) / 1000).toFixed(1)}초 · 처치 ${d.kills + d.bossKills}`
+          : last
+            ? `최근 보상 💰${fmt(last.gold)} · 💎${last.shards} · 최고 피해 ${fmt(s.dungeon.best)}`
+            : `쿨타임 10분 · 최고 피해 기록 없음`;
       } else if (k === 'rent') {
         el.textContent = `💰${fmt(Math.floor(s.land.accruedRent || 0))}`;
       } else if (k === 'rent-c') {
@@ -391,6 +415,117 @@ export class UI {
   }
 }
 
+/* ══════════════════════════ ✨ 전직 · 🔥 던전 · 🐾 펫 ══════════════════════════ */
+const jobBonusText = (j) =>
+  j && (j.atkPct || j.hpPct) ? `공격 +${j.atkPct}% · 체력 +${j.hpPct}%` : '기본 성능';
+
+function jobCard(ui) {
+  const s = ui.s;
+  const pr = jobProgress(s);
+  const cur = pr.cur;
+  const n = pr.next;
+
+  if (!n) {
+    return `
+  <div class="card job-card done">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">${cur.badge}</span>${esc(cur.name)}<small>최종 전직</small></div>
+      <span class="job-badge" style="--jc:${cur.color}">${jobBonusText(cur)}</span>
+    </div>
+    <div class="tiny muted">${esc(cur.line)}</div>
+    <div class="note" style="margin-top:8px">전직 ${cur.tier + 1}/4 완료 · 영구 <b>공격 +${cur.atkPct}% · 체력 +${cur.hpPct}%</b> 적용 중</div>
+  </div>`;
+  }
+
+  return `
+  <div class="card job-card ${pr.canPromote ? 'ready' : ''}">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">${cur.badge}</span>${esc(cur.name)}<small>전직 ${cur.tier + 1}/4</small></div>
+      <span class="job-badge" style="--jc:${cur.color}">${jobBonusText(cur)}</span>
+    </div>
+    <div class="row" style="margin-top:2px">
+      <span class="tiny muted">다음 <b style="color:${n.color}">${n.badge} ${esc(n.name)}</b></span>
+      <span class="tiny dim">${jobBonusText(n)}</span>
+    </div>
+    <div class="row tiny" style="margin-top:7px">
+      <span style="color:${pr.levelOk ? 'var(--green)' : 'var(--sub)'}">Lv.${s.level} / ${n.lv}</span>
+      <span style="color:${pr.stageOk ? 'var(--green)' : 'var(--sub)'}">스테이지 ${s.maxStage} / ${n.stage}</span>
+    </div>
+    <div class="prog" style="margin-top:5px"><i style="width:${Math.min(pr.pctLv, pr.pctStage) * 100}%"></i></div>
+    ${pr.canPromote
+      ? `<button class="btn primary block promote-btn" data-action="promote" style="margin-top:9px" data-live="promote">✨ 전직 가능! ${n.badge} ${esc(n.name)}</button>`
+      : `<div class="note" style="margin-top:8px">${esc(pr.reason)} · 조건을 채우면 <b>✨ 전직 가능!</b> 버튼이 나타납니다.</div>`}
+  </div>`;
+}
+
+function dungeonCard(ui) {
+  const s = ui.s;
+  const b = ui.battle;
+  const now = Date.now();
+  const ds = dungeonState(s, now);
+  const d = b && b.dungeon;
+  const last = s.dungeon && s.dungeon.last;
+  return `
+  <div class="card dungeon-card">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🔥</span>황금 던전<small>보스 러시 30초</small></div>
+      <span class="tiny" style="color:var(--gold)" data-live="dungeon-cd">${ds.ready ? '무료 입장 가능' : `무료까지 ${mmss(ds.leftMs)}`}</span>
+    </div>
+    <div class="tiny muted">30초 동안 몰려오는 황금 몹과 보스를 때려 <b>대량 골드 + 강화석</b>을 즉시 받습니다. 끝나면 원래 스테이지 자동사냥으로 복귀합니다.</div>
+    <div class="row gap6" style="margin-top:9px">
+      <button class="btn small ${ds.ready ? 'primary' : 'ghost'} wide" data-action="dungeon" data-value="free" data-live="dungeon-free" ${ds.ready && !d ? '' : 'disabled'}>🔥 무료 입장</button>
+      <button class="btn small blue wide" data-action="dungeon" data-value="shards" ${!d && ds.canPay ? '' : 'disabled'}>💎${DUNGEON.shardCost} 즉시 입장</button>
+    </div>
+    <div class="tiny dim" style="margin-top:7px" data-live="dungeon-run">${
+      d
+        ? `<b style="color:var(--gold)">진행 중</b> · 남은 ${(Math.max(0, d.ends - now) / 1000).toFixed(1)}초 · 처치 ${d.kills + d.bossKills}`
+        : last
+          ? `최근 보상 💰${fmt(last.gold)} · 💎${last.shards} · 최고 피해 ${fmt(s.dungeon.best)}`
+          : '쿨타임 10분 · 최고 피해 기록 없음'
+    }</div>
+  </div>`;
+}
+
+function petCard(ui) {
+  const s = ui.s;
+  const ps = s.pet || { equipped: null, unlocked: [] };
+  const unlockedIds = Array.isArray(ps.unlocked) ? ps.unlocked : [];
+  const equipped = petDef(ps.equipped);
+
+  const rows = PETS.map((def) => {
+    const unlocked = unlockedIds.includes(def.id);
+    const on = ps.equipped === def.id;
+    const pr = petProgress(s, def.id);
+    return `
+      <div class="pet-row ${on ? 'on' : ''} ${unlocked ? '' : 'lock'}">
+        <img class="pet-thumb" src="assets/sprites/pet/${def.sprite}.png" alt="" loading="lazy">
+        <div class="pet-mid">
+          <div class="pet-name">${def.emoji} ${esc(def.name)}${on ? '<span class="pet-on">동행 중</span>' : ''}</div>
+          <div class="pet-desc">${esc(def.desc)}</div>
+          <div class="pet-stats">공격 ${Math.round(def.dmgPct * 100)}% · 공격력 +${def.atkPct}%${def.goldPct ? ` · 골드 +${def.goldPct}%` : ''}</div>
+          ${unlocked ? '' : `<div class="pet-cond">🔒 ${esc(def.cond)} · ${pr.text}</div><div class="prog tiny-prog"><i style="width:${pr.pct * 100}%"></i></div>`}
+        </div>
+        ${on
+          ? '<button class="mini on" type="button" disabled>동행</button>'
+          : unlocked
+            ? `<button class="mini equip" type="button" data-action="pet-equip" data-value="${def.id}">교체</button>`
+            : '<button class="mini" type="button" disabled>잠김</button>'}
+      </div>`;
+  }).join('');
+
+  return `
+  <div class="card pet-card" id="petCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🐾</span>내 동료 펫<small>${unlockedIds.length}/${PETS.length} 해금</small></div>
+      <span class="tiny dim">${equipped ? `동행 ${equipped.emoji} ${esc(equipped.name)}` : '동행 없음'}</span>
+    </div>
+    ${rows}
+    <div class="note" style="margin-top:9px">
+      부동산이 자라면 <b>자동 해금</b>됩니다. 장착한 펫은 <b>1.5초마다 함께 공격</b>하고, 동행 중에는 패시브가 적용됩니다.
+    </div>
+  </div>`;
+}
+
 /* ══════════════════════════ 사냥/스킬 ══════════════════════════ */
 function tplHunt(ui) {
   const s = ui.s;
@@ -447,6 +582,9 @@ function tplHunt(ui) {
     : `<div class="log-item"><span class="t">—</span><span class="dim">아직 기록이 없습니다.</span></div>`;
 
   return `
+  ${jobCard(ui)}
+  ${dungeonCard(ui)}
+
   <div class="card">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🗺️</span>${esc(b.def.themeName)} 사냥터<small>Lv.${s.level}</small></div>
@@ -496,6 +634,8 @@ function tplHunt(ui) {
     </div>
     ${buffLine}
   </div>
+
+  ${petCard(ui)}
 
   <div class="card">
     <div class="card-head">
@@ -948,6 +1088,8 @@ function tplLandBuff(ui) {
     <button class="btn blue block" style="margin-top:10px" data-action="land-sub" data-value="market">매물 더 사러 가기</button>
   </div>
 
+  ${petCard(ui)}
+
   <div class="card">
     <div class="card-head"><div class="card-title"><span class="t-ico">🧮</span>현재 적용 수치</div></div>
     <div class="kv"><span class="k">보유 지역</span><span class="v">${buffs.cities}곳</span></div>
@@ -1006,6 +1148,9 @@ function tplSettings(ui) {
   <div class="card">
     <div class="card-head"><div class="card-title"><span class="t-ico">ℹ️</span>앱 정보</div></div>
     <div class="kv"><span class="k">버전</span><span class="v">${APP_VERSION} · 게스트 통합</span></div>
+    <div class="kv"><span class="k">전직</span><span class="v">${jobOf(s).badge} ${esc(jobOf(s).name)}</span></div>
+    <div class="kv"><span class="k">동료 펫</span><span class="v">${petDef(s.pet && s.pet.equipped) ? `${petDef(s.pet.equipped).emoji} ${esc(petDef(s.pet.equipped).name)}` : '없음'}</span></div>
+    <div class="kv"><span class="k">황금 던전</span><span class="v">${fmt((s.dungeon && s.dungeon.runs) || 0)}회 · 최고 피해 ${fmt((s.dungeon && s.dungeon.best) || 0)}</span></div>
     <div class="kv"><span class="k">장비</span><span class="v">5부위 강화 + 등급 뽑기</span></div>
     <div class="kv"><span class="k">경제</span><span class="v">골드 하나 (사냥 = 부동산)</span></div>
     <div class="kv"><span class="k">부동산</span><span class="v">전국 ${CITIES.length}개 시군구</span></div>

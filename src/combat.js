@@ -5,6 +5,7 @@ import { ECON, SKILLS, stageDef, monsterKo } from './data.js';
 import {
   calcStats, currentHp, skillEffect, killReward, registerKill, clearStage, monsterStats,
 } from './state.js';
+import { DUNGEON, PET_ATTACK_MS, equippedPet, dungeonReward } from './meta.js';
 
 const ATTACK_STOP_GAP = 260; // 이 거리에서 멈추고 때린다(캐릭터 스프라이트가 겹치지 않는 간격)
 const QUEUE_GAP = 300; // 뒤에 줄 서는 몬스터가 벌어지는 간격
@@ -40,8 +41,27 @@ export class Battle {
     this.lastRegen = 0;
     this.lastStatsAt = 0;
     this.time = 0;
+    // v3.2: 동행 펫 애니메이션 시각 · 황금 던전(보스 러시) 상태
+    this.petLast = 0;
+    this.petAnimAt = 0;
+    this.dungeon = null;
     this.syncStage();
     this.spawnInitial(startAt);
+  }
+
+  /** 장착된 동행 펫 정의(없으면 null) */
+  activePet() {
+    return equippedPet(this.s);
+  }
+
+  /** 황금 던전 진행 중인가 */
+  inDungeon() {
+    return !!this.dungeon;
+  }
+
+  /** 던전 남은 시간(ms) */
+  dungeonLeft(now = Date.now()) {
+    return this.dungeon ? Math.max(0, this.dungeon.ends - now) : 0;
   }
 
   get def() {
@@ -145,6 +165,11 @@ export class Battle {
     this.autoSkills(now);
     this.updateMonsters(dt, now);
     this.attack(now);
+    this.petAttack(now);
+    if (this.dungeon) {
+      this.dungeonTick(now);
+      return;
+    }
     this.maybeSpawn(now);
     this.bossLogic(now);
   }
@@ -203,6 +228,7 @@ export class Battle {
       this.player.reviveAt = now + ECON.reviveMs;
       this.emit({ t: 'playerDeath' });
       if (this.boss) this.failBoss(now, 'dead');
+      if (this.dungeon) this.endDungeon(now); // 쓰러지면 던전 종료(그때까지의 보상 지급)
     }
   }
 
@@ -241,6 +267,7 @@ export class Battle {
       m.hp -= dmg;
       m.hitAt = now;
       m.knock = Math.min(30, (m.knock || 0) + (crit ? 18 : 10));
+      if (this.dungeon) this.dungeon.dmg += dmg;
       hits++;
       this.emit({ t: 'hit', id: m.id, dmg, crit, x: m.x, isBoss: m.isBoss, kind });
       if (m.hp <= 0) this.killMonster(m, now);
@@ -251,6 +278,17 @@ export class Battle {
   killMonster(m, now) {
     m.hp = 0;
     m.dying = now;
+    // 황금 던전: 보상은 종료 시 한 번에 지급하고, 여기서는 처치 수만 센다.
+    if (this.dungeon) {
+      if (m.isBoss) this.dungeon.bossKills += 1;
+      else this.dungeon.kills += 1;
+      this.dungeon.monsters += 1;
+      this.emit({
+        t: 'monsterDeath', id: m.id, name: m.name, ko: m.ko, isBoss: m.isBoss, x: m.x,
+        gold: 0, exp: 0, shards: m.isBoss ? 1 : 0, levelUps: 0, dungeon: true,
+      });
+      return;
+    }
     const reward = killReward(this.s, this.s.stage, m.isBoss, this.buffs(), this.rng);
     registerKill(this.s, m.isBoss);
     this.emit({
@@ -272,6 +310,32 @@ export class Battle {
     }
     if (m.isBoss) this.defeatBoss(now);
     else if (this.s.bossReady && !this.boss) this.bossReadyAt = now;
+  }
+
+  /* ───────────── 동행 펫 ───────────── */
+  /** 1.5초마다 주인공 옆에서 함께 공격한다(펫 피해 + 치명타 가능). */
+  petAttack(now) {
+    const pet = this.activePet();
+    if (!pet || this.player.dead) return;
+    if (now - (this.petLast || 0) < PET_ATTACK_MS) return;
+    const target = this.targets().find((m) => m.x - this.player.x <= ECON.playerRange);
+    if (!target) return;
+    this.petLast = now;
+    this.petAnimAt = now;
+    let dmg = this.stats.atk * pet.dmgPct * (0.9 + this.rng() * 0.2);
+    if (this.berserkUntil > now) dmg *= 1 + skillEffect('berserk', this.s.skills.berserk.lv) * 0.5;
+    let crit = false;
+    if (this.rng() < this.stats.crit) {
+      crit = true;
+      dmg *= this.stats.critDmg;
+    }
+    dmg = Math.max(1, Math.round(dmg));
+    target.hp -= dmg;
+    target.hitAt = now;
+    target.knock = Math.min(30, (target.knock || 0) + (crit ? 14 : 8));
+    if (this.dungeon) this.dungeon.dmg += dmg;
+    this.emit({ t: 'petHit', id: target.id, dmg, crit, x: target.x, pet: pet.id, ko: pet.name, color: pet.color });
+    if (target.hp <= 0) this.killMonster(target, now);
   }
 
   /* ───────────── 스킬 ───────────── */
@@ -403,6 +467,102 @@ export class Battle {
   /** 수동 보스 도전 */
   challengeBoss(now = Date.now()) {
     return this.startBoss(now);
+  }
+
+  /* ───────────── 🔥 황금 던전 (보스 러시) ───────────── */
+  /** 30초 제한 던전 시작. 스테이지 보스 전투 중이거나 이미 진행 중이면 거부. */
+  startDungeon(now = Date.now()) {
+    if (this.dungeon) return { ok: false, reason: '이미 던전이 진행 중입니다.' };
+    if (this.player.dead) return { ok: false, reason: '전투 불능 상태에서는 입장할 수 없습니다.' };
+    if (this.boss) return { ok: false, reason: '스테이지 보스 전투 중에는 입장할 수 없습니다.' };
+    this.dungeon = {
+      t0: now,
+      ends: now + DUNGEON.durationMs,
+      dmg: 0,
+      kills: 0,
+      bossKills: 0,
+      monsters: 0,
+      spawnAt: now - DUNGEON.spawnMs,
+    };
+    this.monsters = [];
+    this.bossReadyAt = 0;
+    this.player.hp = this.stats.hpMax; // 입장 시 체력 완충
+    this.emit({ t: 'dungeonStart', ends: this.dungeon.ends, duration: DUNGEON.durationMs });
+    return { ok: true };
+  }
+
+  dungeonTick(now) {
+    const d = this.dungeon;
+    if (!d) return;
+    if (now >= d.ends) {
+      this.endDungeon(now);
+      return;
+    }
+    const alive = this.monsters.filter((m) => !m.dead && !m.dying).length;
+    if (alive < DUNGEON.maxMonsters && now - d.spawnAt >= DUNGEON.spawnMs) {
+      d.spawnAt = now;
+      this.spawnDungeonMonster(now);
+    }
+  }
+
+  /** 플레이어 DPS 기준으로 체력을 잡아 어느 스테이지에서든 "연타로 부수는" 맛을 낸다. */
+  spawnDungeonMonster(now) {
+    const d = this.dungeon;
+    if (!d) return;
+    const isBoss = d.monsters > 0 && d.monsters % DUNGEON.bossEvery === 0;
+    const def = this._def || stageDef(this.s.stage);
+    const name = isBoss ? def.boss : d.monsters % 2 === 0 ? 'Goblin' : def.normals[0] || 'Goblin';
+    const m = this.makeMonster(name, isBoss, now);
+    const dps = Math.max(1, this.stats.dps || 1);
+    const hp = Math.max(1, Math.round(dps * (isBoss ? DUNGEON.hpSecBoss : DUNGEON.hpSecNormal) * (0.9 + this.rng() * 0.2)));
+    m.maxHp = hp;
+    m.hp = hp;
+    m.atk = Math.max(1, Math.round((this.stats.hpMax * DUNGEON.atkOfHpPct) / 100));
+    m.gold = true; // 황금 던전 표시(렌더러가 금빛 광휘로 그림)
+    m.dungeon = true;
+    m.x = ECON.spawnX + this.rng() * 80;
+    m.lastAttack = now;
+    this.monsters.push(m);
+    if (isBoss) this.emit({ t: 'dungeonBoss', ko: m.ko });
+  }
+
+  /** 던전 종료 → 보상 지급 후 원래 스테이지 자동사냥으로 복귀 */
+  endDungeon(now = Date.now()) {
+    const d = this.dungeon;
+    if (!d) return null;
+    this.dungeon = null;
+    const reward = dungeonReward(this.s, { kills: d.kills, bossKills: d.bossKills, dmg: d.dmg }, this.buffs(), this.rng);
+    this.s.gold = Math.floor((this.s.gold || 0) + reward.gold);
+    this.s.shards = Math.floor((this.s.shards || 0) + reward.shards);
+    if (this.s.records) this.s.records.totalGold = (this.s.records.totalGold || 0) + reward.gold;
+    if (!this.s.dungeon || typeof this.s.dungeon !== 'object') this.s.dungeon = { best: 0, runs: 0, last: null };
+    this.s.dungeon.best = Math.max(Math.floor(this.s.dungeon.best || 0), Math.round(d.dmg));
+    this.s.dungeon.runs = Math.max(0, Math.floor(this.s.dungeon.runs || 0)) + 1;
+    this.s.dungeon.last = {
+      at: now,
+      gold: reward.gold,
+      shards: reward.shards,
+      kills: d.kills,
+      bossKills: d.bossKills,
+      dmg: Math.round(d.dmg),
+    };
+    // 원래 스테이지 자동사냥으로 매끄럽게 복귀
+    this.monsters = [];
+    this.boss = null;
+    this.bossEnds = 0;
+    this.bossReadyAt = 0;
+    this.spawnInitial(now);
+    this.refreshStats(now);
+    this.emit({
+      t: 'dungeonEnd',
+      gold: reward.gold,
+      shards: reward.shards,
+      kills: d.kills,
+      bossKills: d.bossKills,
+      dmg: Math.round(d.dmg),
+      early: now < d.ends,
+    });
+    return reward;
   }
 
   /** 저장용 hp 반영 */

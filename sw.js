@@ -1,5 +1,5 @@
 // land-rpg / sw.js — 오프라인 캐시 (게스트 전용: 네트워크가 없어도 처음부터 끝까지 플레이)
-const VERSION = 'land-rpg-v3.1.0';
+const VERSION = 'land-rpg-v3.2.0';
 const CORE = [
   './',
   './index.html',
@@ -14,6 +14,7 @@ const CORE = [
   './src/sound.js',
   './src/land.js',
   './src/land-data.js',
+  './src/meta.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
@@ -21,6 +22,11 @@ const CORE = [
   './assets/sprites/hero_idle.png',
   './assets/sprites/hero_attack.png',
   './assets/sprites/hero_skill.png',
+  // 🐾 동료 펫 4종 (v3.2)
+  './assets/sprites/pet/pet_wolf.png',
+  './assets/sprites/pet/pet_fox.png',
+  './assets/sprites/pet/pet_owl.png',
+  './assets/sprites/pet/pet_dragon.png',
   // 일반 몬스터 12종
   './assets/sprites/monster/Slime.png',
   './assets/sprites/monster/Goblin.png',

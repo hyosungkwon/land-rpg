@@ -59,6 +59,11 @@ export class Renderer {
     this.embers = [];
     this.drops = []; // 몬스터 사망 시 튀어오르는 금화/보석 (자석 드롭)
     this.bossAlert = 0; // BOSS 등장 경고 시작 시각
+    this.promote = 0; // ✨ 전직 팡파르 시작 시각
+    this.promoteName = '';
+    this.promoteBadge = '✨';
+    this.promoteColor = '#ffd76a';
+    this.petX = null; // 펫 화면 x(부드럽게 따라온다)
     this.onLoot = null; // (kind) => void  · 코인/보석이 캐릭터에 빨려 들어올 때
     this._rar = { weapon: 0, avg: 0, hasLegend: false };
     this.shake = 0;
@@ -267,6 +272,72 @@ export class Renderer {
             });
           }
         }
+      } else if (ev.t === 'petHit') {
+        // 동행 펫의 공격 — 펫 색의 작은 참격과 숫자
+        this.addFloater(ev.x, ev.dmg, false, 'pet', ev.color);
+        this.burst(ev.x, ev.color || '#ffd76a', ev.crit ? 10 : 5, false);
+        this.arcs.push({
+          x: ev.x - 18,
+          t0: now,
+          dur: 300,
+          dx: 0,
+          y: 46,
+          r: 26,
+          a0: -1.0,
+          sweep: 1.5,
+          color: ev.color || '#ffd76a',
+          alpha: 0.9,
+          w: 4,
+        });
+      } else if (ev.t === 'dungeonStart') {
+        this.flash = Math.max(this.flash, 0.34);
+        this.shake = Math.max(this.shake, 5);
+        for (let i = 0; i < 26; i++) {
+          this.embers.push({
+            x: ECON.playerX + (Math.random() - 0.5) * 220,
+            y: this.groundY() - Math.random() * 40,
+            vy: -80 - Math.random() * 120,
+            life: 1,
+            s: 1.4 + Math.random() * 2.6,
+            color: Math.random() < 0.5 ? '#ffd76a' : '#ff9a3d',
+          });
+        }
+      } else if (ev.t === 'dungeonBoss') {
+        this.shake = Math.max(this.shake, 5.5);
+        this.flash = Math.max(this.flash, 0.16);
+      } else if (ev.t === 'dungeonEnd') {
+        this.flash = Math.max(this.flash, 0.26);
+        this.shake = Math.max(this.shake, 6);
+        for (let i = 0; i < 30; i++) {
+          this.sparks.push({
+            x: ECON.playerX + (Math.random() - 0.5) * 120,
+            y: this.groundY() - 60 * this.scale(),
+            life: 1,
+            vx: (Math.random() - 0.5) * 260,
+            vy: -120 - Math.random() * 160,
+            color: Math.random() < 0.5 ? '#ffd76a' : '#fff3cf',
+            s: 2 + Math.random() * 2.4,
+          });
+        }
+      } else if (ev.t === 'promote') {
+        // ✨ 전직 축하 팡파르: 금빛 고리 + 불티 + 화면 플래시 + 배너
+        this.promote = now;
+        this.promoteName = ev.job || '전직';
+        this.promoteBadge = ev.badge || '✨';
+        this.promoteColor = ev.color || '#ffd76a';
+        this.flash = Math.max(this.flash, 0.42);
+        this.shake = Math.max(this.shake, 7);
+        for (let i = 0; i < 3; i++) this.rings.push({ x: ECON.playerX, life: 1, r: 16 + i * 16, color: ev.color || '#ffd76a', wide: 1.8 });
+        for (let i = 0; i < 34; i++) {
+          this.embers.push({
+            x: ECON.playerX + (Math.random() - 0.5) * 130,
+            y: this.groundY() - Math.random() * 30,
+            vy: -110 - Math.random() * 150,
+            life: 1,
+            s: 1.6 + Math.random() * 2.8,
+            color: Math.random() < 0.6 ? '#ffd76a' : ev.color || '#fff3cf',
+          });
+        }
       } else if (ev.t === 'bossStart') {
         this.shake = 8;
         this.flash = Math.max(this.flash, 0.16);
@@ -277,13 +348,14 @@ export class Renderer {
     }
   }
 
-  addFloater(x, text, crit, kind) {
+  addFloater(x, text, crit, kind, color) {
     this.floaters.push({
       x,
       y: 0,
       text: String(text),
       crit,
       kind,
+      color: color || null,
       life: 1,
       vx: (Math.random() - 0.5) * 26,
       vy: crit ? -84 : -60,
@@ -601,6 +673,7 @@ export class Renderer {
     if (this.battle) {
       this.syncRarity();
       this.drawMonsters(ctx, t, dt);
+      this.drawPet(ctx, t, dt);
       this.drawPlayer(ctx, t, dt);
       if (this.effects) {
         this.drawFx(ctx, t);
@@ -620,6 +693,8 @@ export class Renderer {
         this.bossAlert = 0;
       }
       this.drawBossBar(ctx, W, t);
+      this.drawDungeonHud(ctx, W, t);
+      this.drawPromoteBanner(ctx, W, t);
     }
     ctx.restore();
 
@@ -778,6 +853,65 @@ export class Renderer {
       ctx.fill();
     }
     ctx.globalAlpha = 1;
+  }
+
+  /* ─────────── 🐾 동행 펫 ─────────── */
+  /** 주인공 뒤(왼쪽)에서 따라다니며, 공격할 때는 앞으로 튀어나간다. */
+  drawPet(ctx, now, dt) {
+    const b = this.battle;
+    if (!b) return;
+    const pet = b.activePet ? b.activePet() : null;
+    if (!pet) {
+      this.petX = null;
+      return;
+    }
+    const gy = this.groundY();
+    const sc = this.scale();
+    const heroX = this.worldX(b.player.x);
+    const home = heroX - 76 * sc;
+    const sway = Math.sin(now / 640) * 7 * sc;
+    if (this.petX == null || !isFinite(this.petX)) this.petX = home;
+    this.petX += (home - this.petX) * Math.min(1, dt / 150);
+    const lungeAge = now - (b.petAnimAt || 0);
+    const lunge = lungeAge >= 0 && lungeAge < 260 ? Math.sin(Math.PI * (1 - lungeAge / 260)) : 0;
+    const h = Math.min(this.H * 0.3, 78 * sc) * (pet.id === 'dragon' ? 1.08 : 1);
+    const w = h;
+    const x = this.petX + sway + lunge * 56 * sc;
+    const bob = Math.sin(now / 300 + 1.7) * 2.2 * sc - lunge * 5 * sc;
+
+    // 발밑·몸 주변 글로우(펫 색)
+    const gl = ctx.createRadialGradient(x, gy - h * 0.36, 2, x, gy - h * 0.36, h * 0.72);
+    gl.addColorStop(0, hexA(pet.color, 0.2 + lunge * 0.22));
+    gl.addColorStop(1, hexA(pet.color, 0));
+    ctx.fillStyle = gl;
+    ctx.fillRect(x - h * 0.9, gy - h * 1.15, h * 1.8, h * 1.25);
+
+    // 그림자
+    ctx.fillStyle = 'rgba(0,0,0,0.38)';
+    ctx.beginPath();
+    ctx.ellipse(x, gy + 2, w * 0.24, w * 0.07, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    const img = this.image(pet.sprite);
+    if (img) {
+      ctx.drawImage(img, x - w / 2, gy - h + bob, w, h);
+    } else {
+      ctx.fillStyle = pet.color || '#9fc6ff';
+      ctx.beginPath();
+      ctx.arc(x, gy - h * 0.4 + bob, w * 0.28, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 동행 이름표
+    if (this.effects) {
+      ctx.save();
+      ctx.globalAlpha = 0.92;
+      ctx.font = `800 ${Math.round(9 * Math.max(0.85, sc))}px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = hexA(pet.color, 0.95);
+      ctx.fillText(`${pet.emoji || ''} ${pet.name}`.trim(), x, gy - h - 3);
+      ctx.restore();
+    }
   }
 
   /* ─────────── 플레이어 ─────────── */
@@ -955,6 +1089,24 @@ export class Renderer {
         grd.addColorStop(1, 'rgba(255,70,50,0)');
         ctx.fillStyle = grd;
         ctx.fillRect(cxp - h, cyp - h, h * 2, h * 2);
+      }
+      // 황금 던전 몬스터: 금빛 광휘 + 잔불
+      if (m.gold) {
+        const gg = ctx.createRadialGradient(cxp, cyp, 6, cxp, cyp, h * 0.78);
+        gg.addColorStop(0, 'rgba(255,205,80,0.3)');
+        gg.addColorStop(1, 'rgba(255,180,60,0)');
+        ctx.fillStyle = gg;
+        ctx.fillRect(cxp - h, cyp - h, h * 2, h * 2);
+        if (this.effects && this.embers.length < 150 && Math.random() < 0.3) {
+          this.embers.push({
+            x: m.x + (Math.random() - 0.5) * 30,
+            y: gy - Math.random() * 14 * sc,
+            vy: -40 - Math.random() * 60,
+            life: 1,
+            s: 1.1 + Math.random() * 1.6,
+            color: Math.random() < 0.55 ? '#ffd76a' : '#ffb347',
+          });
+        }
       }
       const img = this.image(m.name);
       if (img) {
@@ -1177,7 +1329,7 @@ export class Renderer {
       const y = gy - 46 * sc + f.y;
       ctx.globalAlpha = Math.min(1, f.life * 1.7);
       ctx.textAlign = 'center';
-      const base = f.crit ? 30 : f.kind === 'gold' ? 13 : f.kind === 'heal' ? 16 : 16;
+      const base = f.crit ? 30 : f.kind === 'gold' ? 13 : f.kind === 'pet' ? 12 : f.kind === 'heal' ? 16 : 16;
       const pop = f.age < 130 ? 1 + (1 - f.age / 130) * 0.5 : 1;
       const size = base * Math.max(0.8, sc) * pop;
       if (f.crit) {
@@ -1201,7 +1353,9 @@ export class Renderer {
         ctx.lineWidth = 3.5;
         ctx.strokeStyle = 'rgba(0,0,0,0.7)';
         const color =
-          f.kind === 'gold'
+          f.color
+            ? f.color
+            : f.kind === 'gold'
             ? '#ffd76a'
             : f.kind === 'hurt'
             ? '#ff8080'
@@ -1216,6 +1370,110 @@ export class Renderer {
     }
     this.floaters = this.floaters.filter((f) => f.life > 0);
     ctx.globalAlpha = 1;
+  }
+
+  /* ─────────── 🔥 황금 던전 HUD ─────────── */
+  drawDungeonHud(ctx, W, now) {
+    const d = this.battle && this.battle.dungeon;
+    if (!d) return;
+    const left = Math.max(0, d.ends - now);
+    const total = Math.max(1, d.ends - d.t0);
+    const k = Math.max(0, Math.min(1, left / total));
+    const bw = Math.min(W * 0.84, 344);
+    const bx = (W - bw) / 2;
+    const by = 54;
+    const hgt = 46;
+    const pulse = 0.7 + 0.3 * Math.sin(now / 140);
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,170,40,0.8)';
+    ctx.shadowBlur = 16 * pulse;
+    const g = ctx.createLinearGradient(bx, by, bx, by + hgt);
+    g.addColorStop(0, 'rgba(92,52,6,0.94)');
+    g.addColorStop(0.5, 'rgba(52,28,4,0.94)');
+    g.addColorStop(1, 'rgba(92,52,6,0.94)');
+    ctx.fillStyle = g;
+    roundRect(ctx, bx, by, bw, hgt, 10);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = `rgba(255,208,110,${0.55 + 0.3 * pulse})`;
+    ctx.lineWidth = 2;
+    roundRect(ctx, bx + 1, by + 1, bw - 2, hgt - 2, 9);
+    ctx.stroke();
+
+    const sc = Math.min(1.2, Math.max(0.85, this.W / 390));
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffe6a8';
+    ctx.font = `900 ${Math.round(13 * sc)}px ${FONT}`;
+    ctx.fillText('🔥 황금 던전', bx + 12, by + 18);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#fff6d8';
+    ctx.font = `900 ${Math.round(15 * sc)}px ${FONT}`;
+    ctx.fillText(`${(left / 1000).toFixed(1)}s`, bx + bw - 12, by + 18);
+
+    // 남은 시간 바
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    roundRect(ctx, bx + 12, by + 25, bw - 24, 8, 4);
+    ctx.fill();
+    const bg = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+    bg.addColorStop(0, '#ffd76a');
+    bg.addColorStop(1, '#ff7a3d');
+    ctx.fillStyle = bg;
+    roundRect(ctx, bx + 12, by + 25, Math.max(2, (bw - 24) * k), 8, 4);
+    ctx.fill();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(255,235,190,0.9)';
+    ctx.font = `700 ${Math.round(10 * sc)}px ${FONT}`;
+    const kills = (d.kills || 0) + (d.bossKills || 0);
+    ctx.fillText(`${kills}마리 처치 · 피해 ${Math.round(d.dmg || 0).toLocaleString()}`, bx + 12, by + hgt - 2);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(255,220,160,0.75)';
+    ctx.fillText(`보스 ${d.bossKills || 0}`, bx + bw - 12, by + hgt - 2);
+    ctx.restore();
+  }
+
+  /* ─────────── ✨ 전직 팡파르 배너 ─────────── */
+  drawPromoteBanner(ctx, W, now) {
+    if (!this.promote) return;
+    const DUR = 2600;
+    const age = now - this.promote;
+    if (age < 0 || age > DUR) {
+      this.promote = 0;
+      return;
+    }
+    const inK = easeOut(clamp(age / 300, 0, 1));
+    const outK = clamp((DUR - age) / 400, 0, 1);
+    const alpha = Math.min(inK, outK);
+    const w = Math.min(W * 0.9, 360);
+    const hgt = 62;
+    const x = (W - w) / 2;
+    const y = lerp(-hgt - 12, this.H * 0.3 - hgt / 2, inK);
+    const pulse = 0.65 + 0.35 * Math.sin(age / 100);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.shadowColor = hexA(this.promoteColor || '#ffd76a', 0.9);
+    ctx.shadowBlur = 26 * pulse;
+    const g = ctx.createLinearGradient(x, y, x, y + hgt);
+    g.addColorStop(0, 'rgba(120,86,10,0.96)');
+    g.addColorStop(0.45, 'rgba(64,40,4,0.96)');
+    g.addColorStop(1, 'rgba(120,86,10,0.96)');
+    ctx.fillStyle = g;
+    roundRect(ctx, x, y, w, hgt, 12);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = `rgba(255,220,140,${0.6 + 0.35 * pulse})`;
+    ctx.lineWidth = 2;
+    roundRect(ctx, x + 1, y + 1, w - 2, hgt - 2, 11);
+    ctx.stroke();
+    const sc = Math.min(1.2, Math.max(0.85, this.W / 390));
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff6d8';
+    ctx.font = `900 ${Math.round(13 * sc)}px ${FONT}`;
+    ctx.fillText('✨ 전직 성공! ✨', x + w / 2, y + 20);
+    ctx.fillStyle = '#ffe6a8';
+    ctx.font = `900 ${Math.round(21 * sc)}px ${FONT}`;
+    ctx.fillText(`${this.promoteBadge} ${this.promoteName}`.trim(), x + w / 2, y + 46);
+    ctx.restore();
   }
 
   drawBossBar(ctx, W, now) {

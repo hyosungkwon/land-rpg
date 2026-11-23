@@ -7,6 +7,7 @@ import {
   RARITIES, RARITY_INDEX, RARITY_IDS, GACHA, gachaCost, rarityBonusLv,
 } from './data.js';
 import { defaultLand } from './land.js';
+import { PET_IDS, JOB_MAX, jobOf, equippedPet } from './meta.js';
 
 const nowMs = () => Date.now();
 
@@ -40,6 +41,12 @@ export function defaultState(now = nowMs()) {
     maxStage: 1,
     autoBoss: true,
     effects: true,
+    // v3.2 메타 성장: 펫 동료 · 전직 단계 · 황금 던전 쿨타임
+    jobTier: 0,
+    jobAt: 0,
+    pet: { equipped: null, unlocked: [], chosen: false },
+    dungeonCooldown: 0,
+    dungeon: { best: 0, runs: 0, last: null },
     land: defaultLand(now),
     records: { totalGold: 0, totalRent: 0, playMs: 0, firstPlay: now },
     lastOffline: null,
@@ -87,6 +94,24 @@ export function normalizeState(raw, now = nowMs()) {
   if (!['roi', 'price', 'trend', 'name'].includes(s.land.sort)) s.land.sort = 'roi';
   s.land.q = typeof s.land.q === 'string' ? s.land.q.slice(0, 30) : '';
   s.records = { ...d.records, ...(raw.records || {}) };
+
+  // v3.2: 펫/전직/던전 기본값 병합 (없는 저장본은 그대로 진행도 유지)
+  const rawPet = raw.pet && typeof raw.pet === 'object' ? raw.pet : {};
+  const petIds = Array.isArray(rawPet.unlocked) ? rawPet.unlocked.filter((id) => PET_IDS.includes(id)) : [];
+  s.pet = {
+    equipped: petIds.includes(rawPet.equipped) ? rawPet.equipped : null,
+    unlocked: PET_IDS.filter((id) => petIds.includes(id)),
+    chosen: rawPet.chosen === true,
+  };
+  s.jobTier = clamp(Math.floor(num(raw.jobTier, 0)), 0, JOB_MAX);
+  s.jobAt = Math.max(0, num(raw.jobAt, 0));
+  s.dungeonCooldown = Math.max(0, num(raw.dungeonCooldown, 0));
+  const rawDun = raw.dungeon && typeof raw.dungeon === 'object' ? raw.dungeon : {};
+  s.dungeon = {
+    best: Math.max(0, Math.floor(num(rawDun.best, 0))),
+    runs: Math.max(0, Math.floor(num(rawDun.runs, 0))),
+    last: rawDun.last && typeof rawDun.last === 'object' ? rawDun.last : null,
+  };
 
   s.level = Math.max(1, Math.floor(num(s.level, 1)));
   s.exp = Math.max(0, num(s.exp, 0));
@@ -147,7 +172,8 @@ export function expNeed(level) {
 
 export const NO_BUFF = { atkPct: 0, goldPct: 0, hpPct: 0, dropPct: 0, critPct: 0 };
 
-/** 파생 스탯. buffs 는 land.js 의 computeBuffs 결과(건물주 버프). */
+/** 파생 스탯. buffs 는 land.js 의 computeBuffs 결과(건물주 버프).
+ *  v3.2: 전직 단계(영구 공격력·체력 배율) + 동행 펫 패시브를 함께 반영한다. */
 export function calcStats(s, buffs = NO_BUFF) {
   const b = { ...NO_BUFF, ...(buffs || {}) };
   const L = s.level;
@@ -155,13 +181,19 @@ export function calcStats(s, buffs = NO_BUFF) {
   const gr = s.gearRarity || {};
   // 등급 보정: 장비 강화 레벨에 등급 환산 레벨을 더한다(전설 +25강 상당).
   const eLv = (slot) => e[slot] + rarityBonusLv(gr[slot]);
+  const job = jobOf(s);
+  const pet = equippedPet(s);
+  const jobAtkMul = 1 + (job.atkPct || 0) / 100;
+  const jobHpMul = 1 + (job.hpPct || 0) / 100;
+  const petAtkMul = 1 + (pet ? pet.atkPct : 0) / 100;
   const baseAtk = 12 + 2.6 * L + 0.035 * L * L;
   const equipAtk = EQUIP.weapon.per * eLv('weapon');
-  const atk = (baseAtk + equipAtk) * (1 + b.atkPct / 100);
-  const hpMax = (150 + 30 * L + EQUIP.armor.per * eLv('armor') + EQUIP.helmet.per * eLv('helmet')) * (1 + b.hpPct / 100);
+  const atk = (baseAtk + equipAtk) * (1 + b.atkPct / 100) * jobAtkMul * petAtkMul;
+  const hpMax =
+    (150 + 30 * L + EQUIP.armor.per * eLv('armor') + EQUIP.helmet.per * eLv('helmet')) * (1 + b.hpPct / 100) * jobHpMul;
   const crit = Math.min(0.5, 0.05 + (EQUIP.ring.per / 100) * eLv('ring') + (b.critPct || 0) / 100);
   const critDmg = 2.0;
-  const goldMult = 1 + (EQUIP.amulet.per / 100) * eLv('amulet') + b.goldPct / 100;
+  const goldMult = 1 + (EQUIP.amulet.per / 100) * eLv('amulet') + b.goldPct / 100 + (pet ? pet.goldPct / 100 : 0);
   const dropMult = 1 + b.dropPct / 100;
   const attackMs = Math.max(300, ECON.playerAttackMs - L * 2);
   const dps = (atk / (attackMs / 1000)) * (1 + crit * (critDmg - 1));
@@ -174,6 +206,8 @@ export function calcStats(s, buffs = NO_BUFF) {
     dropMult,
     attackMs,
     dps: Math.round(dps),
+    jobTier: job.tier,
+    petId: pet ? pet.id : null,
   };
 }
 

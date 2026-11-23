@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""land-rpg v3.1.0 검증 (QuickJS + 정적 검사)
+"""land-rpg v3.2.0 검증 (QuickJS + 정적 검사)
 
 1) 모든 JS 파일 문법(파싱) 검사
 2) 정적 검사 (Firebase/로그인 흔적 0, 저장 키 v3, sw 캐시 v3.1)
@@ -17,8 +17,8 @@ import sys
 import quickjs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FILES = ["src/data.js", "src/land-data.js", "src/land.js", "src/state.js", "src/combat.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/land-data.js", "src/land.js", "src/state.js", "src/combat.js", "src/render.js", "src/ui.js", "src/sound.js"]
+FILES = ["src/data.js", "src/land-data.js", "src/land.js", "src/meta.js", "src/state.js", "src/combat.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/land-data.js", "src/land.js", "src/meta.js", "src/state.js", "src/combat.js", "src/render.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -87,8 +87,8 @@ def main():
     for bad in ["firebase", "signInWithPopup", "Google 로그인", "gstatic", "firebaseio", "googleapis"]:
         ok(bad.lower() not in text_all.lower(), f"Firebase/로그인 흔적 없음: {bad}")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v3.1.0" in read("sw.js"), "SW 캐시 버전 v3.1.0")
-    ok("APP_VERSION = '3.1.0'" in read("src/data.js"), "앱 버전 v3.1.0")
+    ok("land-rpg-v3.2.0" in read("sw.js"), "SW 캐시 버전 v3.2.0")
+    ok("APP_VERSION = '3.2.0'" in read("src/data.js"), "앱 버전 v3.2.0")
     ok(os.path.exists(os.path.join(ROOT, "src/sound.js")), "src/sound.js 존재")
     ok("'./src/sound.js'" in read("sw.js"), "sw.js 프리캐시에 sound.js 포함")
     ok(not os.path.exists(os.path.join(ROOT, "src/firebase.js")), "firebase.js 제거")
@@ -384,7 +384,211 @@ def main():
     ok("bindAudioUnlock" in read("app.js") and "toggleSound" in read("app.js") and "pullGacha" in read("app.js"), "첫 터치 unlock·효과음 토글·뽑기 액션 연결")
     ok("data-action=\"toggle-sound\"" in read("src/ui.js"), "설정 탭 효과음 스위치")
 
-    section("[6] 밸런스 시뮬레이션 (60분)")
+
+    section("[6] 🐾 펫 · 🔥 전직 · 황금 던전 (v3.2)")
+    petdef = js(ctx, """
+      return {
+        ids: PETS.map(p => p.id),
+        names: PETS.map(p => p.name),
+        sprites: PETS.map(p => p.sprite),
+        dmg: PETS.map(p => p.dmgPct),
+        atk: PETS.map(p => p.atkPct),
+        gold: PETS.map(p => p.goldPct),
+        types: PETS.map(p => p.unlock.type + ':' + p.unlock.n),
+        conds: PETS.map(p => p.cond),
+      };
+    """)
+    ok(petdef["names"] == ["꼬마 늑대", "불여우", "황금 부엉이", "아기 드래곤"], "펫 4종 정의(이름 순서)", json.dumps(petdef["names"], ensure_ascii=False))
+    ok(petdef["types"] == ["cities:1", "pyeong:100", "asset:50000", "cities:10"], "펫 해금 조건(지역1·100평·총자산5만·지역10)", json.dumps(petdef["types"]))
+    ok(all(d > 0 for d in petdef["dmg"]) and max(petdef["dmg"]) == petdef["dmg"][3], "펫 피해 비율(최강은 아기 드래곤)", json.dumps(petdef["dmg"]))
+    ok(all(s.startswith("pet_") for s in petdef["sprites"]), "펫 스프라이트 키", json.dumps(petdef["sprites"]))
+
+    unlock = js(ctx, """
+      const s = defaultState(0);
+      const r0 = syncPets(s, 0);
+      const sorted = CITIES.slice().sort((a, b) => a.base - b.base);
+      const cheap = sorted[0];
+      applyTrade(s, cheap.key, 'buy', 3, 0);
+      const r1 = syncPets(s, 0);
+      const afterWolf = { equipped: s.pet.equipped, newly: r1.newly.slice() };
+      s.land.owned[cheap.key] = 120;
+      const r2 = syncPets(s, 0);
+      const afterFox = { equipped: s.pet.equipped, newly: r2.newly.slice(), asset: Math.round(portfolioOf(s, 0).totalAsset) };
+      s.gold = 60000;
+      const r3 = syncPets(s, 0);
+      const afterOwl = { equipped: s.pet.equipped, newly: r3.newly.slice() };
+      for (const c of sorted.slice(0, 10)) if (!s.land.owned[c.key]) s.land.owned[c.key] = 1;
+      const r4 = syncPets(s, 0);
+      const afterDragon = { equipped: s.pet.equipped, newly: r4.newly.slice(), unlocked: s.pet.unlocked.slice() };
+      const manual = equipPet(s, 'wolf');
+      const r5 = syncPets(s, 0);
+      return { r0: r0.newly, afterWolf, afterFox, afterOwl, afterDragon, manual: manual.ok, chosen: s.pet.chosen, afterManual: s.pet.equipped, newly5: r5.newly };
+    """)
+    ok(unlock["r0"] == [] and unlock["afterWolf"]["newly"] == ["wolf"] and unlock["afterWolf"]["equipped"] == "wolf", "지역 1곳 → 꼬마 늑대 자동 해금·동행", json.dumps(unlock["afterWolf"], ensure_ascii=False))
+    ok(unlock["afterFox"]["newly"] == ["fox"] and unlock["afterFox"]["equipped"] == "fox", "100평 → 불여우 해금·교체", json.dumps(unlock["afterFox"], ensure_ascii=False))
+    ok(unlock["afterOwl"]["newly"] == ["owl"] and unlock["afterOwl"]["equipped"] == "owl", "총자산 5만 → 황금 부엉이 해금", json.dumps(unlock["afterOwl"], ensure_ascii=False))
+    ok(unlock["afterDragon"]["newly"] == ["dragon"] and unlock["afterDragon"]["equipped"] == "dragon", "지역 10곳 → 아기 드래곤 해금", json.dumps(unlock["afterDragon"], ensure_ascii=False))
+    ok(unlock["manual"] is True and unlock["afterManual"] == "wolf" and unlock["newly5"] == [], "직접 고른 펫은 자동 교체하지 않음", json.dumps({"manual": unlock["manual"], "eq": unlock["afterManual"]}, ensure_ascii=False))
+
+    petstat = js(ctx, """
+      const s = defaultState(0);
+      s.level = 20;
+      const base = calcStats(s, {});
+      s.pet = { equipped: 'dragon', unlocked: ['wolf', 'dragon'], chosen: true };
+      const withPet = calcStats(s, {});
+      const pr = petProgress(s, 'fox', 0);
+      return {
+        atk0: base.atk, atk1: withPet.atk, gold0: base.goldMult, gold1: withPet.goldMult,
+        petId: withPet.petId, prog: { pct: Math.round(pr.pct * 100), text: pr.text, ok: pr.ok },
+      };
+    """)
+    ok(petstat["atk1"] > petstat["atk0"] and petstat["gold1"] > petstat["gold0"] and petstat["petId"] == "dragon", "펫 패시브가 실제 스탯·골드에 반영", json.dumps(petstat, ensure_ascii=False))
+    ok(petstat["prog"]["ok"] is False and 0 <= petstat["prog"]["pct"] <= 100, "펫 해금 진행도 표시", json.dumps(petstat["prog"], ensure_ascii=False))
+
+    job = js(ctx, """
+      const s = defaultState(0);
+      const p1 = jobProgress(s);
+      s.level = 12; s.maxStage = 8;
+      const p2 = jobProgress(s);
+      const atk0 = calcStats(s, {}).atk;
+      const hp0 = calcStats(s, {}).hpMax;
+      const r1 = promoteJob(s, 1000);
+      const atk1 = calcStats(s, {}).atk;
+      const hp1 = calcStats(s, {}).hpMax;
+      const early = promoteJob(s, 2000);
+      s.level = 60; s.maxStage = 40;
+      const r2 = promoteJob(s, 3000);
+      const r3 = promoteJob(s, 4000);
+      const r4 = promoteJob(s, 5000);
+      return {
+        names: JOBS.map(j => j.name), tiers: JOBS.map(j => j.tier),
+        p1: p1.canPromote, p2: p2.canPromote, reason: p1.reason,
+        ok1: r1.ok, tier1: r1.ok ? r1.to.tier : -1, atk0, atk1, hp0, hp1,
+        early: early.ok, ok2: r2.ok, ok3: r3.ok, final: r4.ok, maxTier: s.jobTier,
+        atkPct: JOBS[3].atkPct, hpPct: JOBS[3].hpPct,
+      };
+    """)
+    ok(job["names"] == ["견습 기사", "왕국 기사", "성기사", "드래곤 나이트"] and job["tiers"] == [0, 1, 2, 3], "전직 4단계 정의", json.dumps(job["names"], ensure_ascii=False))
+    ok(job["p1"] is False and job["p2"] is True, "전직 조건(레벨·스테이지) 판정", json.dumps({"p1": job["p1"], "p2": job["p2"]}))
+    ok(job["ok1"] is True and job["tier1"] == 1 and job["atk1"] > job["atk0"] and job["hp1"] > job["hp0"], "전직 시 영구 공격력·체력 배율", f"{job['atk0']}→{job['atk1']} / {job['hp0']}→{job['hp1']}")
+    ok(job["early"] is False and job["ok2"] is True and job["ok3"] is True and job["final"] is False and job["maxTier"] == 3, "전직은 단계별로만·최종 4단계", json.dumps({k: job[k] for k in ["early", "ok2", "ok3", "final", "maxTier"]}))
+
+    dun = js(ctx, """
+      const s = defaultState(0);
+      const d0 = dungeonState(s, 1000);
+      startDungeonCooldown(s, 1000);
+      const d1 = dungeonState(s, 1000);
+      const d2 = dungeonState(s, 1000 + DUNGEON.cooldownMs + 5);
+      s.shards = DUNGEON.shardCost;
+      const d3 = dungeonState(s, 2000);
+      return {
+        ready0: d0.ready, leftSec: Math.round(d1.leftMs / 1000), ready2: d2.ready,
+        canPay: d3.canPay, cost: DUNGEON.shardCost, durSec: DUNGEON.durationMs / 1000, cdMin: DUNGEON.cooldownMs / 60000,
+      };
+    """)
+    ok(dun["ready0"] is True and dun["leftSec"] == 600 and dun["ready2"] is True, "던전 무료 쿨타임 10분", json.dumps(dun))
+    ok(dun["cost"] == 30 and dun["canPay"] is True and dun["durSec"] == 30, "던전 30초 제한 · 강화석 30 즉시 입장", json.dumps(dun))
+
+    bats = js(ctx, """
+      const rng = (function (seed) { let x = seed; return function () { x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296; }; })(5);
+      const s = defaultState(0);
+      s.stage = 3; s.maxStage = 3; s.bossReady = false; s.killsInStage = 0;
+      const b = new Battle(s, () => ({}), rng, 0);
+      const before = { gold: s.gold, shards: s.shards };
+      const r = b.startDungeon(1000);
+      const during = { inDungeon: b.inDungeon(), left: Math.round(b.dungeonLeft(1000) / 1000) };
+      let t = 1000;
+      const ev = {};
+      for (let i = 0; i < 720; i++) {
+        t += 50;
+        b.tick(50, t);
+        for (const e of b.drainEvents()) ev[e.t] = (ev[e.t] || 0) + 1;
+      }
+      const last = s.dungeon.last || {};
+      return {
+        ok: r.ok, end: ev.dungeonEnd || 0, start: ev.dungeonStart || 0, bossEv: ev.dungeonBoss || 0,
+        kills: last.kills || 0, bosses: last.bossKills || 0, dmg: last.dmg || 0,
+        goldGain: s.gold - before.gold, shardGain: s.shards - before.shards,
+        stage: s.stage, dungeonNull: b.dungeon === null, monsters: b.monsters.length, runs: s.dungeon.runs,
+        during,
+      };
+    """)
+    ok(bats["ok"] is True and bats["start"] == 1 and bats["end"] == 1 and bats["during"]["inDungeon"] is True and bats["during"]["left"] == 30, "던전 입장 → 30초 후 자동 종료", json.dumps({k: bats[k] for k in ["ok", "start", "end"]}))
+    ok(bats["kills"] + bats["bosses"] >= 4 and bats["dmg"] > 0 and bats["bossEv"] >= 1, "던전 처치·피해 집계 + 황금 보스 등장", json.dumps({k: bats[k] for k in ["kills", "bosses", "dmg", "bossEv"]}))
+    ok(bats["goldGain"] > 0 and bats["shardGain"] >= 3, "던전 보상(대량 골드 + 강화석) 즉시 지급", json.dumps({k: bats[k] for k in ["goldGain", "shardGain"]}))
+    ok(bats["stage"] == 3 and bats["dungeonNull"] is True and bats["monsters"] >= 1 and bats["runs"] == 1, "던전 종료 후 원래 스테이지 사냥 복귀", json.dumps({k: bats[k] for k in ["stage", "dungeonNull", "monsters", "runs"]}))
+
+    petbat = js(ctx, """
+      function run(petId) {
+        const rng = (function (seed) { let x = seed; return function () { x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296; }; })(9);
+        const s = defaultState(0);
+        s.level = 15; s.stage = 5; s.maxStage = 5;
+        if (petId) { s.pet = { equipped: petId, unlocked: ['wolf'], chosen: true }; }
+        const b = new Battle(s, () => ({}), rng, 0);
+        let t = 0, hits = 0, dmg = 0;
+        for (let i = 0; i < 240; i++) {
+          t += 50;
+          b.tick(50, t);
+          for (const e of b.drainEvents()) { if (e.t === 'petHit') { hits++; dmg += e.dmg; } }
+        }
+        return { hits, dmg, atk: b.stats.atk, active: !!b.activePet() };
+      }
+      return { none: run(null), wolf: run('wolf') };
+    """)
+    ok(petbat["none"]["hits"] == 0 and petbat["none"]["active"] is False, "펫 없으면 동행 공격 없음", json.dumps(petbat["none"]))
+    ok(petbat["wolf"]["hits"] >= 2 and petbat["wolf"]["dmg"] > 0 and petbat["wolf"]["active"] is True, "펫이 1.5초마다 함께 공격", json.dumps(petbat["wolf"]))
+
+    compat = js(ctx, """
+      const old = { ver: 3, level: 40, gold: 7777, shards: 12, stage: 9, maxStage: 9,
+        land: { owned: { '0_0_0': 5 } }, records: { totalGold: 100 } };
+      const n = normalizeState(old, 0);
+      const bad = normalizeState({ pet: { equipped: 'dragon', unlocked: ['fox'], chosen: 'yes' }, jobTier: 99, dungeonCooldown: -5, dungeon: { best: -3, runs: -1 } }, 0);
+      return {
+        level: n.level, gold: n.gold, pet: n.pet, job: n.jobTier, cd: n.dungeonCooldown, dun: n.dungeon,
+        badPet: bad.pet, badJob: bad.jobTier, badCd: bad.dungeonCooldown, badBest: bad.dungeon.best, badRuns: bad.dungeon.runs,
+      };
+    """)
+    ok(compat["level"] == 40 and compat["gold"] == 7777 and compat["pet"] == {"equipped": None, "unlocked": [], "chosen": False} and compat["job"] == 0 and compat["cd"] == 0, "v3.1 저장 호환(펫·전직·던전 기본값 병합)", json.dumps(compat, ensure_ascii=False))
+    ok(compat["badPet"] == {"equipped": None, "unlocked": ["fox"], "chosen": False} and compat["badJob"] == 3 and compat["badCd"] == 0 and compat["badBest"] == 0 and compat["badRuns"] == 0, "손상된 펫/전직/던전 값 방어", json.dumps({k: compat[k] for k in ["badPet", "badJob", "badCd", "badBest", "badRuns"]}, ensure_ascii=False))
+
+    tpl2 = js(ctx2, """
+      const s = defaultState(0);
+      s.gold = 60000; s.shards = 320; s.level = 12; s.stage = 7; s.maxStage = 8;
+      for (const c of CITIES.slice(0, 5)) s.land.owned[c.key] = 40;
+      s.pet = { equipped: 'fox', unlocked: ['wolf', 'fox'], chosen: true };
+      s.dungeon = { best: 12345, runs: 2, last: { at: 0, gold: 999, shards: 12, kills: 8, bossKills: 1, dmg: 12345 } };
+      const buffs = computeBuffs(s, 0);
+      const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(7), boss: null, dungeon: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'hunt', el: {} };
+      const hunt = __tpls.hunt(ui);
+      s.land.sub = 'buff';
+      const land = __tpls.land(ui);
+      const set = __tpls.settings(ui);
+      return { hunt, land, set, bad: /undefined|NaN|\\[object Object\\]/.test(hunt + land + set) };
+    """)
+    ok(tpl2["bad"] is False, "v3.2 템플릿에 undefined/NaN 누출 없음")
+    ok("✨ 전직 가능!" in tpl2["hunt"] and "황금 던전" in tpl2["hunt"] and "내 동료 펫" in tpl2["hunt"], "사냥 탭에 전직·던전·펫 카드", "")
+    ok("내 동료 펫" in tpl2["land"] and "동행 중" in tpl2["land"], "건물주 버프 탭에도 펫 카드", "")
+    ok("전직" in tpl2["set"] and "황금 던전" in tpl2["set"], "설정 탭에 전직/던전 기록", "")
+
+    rsrc2 = read("src/render.js")
+    ok("drawPet" in rsrc2 and "drawDungeonHud" in rsrc2 and "drawPromoteBanner" in rsrc2, "펫 동행·던전 HUD·전직 배너 렌더 구현")
+    ok("petHit" in read("src/combat.js") and "activePet" in read("src/combat.js") and "startDungeon" in read("src/combat.js"), "펫 동행 전투·던전 전투 구현")
+    ok("fanfare()" in read("src/sound.js"), "전직 팡파르 효과음")
+    ok(all(k in read("app.js") for k in ["promoteJob", "equipPet", "enterDungeon", "checkPets", "showDungeonResult"]), "전직·펫·던전 액션 연결")
+    ok('data-action="promote"' in read("src/ui.js") and 'data-action="pet-equip"' in read("src/ui.js") and 'data-action="dungeon"' in read("src/ui.js"), "전직·펫·던전 버튼 연결")
+    ok("'./src/meta.js'" in read("sw.js"), "sw.js 프리캐시에 meta.js 포함")
+    pet_files = [f"assets/sprites/pet/pet_{n}.png" for n in ("wolf", "fox", "owl", "dragon")]
+    ok(all(os.path.exists(os.path.join(ROOT, f)) for f in pet_files), "펫 스프라이트 4종 파일", ", ".join(f for f in pet_files if not os.path.exists(os.path.join(ROOT, f))))
+    ok(all(f"'./{f}'" in read("sw.js") for f in pet_files), "sw.js 프리캐시에 펫 스프라이트 포함")
+    try:
+        from PIL import Image
+        sizes = [Image.open(os.path.join(ROOT, f)).size for f in pet_files]
+        alphas = [Image.open(os.path.join(ROOT, f)).getextrema()[3][0] for f in pet_files]
+        ok(all(sz == (256, 256) for sz in sizes) and all(a == 0 for a in alphas), "펫 스프라이트 256px 투명 PNG", json.dumps({"sizes": sizes, "min_alpha": alphas}))
+    except Exception as e:  # noqa: BLE001
+        ok(False, "펫 스프라이트 검사", str(e))
+
+    section("[7] 밸런스 시뮬레이션 (60분)")
     import importlib.util
     spec = importlib.util.spec_from_file_location("bs", os.path.join(ROOT, "tools/balance_sim.py"))
     bs = importlib.util.module_from_spec(spec)

@@ -937,3 +937,103 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .gr-row .nm { font-weight: 800; }
 .gr-row .tag { margin-left: auto; font-size: 10px; font-weight: 800; color: var(--green); text-align: right; }
 .gr-row.dust .tag { color: var(--dim); }
+
+/* ══════════════════ v3.2: 전직 · 황금 던전 · 동료 펫 ══════════════════ */
+
+/* ✨ 전직/각성 카드 */
+.job-card { position: relative; overflow: hidden; }
+.job-card.ready { border-color: rgba(255, 214, 110, 0.55); box-shadow: 0 0 0 1px rgba(255, 214, 110, 0.18), 0 8px 26px rgba(255, 170, 40, 0.14); }
+.job-card.ready::before {
+  content: '';
+  position: absolute;
+  inset: -40% -60%;
+  background: conic-gradient(from 0deg, rgba(255, 210, 120, 0) 0deg, rgba(255, 214, 110, 0.18) 40deg, rgba(255, 210, 120, 0) 90deg);
+  animation: jobSweep 3.6s linear infinite;
+  pointer-events: none;
+}
+@keyframes jobSweep { to { transform: rotate(360deg); } }
+.job-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border-radius: 8px;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: var(--jc, var(--gold));
+  border: 1px solid color-mix(in srgb, var(--jc, #ffd76a) 45%, transparent);
+  background: rgba(255, 255, 255, 0.05);
+  white-space: nowrap;
+}
+.promote-btn {
+  position: relative;
+  overflow: hidden;
+  font-weight: 900;
+  letter-spacing: -0.2px;
+  animation: promotePulse 1.6s ease-in-out infinite;
+}
+.promote-btn::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0) 100%);
+  animation: promoteShine 1.9s ease-in-out infinite;
+}
+@keyframes promoteShine { 0% { left: -60%; } 55% { left: 120%; } 100% { left: 120%; } }
+@keyframes promotePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 214, 110, 0.35); }
+  50% { box-shadow: 0 0 16px 2px rgba(255, 214, 110, 0.4); }
+}
+
+/* 🔥 황금 던전 카드 */
+.dungeon-card {
+  border-color: rgba(255, 190, 80, 0.32);
+  background: linear-gradient(180deg, rgba(66, 40, 8, 0.55), rgba(20, 15, 10, 0.72));
+}
+.dungeon-card .card-title .t-ico { filter: drop-shadow(0 0 6px rgba(255, 170, 40, 0.65)); }
+
+/* 🐾 동료 펫 카드 */
+.pet-card { border-color: rgba(160, 200, 255, 0.22); }
+.pet-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 0;
+  border-bottom: 1px dashed var(--line);
+}
+.pet-row:last-of-type { border-bottom: 0; }
+.pet-row.on {
+  margin: 4px -6px;
+  padding: 8px 6px;
+  border-radius: 10px;
+  background: rgba(120, 190, 255, 0.09);
+  border: 1px solid rgba(140, 200, 255, 0.28);
+}
+.pet-row.lock { opacity: 0.62; }
+.pet-thumb {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.45));
+}
+.pet-row.lock .pet-thumb { filter: grayscale(0.75) brightness(0.72); }
+.pet-mid { flex: 1 1 auto; min-width: 0; }
+.pet-name { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 800; }
+.pet-on {
+  font-size: 9px;
+  font-weight: 900;
+  color: #04121f;
+  background: linear-gradient(180deg, #a9e2ff, #56b6f0);
+  border-radius: 6px;
+  padding: 1px 5px;
+}
+.pet-desc { font-size: 10px; color: var(--sub); margin-top: 1px; }
+.pet-stats { font-size: 9.5px; color: var(--gold); font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.pet-cond { font-size: 9.5px; color: var(--dim); margin-top: 3px; }
+.tiny-prog { height: 4px; margin-top: 4px; }
+.mini.equip { color: #cfeaff; border-color: rgba(120, 200, 255, 0.4); background: rgba(120, 200, 255, 0.12); }
+.mini.on { color: #0d1b0f; border-color: rgba(94, 225, 163, 0.55); background: rgba(94, 225, 163, 0.55); opacity: 1; }

@@ -210,6 +210,23 @@ export class GameSound {
     this.tone(t + 0.14, { freq: NOTE(79), dur: 0.18, gain: 0.07, type: 'triangle' });
   }
 
+  /** ✨ 전직 팡파르 — 뽑기보다 웅장한 4음 상승 + 금빛 잔향 */
+  fanfare() {
+    const ctx = this.ready();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const notes = [55, 60, 64, 67, 72, 76];
+    notes.forEach((n, i) => {
+      this.tone(t + i * 0.12, { freq: NOTE(n), dur: 0.34, gain: 0.1, type: 'triangle' });
+      this.tone(t + i * 0.12, { freq: NOTE(n + 12), dur: 0.26, gain: 0.04, type: 'sine' });
+    });
+    const end = t + notes.length * 0.12;
+    this.tone(end, { freq: NOTE(84), dur: 0.55, gain: 0.1, type: 'sine' });
+    this.tone(end + 0.02, { freq: NOTE(79), dur: 0.5, gain: 0.06, type: 'triangle' });
+    this.noiseHit(end, { freq: 5200, q: 0.7, gain: 0.07, dur: 0.7, type: 'highpass' });
+    this.tone(end, { freq: 150, to: 60, dur: 0.5, gain: 0.13, type: 'sine' });
+  }
+
   /** UI 클릭 — 아주 작은 틱 */
   ui() {
     const ctx = this.ready();

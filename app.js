@@ -14,6 +14,10 @@ import {
 import { Renderer } from './src/render.js';
 import { UI } from './src/ui.js';
 import { GameSound } from './src/sound.js';
+import {
+  PET_SPRITES, DUNGEON, petDef, syncPets as syncPetUnlocks, equipPet,
+  promoteJob as promoteJobState, dungeonState, startDungeonCooldown,
+} from './src/meta.js';
 
 // 구형 Safari / 삼성 인터넷 대비 CanvasRenderingContext2D.roundRect 폴리필
 (() => {
@@ -51,6 +55,7 @@ class App {
       if (STORAGE && !STORAGE.getItem(SAVE_KEY)) STORAGE.removeItem('land_rpg_state_v1');
     } catch (e) { /* ignore */ }
     this.s = loadState(STORAGE);
+    try { syncPetUnlocks(this.s); } catch (e) { /* ignore */ }
     this.buffs = computeBuffs(this.s);
     this.battle = new Battle(this.s, () => this.buffs);
     this.renderer = new Renderer(document.getElementById('battle'));
@@ -74,11 +79,12 @@ class App {
   async boot() {
     this.ui.init();
     this.renderer
-      .preload(['hero_idle', 'hero_attack', 'hero_skill', ...this.stageMonsterNames(this.s.stage)])
+      .preload(['hero_idle', 'hero_attack', 'hero_skill', ...PET_SPRITES, ...this.stageMonsterNames(this.s.stage)])
       .then(() => this.renderer.resize())
       .catch(() => {});
 
     const now = Date.now();
+    this.checkPets(now);
 
     // 오프라인 임대수익 (접속 중의 25%만 적립)
     this.accrueRent(now, LAND.rentOfflineRate);
@@ -161,9 +167,37 @@ class App {
         this.lastSave = now;
         this.save();
       }
+      if (now - (this.lastPetCheck || 0) > 2000) {
+        this.lastPetCheck = now;
+        this.checkPets(now);
+      }
     } catch (e) {
       this.reportError('save', e);
     }
+  }
+
+  /** 부동산 성장 → 펫 해금 확인 (해금되면 토스트 + 자동 동행) */
+  checkPets(now = Date.now()) {
+    let r;
+    try {
+      r = syncPetUnlocks(this.s, now);
+    } catch (e) {
+      return null;
+    }
+    if (!r.changed) return r;
+    this.battle.refreshStats();
+    this.save();
+    if (r.newly.length) {
+      for (const id of r.newly) {
+        const def = petDef(id);
+        if (!def) continue;
+        this.ui.toast(`🐾 ${def.emoji} ${def.name} 해금!${r.equipped === id ? ' 동행 시작' : ''}`, 'gold');
+        this.ui.addLog(`🐾 <b>${def.name}</b> 해금 · ${def.cond}`);
+      }
+      this.sound.levelUp();
+      this.ui.renderIfNeeded();
+    }
+    return r;
   }
 
   /* ───────────── 오류 보고 · 자동복구 ───────────── */
@@ -199,6 +233,7 @@ class App {
     try {
       this.battle.monsters = [];
       this.battle.boss = null;
+      this.battle.dungeon = null; // 던전 중 예외가 나도 스테이지 사냥으로 복귀
       this.battle.events = [];
       this.battle.refreshStats(Date.now());
       if (!isFinite(this.battle.player.hp)) this.battle.player.hp = this.battle.stats.hpMax;
@@ -253,6 +288,22 @@ class App {
         this.ui.addLog('💀 전투 불능 — 3초 후 부활');
       } else if (ev.t === 'revive') {
         this.ui.addLog('✨ 부활했습니다');
+      } else if (ev.t === 'dungeonStart') {
+        this.ui.addLog(`🔥 <b>황금 던전</b> 시작 — ${DUNGEON.durationMs / 1000}초 보스 러시`);
+        this.ui.toast('🔥 황금 던전 시작! 30초간 몰아칩니다', 'gold');
+        this.ui.renderIfNeeded();
+      } else if (ev.t === 'dungeonBoss') {
+        this.ui.addLog(`👑 <b>${ev.ko}</b> 황금 보스 등장!`);
+      } else if (ev.t === 'dungeonEnd') {
+        this.battle.refreshStats();
+        this.checkPets(now);
+        this.save(true);
+        this.sound.gacha('hero');
+        this.ui.addLog(
+          `🔥 던전 완료 · 처치 ${ev.kills + ev.bossKills}마리(보스 ${ev.bossKills}) · 💰+${ev.gold.toLocaleString()} 💎+${ev.shards}`,
+        );
+        this.showDungeonResult(ev);
+        this.ui.renderIfNeeded();
       }
     }
   }
@@ -475,6 +526,85 @@ class App {
         this.ui.updateLandList();
       },
       claimRent: () => this.openClaimRent(),
+
+      /* ── v3.2: 전직 · 펫 · 황금 던전 ── */
+      promoteJob: () => {
+        this.sound.unlock();
+        const r = promoteJobState(this.s);
+        if (!r.ok) {
+          this.ui.toast(r.reason, 'red');
+          return;
+        }
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.fanfare();
+        this.renderer.onEvents(
+          [{ t: 'promote', job: r.to.name, tier: r.to.tier, badge: r.to.badge, color: r.to.color }],
+          Date.now(),
+        );
+        this.ui.addLog(
+          `✨ <b>전직</b> ${r.from.name} → <b>${r.to.name}</b> · 공격 +${r.to.atkPct}% 체력 +${r.to.hpPct}%`,
+        );
+        this.ui.modal({
+          title: `✨ 전직! ${r.to.badge} ${r.to.name}`,
+          sub: `${r.from.name} → ${r.to.name} · 칭호 획득`,
+          body: `<div class="modal-rewards">
+                   <div class="rw"><div class="e">⚔️</div><div class="v">+${r.to.atkPct}%</div><div class="k">공격력</div></div>
+                   <div class="rw"><div class="e">❤️</div><div class="v">+${r.to.hpPct}%</div><div class="k">최대 체력</div></div>
+                   <div class="rw"><div class="e">🏅</div><div class="v">${r.to.tier + 1}/4</div><div class="k">전직 단계</div></div>
+                 </div>
+                 <div class="note">${esc(r.to.line)}<br>영구 보너스는 즉시 적용되었습니다.</div>`,
+          actions: [{ label: '확인', style: 'primary', onClick: () => {} }],
+        });
+        this.ui.render();
+      },
+
+      equipPet: (id) => {
+        const r = equipPet(this.s, id);
+        if (!r.ok) {
+          this.ui.toast(r.reason, 'red');
+          return;
+        }
+        this.battle.refreshStats();
+        this.save();
+        this.sound.ui();
+        this.ui.toast(`🐾 ${r.pet.emoji} ${r.pet.name} 동행 시작`, 'green');
+        this.ui.render();
+      },
+
+      enterDungeon: (kind) => {
+        this.sound.unlock();
+        const now = Date.now();
+        if (this.battle.dungeon) {
+          this.ui.toast('이미 던전이 진행 중입니다');
+          return;
+        }
+        const ds = dungeonState(this.s, now);
+        const paid = kind === 'shards' && !ds.ready; // 무료가 가능하면 강화석을 쓰지 않는다
+        if (!ds.ready && !paid) {
+          this.ui.toast('무료 입장 준비 중입니다');
+          return;
+        }
+        if (paid && !ds.canPay) {
+          this.ui.toast(`강화석이 부족합니다 (💎${DUNGEON.shardCost} 필요)`, 'red');
+          return;
+        }
+        const r = this.battle.startDungeon(now);
+        if (!r.ok) {
+          this.ui.toast(r.reason, 'red');
+          return;
+        }
+        if (paid) this.s.shards = Math.max(0, this.s.shards - DUNGEON.shardCost);
+        else startDungeonCooldown(this.s, now);
+        this.save(true);
+        this.sound.boss();
+        this.ui.toast(
+          `🔥 황금 던전 입장! ${DUNGEON.durationMs / 1000}초 동안 몰아칩니다${paid ? ` (💎${DUNGEON.shardCost})` : ' (무료)'}`,
+          'gold',
+        );
+        this.ui.render();
+      },
+
       resetGame: () => {
         this.ui.modal({
           title: '⚠️ 게임 초기화',
@@ -600,6 +730,7 @@ class App {
     if (side === 'buy' && b.active) {
       this.ui.toast(`🏢 건물주 버프 · 공격 +${b.atkPct}% · 골드 +${b.goldPct}% · 체력 +${b.hpPct}%`, 'gold');
     }
+    this.checkPets(); // 거래로 지역·평수·총자산이 바뀌면 펫 해금 확인
     this.ui.render();
   }
 
@@ -625,6 +756,7 @@ class App {
             this.s.records.totalRent = (this.s.records.totalRent || 0) + got;
             this.save(true);
             this.ui.toast(`💤 임대수익 💰${got.toLocaleString()} 수령`, 'gold');
+            this.checkPets();
             this.ui.render();
           },
         },
@@ -662,6 +794,20 @@ class App {
       body: `<div class="gr-sum">${summary}</div>
              <div class="gacha-result">${rows}</div>
              <div class="note" style="margin-top:9px">분해 💎+${r.shards} · 천장까지 ${r.pityLeft}회 · 누적 ${r.total}회</div>`,
+      actions: [{ label: '확인', style: 'primary', onClick: () => {} }],
+    });
+  }
+
+  showDungeonResult(ev) {
+    this.ui.modal({
+      title: '🔥 황금 던전 완료',
+      sub: `${ev.early ? '조기 종료' : `${DUNGEON.durationMs / 1000}초 종료`} · 처치 ${ev.kills + ev.bossKills}마리(보스 ${ev.bossKills})`,
+      body: `<div class="modal-rewards">
+               <div class="rw"><div class="e">💰</div><div class="v">${ev.gold.toLocaleString()}</div><div class="k">골드</div></div>
+               <div class="rw"><div class="e">💎</div><div class="v">${ev.shards.toLocaleString()}</div><div class="k">강화석</div></div>
+               <div class="rw"><div class="e">⚔️</div><div class="v">${ev.dmg.toLocaleString()}</div><div class="k">총 피해</div></div>
+             </div>
+             <div class="note" style="margin-top:9px">보상은 이미 반영되었습니다. 원래 스테이지 자동사냥으로 복귀했습니다.</div>`,
       actions: [{ label: '확인', style: 'primary', onClick: () => {} }],
     });
   }
