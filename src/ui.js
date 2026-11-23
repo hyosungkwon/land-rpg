@@ -123,7 +123,10 @@ export class UI {
 
   setTab(tab) {
     if (!tab || tab === this.tab) {
-      if (tab) this.render();
+      if (tab) {
+        this.el.panel.scrollTop = 0;
+        this.render();
+      }
       return;
     }
     this.tab = tab;
@@ -668,7 +671,7 @@ function tplLandHome(ui) {
     </div>
     <div class="rent-num" data-live="rent">💰${fmt(Math.floor(p.accruedRent))}</div>
     <button class="btn ${p.accruedRent >= 1 ? 'green' : 'ghost'} block" style="margin-top:8px" data-action="claim-rent" ${p.accruedRent >= 1 ? '' : 'disabled'}>
-      ${p.accruedRent >= 1 ? `💰${fmt(Math.floor(p.accruedRent))} 수령` : '쌓이는 중…'}
+      ${p.accruedRent >= 1 ? '임대수익 수령' : '쌓이는 중…'}
     </button>
     <div class="note" style="margin-top:9px">
       접속 중에는 <b>100%</b>, 앱을 닫아둔 동안은 <b>5%</b>(최대 ${LAND.rentCapHours}시간)만 적립됩니다.
@@ -722,7 +725,7 @@ function buildMarketList(ui) {
   if (sort === 'price') rows.sort((a, b) => a.info.price - b.info.price);
   else if (sort === 'trend') rows.sort((a, b) => b.info.trend - a.info.trend);
   else if (sort === 'name') rows.sort((a, b) => a.c.name.localeCompare(b.c.name, 'ko'));
-  else rows.sort((a, b) => a.payback - b.payback);
+  else rows.sort((a, b) => a.payback - b.payback || a.info.price - b.info.price);
 
   const PAGE = 20;
   const shown = rows.slice(0, page * PAGE);
