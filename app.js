@@ -245,11 +245,11 @@ class App {
       } else if (ev.t === 'levelUp') {
         this.ui.toast(`⬆️ 레벨 업! Lv.${ev.level}`, 'green');
         this.ui.addLog(`<b>레벨 업</b> Lv.${ev.level} · 체력 완충`);
-        this.ui.render();
+        this.ui.renderIfNeeded();
       } else if (ev.t === 'stageClear') {
         this.ui.toast(`🏅 스테이지 ${ev.stage} 클리어! 💎+${ev.bonus}`, 'gold');
         this.ui.addLog(`<b>스테이지 ${ev.stage} 클리어</b> → ${ev.next} (보너스 💎${ev.bonus})`);
-        this.ui.render();
+        this.ui.renderIfNeeded();
         this.save(true);
         this.renderer.preload(this.stageMonsterNames(this.s.stage)).catch(() => {});
         if (this.cloud.signedIn) this.cloud.publishRanking(this.s).catch(() => {});
@@ -259,7 +259,7 @@ class App {
         const why = ev.why === 'timeout' ? '시간 초과' : '전투 불능';
         this.ui.toast(`보스 퇴치 실패 (${why}) · 조금 더 강해져서 재도전`, 'red');
         this.ui.addLog(`보스 <b>${ev.ko}</b> 실패(${why}) · ${ECON.bossRetryKills}마리 더 처치하면 재도전`);
-        this.ui.render();
+        this.ui.renderIfNeeded();
       } else if (ev.t === 'playerDeath') {
         this.ui.addLog('💀 전투 불능 — 3초 후 부활');
       } else if (ev.t === 'revive') {

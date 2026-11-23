@@ -1,7 +1,7 @@
 // land-rpg / src/data.js
 // 밸런스·몬스터·장비·스킬 정의. DOM 의존 없음(헤드리스 테스트 가능).
 
-export const APP_VERSION = '2.1.3';
+export const APP_VERSION = '2.1.4';
 export const SAVE_KEY = 'land_rpg_state_v1';
 export const SAVE_VERSION = 1;
 

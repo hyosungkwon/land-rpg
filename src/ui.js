@@ -356,6 +356,14 @@ export class UI {
     this.lastLive = 0;
   }
 
+  /** 레벨업·클리어로 패널을 다시 그릴 필요가 없는 탭(부동산)에서는 건너뛴다.
+   *  부동산 화면은 서브탭/거래/새로고침 때만 갱신되므로, 탭을 누르는 도중
+   *  패널이 다시 그려져 입력이 무시되는 일을 막는다. */
+  renderIfNeeded() {
+    if (this.tab === 'land') return;
+    this.render();
+  }
+
   /** 매물 목록만 다시 그린다(검색어 입력 중 포커스 유지) */
   updateLandList() {
     const list = document.getElementById('landList');
