@@ -115,11 +115,15 @@ export class Cloud {
           }
         };
         f.onAuthStateChanged(this.auth, async (user) => {
-          finish();
-          if (user) await this.handleUser(user);
-          else this.setStatus('guest');
+          // 복원된 세션이면 부동산/ RPG 데이터를 다 읽은 뒤에 init() 을 끝낸다.
+          try {
+            if (user) await this.handleUser(user);
+            else this.setStatus('guest');
+          } finally {
+            finish();
+          }
         });
-        setTimeout(finish, 4000);
+        setTimeout(finish, 7000);
       });
     } catch (e) {
       this.lastError = String(e && e.message ? e.message : e);

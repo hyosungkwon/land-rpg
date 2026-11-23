@@ -73,7 +73,13 @@ class App {
       .catch(() => {});
 
     this.ui.setSync({ kind: 'guest', label: '로컬 저장', detail: '부동산 연동 전' });
-    this.cloud.onStatus((info) => this.ui.setSync(info));
+    this.cloud.onStatus((info) => {
+      this.ui.setSync(info);
+      // 세션 복원/늦은 로그인으로 부동산 데이터가 나중에 도착한 경우에도 한 번 연결한다.
+      if (info.signedIn && this.cloud.prop && (!this.prop || !this.prop.connected)) {
+        try { this.syncProperty(); } catch (e) { this.reportError('property', e); }
+      }
+    });
 
     // 오프라인 정산 (최대 12시간)
     const summary = offlineSummary(this.s, Date.now(), this.buffs);
