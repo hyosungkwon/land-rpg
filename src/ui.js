@@ -1,6 +1,6 @@
 // land-rpg / src/ui.js
 // 하단 탭 UI · HUD · 토스트/모달. 상태는 app.js 를 통해 읽고, 조작은 actions 로 넘긴다.
-import { ECON, EQUIP, EQUIP_MAX_LV, SKILLS, skillCost, enhanceCost } from './data.js';
+import { APP_VERSION, ECON, EQUIP, EQUIP_MAX_LV, SKILLS, skillCost, enhanceCost } from './data.js';
 import { expNeed, exchangeStatus, skillEffect } from './state.js';
 import { buffProgress, dividendReward, formatMan } from './property.js';
 
@@ -656,7 +656,7 @@ function tplMore(ui) {
   </div>
 
   <div class="card">
-    <div class="card-head"><div class="card-title"><span class="t-ico">⚙️</span>설정</div><span class="tiny dim">v${'1.0.0'}</span></div>
+    <div class="card-head"><div class="card-title"><span class="t-ico">⚙️</span>설정</div><span class="tiny dim">v${APP_VERSION}</span></div>
     <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
       <span class="tiny">자동 보스 전환</span>
       <button class="switch ${s.autoBoss ? 'on' : ''}" data-action="toggle-auto"></button>
@@ -678,7 +678,7 @@ function tplMore(ui) {
 
   <div class="card">
     <div class="card-head"><div class="card-title"><span class="t-ico">ℹ️</span>앱 정보</div></div>
-    <div class="kv"><span class="k">버전</span><span class="v">1.0.0 (프로토타입)</span></div>
+    <div class="kv"><span class="k">버전</span><span class="v">${APP_VERSION} (스프라이트·전투 연출)</span></div>
     <div class="kv"><span class="k">부동산 프로젝트</span><span class="v">korea-land-4e0c2</span></div>
     <div class="kv"><span class="k">저장 위치</span><span class="v">${status.kind === 'sync' ? 'rpg/' + esc(status.uid || '') : 'localStorage'}</span></div>
     <div class="note" style="margin-top:9px">

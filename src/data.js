@@ -1,7 +1,7 @@
 // land-rpg / src/data.js
 // 밸런스·몬스터·장비·스킬 정의. DOM 의존 없음(헤드리스 테스트 가능).
 
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '2.0.0';
 export const SAVE_KEY = 'land_rpg_state_v1';
 export const SAVE_VERSION = 1;
 
@@ -78,88 +78,63 @@ export const THEMES = [
 ];
 
 /* ────────────────────────────── 몬스터 도감 ──────────────────────────────
- * art: true 인 7종은 1408x768 보스 일러스트(assets/boss/)를 쓴다.
+ * v2: image-generation 으로 새로 만든 통일된 SD 2D 판타지 스프라이트를 쓴다.
+ *   일반: assets/sprites/monster/<Name>.png    보스: assets/sprites/boss/<Name>.png
  */
 export const MONSTERS = {
-  Slime: { ko: '슬라임', art: false },
-  Goblin: { ko: '고블린', art: false },
-  Kobold: { ko: '코볼트', art: false },
-  Orc: { ko: '오크', art: false },
-  Werewolf: { ko: '웨어울프', art: false },
-  Skeleton: { ko: '스켈레톤', art: false },
-  Zombie: { ko: '좀비', art: false },
-  Ghoul: { ko: '구울', art: false },
-  Bugbear: { ko: '버그베어', art: false },
-  Lizardman: { ko: '리자드맨', art: false },
-  Harpy: { ko: '하피', art: false },
-  Scorpion: { ko: '스콜피온', art: false },
-  GiantAnt: { ko: '자이언트앤트', art: false },
-  Cyclops: { ko: '사이클롭스', art: false },
-  Minotaur: { ko: '미노타우로스', art: false },
-  Troll: { ko: '트롤', art: false },
-  Ogre: { ko: '오우거', art: false },
-  Wyvern: { ko: '와이번', art: false },
-  Golem: { ko: '골렘', art: false },
-  Gargoyle: { ko: '가고일', art: false },
-  Succubus: { ko: '서큐버스', art: false },
-  Cerberus: { ko: '케르베로스', art: false },
-  DeathKnight: { ko: '데스나이트', art: false },
-  Drake: { ko: '드레이크', art: false },
-  Beholder: { ko: '비홀더', art: false },
-  Basilisk: { ko: '바실리스크', art: false },
-  Cockatrice: { ko: '코카트리스', art: false },
-  BlackKnight: { ko: '블랙나이트', art: false },
-  DeathLord: { ko: '데스로드', art: false },
-  Lich: { ko: '리치', art: false },
-  RedDragon: { ko: '레드드래곤', art: false },
-  FrostGiant: { ko: '프로스트자이언트', art: false },
-  Phoenix: { ko: '피닉스', art: false },
-  AncientDragon: { ko: '에인션트드래곤', art: false },
-  ShadowKnight: { ko: '섀도우나이트', art: false },
-  GiantWorm: { ko: '자이언트웜', art: false },
-  Kraken: { ko: '크라켄', art: false },
-  Behemoth: { ko: '베히모스', art: false },
-  Tiamat: { ko: '티아마트', art: false },
-  Leviathan: { ko: '리바이어던', art: false },
-  DragonLord: { ko: '드래곤로드', art: false },
-  DemiGod: { ko: '데미갓', art: false },
-  ChaosOverlord: { ko: '카오스오버로드', art: false },
-  AncientOne: { ko: '에인션트원', art: false },
-  WorldEater: { ko: '월드이터', art: false },
-  // ── 보스 일러스트 전용 ──
-  SlimeKing: { ko: '슬라임 킹', art: true },
-  DarkTitan: { ko: '다크 타이탄', art: true },
-  VoidWalker: { ko: '보이드 워커', art: true },
-  SoulReaper: { ko: '소울 리퍼', art: true },
-  AbyssalHorror: { ko: '어비설 호러', art: true },
-  CelestialGuard: { ko: '셀레스티얼 가드', art: true },
-  Seraphim: { ko: '세라핌', art: true },
+  // 일반 몬스터 12종
+  Slime: { ko: '슬라임', boss: false },
+  Goblin: { ko: '고블린', boss: false },
+  Kobold: { ko: '코볼트', boss: false },
+  Orc: { ko: '오크', boss: false },
+  Skeleton: { ko: '스켈레톤', boss: false },
+  Zombie: { ko: '좀비', boss: false },
+  Werewolf: { ko: '웨어울프', boss: false },
+  Harpy: { ko: '하피', boss: false },
+  Cyclops: { ko: '사이클롭스', boss: false },
+  Minotaur: { ko: '미노타우로스', boss: false },
+  Golem: { ko: '골렘', boss: false },
+  Drake: { ko: '드레이크', boss: false },
+  // 보스 7종
+  SlimeKing: { ko: '슬라임 킹', boss: true },
+  Troll: { ko: '트롤', boss: true },
+  Cerberus: { ko: '케르베로스', boss: true },
+  DeathLord: { ko: '데스로드', boss: true },
+  RedDragon: { ko: '레드드래곤', boss: true },
+  VoidWalker: { ko: '보이드 워커', boss: true },
+  Seraphim: { ko: '세라핌', boss: true },
+};
+
+/* 플레이어 캐릭터 3프레임 (대기 / 공격 / 스킬) */
+export const HERO_FRAMES = {
+  idle: 'hero_idle',
+  attack: 'hero_attack',
+  skill: 'hero_skill',
 };
 
 /* ────────────────────────────── 스테이지 ────────────────────────────── */
 export const STAGES = [
   { normals: ['Slime', 'Goblin', 'Kobold'], boss: 'SlimeKing' },
-  { normals: ['Orc', 'Werewolf', 'Skeleton'], boss: 'Bugbear' },
-  { normals: ['Zombie', 'Ghoul', 'Lizardman'], boss: 'Minotaur' },
-  { normals: ['Harpy', 'Scorpion', 'GiantAnt'], boss: 'Cyclops' },
-  { normals: ['Lizardman', 'Harpy', 'Cyclops'], boss: 'Troll' },
-  { normals: ['Scorpion', 'GiantAnt', 'Minotaur'], boss: 'Golem' },
-  { normals: ['Ogre', 'Troll', 'Wyvern'], boss: 'Cerberus' },
-  { normals: ['Golem', 'Gargoyle', 'Succubus'], boss: 'DeathLord' },
-  { normals: ['Basilisk', 'Cockatrice', 'Drake'], boss: 'Beholder' },
-  { normals: ['DeathKnight', 'Lich', 'DeathLord'], boss: 'BlackKnight' },
-  { normals: ['RedDragon', 'FrostGiant', 'Phoenix'], boss: 'RedDragon' },
-  { normals: ['Phoenix', 'AncientDragon', 'ShadowKnight'], boss: 'FrostGiant' },
-  { normals: ['GiantWorm', 'Kraken', 'Behemoth'], boss: 'Phoenix' },
-  { normals: ['Tiamat', 'Leviathan', 'DragonLord'], boss: 'Kraken' },
-  { normals: ['DemiGod', 'AncientOne', 'WorldEater'], boss: 'DragonLord' },
-  { normals: ['ChaosOverlord', 'DemiGod', 'WorldEater'], boss: 'ShadowKnight' },
-  { normals: ['WorldEater', 'ChaosOverlord', 'AncientOne'], boss: 'DarkTitan' },
-  { normals: ['Tiamat', 'Leviathan', 'Behemoth'], boss: 'VoidWalker' },
-  { normals: ['DragonLord', 'ChaosOverlord', 'WorldEater'], boss: 'AbyssalHorror' },
-  { normals: ['AncientOne', 'DemiGod', 'Behemoth'], boss: 'CelestialGuard' },
-  { normals: ['WorldEater', 'Tiamat', 'Leviathan'], boss: 'SoulReaper' },
-  { normals: ['ChaosOverlord', 'DragonLord', 'AncientOne'], boss: 'Seraphim' },
+  { normals: ['Goblin', 'Kobold', 'Orc'], boss: 'Troll' },
+  { normals: ['Kobold', 'Orc', 'Skeleton'], boss: 'Cerberus' },
+  { normals: ['Orc', 'Skeleton', 'Zombie'], boss: 'DeathLord' },
+  { normals: ['Skeleton', 'Zombie', 'Werewolf'], boss: 'RedDragon' },
+  { normals: ['Zombie', 'Werewolf', 'Harpy'], boss: 'VoidWalker' },
+  { normals: ['Werewolf', 'Harpy', 'Cyclops'], boss: 'Seraphim' },
+  { normals: ['Harpy', 'Cyclops', 'Minotaur'], boss: 'SlimeKing' },
+  { normals: ['Cyclops', 'Minotaur', 'Golem'], boss: 'Troll' },
+  { normals: ['Minotaur', 'Golem', 'Drake'], boss: 'Cerberus' },
+  { normals: ['Golem', 'Drake', 'Slime'], boss: 'DeathLord' },
+  { normals: ['Drake', 'Slime', 'Goblin'], boss: 'RedDragon' },
+  { normals: ['Slime', 'Kobold', 'Werewolf'], boss: 'VoidWalker' },
+  { normals: ['Goblin', 'Orc', 'Harpy'], boss: 'Seraphim' },
+  { normals: ['Kobold', 'Skeleton', 'Cyclops'], boss: 'SlimeKing' },
+  { normals: ['Orc', 'Zombie', 'Minotaur'], boss: 'Troll' },
+  { normals: ['Skeleton', 'Werewolf', 'Golem'], boss: 'Cerberus' },
+  { normals: ['Zombie', 'Harpy', 'Drake'], boss: 'DeathLord' },
+  { normals: ['Werewolf', 'Cyclops', 'Slime'], boss: 'RedDragon' },
+  { normals: ['Harpy', 'Minotaur', 'Goblin'], boss: 'VoidWalker' },
+  { normals: ['Cyclops', 'Golem', 'Kobold'], boss: 'Seraphim' },
 ];
 
 /** 스테이지 번호(1부터) → 스테이지 정의. 23스테이지 이후는 순환하며 난이도만 계속 오른다. */
@@ -178,11 +153,17 @@ export function stageDef(stage) {
   };
 }
 
-export function monsterSrc(name) {
-  if (name === 'warrior') return 'assets/char/warrior.png'; // 플레이어 캐릭터는 char/ 에 있음
+/** 스프라이트 경로. 히어로 3프레임은 assets/sprites/ 루트, 몬스터/보스는 하위 폴더. */
+export function spriteSrc(name) {
+  if (name === 'warrior' || name === 'hero_idle') return 'assets/sprites/hero_idle.png';
+  if (name === 'hero_attack') return 'assets/sprites/hero_attack.png';
+  if (name === 'hero_skill') return 'assets/sprites/hero_skill.png';
   const m = MONSTERS[name];
-  return m && m.art ? `assets/boss/${name}.png` : `assets/monster/${name}.png`;
+  return m && m.boss ? `assets/sprites/boss/${name}.png` : `assets/sprites/monster/${name}.png`;
 }
+
+/** 하위 호환용 별칭 */
+export const monsterSrc = spriteSrc;
 export function monsterKo(name) {
   return (MONSTERS[name] || {}).ko || name;
 }
