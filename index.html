@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#070a12">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="영지 RPG">
+<meta name="description" content="부동산 거래소와 연동되는 모바일 방치형 RPG 프로토타입">
+<title>⚔️ 영지 RPG · 방치형</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="app" class="app">
+
+  <!-- 상단 상태줄: 동기화 상태 + 재화 -->
+  <header class="hud" id="hud">
+    <div class="hud-l">
+      <span class="badge" id="syncBadge" data-kind="guest">
+        <i class="dot"></i><b id="syncLabel">로컬 저장</b>
+      </span>
+    </div>
+    <div class="hud-r">
+      <span class="res"><span class="ico">💰</span><b id="goldVal">0</b></span>
+      <span class="res"><span class="ico">💎</span><b id="shardVal">0</b></span>
+    </div>
+  </header>
+
+  <!-- 상단 40%: 자동사냥 캔버스 -->
+  <section class="stage" id="stage">
+    <canvas id="battle" aria-label="자동 사냥 화면"></canvas>
+
+    <div class="stage-top">
+      <div class="stage-chip">
+        <span class="s-label" id="stageNum">스테이지 1</span>
+        <span class="s-theme" id="themeName">초원</span>
+      </div>
+      <button class="boss-btn" id="bossBtn" type="button">
+        <span class="b-ico">👑</span>
+        <span class="b-txt">보스</span>
+        <span class="b-count" id="bossCount">3</span>
+      </button>
+    </div>
+
+    <div class="stage-bottom">
+      <div class="killbar" id="killDots" aria-hidden="true"></div>
+      <div class="bars">
+        <div class="bar hp"><i id="hpFill"></i><span id="hpText">100 / 100</span></div>
+        <div class="bar exp"><i id="expFill"></i><span id="expText">Lv.1 · 0%</span></div>
+      </div>
+    </div>
+
+    <div class="quick" id="quickSkills">
+      <button class="q" data-skill="strike" type="button" aria-label="강격 시전"><span class="q-ico">💥</span><i class="q-cd"></i></button>
+      <button class="q" data-skill="whirl" type="button" aria-label="범위 베기 시전"><span class="q-ico">🌀</span><i class="q-cd"></i></button>
+      <button class="q" data-skill="berserk" type="button" aria-label="광폭 시전"><span class="q-ico">🔥</span><i class="q-cd"></i></button>
+      <button class="q" data-skill="heal" type="button" aria-label="회복 시전"><span class="q-ico">💚</span><i class="q-cd"></i></button>
+    </div>
+
+    <div class="offline-pill hidden" id="offlinePill">방치 보상 계산 중…</div>
+  </section>
+
+  <!-- 하단 60%: 탭 UI -->
+  <main class="panel" id="panel">
+    <div class="panel-inner" id="panelInner"></div>
+  </main>
+
+  <nav class="tabbar" id="tabbar">
+    <button class="tab active" data-tab="hunt" type="button"><span>⚔️</span><b>사냥/스킬</b></button>
+    <button class="tab" data-tab="gear" type="button"><span>🎒</span><b>장비/강화</b></button>
+    <button class="tab" data-tab="land" type="button"><span>🏢</span><b>부동산 연계</b></button>
+    <button class="tab" data-tab="more" type="button"><span>🏆</span><b>랭킹/설정</b></button>
+  </nav>
+</div>
+
+<div class="toast-root" id="toastRoot" aria-live="polite"></div>
+<div class="modal-root hidden" id="modalRoot">
+  <div class="modal-backdrop" data-modal-close></div>
+  <div class="modal-card" id="modalCard" role="dialog" aria-modal="true"></div>
+</div>
+
+<div class="boot" id="boot">
+  <div class="boot-logo">⚔️</div>
+  <div class="boot-title">영지 RPG</div>
+  <div class="boot-sub">부동산 거래소 × 방치형</div>
+  <div class="boot-bar"><i></i></div>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

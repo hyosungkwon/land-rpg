@@ -1,0 +1,14 @@
+# 로컬 검증용 파일 (배포물 아님)
+node_modules/
+package.json
+package-lock.json
+tools/
+__pycache__/
+*.pyc
+
+# OS/에디터
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
