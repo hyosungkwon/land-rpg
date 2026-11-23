@@ -247,14 +247,22 @@ export class Cloud {
    * mutator(curState) 는 새 state 를 반환해야 하며, 기존 필드를 모두 복사해 두어야 한다.
    * (전체 set 이 아니라 트랜잭션이므로 동시에 들어온 다른 변경도 보존된다)
    */
-  async mutateState(mutator) {
+  async mutateState(mutator, fallback = null) {
     if (!this.user) return { ok: false, reason: 'login' };
     const f = this.f || (await this.loadSdk());
     let reason = '';
     try {
       const r = await withTimeout(
         f.runTransaction(f.ref(this.db, `users/${this.uid}/state`), (cur) => {
-          const out = mutator(cur && typeof cur === 'object' ? cur : {});
+          // 로컬 캐시가 비어 있으면 cur=null 로 먼저 호출된다. 서버 값이 따로 있으면
+          // Firebase 가 서버 값으로 한 번 더 호출하므로, 마지막으로 읽은 사본을 기본값으로 쓴다.
+          const hasCur = cur && typeof cur === 'object' && Object.keys(cur).length > 0;
+          const base = hasCur ? cur : fallback;
+          if (!base || typeof base !== 'object') {
+            reason = reason || '부동산 데이터를 읽지 못했습니다.';
+            return undefined; // 중단
+          }
+          const out = mutator(base);
           if (!out || typeof out !== 'object') {
             reason = reason || '변경 내용이 없습니다.';
             return undefined; // 중단
@@ -273,6 +281,13 @@ export class Cloud {
     }
   }
 
+  /** 트랜잭션 fallback 용: 로컬 전용 필드(_pendingIncome)를 뺀 state 사본 */
+  propSnapshot() {
+    if (!this.prop) return null;
+    const { _pendingIncome, ...rest } = this.prop; // eslint-disable-line no-unused-vars
+    return rest;
+  }
+
   /** 트랜잭션 결과 state 를 로컬 사본에 반영 (pending income 유지) */
   setPropertyState(val) {
     const pending = this.prop && this.prop._pendingIncome ? this.prop._pendingIncome : 0;
@@ -285,11 +300,17 @@ export class Cloud {
     const f = this.f || (await this.loadSdk());
     // 트랜잭션은 로컬 캐시를 기준으로 시작하므로, 먼저 최신 state 를 읽어 둔다.
     if (!this.prop) await this.refreshProperty();
+    const fallback = this.prop ? this.propSnapshot() : null;
     let applied = null;
     try {
       const r = await withTimeout(
         f.runTransaction(f.ref(this.db, `users/${this.uid}/state`), (cur) => {
-          const base = cur && typeof cur === 'object' ? cur : {};
+          const hasCur = cur && typeof cur === 'object' && Object.keys(cur).length > 0;
+          const base = hasCur ? cur : fallback;
+          if (!base) {
+            applied = { ok: false, reason: '부동산 데이터를 읽지 못했습니다. 새로고침 후 다시 시도해 주세요.' };
+            return undefined;
+          }
           const out = applyTrade(base, key, side, qty, Date.now());
           applied = out;
           if (!out.ok) return undefined; // 잔여 공급/현금 부족 → 중단
@@ -320,7 +341,7 @@ export class Cloud {
       const p = portfolioOf(next, Date.now());
       next.bestAsset = Math.max(Number(cur.bestAsset) || 0, Math.floor(p.totalAsset));
       return next;
-    });
+    }, this.propSnapshot());
     if (!r.ok) return { ok: false, reason: r.reason === 'login' ? 'login' : '거래를 반영하지 못했습니다.', error: r.error };
     return { ok: true, cash: Number((r.state || {}).cash) || 0 };
   }
@@ -380,7 +401,10 @@ export class Cloud {
     try {
       const r = await withTimeout(
         f.runTransaction(ref, (cur) => {
-          if (cur && typeof cur === 'object' && Object.keys(cur).length) return undefined; // 경쟁 시 중단
+          if (cur && typeof cur === 'object' && Object.keys(cur).length) {
+            created = false; // 서버에 이미 기록이 있음 → 낙관적 쓰기 취소
+            return undefined;
+          }
           created = true;
           return initial;
         }),

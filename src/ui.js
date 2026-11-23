@@ -64,24 +64,18 @@ export class UI {
       else this.setTab('land');
     });
 
-    // 부동산 매물 검색 (입력 중 포커스/커서 유지)
+    // 부동산 매물 검색 — 목록 영역만 갱신해 입력 포커스를 유지한다
     this._searchTimer = 0;
     this.el.panelInner.addEventListener('input', (e) => {
       const el = e.target;
       if (!el || el.id !== 'landSearch') return;
       const v = el.value;
-      const pos = el.selectionStart;
       clearTimeout(this._searchTimer);
       this._searchTimer = setTimeout(() => {
         this.s.land.q = v;
         this.s.land.page = 1;
-        this.render();
-        const n = document.getElementById('landSearch');
-        if (n) {
-          n.focus();
-          try { n.setSelectionRange(pos, pos); } catch (err) { /* ignore */ }
-        }
-      }, 260);
+        this.updateLandList();
+      }, 200);
     });
 
     document.body.addEventListener('click', (e) => {
@@ -271,6 +265,7 @@ export class UI {
     if (!signedIn) {
       this.el.syncLabel.textContent = 'Google 로그인';
       this.el.badge.title = '한 번 로그인하면 RPG와 부동산이 함께 연결됩니다';
+      this.el.badge.setAttribute('aria-label', 'Google 로그인');
       return;
     }
     const nick = info.nickname || '내 계정';
@@ -278,6 +273,7 @@ export class UI {
       info.kind === 'sync' ? '동기화' : info.kind === 'local' ? '로컬' : info.kind === 'loading' ? '연결 중' : info.label;
     this.el.syncLabel.textContent = `${nick} · ${short}`;
     this.el.badge.title = info.detail || '';
+    this.el.badge.setAttribute('aria-label', `${nick} 계정 · ${short} — 눌러서 부동산 열기`);
   }
 
   /* ───────────── 토스트 / 모달 ───────────── */
@@ -343,9 +339,34 @@ export class UI {
   /* ───────────── 패널 렌더 ───────────── */
   render() {
     const scroll = this.el.panel.scrollTop;
+    // 검색 중 레벨업 등으로 패널이 다시 그려져도 입력 내용/포커스를 잃지 않게
+    const active = document.activeElement;
+    const keep = active && active.id === 'landSearch'
+      ? { value: active.value, pos: active.selectionStart }
+      : null;
     this.el.panelInner.innerHTML = this.template();
     this.el.panel.scrollTop = scroll;
+    if (keep) {
+      const n = document.getElementById('landSearch');
+      if (n) {
+        n.focus();
+        try { n.setSelectionRange(keep.pos, keep.pos); } catch (e) { /* ignore */ }
+      }
+    }
     this.lastLive = 0;
+  }
+
+  /** 매물 목록만 다시 그린다(검색어 입력 중 포커스 유지) */
+  updateLandList() {
+    const list = document.getElementById('landList');
+    if (!list) {
+      this.render();
+      return;
+    }
+    const built = buildMarketList(this);
+    list.innerHTML = built.html;
+    const c = document.getElementById('landCount');
+    if (c) c.textContent = `${built.total}개 매물 · ${built.shown}개 표시 · 가격은 실시간 변동(±30% 일일 밴드)`;
   }
 
   template() {
@@ -692,25 +713,11 @@ function tplLandHome(ui) {
 }
 
 /* ───────────── 🛒 매물 투자 ───────────── */
-function tplLandMarket(ui) {
+function buildMarketList(ui) {
   const s = ui.s;
-  const status = ui.cloud.statusInfo();
-  if (!status.signedIn || !ui.cloud.prop) {
-    const signIn = !status.signedIn;
-    return `<div class="card">
-      <div class="card-head"><div class="card-title"><span class="t-ico">🛒</span>매물 투자</div><span class="tiny dim">${signIn ? '로그인 필요' : '새 계정'}</span></div>
-      <div class="tiny muted" style="line-height:1.7">${signIn
-        ? '상단 <b>Google 로그인</b> 한 번이면 전국 229개 시군구 매물을 이 화면에서 바로 사고팔 수 있습니다.'
-        : '이 계정에는 아직 부동산 기록이 없습니다. 초기 자금 <b>₩500,000</b> 으로 시작하면 매물을 바로 살 수 있습니다.'}</div>
-      ${signIn ? '' : '<button class="btn green block" style="margin-top:11px" data-action="create-account">부동산 게임 시작 (₩500,000)</button>'}
-      <div class="note" style="margin-top:10px">가격·수익률은 korea-land 원본 데이터(초기가·분당 임대수익·최대 공급·지역 특성)를 그대로 씁니다.</div>
-    </div>`;
-  }
-
+  const raw = ui.cloud.prop || {};
+  const owned = raw.owned || {};
   const now = Date.now();
-  const raw = ui.cloud.prop;
-  const owned = (raw && raw.owned) || {};
-  const cash = Number(raw && raw.cash) || 0;
   const q = String(s.land.q || '').trim();
   const tier = s.land.tier || 'all';
   const sort = s.land.sort || 'roi';
@@ -737,6 +744,54 @@ function tplLandMarket(ui) {
   const PAGE = 24;
   const shown = rows.slice(0, page * PAGE);
 
+  const html = shown.length
+    ? shown
+        .map(({ c, info, held, hourlyPerPyeong, payback }) => {
+          const seasonal = info.season ? traitBadge(info.season) : '';
+          const remain = Math.max(0, c.supply - held);
+          return `<div class="mkt">
+            <div class="m-ico">${c.emoji}</div>
+            <div class="m-mid">
+              <div class="m-name">${esc(c.name)}<span class="m-region">${esc(c.region)}</span>${traitBadge(c.trait)}${seasonal}</div>
+              <div class="m-line"><b>₩${fmt(info.price)}</b><span class="dim">/평</span> ${trendHtml(info.trend)}</div>
+              <div class="m-line dim">시간 +₩${formatWon(hourlyPerPyeong)}/평 · 회수 ${paybackText(payback)}${held > 0 ? ` · <b class="own">보유 ${fmt(held)}평</b>` : ''}</div>
+              <div class="m-line dim">잔여 ${formatWon(remain)}평</div>
+            </div>
+            <div class="m-btns">
+              <button class="mini buy" data-action="land-trade" data-value="${c.key}" data-side="buy">매수</button>
+              <button class="mini sell" data-action="land-trade" data-value="${c.key}" data-side="sell" ${held > 0 ? '' : 'disabled'}>매도</button>
+            </div>
+          </div>`;
+        })
+        .join('') + (shown.length < rows.length
+      ? `<button class="btn small ghost block" style="margin-top:10px" data-action="land-more">더 보기 (${shown.length}/${rows.length})</button>`
+      : '')
+    : `<div class="empty">조건에 맞는 매물이 없습니다.</div>`;
+
+  return { total: rows.length, shown: shown.length, html };
+}
+
+function tplLandMarket(ui) {
+  const s = ui.s;
+  const status = ui.cloud.statusInfo();
+  if (!status.signedIn || !ui.cloud.prop) {
+    const signIn = !status.signedIn;
+    return `<div class="card">
+      <div class="card-head"><div class="card-title"><span class="t-ico">🛒</span>매물 투자</div><span class="tiny dim">${signIn ? '로그인 필요' : '새 계정'}</span></div>
+      <div class="tiny muted" style="line-height:1.7">${signIn
+        ? '상단 <b>Google 로그인</b> 한 번이면 전국 229개 시군구 매물을 이 화면에서 바로 사고팔 수 있습니다.'
+        : '이 계정에는 아직 부동산 기록이 없습니다. 초기 자금 <b>₩500,000</b> 으로 시작하면 매물을 바로 살 수 있습니다.'}</div>
+      ${signIn ? '' : '<button class="btn green block" style="margin-top:11px" data-action="create-account">부동산 게임 시작 (₩500,000)</button>'}
+      <div class="note" style="margin-top:10px">가격·수익률은 korea-land 원본 데이터(초기가·분당 임대수익·최대 공급·지역 특성)를 그대로 씁니다.</div>
+    </div>`;
+  }
+
+  const raw = ui.cloud.prop || {};
+  const cash = Number(raw.cash) || 0;
+  const tier = s.land.tier || 'all';
+  const sort = s.land.sort || 'roi';
+  const list = buildMarketList(ui);
+
   const chips = [
     ['all', '전체'],
     ['0', '군'],
@@ -756,28 +811,6 @@ function tplLandMarket(ui) {
     .map(([k, l]) => `<button class="chip ${sort === k ? 'on' : ''}" data-action="land-sort" data-value="${k}">${l}</button>`)
     .join('');
 
-  const list = shown.length
-    ? shown
-        .map(({ c, info, held, hourlyPerPyeong, payback }) => {
-          const seasonal = info.season ? traitBadge(info.season) : '';
-          const remain = Math.max(0, c.supply - held);
-          return `<div class="mkt">
-            <div class="m-ico">${c.emoji}</div>
-            <div class="m-mid">
-              <div class="m-name">${esc(c.name)}<span class="m-region">${esc(c.region)}</span>${traitBadge(c.trait)}${seasonal}</div>
-              <div class="m-line"><b>₩${fmt(info.price)}</b><span class="dim">/평</span> ${trendHtml(info.trend)}</div>
-              <div class="m-line dim">시간 +₩${formatWon(hourlyPerPyeong)}/평 · 회수 ${paybackText(payback)}${held > 0 ? ` · <b class="own">보유 ${fmt(held)}평</b>` : ''}</div>
-              <div class="m-line dim">잔여 ${formatWon(remain)}평</div>
-            </div>
-            <div class="m-btns">
-              <button class="mini buy" data-action="land-trade" data-value="${c.key}" data-side="buy">매수</button>
-              <button class="mini sell" data-action="land-trade" data-value="${c.key}" data-side="sell" ${held > 0 ? '' : 'disabled'}>매도</button>
-            </div>
-          </div>`;
-        })
-        .join('')
-    : `<div class="empty">조건에 맞는 매물이 없습니다.</div>`;
-
   return `
   <div class="card">
     <div class="card-head">
@@ -790,15 +823,10 @@ function tplLandMarket(ui) {
     </div>
     <div class="chips" style="margin-top:8px">${chips}</div>
     <div class="chips" style="margin-top:5px">${sorts}</div>
-    <div class="tiny dim" style="margin-top:8px">${rows.length}개 매물 · ${shown.length}개 표시 · 가격은 실시간 변동(±30% 일일 밴드)</div>
+    <div class="tiny dim" style="margin-top:8px" id="landCount">${list.total}개 매물 · ${list.shown}개 표시 · 가격은 실시간 변동(±30% 일일 밴드)</div>
   </div>
 
-  <div class="card" style="padding-top:2px">
-    ${list}
-    ${shown.length < rows.length
-      ? `<button class="btn small ghost block" style="margin-top:10px" data-action="land-more">더 보기 (${shown.length}/${rows.length})</button>`
-      : ''}
-  </div>
+  <div class="card" style="padding-top:2px" id="landList">${list.html}</div>
 
   <div class="note">
     매수·매도는 <b>users/{uid}/state</b> 에 원자적으로 반영됩니다(다른 필드 보존). 거래세 0.01%,
