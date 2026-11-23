@@ -11,6 +11,24 @@ import { normalizeProperty, computeBuffs, dividendReward, EMPTY_PROP } from './s
 import { Renderer } from './src/render.js';
 import { UI } from './src/ui.js';
 
+// 구형 Safari / 삼성 인터넷 대비 CanvasRenderingContext2D.roundRect 폴리필
+(() => {
+  try {
+    const P = typeof CanvasRenderingContext2D !== 'undefined' && CanvasRenderingContext2D.prototype;
+    if (!P || typeof P.roundRect === 'function') return;
+    P.roundRect = function (x, y, w, h, r) {
+      const rr = Math.min(typeof r === 'number' ? r : 0, Math.abs(w) / 2, Math.abs(h) / 2);
+      this.beginPath();
+      this.moveTo(x + rr, y);
+      this.arcTo(x + w, y, x + w, y + h, rr);
+      this.arcTo(x + w, y + h, x, y + h, rr);
+      this.arcTo(x, y + h, x, y, rr);
+      this.arcTo(x, y, x + w, y, rr);
+      this.closePath();
+    };
+  } catch (e) { /* ignore */ }
+})();
+
 const STORAGE = (() => {
   try {
     return window.localStorage;
@@ -43,8 +61,9 @@ class App {
   async boot() {
     this.ui.init();
     this.renderer
-      .preload(['warrior', ...this.stageMonsterNames(this.s.stage), stageDef(this.s.stage).boss])
-      .then(() => this.renderer.resize());
+      .preload(['hero_idle', 'hero_attack', 'hero_skill', ...this.stageMonsterNames(this.s.stage)])
+      .then(() => this.renderer.resize())
+      .catch(() => {});
 
     this.ui.setSync({ kind: 'guest', label: '로컬 저장', detail: '부동산 연동 전' });
     this.cloud.onStatus((info) => this.ui.setSync(info));
@@ -79,37 +98,123 @@ class App {
     return [...d.normals, d.boss];
   }
 
-  /* ───────────── 메인 루프 ───────────── */
+  /* ───────────── 메인 루프 ─────────────
+   * 중요: 다음 프레임을 먼저 예약한 뒤 작업한다. 어느 한 단계에서 예외가 나도
+   * 루프가 영구히 멈추지 않고(모바일 '몹 오면 멈춤' 증상), 전투 시뮬레이션은 계속된다.
+   */
   loop(ts) {
+    this._raf = requestAnimationFrame((t) => this.loop(t));
     const now = Date.now();
-    const dt = this.lastTs ? Math.min(200, ts - this.lastTs) : 16;
-    this.lastTs = ts;
+    const tsNum = typeof ts === 'number' && isFinite(ts) ? ts : now;
+    let dt = this.lastTs ? tsNum - this.lastTs : 16;
+    if (!isFinite(dt) || dt < 0) dt = 16;
+    dt = Math.min(200, dt);
+    this.lastTs = tsNum;
 
-    this.battle.tick(dt, now);
-    const events = this.battle.drainEvents();
-    if (events.length) {
-      this.renderer.onEvents(events);
-      this.handleEvents(events, now);
-    }
-    this.renderer.frame(ts);
-    this.ui.refreshLive(now);
-
-    // 자동 저장 / 클라우드 동기화
-    this.s.records.playMs = (this.s.records.playMs || 0) + dt;
-    if (now - this.lastSave > 8000) {
-      this.lastSave = now;
-      this.save();
-    }
-    if (now - this.lastCloud > 45000 && this.cloud.signedIn) {
-      this.lastCloud = now;
-      this.pushCloud(true);
-    }
-    if (now - this.lastRank > 120000 && this.cloud.signedIn && this.s.maxStage > 1) {
-      this.lastRank = now;
-      this.cloud.publishRanking(this.s).catch(() => {});
+    // 1) 전투 시뮬레이션
+    let events = [];
+    try {
+      this.battle.tick(dt, now);
+      events = this.battle.drainEvents();
+    } catch (e) {
+      this.reportError('battle', e);
+      this.recoverBattle();
     }
 
-    requestAnimationFrame((t) => this.loop(t));
+    // 2) 연출 · 렌더 · UI (실패해도 전투는 계속)
+    try {
+      if (events.length) this.renderer.onEvents(events, now);
+    } catch (e) {
+      this.reportError('effects', e);
+    }
+    try {
+      this.renderer.frame(now);
+      this._lastFrameOk = now;
+    } catch (e) {
+      this.reportError('render', e);
+      this.recoverRender(now);
+    }
+    try {
+      if (events.length) this.handleEvents(events, now);
+      this.ui.refreshLive(now);
+    } catch (e) {
+      this.reportError('ui', e);
+    }
+
+    // 3) 자동 저장 / 클라우드 동기화
+    try {
+      this.s.records.playMs = (this.s.records.playMs || 0) + dt;
+      if (now - this.lastSave > 8000) {
+        this.lastSave = now;
+        this.save();
+      }
+      if (now - this.lastCloud > 45000 && this.cloud.signedIn) {
+        this.lastCloud = now;
+        this.pushCloud(true);
+      }
+      if (now - this.lastRank > 120000 && this.cloud.signedIn && this.s.maxStage > 1) {
+        this.lastRank = now;
+        this.cloud.publishRanking(this.s).catch(() => {});
+      }
+    } catch (e) {
+      this.reportError('save', e);
+    }
+  }
+
+  /* ───────────── 오류 보고 ·자동복구 ───────────── */
+  reportError(where, err) {
+    const msg = (err && (err.message || err.name)) || String(err);
+    this._errCounts = this._errCounts || {};
+    const n = (this._errCounts[where] = (this._errCounts[where] || 0) + 1);
+    if (this._lastErr !== msg) {
+      this._lastErr = msg;
+      // 사용자에게는 짧게만, 자세한 내용은 개발자 도구로
+      try { console.warn(`[land-rpg] ${where} error:`, err); } catch (e) { /* ignore */ }
+    }
+    if (n === 3) this.showErrorBadge(`${where}: ${msg}`);
+  }
+
+  showErrorBadge(text) {
+    try {
+      if (!this._badgeEl) {
+        const el = document.createElement('div');
+        el.id = 'errBadge';
+        el.style.cssText =
+          'position:fixed;left:8px;bottom:70px;z-index:9999;max-width:80vw;padding:6px 10px;' +
+          'border-radius:10px;background:rgba(150,20,30,.88);color:#fff;font-size:11px;' +
+          'line-height:1.35;font-family:system-ui,sans-serif;pointer-events:none;opacity:.92';
+        document.body.appendChild(el);
+        this._badgeEl = el;
+        setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); this._badgeEl = null; }, 6000);
+      }
+      this._badgeEl.textContent = `⚠ ${String(text).slice(0, 90)}`;
+    } catch (e) { /* ignore */ }
+  }
+
+  recoverBattle() {
+    // 전투 상태가 깨졌으면 엔티티를 정리해 다시 돌아가게 한다(진행도는 유지).
+    try {
+      this.battle.monsters = [];
+      this.battle.boss = null;
+      this.battle.events = [];
+      this.battle.refreshStats(Date.now());
+      if (!isFinite(this.battle.player.hp)) this.battle.player.hp = this.battle.stats.hpMax;
+      this.battle.spawnInitial(Date.now());
+    } catch (e) { /* ignore */ }
+  }
+
+  recoverRender(now) {
+    // 캔버스 상태(save/restore 불균형·깨진 변환)를 되돌리고 다음 프레임을 다시 그린다.
+    const since = now - (this._lastFrameOk || 0);
+    try {
+      const ctx = this.renderer.ctx;
+      ctx.restore && ctx.setTransform(this.renderer.dpr, 0, 0, this.renderer.dpr, 0, 0);
+      this.renderer.shake = 0;
+      this.renderer.bgKey = '';
+    } catch (e) { /* ignore */ }
+    if (since > 2500) {
+      try { this.renderer.resize(); } catch (e) { /* ignore */ }
+    }
   }
 
   handleEvents(events, now) {
@@ -194,7 +299,30 @@ class App {
   registerSW() {
     if (!('serviceWorker' in navigator)) return;
     if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker
+      .register('sw.js', { updateViaCache: 'none' })
+      .then((reg) => {
+        // 새 버전이 대기 중이면 바로 활성화 요청(삼성 인터넷은 skipWaiting 만으로도 교체됨)
+        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        reg.update && reg.update().catch(() => {});
+      })
+      .catch(() => {});
+
+    // 새 서비스 워커가 제어권을 가져가면(새 캐시 준비 완료) 한 번만 자동 새로고짐
+    try {
+      if (!navigator.serviceWorker.controller) return;
+      let done = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (done) return;
+        try {
+          if (sessionStorage.getItem('land_rpg_sw_reloaded') === '1') return;
+          sessionStorage.setItem('land_rpg_sw_reloaded', '1');
+        } catch (e) { /* ignore */ }
+        done = true;
+        this.save(true);
+        setTimeout(() => location.reload(), 350);
+      });
+    } catch (e) { /* ignore */ }
   }
 
   /* ───────────── Firebase ───────────── */

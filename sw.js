@@ -1,75 +1,47 @@
 // land-rpg / sw.js — 오프라인 캐시 (방치형 RPG 는 네트워크 없이도 플레이 가능해야 함)
 // Firebase/CDN 요청은 캐시하지 않고 네트워크로 그대로 보낸다.
-const VERSION = 'land-rpg-v1.0.2';
+const VERSION = 'land-rpg-v2.0.0';
 const CORE = [
-  "./",
-  "./index.html",
-  "./style.css",
-  "./app.js",
-  "./manifest.json",
-  "./src/data.js",
-  "./src/state.js",
-  "./src/combat.js",
-  "./src/render.js",
-  "./src/ui.js",
-  "./src/firebase.js",
-  "./src/property.js",
-  "./assets/char/warrior.png",
-  "./icons/icon-192.png",
-  "./icons/icon-512.png",
-  "./icons/icon-maskable-512.png",
-  "./assets/monster/AncientDragon.png",
-  "./assets/monster/AncientOne.png",
-  "./assets/monster/Basilisk.png",
-  "./assets/monster/Behemoth.png",
-  "./assets/monster/Beholder.png",
-  "./assets/monster/BlackKnight.png",
-  "./assets/monster/Bugbear.png",
-  "./assets/monster/Cerberus.png",
-  "./assets/monster/ChaosOverlord.png",
-  "./assets/monster/Cockatrice.png",
-  "./assets/monster/Cyclops.png",
-  "./assets/monster/DeathKnight.png",
-  "./assets/monster/DeathLord.png",
-  "./assets/monster/DemiGod.png",
-  "./assets/monster/DragonLord.png",
-  "./assets/monster/Drake.png",
-  "./assets/monster/FrostGiant.png",
-  "./assets/monster/Gargoyle.png",
-  "./assets/monster/Ghoul.png",
-  "./assets/monster/GiantAnt.png",
-  "./assets/monster/GiantWorm.png",
-  "./assets/monster/Goblin.png",
-  "./assets/monster/Golem.png",
-  "./assets/monster/Harpy.png",
-  "./assets/monster/Kobold.png",
-  "./assets/monster/Kraken.png",
-  "./assets/monster/Leviathan.png",
-  "./assets/monster/Lich.png",
-  "./assets/monster/Lizardman.png",
-  "./assets/monster/Minotaur.png",
-  "./assets/monster/Ogre.png",
-  "./assets/monster/Orc.png",
-  "./assets/monster/Phoenix.png",
-  "./assets/monster/RedDragon.png",
-  "./assets/monster/Scorpion.png",
-  "./assets/monster/ShadowKnight.png",
-  "./assets/monster/Skeleton.png",
-  "./assets/monster/Slime.png",
-  "./assets/monster/Succubus.png",
-  "./assets/monster/Tiamat.png",
-  "./assets/monster/Troll.png",
-  "./assets/monster/Werewolf.png",
-  "./assets/monster/WorldEater.png",
-  "./assets/monster/Wyvern.png",
-  "./assets/monster/Zombie.png",
-  "./assets/boss/AbyssalHorror.png",
-  "./assets/boss/CelestialGuard.png",
-  "./assets/boss/DarkTitan.png",
-  "./assets/boss/Seraphim.png",
-  "./assets/boss/SlimeKing.png",
-  "./assets/boss/SoulReaper.png",
-  "./assets/boss/VoidWalker.png"
+  './',
+  './index.html',
+  './style.css',
+  './app.js',
+  './manifest.json',
+  './src/data.js',
+  './src/state.js',
+  './src/combat.js',
+  './src/render.js',
+  './src/ui.js',
+  './src/firebase.js',
+  './src/property.js',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-maskable-512.png',
+  // 플레이어 3프레임 (대기 / 공격 / 스킬)
+  './assets/sprites/hero_idle.png',
+  './assets/sprites/hero_attack.png',
+  './assets/sprites/hero_skill.png',
+  // 일반 몬스터 12종
+  './assets/sprites/monster/Slime.png',
+  './assets/sprites/monster/Goblin.png',
+  './assets/sprites/monster/Kobold.png',
+  './assets/sprites/monster/Orc.png',
+  './assets/sprites/monster/Skeleton.png',
+  './assets/sprites/monster/Zombie.png',
+  './assets/sprites/monster/Werewolf.png',
+  './assets/sprites/monster/Harpy.png',
+  './assets/sprites/monster/Cyclops.png',
+  './assets/sprites/monster/Minotaur.png',
+  './assets/sprites/monster/Golem.png',
+  './assets/sprites/monster/Drake.png',
+  // 보스 7종
+  './assets/sprites/boss/SlimeKing.png',
+  './assets/sprites/boss/Troll.png',
+  './assets/sprites/boss/Cerberus.png',
+  './assets/sprites/boss/DeathLord.png',
+  './assets/sprites/boss/RedDragon.png',
+  './assets/sprites/boss/VoidWalker.png',
+  './assets/sprites/boss/Seraphim.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -91,6 +63,11 @@ self.addEventListener('activate', (event) => {
       await self.clients.claim();
     })()
   );
+});
+
+// 새 버전이 설치되면 대기 중인 SW 를 즉시 활성화하고 열려 있는 모든 탭을 새 버전으로 넘긴다.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 const PASSTHROUGH = [

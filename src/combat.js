@@ -6,7 +6,8 @@ import {
   calcStats, currentHp, skillEffect, killReward, registerKill, clearStage,
 } from './state.js';
 
-const ATTACK_STOP_GAP = 78; // 이 거리에서 멈추고 때린다
+const ATTACK_STOP_GAP = 240; // 이 거리에서 멈추고 때린다(캐릭터 스프라이트가 겹치지 않는 간격)
+const QUEUE_GAP = 80; // 뒤에 줄 서는 몬스터가 벌어지는 간격
 
 export class Battle {
   constructor(state, getBuffs, rng = Math.random, startAt = Date.now()) {
@@ -23,6 +24,10 @@ export class Battle {
       dead: false,
       reviveAt: 0,
       attackAnim: 0,
+      attackAt: 0,      // 마지막 공격 시작 시각(렌더러가 프레임 전환에 사용)
+      attackKind: 'normal',
+      skillAt: 0,       // 마지막 스킬 발동 시각
+      skillKey: '',
       hurtAt: 0,
       lastAttack: 0,
       born: Date.now(),
@@ -93,6 +98,8 @@ export class Battle {
       scale,
       lastAttack: now,
       hitAt: 0,
+      knock: 0,      // 피격 넉백(월드 단위)
+      lungeAt: 0,    // 캐릭터를 향해 돌진한 시각
       dying: 0,
       dead: false,
       born: now,
@@ -117,7 +124,10 @@ export class Battle {
 
   /* ───────────── 틱 ───────────── */
   tick(dtMs, now = Date.now()) {
-    const dt = Math.min(250, Math.max(0, dtMs));
+    // dt 가 NaN/음수/거대값이어도 전투가 깨지지 않게 방어한다(모바일 rAF 타임스탬프 이상 대응)
+    const raw = Number(dtMs);
+    const dt = Number.isFinite(raw) ? Math.min(250, Math.max(0, raw)) : 16;
+    if (!Number.isFinite(now)) now = Date.now();
     this.time += dt;
     if (now - this.lastStatsAt > 500) this.refreshStats(now);
 
@@ -147,24 +157,35 @@ export class Battle {
 
   updateMonsters(dt, now) {
     const p = this.player;
-    for (const m of this.monsters) {
-      if (m.dead) continue;
-      if (m.dying) {
-        if (now - m.dying > 450) m.dead = true;
-        continue;
-      }
+    // 앞에서부터 줄을 세운다: 가장 앞 몬스터만 캐릭터 옆에 붙고, 나머지는 뒤에 대기
+    const alive = this.monsters
+      .filter((m) => !m.dead && !m.dying)
+      .sort((a, b) => (b.isBoss ? 1 : 0) - (a.isBoss ? 1 : 0) || a.x - b.x);
+    let ahead = p.x + ATTACK_STOP_GAP;
+    for (const m of alive) {
+      if (!Number.isFinite(m.x)) m.x = ECON.spawnX;
+      if (!Number.isFinite(m.hp)) m.hp = m.maxHp;
+      const standX = ahead + (m.isBoss ? 100 : 0);
+      ahead = standX + QUEUE_GAP * (m.isBoss ? 1.5 : 1);
       const dist = m.x - p.x;
-      const stop = ATTACK_STOP_GAP + (m.isBoss ? 30 : 0);
-      if (dist > stop) {
-        const speed = m.isBoss ? 46 : 62 + (m.scale - 1) * 40; // 월드단위/초
-        m.x = Math.max(p.x + stop, m.x - (speed * dt) / 1000);
-      } else if (now - m.lastAttack > ECON.monsterAttackMs) {
+      if (m.x > standX + 2) {
+        const speed = m.isBoss ? 62 : 96 + (m.scale - 1) * 40; // 월드단위/초
+        m.x = Math.max(standX, m.x - (speed * dt) / 1000);
+      } else if (dist <= ATTACK_STOP_GAP + (m.isBoss ? 100 : 40) && now - m.lastAttack > ECON.monsterAttackMs) {
         m.lastAttack = now;
         m.lunge = 1;
+        m.lungeAt = now;
         const raw = m.atk * (0.88 + this.rng() * 0.24);
         this.damagePlayer(raw, m, now);
       }
+    }
+    for (const m of this.monsters) {
+      if (m.dead || m.dying) continue;
+      if (m.knock > 0) m.knock = Math.max(0, m.knock - (dt / 1000) * 90);
       if (m.lunge) m.lunge = Math.max(0, m.lunge - dt / 220);
+    }
+    for (const m of this.monsters) {
+      if (m.dying && now - m.dying > 450) m.dead = true;
     }
     this.monsters = this.monsters.filter((m) => !m.dead);
   }
@@ -191,6 +212,8 @@ export class Battle {
     if (!target) return;
     this.player.lastAttack = now;
     this.player.attackAnim = 1;
+    this.player.attackAt = now;
+    this.player.attackKind = 'normal';
     this.hit([target], 1, 'normal', now);
   }
 
@@ -210,14 +233,18 @@ export class Battle {
   }
 
   hit(list, mul, kind, now) {
+    let hits = 0;
     for (const m of list) {
       if (m.dead || m.dying) continue;
       const { dmg, crit } = this.roll(mul, now);
       m.hp -= dmg;
       m.hitAt = now;
+      m.knock = Math.min(30, (m.knock || 0) + (crit ? 18 : 10));
+      hits++;
       this.emit({ t: 'hit', id: m.id, dmg, crit, x: m.x, isBoss: m.isBoss, kind });
       if (m.hp <= 0) this.killMonster(m, now);
     }
+    return hits;
   }
 
   killMonster(m, now) {
@@ -269,6 +296,8 @@ export class Battle {
     const alive = this.targets();
     if (key === 'heal') {
       sk.last = now;
+      this.player.skillAt = now;
+      this.player.skillKey = key;
       const heal = Math.round(this.stats.hpMax * skillEffect('heal', sk.lv));
       this.player.hp = Math.min(this.stats.hpMax, this.player.hp + heal);
       this.emit({ t: 'skill', key, ko: def.name, heal, color: def.color });
@@ -276,6 +305,8 @@ export class Battle {
     }
     if (key === 'berserk') {
       sk.last = now;
+      this.player.skillAt = now;
+      this.player.skillKey = key;
       this.berserkUntil = now + def.dur;
       this.emit({ t: 'skill', key, ko: def.name, color: def.color, dur: def.dur });
       return true;
@@ -283,6 +314,10 @@ export class Battle {
     if (!alive.length) return false;
     if (key === 'whirl') {
       sk.last = now;
+      this.player.skillAt = now;
+      this.player.skillKey = key;
+      this.player.attackAt = now;
+      this.player.attackKind = 'whirl';
       const inRange = alive.filter((m) => m.x - this.player.x <= ECON.playerRange * 1.6);
       this.hit(inRange.length ? inRange : alive, skillEffect('whirl', sk.lv), 'whirl', now);
       this.emit({ t: 'skill', key, ko: def.name, color: def.color });
@@ -291,6 +326,10 @@ export class Battle {
     if (key === 'strike') {
       const target = alive.find((m) => m.x - this.player.x <= ECON.playerRange) || alive[0];
       sk.last = now;
+      this.player.skillAt = now;
+      this.player.skillKey = key;
+      this.player.attackAt = now;
+      this.player.attackKind = 'strike';
       this.hit([target], skillEffect('strike', sk.lv), 'strike', now);
       this.emit({ t: 'skill', key, ko: def.name, color: def.color, x: target.x });
       return true;
