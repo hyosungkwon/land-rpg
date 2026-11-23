@@ -268,8 +268,8 @@ export function questValue(state, type) {
     case 'level': return Math.max(1, Math.floor(num(s.level, 1)));
     case 'gacha': return Math.max(0, Math.floor(num(s.gacha && s.gacha.total)));
     case 'dungeon': return Math.max(0, Math.floor(num(s.dungeon && s.dungeon.runs)));
-    case 'job': return Math.max(0, Math.floor(num(s.jobTier)));
-    case 'equipLv': return equipLevelSum(s);
+    case 'job': return Math.max(0, Math.floor(num(s.jobTier)), Math.floor(num(s.records && s.records.peakJobTier)));
+    case 'equipLv': return Math.max(equipLevelSum(s), Math.floor(num(s.records && s.records.peakEquipLv)));
     case 'rarity': return bestRarityIndex(s);
     case 'cities': return landCounts(s).cities;
     case 'pyeong': return landCounts(s).pyeong;

@@ -299,6 +299,10 @@ export function promoteJob(state, now = Date.now()) {
   if (!pr.canPromote) return { ok: false, reason: pr.reason };
   state.jobTier = pr.next.tier;
   state.jobAt = now;
+  // v3.5: 환생으로 전직 단계가 초기화되어도 미션·업적 진행도가 유지되게 역대 최고 기록을 남긴다.
+  if (state.records && typeof state.records === 'object') {
+    state.records.peakJobTier = Math.max(Math.floor(Number(state.records.peakJobTier) || 0), state.jobTier);
+  }
   return { ok: true, from: pr.cur, to: pr.next };
 }
 

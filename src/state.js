@@ -13,7 +13,7 @@ import {
 import { defaultLand } from './land.js';
 import { PET_IDS, PET_MAX_LV, JOB_MAX, jobOf, equippedPet, petLevel, petAtkPct } from './meta.js';
 import {
-  collectionBonus, normalizeQuestState, normalizeAchievements, normalizeCodex,
+  collectionBonus, normalizeQuestState, normalizeAchievements, normalizeCodex, equipLevelSum,
 } from './quests.js';
 
 const nowMs = () => Date.now();
@@ -165,6 +165,15 @@ export function normalizeState(raw, now = nowMs()) {
   s.totalKills = Math.max(0, Math.floor(num(s.totalKills, 0)));
   s.bossKills = Math.max(0, Math.floor(num(s.bossKills, 0)));
   for (const k of Object.keys(EQUIP)) s.equip[k] = clamp(Math.floor(num(s.equip[k], 0)), 0, EQUIP_MAX_LV);
+  // v3.5: 환생으로 장비 강화·전직이 초기화되어도 미션·업적 진행도가 되돌아가지 않도록 역대 최고치를 기록한다.
+  s.records.peakEquipLv = Math.max(
+    Math.max(0, Math.floor(num(s.records.peakEquipLv, 0))),
+    equipLevelSum(s),
+  );
+  s.records.peakJobTier = Math.max(
+    Math.max(0, Math.floor(num(s.records.peakJobTier, 0))),
+    Math.max(0, Math.floor(num(s.jobTier, 0))),
+  );
   for (const k of Object.keys(SKILLS)) s.skills[k].lv = clamp(Math.floor(num(s.skills[k].lv, 0)), 0, SKILL_UPGRADE_MAX);
   s.bossReady = !!s.bossReady;
   s.autoBoss = s.autoBoss !== false;
@@ -476,6 +485,9 @@ export function tryEnhance(s, slot, times = 1) {
     s.equip[slot] += 1;
     spent += cost;
     done += 1;
+  }
+  if (s.records) {
+    s.records.peakEquipLv = Math.max(Math.max(0, Math.floor(num(s.records.peakEquipLv, 0))), equipLevelSum(s));
   }
   return { ok: true, done, spent };
 }

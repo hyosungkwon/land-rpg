@@ -1346,13 +1346,29 @@ def main():
     ok("환생" in tpl5["set"] and "초월석" in tpl5["set"], "설정 탭에도 환생 카드·기록", "")
     ok("∞" in tpl5["deepHunt"] and "inf-badge" in tpl5["deepHunt"], "S31+ 스테이지에 ∞ 배지 표시", "")
 
+    rbm = js(ctx, """
+      const s = defaultState(0);
+      s.maxStage = 25; s.stage = 25; s.level = 12; s.shards = 500;
+      tryEnhance(s, 'weapon', 5);
+      tryEnhance(s, 'armor', 4);
+      promoteJob(s, 500);
+      const before = { eq: questValue(s, 'equipLv'), job: questValue(s, 'job') };
+      const n = normalizeState(JSON.parse(JSON.stringify(s)), 0);
+      const saved = { eq: questValue(n, 'equipLv'), job: questValue(n, 'job'), peakEq: n.records.peakEquipLv, peakJob: n.records.peakJobTier };
+      const r = doRebirth(n, 1000);
+      const after = { eq: questValue(n, 'equipLv'), job: questValue(n, 'job'), equip: n.equip.weapon, jobTier: n.jobTier, level: n.level };
+      return { before, saved, after, ok: r.ok };
+    """)
+    ok(rbm["before"]["eq"] == 9 and rbm["saved"]["eq"] == 9 and rbm["saved"]["peakEq"] == 9 and rbm["saved"]["job"] == 1, "강화·전직이 역대 최고치로 기록됨", json.dumps(rbm["saved"], ensure_ascii=False))
+    ok(rbm["ok"] is True and rbm["after"]["equip"] == 0 and rbm["after"]["jobTier"] == 0 and rbm["after"]["eq"] == 9 and rbm["after"]["job"] == 1, "환생 후에도 장비·전직 기반 미션 진행도 유지", json.dumps(rbm["after"], ensure_ascii=False))
+
     rbsrc = read("src/rebirth.js")
     uisrc5 = read("src/ui.js")
     appsrc5 = read("app.js")
     stsrc5 = read("src/state.js")
     css5 = read("style.css")
     ok(os.path.exists(os.path.join(ROOT, "src/rebirth.js")) and all(x in rbsrc for x in ["REBIRTH", "REBIRTH_TRAITS", "rebirthPointsFor", "doRebirth", "upgradeTrait", "normalizeRebirth", "rebirthBonus"]), "rebirth.js 모듈 구성", "")
-    ok(all(x in stsrc5 for x in ["normalizeRebirth", "rebirthBonus", "peakStage", "monsterBaseHp", "stageGoldBase"]), "state.js — 환생 정규화·특성 스탯·무한 스케일 연결", "")
+    ok(all(x in stsrc5 for x in ["normalizeRebirth", "rebirthBonus", "peakStage", "peakEquipLv", "peakJobTier", "monsterBaseHp", "stageGoldBase"]), "state.js — 환생 정규화·특성 스탯·무한 스케일 연결", "")
     ok(all(x in appsrc5 for x in ["openRebirthConfirm", "doRebirth", "showRebirthTraits", "doUpgradeRebirthTrait", "rebirth: () => this.openRebirthConfirm()", 'data-action="rebirth-trait"']), "환생 액션·특성 버튼 연결(app.js)", "")
     ok(all(x in uisrc5 for x in ['data-action="rebirth"', 'data-action="rebirth-traits"', "case 'rebirth-trait'", "rebirthCard", "inf-badge"]), "환생·특성·∞ UI 구현(ui.js)", "")
     ok(all(x in css5 for x in [".rebirth-card", ".rb-list", ".trait-row", ".inf-badge", ".rb-points"]), "v3.5 환생·특성 CSS", "")
