@@ -1,5 +1,8 @@
 // land-rpg / sw.js — 오프라인 캐시 (게스트 전용: 네트워크가 없어도 처음부터 끝까지 플레이)
 const VERSION = 'land-rpg-v3.2.0';
+// 같은 릴리스 안에서 자산을 고친 경우 BUILD 를 올린다 → 열린 탭이 새 캐시로 넘어온다.
+const BUILD = 'r2';
+const CACHE = `${VERSION}-${BUILD}`;
 const CORE = [
   './',
   './index.html',
@@ -53,7 +56,7 @@ const CORE = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
-      const cache = await caches.open(VERSION);
+      const cache = await caches.open(CACHE);
       // cache:'reload' 로 브라우저 HTTP 캐시를 건너뛰고 항상 최신 파일을 담는다.
       await Promise.all(
         CORE.map((url) =>
@@ -71,7 +74,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      await Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k)));
+      await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
       await self.clients.claim();
       // 구버전 앱이 열려 있으면 새 버전으로 한 번 넘긴다(구버전 자동 새로고침 코드가 없는 경우 대비).
       try {
@@ -104,11 +107,11 @@ self.addEventListener('fetch', (event) => {
       (async () => {
         try {
           const fresh = await fetch(req);
-          const cache = await caches.open(VERSION);
+          const cache = await caches.open(CACHE);
           cache.put('./index.html', fresh.clone()).catch(() => {});
           return fresh;
         } catch (e) {
-          const cache = await caches.open(VERSION);
+          const cache = await caches.open(CACHE);
           return (await cache.match('./index.html')) || (await cache.match('./')) || Response.error();
         }
       })()
@@ -119,7 +122,7 @@ self.addEventListener('fetch', (event) => {
   // 정적 자산: 캐시 우선 + 백그라운드 갱신
   event.respondWith(
     (async () => {
-      const cache = await caches.open(VERSION);
+      const cache = await caches.open(CACHE);
       const cached = await cache.match(req, { ignoreSearch: true });
       if (cached) {
         fetch(req).then((res) => { if (res && res.ok) cache.put(req, res.clone()); }).catch(() => {});
