@@ -6,7 +6,8 @@ import {
   calcStats, currentHp, skillEffect, killReward, registerKill, clearStage,
 } from './state.js';
 
-const ATTACK_STOP_GAP = 78; // 이 거리에서 멈추고 때린다
+const ATTACK_STOP_GAP = 210; // 이 거리에서 멈추고 때린다(캐릭터 스프라이트가 겹치지 않는 간격)
+const QUEUE_GAP = 80; // 뒤에 줄 서는 몬스터가 벌어지는 간격
 
 export class Battle {
   constructor(state, getBuffs, rng = Math.random, startAt = Date.now()) {
@@ -156,29 +157,35 @@ export class Battle {
 
   updateMonsters(dt, now) {
     const p = this.player;
-    for (const m of this.monsters) {
-      if (m.dead) continue;
-      // 방어: 좌표가 깨지면(예외/NaN) 스폰 위치로 되돌려 전투가 영구히 멈추지 않게 한다
+    // 앞에서부터 줄을 세운다: 가장 앞 몬스터만 캐릭터 옆에 붙고, 나머지는 뒤에 대기
+    const alive = this.monsters
+      .filter((m) => !m.dead && !m.dying)
+      .sort((a, b) => (b.isBoss ? 1 : 0) - (a.isBoss ? 1 : 0) || a.x - b.x);
+    let ahead = p.x + ATTACK_STOP_GAP;
+    for (const m of alive) {
       if (!Number.isFinite(m.x)) m.x = ECON.spawnX;
       if (!Number.isFinite(m.hp)) m.hp = m.maxHp;
-      if (m.knock > 0) m.knock = Math.max(0, m.knock - (dt / 1000) * 90);
-      if (m.dying) {
-        if (now - m.dying > 450) m.dead = true;
-        continue;
-      }
+      const standX = ahead + (m.isBoss ? 70 : 0);
+      ahead = standX + QUEUE_GAP * (m.isBoss ? 1.5 : 1);
       const dist = m.x - p.x;
-      const stop = ATTACK_STOP_GAP + (m.isBoss ? 30 : 0);
-      if (dist > stop) {
-        const speed = m.isBoss ? 46 : 62 + (m.scale - 1) * 40; // 월드단위/초
-        m.x = Math.max(p.x + stop, m.x - (speed * dt) / 1000);
-      } else if (now - m.lastAttack > ECON.monsterAttackMs) {
+      if (m.x > standX + 2) {
+        const speed = m.isBoss ? 62 : 96 + (m.scale - 1) * 40; // 월드단위/초
+        m.x = Math.max(standX, m.x - (speed * dt) / 1000);
+      } else if (dist <= ATTACK_STOP_GAP + (m.isBoss ? 100 : 40) && now - m.lastAttack > ECON.monsterAttackMs) {
         m.lastAttack = now;
         m.lunge = 1;
         m.lungeAt = now;
         const raw = m.atk * (0.88 + this.rng() * 0.24);
         this.damagePlayer(raw, m, now);
       }
+    }
+    for (const m of this.monsters) {
+      if (m.dead || m.dying) continue;
+      if (m.knock > 0) m.knock = Math.max(0, m.knock - (dt / 1000) * 90);
       if (m.lunge) m.lunge = Math.max(0, m.lunge - dt / 220);
+    }
+    for (const m of this.monsters) {
+      if (m.dying && now - m.dying > 450) m.dead = true;
     }
     this.monsters = this.monsters.filter((m) => !m.dead);
   }

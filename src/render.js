@@ -512,7 +512,7 @@ export class Renderer {
     const p = b.player;
     const gy = this.groundY();
     const sc = this.scale();
-    const h = Math.min(this.H * 0.5, 148 * sc);
+    const h = Math.min(this.H * 0.48, 138 * sc);
     const w = h;
     const baseX = this.worldX(p.x);
 
@@ -574,13 +574,18 @@ export class Renderer {
     ctx.restore();
 
     // ── 검기 아크 ──
-    if (this.effects && attacking) this.drawSlash(ctx, px, gy, h, sc, atkK, p.attackKind);
+    if (this.effects && attacking) {
+      let near = null;
+      for (const m of b.monsters) if (!m.dead && !m.dying && (!near || m.x < near.x)) near = m;
+      const reach = near ? Math.max(30 * sc, this.worldX(near.x) - px) : 62 * sc;
+      this.drawSlash(ctx, px, gy, h, sc, atkK, p.attackKind, Math.min(reach * 0.82, 132 * sc));
+    }
   }
 
-  drawSlash(ctx, px, gy, h, sc, k, kind) {
-    const cx = px + h * 0.12;
+  drawSlash(ctx, px, gy, h, sc, k, kind, rIn) {
+    const cx = px + h * 0.1;
     const cy = gy - h * 0.56;
-    const r = h * 0.52;
+    const r = Math.max(26 * sc, rIn || h * 0.52);
     const fade = 1 - k;
     const start = -1.25;
     const sweep = lerp(0.25, 1.85, easeOut(k));
@@ -623,8 +628,8 @@ export class Renderer {
       const x = this.worldX(m.x + knock);
       const lungeAge = now - (m.lungeAt || 0);
       const lunge = lungeAge >= 0 && lungeAge < 240 ? (1 - lungeAge / 240) : 0;
-      let h = (m.isBoss ? 176 : 92) * sc * (m.isBoss ? 1 : m.scale);
-      h = Math.min(h, this.H * (m.isBoss ? 0.66 : 0.44));
+      let h = (m.isBoss ? 168 : 84) * sc * (m.isBoss ? 1 : m.scale);
+      h = Math.min(h, this.H * (m.isBoss ? 0.62 : 0.4));
       const w = h;
       let alpha = 1;
       let sink = 0;
