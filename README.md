@@ -2,6 +2,11 @@
 
 `survival-in-korea` 의 Firebase(부동산 거래소 `korea-land-4e0c2`)를 결합한 **모바일 세로형 PWA** 입니다.
 
+**v2.1.5 (2026-11-23)**: 모바일(삼성 인터넷) **로그인이 "연동 확인 중" 에서 멈추던 문제** 수정 —
+SDK 선로딩으로 탭 즉시 팝업 호출(제스처 유지), `signInWithPopup` 45초 타임아웃, 팝업 닫기 시 즉시 게스트 복귀,
+자동 리다이렉트 제거(교차 도메인 쿠키 차단 환경의 무한 루프 원인), 팝업 차단 시 안내창, `init()` 5초 내 상태 확정,
+SW 가 Firebase Auth/Google 요청을 절대 가로채지 않도록 보강.
+
 **v2.1 (2026-11-23)**: **Google 로그인 1회**로 RPG(`rpg/{uid}`)와 부동산 게임(`users/{uid}/state`)이 동시에 연결됩니다.
 부동산 탭이 단순 연계를 넘어 **실제 korea-land 플레이**(전국 229개 시군구 매물 시세·매수/매도·임대수익 수령)를
 할 수 있는 3개 서브탭 `[🏠 내 부동산 | 🛒 매물 투자 | ⚡ RPG 연계]` 으로 확장됐고,
@@ -241,7 +246,7 @@ Firebase Auth → 승인된 도메인에 추가해야 Google 팝업 로그인이
 - 라이브: **https://hyosungkwon.github.io/land-rpg/** (200 OK 확인)
 - `start_url`·`scope`·`sw.js`·모든 `src`/`assets` 경로가 **상대 경로**라 `/land-rpg/` 서브패스에서 그대로 동작합니다.
 - `package.json`·`tools/`·`node_modules/` 는 `.gitignore` 로 제외되어 배포에 섞이지 않습니다.
-- Pages 는 커스텀 헤더를 못 주므로 `sw.js` 캐시 갱신은 `const VERSION` 문자열을 올려 처리합니다(현재 `land-rpg-v2.0.0`, `skipWaiting()`+`clients.claim()` 로 즉시 교체).
+- Pages 는 커스텀 헤더를 못 주므로 `sw.js` 캐시 갱신은 `const VERSION` 문자열을 올려 처리합니다(현재 `land-rpg-v2.1.5`, `skipWaiting()`+`clients.claim()` 로 즉시 교체).
 - Firebase Auth **승인된 도메인**에 `hyosungkwon.github.io` 가 추가되어 있어야 Google 로그인 팝업이 동작합니다(추가 완료).
 
 ---
@@ -291,6 +296,19 @@ npm test          # smoke-test / app-smoke / app-offline / static-check
 - 원작 `pending_income` 은 **닉네임**으로 저장됩니다. 같은 닉네임을 쓰는 두 Google 계정이 있으면
   거래소 판매 대기가 공유되어 보입니다(원작 구조). 계정마다 다른 닉네임을 쓰면 피할 수 있습니다.
 - 다음 단계: ① 실기기(삼성 인터넷) 재확인 ② 프레임 시트 애니메이션·사운드 ③ 부동산 측 화면에 "영지 RPG" 진입 버튼 추가
+
+### 8-1. v2.1.5 — 모바일 구글 로그인 멈춤 수정
+
+증상: 삼성 인터넷에서 로그인 버튼을 누르면 **"계속 파이어베이스랑 연결하려고 하는"** 것처럼 `연동 확인 중` 에 머물렀다.
+
+| 원인 | 수정 |
+|---|---|
+| 로그인 탭 → `await loadSdk()` 로 제스처가 끊겨 `signInWithPopup` 이 차단됨 | 모듈 로드 즉시 SDK 선로딩(`prefetch()`), 부팅 시 `init()` 도 선로딩. 탭 순간에는 `await` 없이 팝업 호출 |
+| 팝업을 닫으면 `popup-closed-by-user` 가 `/closed/` 정규식에 걸려 **자동 `signInWithRedirect`** → `hyosungkwon.github.io` ↔ `korea-land-4e0c2.firebaseapp.com` 교차 도메인 + 3rd-party 쿠키 차단에서 복귀가 끝나지 않고 무한 "연결 중" | 자동 리다이렉트 삭제. `popup-closed-by-user`/`cancelled-popup-request` → 즉시 `guest` 복귀. 리다이렉트는 사용자가 안내창에서 **명시적으로 선택할 때만** 실행하고, 복귀는 `getRedirectResult()` 로 안전하게 처리 |
+| `signInWithPopup` 에 타임아웃이 없어 relay 가 끊기면 영구 `loading` | **45초 타임아웃** + 에러 코드별 분기(차단/미지원/도메인/네트워크). 어느 경우에도 `loading` 에 머물지 않음 |
+| `init()` 이 `onAuthStateChanged` 를 7초 기다린 뒤 **상태를 바꾸지 않고** 끝나 `연동 확인 중` 이 남음 | 5초 워치독 + `settleStatus()` 로 **최대 5초 내 `guest`/`sync` 확정**. 세션 복원 데이터 읽기는 병렬·비동기로 분리(데이터 도착 시 앱이 이어서 연결) |
+| 팝업이 막혔을 때 안내가 없음 | `팝업 차단`/`미지원`/`응답 없음` → 원인·해결(팝업 허용, Chrome) 안내창 + `다시 시도` / `같은 창에서 계속` 버튼 |
+| SW 가 Firebase/Google 요청을 가로챌 여지 | `firebaseapp.com`·`firebaseio.com`·`gstatic.com`·`googleapis.com`·`accounts.google.com`·`google.com`·`/__/auth` 는 fetch 핸들러에서 **즉시 반환**(네트워크 직통). 캐시 버전 `land-rpg-v2.1.5` |
 
 ---
 

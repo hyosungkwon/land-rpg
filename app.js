@@ -76,8 +76,10 @@ class App {
     this.cloud.onStatus((info) => {
       this.ui.setSync(info);
       // 세션 복원/늦은 로그인으로 부동산 데이터가 나중에 도착한 경우에도 한 번 연결한다.
+      // (init() 은 'loading' 에 갇히지 않도록 데이터를 기다리지 않으므로,
+      //  데이터 도착 시점에 애프터 처리·클라우드 저장 제안을 다시 한 번 실행한다)
       if (info.signedIn && this.cloud.prop && (!this.prop || !this.prop.connected)) {
-        try { this.syncProperty(); } catch (e) { this.reportError('property', e); }
+        try { this.afterCloudChange(); } catch (e) { this.reportError('property', e); }
       }
     });
 
@@ -561,15 +563,31 @@ class App {
       claimRent: () => this.openClaimRent(),
       createAccount: () => this.openCreateAccount(),
       signIn: async () => {
+        if (this.cloud.signedIn) { this.ui.setTab('land'); return; }
         this.ui.toast('구글 로그인 창을 여는 중…');
         const r = await this.cloud.signIn();
-        if (!r.ok) {
-          this.ui.toast('로그인에 실패했습니다. 팝업 차단을 확인해 주세요.', 'red');
+        if (r.ok) {
+          await this.afterCloudChange();
+          this.ui.toast(`🏢 ${this.prop.nickname || '부동산'} 계정 연동 완료`, 'gold');
           return;
         }
-        if (r.redirect) return;
-        await this.afterCloudChange();
-        this.ui.toast(`🏢 ${this.prop.nickname || '부동산'} 계정 연동 완료`, 'gold');
+        if (r.reason === 'cancelled') {
+          this.ui.toast('로그인 창을 닫았습니다. 다시 눌러 주세요.');
+          return;
+        }
+        if (r.reason === 'busy') {
+          this.ui.toast(r.message || '이미 로그인 창을 여는 중입니다.');
+          return;
+        }
+        if (['popup-blocked', 'unsupported', 'timeout', 'sdk', 'config', 'no-user'].includes(r.reason)) {
+          this.openLoginHelp(r);
+          return;
+        }
+        this.ui.toast(r.message || '로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.', 'red');
+      },
+      signInRedirect: async () => {
+        const r = await this.cloud.signInRedirect();
+        if (!r.ok) this.ui.toast('같은 창 로그인을 시작하지 못했습니다. 크롬에서 열어 주세요.', 'red');
       },
       signOut: async () => {
         await this.cloud.signOut();
@@ -798,6 +816,33 @@ class App {
     } finally {
       this._trading = false;
     }
+  }
+
+  /* 로그인이 막혔을 때: 팝업 차단·인앱 브라우저·응답 없음 → 원인과 다음 행동을 한 화면에서 안내 */
+  openLoginHelp(r) {
+    const reason = (r && r.reason) || '';
+    const head =
+      reason === 'popup-blocked' ? '로그인 창이 차단되었습니다'
+        : reason === 'timeout' ? '로그인 응답이 없습니다'
+        : reason === 'sdk' ? 'Firebase 연결에 실패했습니다'
+        : reason === 'config' ? '로그인 설정을 확인해야 합니다'
+        : '팝업 로그인이 어려운 환경입니다';
+    const detail = (r && r.message) || '';
+    this.ui.modal({
+      title: `🔐 ${head}`,
+      sub: '팝업을 허용하면 다음부터는 버튼 한 번으로 로그인됩니다.',
+      body: `<div class="note" style="line-height:1.9">
+        · 주소창 오른쪽의 <b>팝업 차단</b> 아이콘을 누르고 이 사이트를 <b>허용</b>한 뒤 <b>다시 시도</b>를 누르세요.<br>
+        · 삼성 인터넷: 메뉴 ☰ → 설정 → 사이트 및 다운로드 → <b>팝업 차단</b> 끄기(또는 이 사이트 허용).<br>
+        · 계속 되지 않으면 <b>Chrome</b>에서 <b>hyosungkwon.github.io/land-rpg</b> 를 열어 주세요.<br>
+        · 로그인 없이도 게임은 <b>로컬 저장</b>으로 그대로 플레이됩니다.
+      </div>${detail ? `<div class="tiny muted" style="margin-top:8px">${esc(detail)}</div>` : ''}`,
+      actions: [
+        { label: '닫기' },
+        { label: '같은 창에서 계속', onClick: () => this.actions.signInRedirect() },
+        { label: '다시 시도', style: 'primary', onClick: () => this.actions.signIn() },
+      ],
+    });
   }
 
   openClaimRent() {

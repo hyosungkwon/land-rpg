@@ -1,6 +1,6 @@
 // land-rpg / sw.js — 오프라인 캐시 (방치형 RPG 는 네트워크 없이도 플레이 가능해야 함)
-// Firebase/CDN 요청은 캐시하지 않고 네트워크로 그대로 보낸다.
-const VERSION = 'land-rpg-v2.1.4';
+// Firebase/CDN/Google Auth 요청은 절대 가로채지 않고 네트워크로 그대로 보낸다.
+const VERSION = 'land-rpg-v2.1.5';
 const CORE = [
   './',
   './index.html',
@@ -89,20 +89,29 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
-const PASSTHROUGH = [
-  'firebaseio.com', 'googleapis.com', 'gstatic.com', 'firebaseapp.com',
-  'google-analytics', 'googletagmanager.com',
+// Firebase Auth(로그인 팝업/리다이렉트)에 직접 쓰는 도메인 — 캐시·가로채기 금지.
+// 하나라도 SW 가 응답하면 signInWithPopup 의 relay(iframe/postMessage) 가 끊겨
+// '로그인이 계속 연결 중' 으로 멈춘다.
+const AUTH_HOSTS = [
+  'firebaseapp.com', 'firebaseio.com', 'firebasedatabase.app', 'firebase.com',
+  'googleapis.com', 'gstatic.com', 'google.com', 'googleusercontent.com',
+  'google-analytics.com', 'googletagmanager.com',
 ];
+const AUTH_PATHS = ['/__/auth', '/__/firebase'];
+
+function isAuthRequest(url) {
+  if (AUTH_PATHS.some((p) => url.pathname.indexOf(p) === 0)) return true;
+  return AUTH_HOSTS.some((h) => url.hostname === h || url.hostname.endsWith('.' + h));
+}
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   let url;
   try { url = new URL(req.url); } catch (e) { return; }
-  if (url.origin !== self.location.origin) {
-    if (PASSTHROUGH.some((h) => url.hostname.includes(h))) return; // 브라우저 기본 처리
-    return;
-  }
+  // Firebase Auth / Google 계정 / SDK CDN 은 SW 가 관여하지 않는다(네트워크 직통).
+  if (isAuthRequest(url)) return;
+  if (url.origin !== self.location.origin) return;
 
   // 페이지 이동: 네트워크 우선, 실패 시 캐시된 index.html
   if (req.mode === 'navigate') {

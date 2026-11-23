@@ -42,9 +42,18 @@ export class Cloud {
     this.rpgRankings = [];
     this.lastSync = 0;
     this.lastError = null;
+    this.lastRpg = null;
     this.listeners = new Set();
     this._unsub = null;
     this.saveTimer = null;
+    this._preload = null; // SDK 선로딩 promise (탭 즉시 팝업을 열기 위함)
+    this._signingIn = false;
+    this._handledUid = '';
+    this._handledAt = 0;
+  }
+
+  get ready() {
+    return !!this.f;
   }
 
   onStatus(fn) {
@@ -79,6 +88,23 @@ export class Cloud {
     return !!this.user;
   }
 
+  /**
+   * SDK 를 미리 받아 둔다.
+   * 로그인 버튼 탭 → signIn() 이 loadSdk() 를 await 하면 user gesture 가 끊겨
+   * 모바일(삼성 인터넷 등)에서 팝업이 차단된다. 그래서 부팅 시점에 미리 받아 두고,
+   * 탭 순간에는 await 없이 곧바로 signInWithPopup 을 호출한다.
+   */
+  prefetch() {
+    if (this.f) return Promise.resolve(this.f);
+    if (!this._preload) {
+      this._preload = this.loadSdk().catch((e) => {
+        this._preload = null; // 실패하면 다음 호출에서 다시 시도
+        throw e;
+      });
+    }
+    return this._preload;
+  }
+
   async loadSdk() {
     if (this.f) return this.f;
     const [appMod, dbMod, authMod] = await withTimeout(
@@ -97,15 +123,36 @@ export class Cloud {
     return this.f;
   }
 
-  /** 앱 시작 시 1회 호출. 실패해도 예외를 던지지 않고 상태만 바꾼다. */
+  /**
+   * 'loading' 에 갇히지 않도록 지금까지 확인된 정보로 상태를 확정한다.
+   * (모바일에서 '연동 확인 중' 이 영구히 남던 문제의 방어선)
+   */
+  settleStatus(detail = '') {
+    if (this.status !== 'loading') return this.statusInfo();
+    if (this.user) {
+      const local = this.writable === false;
+      this.setStatus(local ? 'local' : 'sync', detail || (local ? 'rpg 쓰기 권한이 없어 로컬 저장' : ''));
+    } else {
+      this.setStatus('guest', detail);
+    }
+    return this.statusInfo();
+  }
+
+  /**
+   * 앱 시작 시 1회 호출. 실패해도 예외를 던지지 않고 상태만 바꾼다.
+   * 어떤 경우에도 5초 안에 'loading' 에서 벗어난다(무한 '연동 확인 중' 방지).
+   */
   async init() {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       this.setStatus('offline', '네트워크 없음');
       return this.statusInfo();
     }
     this.setStatus('loading');
+    const watchdog = setTimeout(() => this.settleStatus('연결 확인 시간 초과'), 5000);
     try {
-      const f = await this.loadSdk();
+      const f = await withTimeout(this.prefetch(), 5000, 'Firebase SDK');
+      // 리다이렉트로 돌아온 경우가 있으면 안전하게 처리한다(없으면 조용히 지나간다).
+      this.checkRedirectResult().catch(() => null);
       await new Promise((resolve) => {
         let done = false;
         const finish = () => {
@@ -114,46 +161,131 @@ export class Cloud {
             resolve();
           }
         };
-        f.onAuthStateChanged(this.auth, async (user) => {
-          // 복원된 세션이면 부동산/ RPG 데이터를 다 읽은 뒤에 init() 을 끝낸다.
-          try {
-            if (user) await this.handleUser(user);
-            else this.setStatus('guest');
-          } finally {
-            finish();
+        f.onAuthStateChanged(this.auth, (user) => {
+          // 세션이 복원되면 부동산/RPG 데이터를 읽는다. 읽기가 늦어도 상태는
+          // handleUser 내부의 watchdog 이 먼저 확정하므로 init() 을 붙잡지 않는다.
+          if (user) {
+            this.handleUser(user).catch((e) => {
+              this.lastError = String(e && e.message ? e.message : e);
+              this.settleStatus();
+            });
+          } else {
+            this.setStatus('guest');
           }
+          finish();
         });
-        setTimeout(finish, 7000);
+        setTimeout(finish, 4000);
       });
     } catch (e) {
       this.lastError = String(e && e.message ? e.message : e);
       const off = typeof navigator !== 'undefined' && navigator.onLine === false;
       this.setStatus(off ? 'offline' : 'error', off ? '네트워크 없음' : 'Firebase SDK를 불러오지 못했습니다');
+    } finally {
+      clearTimeout(watchdog);
     }
-    return this.statusInfo();
+    return this.settleStatus();
   }
 
+  /** 로그인에 실패했을 때 되돌릴 상태(로그인 전 상태로 복귀) */
+  _restoreStatus() {
+    if (this.user) this.setStatus(this.writable === false ? 'local' : 'sync', this.writable === false ? 'rpg 쓰기 권한이 없어 로컬 저장' : '');
+    else this.setStatus('guest');
+  }
+
+  /**
+   * 로그인 버튼 탭에서 곧바로 호출된다.
+   * - SDK 는 prefetch 되어 있어 await 없이 popup 을 연다(user gesture 유지).
+   * - 45초 타임아웃: 응답이 없어도 '연동 확인 중' 에 갇히지 않는다.
+   * - 자동 signInWithRedirect 는 하지 않는다(교차 도메인 3rd-party 쿠키 차단 시 무한 루프).
+   *   리다이렉트는 사용자가 안내 창에서 명시적으로 고를 때만 signInRedirect() 로 시도한다.
+   */
   async signIn() {
+    if (this._signingIn) return { ok: false, reason: 'busy', message: '이미 로그인 창을 여는 중입니다.' };
+    this._signingIn = true;
     try {
-      const f = await this.loadSdk();
+      let f = this.f;
+      if (!f) {
+        this.setStatus('loading', '로그인 준비 중…');
+        try {
+          f = await withTimeout(this.prefetch(), 8000, 'Firebase SDK');
+        } catch (e) {
+          this.lastError = String(e && e.message ? e.message : e);
+          this._restoreStatus();
+          return { ok: false, reason: 'sdk', message: 'Firebase 연결에 실패했습니다. 네트워크를 확인해 주세요.' };
+        }
+      }
+
       this.setStatus('loading', '구글 로그인 중…');
       let result;
       try {
-        result = await f.signInWithPopup(this.auth, new f.GoogleAuthProvider());
+        result = await withTimeout(
+          f.signInWithPopup(this.auth, new f.GoogleAuthProvider()),
+          45000,
+          '구글 로그인',
+        );
       } catch (e) {
-        // 팝업 차단/인앱 브라우저 → 리다이렉트 시도
-        if (e && /popup|blocked|cancelled|closed/i.test(String(e.code || e.message))) {
-          await f.signInWithRedirect(this.auth, new f.GoogleAuthProvider());
-          return { ok: true, redirect: true };
+        const code = String((e && (e.code || e.message)) || e);
+        this.lastError = code;
+        this._restoreStatus();
+        if (/popup-closed-by-user|cancelled-popup-request|popup_closed|cancelled/i.test(code)) {
+          return { ok: false, reason: 'cancelled', message: '로그인 창을 닫았습니다.' };
         }
-        throw e;
+        if (/popup-blocked|popup_blocked/i.test(code)) {
+          return { ok: false, reason: 'popup-blocked', message: '브라우저가 로그인 창(팝업)을 차단했습니다.' };
+        }
+        if (/operation-not-supported|operation_not_supported|disallowed_useragent|in-app|web-storage-unsupported/i.test(code)) {
+          return { ok: false, reason: 'unsupported', message: '이 브라우저에서는 팝업 로그인을 지원하지 않습니다.' };
+        }
+        if (/unauthorized-domain|invalid-api-key|configuration/i.test(code)) {
+          return { ok: false, reason: 'config', message: '로그인 설정에 문제가 있습니다(도메인 미승인).' };
+        }
+        if (/시간 초과|timeout|network/i.test(code)) {
+          return { ok: false, reason: 'timeout', message: '로그인 응답이 45초 동안 없었습니다.' };
+        }
+        return { ok: false, reason: code, message: '로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.' };
+      }
+
+      if (!result || !result.user) {
+        this._restoreStatus();
+        return { ok: false, reason: 'no-user', message: '로그인 정보를 받지 못했습니다.' };
       }
       await this.handleUser(result.user);
       return { ok: true, user: this.user };
+    } finally {
+      this._signingIn = false;
+    }
+  }
+
+  /** 팝업을 쓸 수 없을 때 사용자가 '같은 창에서 계속' 을 고르면 호출된다. */
+  async signInRedirect() {
+    try {
+      const f = await withTimeout(this.prefetch(), 8000, 'Firebase SDK');
+      this.setStatus('loading', '구글 로그인으로 이동 중…');
+      await f.signInWithRedirect(this.auth, new f.GoogleAuthProvider());
+      return { ok: true, redirect: true };
     } catch (e) {
       this.lastError = String((e && (e.code || e.message)) || e);
-      this.setStatus(this.signedIn ? 'local' : 'guest', '로그인 실패');
+      this._restoreStatus();
       return { ok: false, reason: this.lastError };
+    }
+  }
+
+  /**
+   * 리다이렉트 복귀 처리. 대기 중인 결과가 없으면(대부분) 아무 일도 하지 않는다.
+   * 실패해도 상태를 건드리지 않는다 — 로그아웃 상태로 조용히 남는다.
+   */
+  async checkRedirectResult() {
+    try {
+      const f = await withTimeout(this.prefetch(), 8000, 'Firebase SDK');
+      if (typeof f.getRedirectResult !== 'function') return null;
+      const r = await withTimeout(f.getRedirectResult(this.auth), 10000, 'redirect');
+      if (r && r.user) {
+        await this.handleUser(r.user);
+        return this.user;
+      }
+      return null;
+    } catch (e) {
+      return null;
     }
   }
 
@@ -166,21 +298,35 @@ export class Cloud {
     this.uid = null;
     this.writable = null;
     this.prop = null;
+    this.lastRpg = null;
+    this._handledUid = '';
     this.setStatus('guest');
   }
 
   async handleUser(user) {
-    const f = await this.loadSdk();
+    await this.prefetch();
+    // 같은 사용자로 중복 호출(세션 복원 + 리다이렉트 결과) 시 데이터를 두 번 읽지 않는다.
+    if (user.uid === this._handledUid && Date.now() - this._handledAt < 5000) return this.lastRpg;
+    this._handledUid = user.uid;
+    this._handledAt = Date.now();
     this.user = user;
     this.uid = user.uid;
     this.nickname = (user.displayName || '').replace(/\s+/g, '').slice(0, 8) || '플레이어';
     this.setStatus('loading', '부동산 데이터 확인 중…');
-    await this.refreshProperty();
-    const cloud = await this.loadRpg();
-    this.lastRpg = cloud;
-    this.setStatus(this.writable ? 'sync' : 'local', this.writable ? '' : 'rpg 쓰기 권한이 없어 로컬 저장');
+    // 두 읽기는 서로 독립이므로 병렬로 보내고, 늦어지면 상태를 먼저 확정한다.
+    const watchdog = setTimeout(() => this.settleStatus('데이터 응답 지연'), 4500);
+    try {
+      const [, cloud] = await Promise.all([this.refreshProperty(), this.loadRpg()]);
+      this.lastRpg = cloud;
+    } catch (e) {
+      this.lastError = String(e && (e.code || e.message));
+    } finally {
+      clearTimeout(watchdog);
+    }
+    const local = this.writable === false;
+    this.setStatus(local ? 'local' : 'sync', local ? 'rpg 쓰기 권한이 없어 로컬 저장' : '');
     this.loadRankings().catch(() => {});
-    return cloud;
+    return this.lastRpg;
   }
 
   /** users/{uid}/state + pending_income/{nickname} 읽기 */
@@ -483,3 +629,9 @@ export class Cloud {
 }
 
 export const CLOUD = new Cloud();
+
+// 모듈이 로드되는 즉시(Firebase 초기화 타이머를 기다리지 않고) SDK 선로딩을 시작한다.
+// → 로그인 버튼 탭 순간에 await 없이 signInWithPopup 을 호출할 수 있다.
+if (typeof window !== 'undefined') {
+  try { CLOUD.prefetch().catch(() => {}); } catch (e) { /* ignore */ }
+}
