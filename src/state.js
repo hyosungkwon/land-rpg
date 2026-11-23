@@ -8,6 +8,9 @@ import {
 } from './data.js';
 import { defaultLand } from './land.js';
 import { PET_IDS, PET_MAX_LV, JOB_MAX, jobOf, equippedPet, petLevel, petAtkPct } from './meta.js';
+import {
+  collectionBonus, normalizeQuestState, normalizeAchievements, normalizeCodex,
+} from './quests.js';
 
 const nowMs = () => Date.now();
 
@@ -47,6 +50,10 @@ export function defaultState(now = nowMs()) {
     pet: { equipped: null, unlocked: [], chosen: false },
     dungeonCooldown: 0,
     dungeon: { best: 0, runs: 0, last: null },
+    // v3.3 수집 메타: 순차 미션 · 업적 수령 · 도감 기록
+    quests: { idx: 0, claimed: [], done: 0, at: 0 },
+    achievements: { claimed: [] },
+    codex: { monsters: {}, cities: {}, gear: {} },
     land: defaultLand(now),
     records: { totalGold: 0, totalRent: 0, playMs: 0, firstPlay: now },
     lastOffline: null,
@@ -119,6 +126,11 @@ export function normalizeState(raw, now = nowMs()) {
     runs: Math.max(0, Math.floor(num(rawDun.runs, 0))),
     last: rawDun.last && typeof rawDun.last === 'object' ? rawDun.last : null,
   };
+
+  // v3.3: 미션/업적/도감 기본값 병합 (없는 저장본은 그대로 진행도 유지)
+  s.quests = normalizeQuestState(raw.quests);
+  s.achievements = normalizeAchievements(raw.achievements);
+  s.codex = normalizeCodex(raw.codex, s, now);
 
   s.level = Math.max(1, Math.floor(num(s.level, 1)));
   s.exp = Math.max(0, num(s.exp, 0));
@@ -193,14 +205,19 @@ export function calcStats(s, buffs = NO_BUFF) {
   const jobAtkMul = 1 + (job.atkPct || 0) / 100;
   const jobHpMul = 1 + (job.hpPct || 0) / 100;
   const petAtkMul = 1 + (pet ? petAtkPct(s, pet.id) : 0) / 100;
+  // v3.3: 도감 수집률 마일스톤 + 수령한 업적의 소폭 영구 보너스(기본 0 → 기존 밸런스 불변)
+  const col = collectionBonus(s);
+  const colAtkMul = 1 + (col.atkPct || 0) / 100;
   const baseAtk = 12 + 2.6 * L + 0.035 * L * L;
   const equipAtk = EQUIP.weapon.per * eLv('weapon');
-  const atk = (baseAtk + equipAtk) * (1 + b.atkPct / 100) * jobAtkMul * petAtkMul;
+  const atk = (baseAtk + equipAtk) * (1 + b.atkPct / 100) * jobAtkMul * petAtkMul * colAtkMul;
   const hpMax =
     (150 + 30 * L + EQUIP.armor.per * eLv('armor') + EQUIP.helmet.per * eLv('helmet')) * (1 + b.hpPct / 100) * jobHpMul;
   const crit = Math.min(0.5, 0.05 + (EQUIP.ring.per / 100) * eLv('ring') + (b.critPct || 0) / 100);
   const critDmg = 2.0;
-  const goldMult = 1 + (EQUIP.amulet.per / 100) * eLv('amulet') + b.goldPct / 100 + (pet ? pet.goldPct / 100 : 0);
+  const goldMult =
+    1 + (EQUIP.amulet.per / 100) * eLv('amulet') + b.goldPct / 100 + (pet ? pet.goldPct / 100 : 0)
+    + (col.goldPct || 0) / 100;
   const dropMult = 1 + b.dropPct / 100;
   const attackMs = Math.max(300, ECON.playerAttackMs - L * 2);
   const dps = (atk / (attackMs / 1000)) * (1 + crit * (critDmg - 1));
@@ -215,6 +232,8 @@ export function calcStats(s, buffs = NO_BUFF) {
     dps: Math.round(dps),
     jobTier: job.tier,
     petId: pet ? pet.id : null,
+    collectAtkPct: col.atkPct || 0,
+    collectGoldPct: col.goldPct || 0,
   };
 }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""land-rpg v3.2.1 검증 (QuickJS + 정적 검사)
+"""land-rpg v3.3.0 검증 (QuickJS + 정적 검사)
 
 1) 모든 JS 파일 문법(파싱) 검사
 2) 정적 검사 (Firebase/로그인 흔적 0, 저장 키 v3, sw 캐시 v3.1)
@@ -17,8 +17,8 @@ import sys
 import quickjs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FILES = ["src/data.js", "src/land-data.js", "src/land.js", "src/meta.js", "src/state.js", "src/combat.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/land-data.js", "src/land.js", "src/meta.js", "src/state.js", "src/combat.js", "src/render.js", "src/ui.js", "src/sound.js"]
+FILES = ["src/data.js", "src/land-data.js", "src/land.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/land-data.js", "src/land.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js", "src/render.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -87,8 +87,8 @@ def main():
     for bad in ["firebase", "signInWithPopup", "Google 로그인", "gstatic", "firebaseio", "googleapis"]:
         ok(bad.lower() not in text_all.lower(), f"Firebase/로그인 흔적 없음: {bad}")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v3.2.1" in read("sw.js"), "SW 캐시 버전 v3.2.1")
-    ok("APP_VERSION = '3.2.1'" in read("src/data.js"), "앱 버전 v3.2.1")
+    ok("land-rpg-v3.3.0" in read("sw.js"), "SW 캐시 버전 v3.3.0")
+    ok("APP_VERSION = '3.3.0'" in read("src/data.js"), "앱 버전 v3.3.0")
     ok(os.path.exists(os.path.join(ROOT, "src/sound.js")), "src/sound.js 존재")
     ok("'./src/sound.js'" in read("sw.js"), "sw.js 프리캐시에 sound.js 포함")
     ok(not os.path.exists(os.path.join(ROOT, "src/firebase.js")), "firebase.js 제거")
@@ -664,6 +664,248 @@ def main():
     ok(attempts > 20 and fails / max(1, attempts) < 0.75, "보스 실패율 과다 아님", f"{fails}/{attempts}")
     print(f"  · 적극: 5분 S{bs.stage_at(active['marks'], 5)} · 10분 S{s10} · 30분 S{s22} · 60분 S{active['end']['stage']} · 보스 {attempts}회/실패 {fails}회")
     print(f"  · 방치: 60분 S{passive['end']['stage']} · 보스 {passive['bossStarts']}회/실패 {passive['bossFails']}회")
+
+    section("[9] 🎯 미션 · 🏆 업적 · 📖 도감 (v3.3.0)")
+    qdef = js(ctx, """
+      return {
+        ids: QUESTS.map(q => q.id),
+        types: QUESTS.map(q => q.type),
+        goals: QUESTS.map(q => q.goal),
+        pay: QUESTS.map(q => q.gold + q.shards),
+        golds: QUESTS.map(q => q.gold),
+        shards: QUESTS.map(q => q.shards),
+        achIds: ACHIEVEMENTS.map(a => a.id),
+        achShards: ACHIEVEMENTS.map(a => a.shards),
+        achAtk: ACHIEVEMENTS.filter(a => a.atkPct > 0).length,
+        achGold: ACHIEVEMENTS.filter(a => a.goldPct > 0).length,
+        weights: [CODEX_WEIGHTS.monsters, CODEX_WEIGHTS.cities, CODEX_WEIGHTS.gear, CODEX_WEIGHTS.pets],
+        milestones: CODEX_MILESTONES.map(m => m.pct),
+        monsters: MONSTER_IDS.length,
+        bosses: MONSTER_IDS.filter(n => MONSTERS[n].boss).length,
+        petIds: PETS.map(p => p.id),
+      };
+    """)
+    ok(len(qdef["ids"]) == 15 and len(set(qdef["ids"])) == 15, "미션 15단계 정의(중복 없음)", str(len(qdef["ids"])))
+    ok(set(qdef["types"]) >= {"kills", "stage", "equipLv", "gacha", "cities", "bossKills", "dungeon", "pyeong", "job"}, "미션에 사냥·강화·뽑기·매수·던전·전직 흐름 포함", json.dumps(sorted(set(qdef["types"]))))
+    ok(all(p > 0 for p in qdef["pay"]) and all(g >= 1 for g in qdef["goals"]), "모든 미션에 1 이상 목표·골드/강화석 보상", json.dumps(qdef["pay"]))
+    ok(any(v > 0 for v in qdef["golds"]) and any(v > 0 for v in qdef["shards"]), "미션 보상에 💰 골드·💎 강화석 모두 존재")
+    ok(len(qdef["achIds"]) == 19 and len(set(qdef["achIds"])) == 19, "업적 19종 정의(중복 없음)", str(len(qdef["achIds"])))
+    ok(all(s > 0 for s in qdef["achShards"]) and qdef["achAtk"] >= 2 and qdef["achGold"] >= 2, "업적 보상 = 💎 + 영구 스탯 보너스", json.dumps({"atk": qdef["achAtk"], "gold": qdef["achGold"]}))
+    ok(qdef["weights"] == [30, 40, 20, 10] and qdef["milestones"] == [10, 25, 50, 75, 100], "도감 가중치 합 100 · 마일스톤 5단계", json.dumps(qdef["weights"]))
+    ok(qdef["monsters"] == 19 and qdef["bosses"] == 7 and qdef["petIds"] == ["wolf", "fox", "owl", "dragon"], "도감 몬스터 19종(보스 7)·펫 4종", json.dumps({"m": qdef["monsters"], "b": qdef["bosses"]}))
+
+    mq = js(ctx, """
+      const s = defaultState(0);
+      const p0 = questProgress(s, 'm01');
+      const c0 = claimQuest(s, 'm01');
+      s.totalKills = 10;
+      const p1 = questProgress(s);
+      const gold0 = s.gold, shards0 = s.shards;
+      const c1 = claimQuest(s, 'm01');
+      const after = { gold: s.gold - gold0, shards: s.shards - shards0, idx: s.quests.idx, claimed: s.quests.claimed.slice(), done: s.quests.done };
+      const again = claimQuest(s, 'm01');
+      const wrong = claimQuest(s, 'm05');
+      const cur = currentQuest(s);
+      return {
+        p0: p0.done, p0cur: p0.cur, c0: c0.ok,
+        p1cur: p1.cur, p1done: p1.done, c1: c1.ok, gain: [c1.gold, c1.shards],
+        next: c1.next ? c1.next.id : null, after,
+        again: again.ok, wrong: wrong.ok, curId: cur ? cur.id : null,
+      };
+    """)
+    ok(mq["p0"] is False and mq["p0cur"] == 0 and mq["c0"] is False, "목표 미달 미션은 수령 거부", json.dumps({"p0": mq["p0"], "c0": mq["c0"]}))
+    ok(mq["p1cur"] == 10 and mq["p1done"] is True and mq["c1"] is True and mq["gain"] == [300, 0], "첫 미션 진행도·보상(💰300)", json.dumps(mq["gain"]))
+    ok(mq["after"] == {"gold": 300, "shards": 0, "idx": 1, "claimed": ["m01"], "done": 1} and mq["next"] == "m02", "수령 → 보상 지급·다음 미션 열림", json.dumps(mq["after"]))
+    ok(mq["again"] is False and mq["wrong"] is False and mq["curId"] == "m02", "중복 수령·다른 미션 수령 거부", json.dumps({"again": mq["again"], "wrong": mq["wrong"], "cur": mq["curId"]}))
+
+    chain = js(ctx, """
+      const s = defaultState(0);
+      s.totalKills = 5000; s.maxStage = 30; s.stage = 30; s.bossKills = 40; s.level = 40;
+      s.equip.weapon = 40; s.equip.armor = 20;
+      s.gacha.total = 60; s.jobTier = 2;
+      s.dungeon = { best: 1000, runs: 3, last: null };
+      for (const c of CITIES.slice(0, 6)) s.land.owned[c.key] = 30;
+      const gold0 = s.gold, shards0 = s.shards;
+      const claimed = [];
+      const reasons = [];
+      for (let i = 0; i < 30; i++) {
+        const q = currentQuest(s);
+        if (!q) break;
+        const r = claimQuest(s, q.id);
+        if (!r.ok) { reasons.push(q.id + ':' + r.reason); break; }
+        claimed.push(q.id);
+      }
+      const payG = s.gold - gold0, payS = s.shards - shards0;
+      const want = QUESTS.reduce((a, q) => a + q.gold, 0) + QUESTS.reduce((a, q) => a + q.shards, 0);
+      return {
+        n: claimed.length, reasons, cur: currentQuest(s), done: s.quests.done,
+        payG, payS, allPay: QUESTS.reduce((a, q) => a + q.gold, 0), allPayS: QUESTS.reduce((a, q) => a + q.shards, 0),
+      };
+    """)
+    ok(chain["n"] == 15 and chain["cur"] is None and chain["reasons"] == [] and chain["done"] == 15, "조건이 차면 15단계 연속 수령 → 시즌 완료", json.dumps(chain, ensure_ascii=False))
+    ok(chain["payG"] == chain["allPay"] and chain["payS"] == chain["allPayS"], "미션 보상 합계 정확히 지급", json.dumps({"g": chain["payG"], "s": chain["payS"]}))
+
+    ach = js(ctx, """
+      const s = defaultState(0);
+      const first0 = achievementStatus(s).find(a => a.id === 'a_land1');
+      const cheap = CITIES.slice().sort((a, b) => a.base - b.base)[0];
+      applyTrade(s, cheap.key, 'buy', 3, 0);
+      const first1 = achievementStatus(s).find(a => a.id === 'a_land1');
+      const shards0 = s.shards;
+      const r = claimAchievement(s, 'a_land1');
+      const again = claimAchievement(s, 'a_land1');
+      const notYet = claimAchievement(s, 'a_kill1000');
+      const bogus = claimAchievement(s, 'zzz');
+      return {
+        before: [first0.cur, first0.done, first0.claimable],
+        after: [first1.cur, first1.done, first1.claimable],
+        ok: r.ok, shards: r.shards, gain: s.shards - shards0,
+        again: again.ok, notYet: notYet.ok, bogus: bogus.ok,
+        count: claimedAchievementCount(s), claimed: s.achievements.claimed.slice(),
+      };
+    """)
+    ok(ach["after"] == [1, True, True] and ach["before"][2] is False, "첫 매수 → '첫 부동산' 업적 달성·수령 가능", json.dumps(ach["after"]))
+    ok(ach["ok"] is True and ach["gain"] == 5 and ach["shards"] == 5, "업적 보상 💎5 지급", json.dumps({"gain": ach["gain"]}))
+    ok(ach["again"] is False and ach["notYet"] is False and ach["bogus"] is False and ach["count"] == 1, "중복·미달성·알 수 없는 업적 거부", json.dumps({"again": ach["again"], "notYet": ach["notYet"]}))
+
+    abonus = js(ctx, """
+      const s = defaultState(0);
+      s.level = 20;
+      for (const c of CITIES.slice(0, 3)) s.land.owned[c.key] = 400; // 1,200평
+      const atk0 = calcStats(s, {}).atk;
+      const gold0 = calcStats(s, {}).goldMult;
+      const cAtk = claimAchievement(s, 'a_pyeong1000');
+      const atk1 = calcStats(s, {}).atk;
+      for (const c of CITIES.slice(3, 10)) s.land.owned[c.key] = 3; // 10곳
+      const cGold = claimAchievement(s, 'a_land10');
+      const gold1 = calcStats(s, {}).goldMult;
+      return { atkOk: cAtk.ok, atk0, atk1, goldOk: cGold.ok, gold0, gold1 };
+    """)
+    ok(abonus["atkOk"] is True and abonus["atk1"] > abonus["atk0"], "업적 영구 공격 보너스가 calcStats 에 반영", f"{abonus['atk0']}→{abonus['atk1']}")
+    ok(abonus["goldOk"] is True and abonus["gold1"] > abonus["gold0"], "업적 영구 골드 보너스가 calcStats 에 반영", f"{abonus['gold0']}→{abonus['gold1']}")
+
+    cxr = js(ctx, """
+      const s = defaultState(0);
+      const c0 = codexStats(s);
+      codexMeet(s, 'Slime');
+      codexKill(s, 'Slime', 3);
+      codexKill(s, 'Slime');
+      const c1 = codexStats(s);
+      const cheap = CITIES.slice().sort((a, b) => a.base - b.base)[0];
+      applyTrade(s, cheap.key, 'buy', 5, 0);
+      codexCity(s, cheap.key, 5, 0);
+      applyTrade(s, cheap.key, 'sell', 5, 0);
+      const d1 = codexDetail(s);
+      codexGear(s, 'legend');
+      const c2 = codexStats(s);
+      const d2 = codexDetail(s);
+      return {
+        pct0: c0.pct, met0: c0.monsters.seen,
+        slime: s.codex.monsters.Slime, seen1: c1.monsters.seen, kills: c1.monsters.kills,
+        ownedAfterSell: Object.keys(s.land.owned).length,
+        cityNames: d1.cities.map(x => x.name), cityPyeong: d1.cities.length ? d1.cities[0].pyeong : -1,
+        gearGot: d2.gear.filter(g => g.got).map(g => g.id), pct2: c2.pct,
+        monstersMet: d2.monsters.filter(m => m.met).length, monsterTotal: d2.monsters.length,
+        petsUnlocked: d2.pets.filter(p => p.unlocked).length,
+      };
+    """)
+    ok(cxr["pct0"] < 10 and cxr["met0"] == 0 and cxr["slime"] == {"m": 1, "k": 4}, "몬스터 도감 — 만남·처치 수 기록", json.dumps(cxr["slime"]))
+    ok(cxr["ownedAfterSell"] == 0 and len(cxr["cityNames"]) == 1 and cxr["cityPyeong"] == 5, "부동산 도감 — 매도해도 지역·최대 평수 기록 유지", json.dumps(cxr["cityNames"], ensure_ascii=False))
+    ok("legend" in cxr["gearGot"] and "common" in cxr["gearGot"], "장비 등급 도감 — 획득 등급 기록", json.dumps(cxr["gearGot"]))
+    ok(cxr["monsterTotal"] == 19 and cxr["monstersMet"] == 1 and cxr["petsUnlocked"] == 0, "도감 상세 목록(19종·펫 4종)", json.dumps({"met": cxr["monstersMet"]}))
+
+    msb = js(ctx, """
+      const s = defaultState(0);
+      s.level = 20;
+      const base = calcStats(s, {});
+      const b0 = collectionBonus(s);
+      for (const n of MONSTER_IDS) codexMeet(s, n);
+      const c1 = codexStats(s);
+      const after = calcStats(s, {});
+      const b1 = collectionBonus(s);
+      for (const c of CITIES) codexCity(s, c.key, 1, 0);
+      for (const r of RARITY_IDS) codexGear(s, r);
+      s.pet = { equipped: null, unlocked: PETS.map(p => p.id), chosen: true, levels: {} };
+      const c2 = codexStats(s);
+      const b2 = collectionBonus(s);
+      return {
+        b0, atk0: base.atk, gold0: base.goldMult,
+        pct1: c1.pct, ms1: c1.milestone ? c1.milestone.pct : -1, atk1: after.atk, gold1: after.goldMult, b1,
+        pct2: c2.pct, seen: c2.seen, total: c2.total, ms2: c2.milestone ? c2.milestone.pct : -1, b2,
+      };
+    """)
+    ok(msb["b0"] == {"atkPct": 0, "goldPct": 0}, "새 게임(수집 10% 미만)은 수집 보너스 0 → 기존 밸런스 불변", json.dumps(msb["b0"]))
+    ok(msb["pct1"] >= 30 and msb["ms1"] == 25 and msb["b1"]["atkPct"] == 1 and msb["atk1"] > msb["atk0"] and msb["gold1"] > msb["gold0"], "몬스터 도감 완성 → 수집률 30%↑·공격/골드 보너스", json.dumps({"pct": msb["pct1"], "b": msb["b1"]}))
+    ok(msb["pct2"] == 100 and msb["ms2"] == 100 and msb["b2"]["atkPct"] == 5 and msb["b2"]["goldPct"] == 5 and msb["seen"] == msb["total"], "도감 100% → 마일스톤 최종 보너스", json.dumps({"pct": msb["pct2"], "b": msb["b2"], "seen": msb["seen"]}))
+
+    nq = js(ctx, """
+      const old = { ver: 3, level: 22, gold: 9000, shards: 40, maxStage: 12, totalKills: 900,
+        equip: { weapon: 8 }, gearRarity: { weapon: 'hero' }, land: { owned: { '0_0_0': 12 } },
+        pet: { equipped: 'wolf', unlocked: ['wolf'], chosen: true } };
+      const n = normalizeState(old, 0);
+      const bad = normalizeState({
+        quests: { idx: 999, claimed: ['m01', 'zzz', 'm01'] },
+        achievements: { claimed: ['a_land1', 'nope'] },
+        codex: {
+          monsters: { Slime: { m: 1, k: -5 }, Dragon: { m: 1, k: 3 } },
+          cities: { zzz: { p: 3 }, '0_0_0': { p: 4 } },
+          gear: { legend: -2, rare: 'x' },
+        },
+      }, 0);
+      const stable = normalizeState(JSON.parse(JSON.stringify(n)), 0);
+      return {
+        level: n.level, gold: n.gold, quests: n.quests, ach: n.achievements.claimed,
+        codexMonsters: n.codex.monsters, codexCities: Object.keys(n.codex.cities), codexGear: n.codex.gear,
+        badIdx: bad.quests.idx, badClaimed: bad.quests.claimed, badAch: bad.achievements.claimed,
+        badMonsters: bad.codex.monsters, badCities: Object.keys(bad.codex.cities), badGear: bad.codex.gear,
+        stable: stable.gold === n.gold && stable.quests.idx === n.quests.idx && Object.keys(stable.codex.cities).length === Object.keys(n.codex.cities).length,
+        pct: codexStats(n).pct,
+      };
+    """)
+    ok(nq["level"] == 22 and nq["gold"] == 9000 and nq["quests"] == {"idx": 0, "claimed": [], "done": 0, "at": 0}, "v3.2 저장 호환 — 미션/업적 기본값 병합·진행도 유지", json.dumps(nq["quests"], ensure_ascii=False))
+    ok(nq["codexCities"] == ["0_0_0"] and nq["codexGear"].get("hero") == 1 and nq["codexMonsters"] == {}, "도감 기본값 — 현재 보유 지역·장착 등급 반영", json.dumps({"c": nq["codexCities"], "g": nq["codexGear"]}))
+    ok(nq["badIdx"] == 15 and nq["badClaimed"] == ["m01"] and nq["badAch"] == ["a_land1"], "손상된 미션/업적 값 방어", json.dumps({"idx": nq["badIdx"], "c": nq["badClaimed"]}))
+    ok(nq["badMonsters"] == {"Slime": {"m": 1, "k": 0}} and nq["badCities"] == ["0_0_0"] and "legend" not in nq["badGear"] and "rare" not in nq["badGear"], "손상된 도감 값 방어(알 수 없는 키·음수 제거)", json.dumps({"m": nq["badMonsters"], "c": nq["badCities"], "g": nq["badGear"]}, ensure_ascii=False))
+    ok(nq["stable"] is True and 5 <= nq["pct"] < 30, "정규화 반복해도 안정 · 보유 지역이 도감 수집률에 반영", f"pct={nq['pct']}")
+
+    tpl3 = js(ctx2, """
+      const s = defaultState(0);
+      s.gold = 20000; s.shards = 100; s.totalKills = 10; s.maxStage = 3;
+      const buffs = computeBuffs(s, 0);
+      const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(3), boss: null, dungeon: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'hunt', el: {}, install: { hidden: true } };
+      const hunt = __tpls.hunt(ui);
+      const settings = __tpls.settings(ui);
+      const done = defaultState(0);
+      done.quests = { idx: 15, claimed: QUESTS.map(q => q.id), done: 15, at: 0 };
+      const ui2 = { s: done, battle: { stats: calcStats(done, {}), def: stageDef(1), boss: null, player: { hp: 1 } }, app: { buffs: {} }, logs: [], tab: 'hunt', el: {}, install: { hidden: true } };
+      const huntDone = __tpls.hunt(ui2);
+      return {
+        hunt, settings, huntDone,
+        bad: /undefined|NaN|\\[object Object\\]/.test(hunt + settings + huntDone),
+      };
+    """)
+    ok(tpl3["bad"] is False, "v3.3 템플릿에 undefined/NaN 누출 없음")
+    ok("🎯" in tpl3["hunt"] and "claim-quest" in tpl3["hunt"] and "보상 받기" in tpl3["hunt"], "사냥 탭 — 미션 카드·진행도·보상 수령 버튼", "")
+    ok('data-action="open-codex"' in tpl3["hunt"] and 'data-action="open-achievements"' in tpl3["hunt"], "사냥 탭 — 도감·업적 진입 버튼", "")
+    ok("도감 · 업적" in tpl3["settings"] and "도감 열기" in tpl3["settings"], "설정 탭 — 도감·업적 카드", "")
+    ok("시즌 완료" in tpl3["huntDone"], "미션 모두 완료 시 완료 상태 표시", "")
+
+    qsrc = read("src/quests.js")
+    uisrc2 = read("src/ui.js")
+    appsrc2 = read("app.js")
+    css2 = read("style.css")
+    cbsrc = read("src/combat.js")
+    stsrc = read("src/state.js")
+    ok(os.path.exists(os.path.join(ROOT, "src/quests.js")), "src/quests.js 존재")
+    ok("'./src/quests.js'" in read("sw.js"), "sw.js 프리캐시에 quests.js 포함")
+    ok(all(x in qsrc for x in ["QUESTS", "ACHIEVEMENTS", "codexStats", "claimQuest", "claimAchievement", "collectionBonus"]), "quests.js 모듈 구성")
+    ok(all(x in appsrc2 for x in ["claimQuest", "claimAchievement", "showCodex", "showAchievements", "codexGear", "codexCity"]), "미션·업적·도감 액션 연결(app.js)")
+    ok(all(x in uisrc2 for x in ['data-action="claim-quest"', 'data-action="open-codex"', 'data-action="open-achievements"', "case 'claim-achievement'"]) and 'data-action="claim-achievement"' in appsrc2, "미션·업적·도감 버튼 연결(ui.js·app.js)")
+    ok("questCard" in uisrc2 and "tplHunt" in uisrc2, "사냥 탭 미션 카드 렌더")
+    ok("codexMeet" in cbsrc and "codexKill" in cbsrc, "전투 중 몬스터 도감 해금·처치 기록")
+    ok("collectionBonus" in stsrc and "normalizeQuestState" in stsrc and "normalizeCodex" in stsrc, "state 저장 정규화·calcStats 수집 보너스")
+    ok(all(x in css2 for x in [".quest-card", ".q-claim.ready", ".codex-grid", ".ach-row"]), "미션·도감·업적 CSS")
+    ok("qPulse" in css2, "보상 수령 버튼 반짝임 애니메이션")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

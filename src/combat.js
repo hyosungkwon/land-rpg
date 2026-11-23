@@ -6,6 +6,7 @@ import {
   calcStats, currentHp, skillEffect, killReward, registerKill, clearStage, monsterStats,
 } from './state.js';
 import { DUNGEON, PET_ATTACK_MS, equippedPet, petDmgPct, dungeonReward } from './meta.js';
+import { codexMeet, codexKill } from './quests.js';
 
 const ATTACK_STOP_GAP = 260; // 이 거리에서 멈추고 때린다(캐릭터 스프라이트가 겹치지 않는 간격)
 const QUEUE_GAP = 300; // 뒤에 줄 서는 몬스터가 벌어지는 간격
@@ -101,6 +102,8 @@ export class Battle {
     const variant = 0.9 + this.rng() * 0.2;
     const base = monsterStats(this.s.stage, isBoss, variant);
     const scale = isBoss ? 1.5 : 0.92 + this.rng() * 0.22;
+    // 📖 도감: 마주친 몬스터를 기록(해금은 만남만으로)
+    try { codexMeet(this.s, name); } catch (e) { /* ignore */ }
     return {
       id: this.nextId++,
       name,
@@ -278,6 +281,8 @@ export class Battle {
   killMonster(m, now) {
     m.hp = 0;
     m.dying = now;
+    // 📖 도감: 처치 수 기록(던전 몹 포함)
+    try { codexKill(this.s, m.name); } catch (e) { /* ignore */ }
     // 황금 던전: 보상은 종료 시 한 번에 지급하고, 여기서는 처치 수만 센다.
     if (this.dungeon) {
       if (m.isBoss) this.dungeon.bossKills += 1;

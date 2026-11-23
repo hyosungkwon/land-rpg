@@ -13,6 +13,10 @@ import {
   PETS, DUNGEON, PET_MAX_LV, petDef, petProgress, petLevel, petAtkPct, petDmgPct,
   petUpgradeCost, jobOf, jobProgress, dungeonState,
 } from './meta.js';
+import {
+  QUESTS, ACHIEVEMENTS, questStateOf, currentQuest, questProgress, codexStats,
+  achievementStatus, claimedAchievementCount,
+} from './quests.js';
 
 const esc = (v) =>
   String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -141,6 +145,10 @@ export class UI {
       case 'pet-equip': actions.equipPet(v); break;
       case 'pet-upgrade': actions.upgradePet(v); break;
       case 'dungeon': actions.enterDungeon(v); break;
+      case 'claim-quest': actions.claimQuest(v); break;
+      case 'claim-achievement': actions.claimAchievement(v); break;
+      case 'open-codex': actions.openCodex(v || 'monster'); break;
+      case 'open-achievements': actions.openAchievements(); break;
       case 'reset': actions.resetGame(); break;
       case 'install': actions.install(); break;
       case 'close-modal': this.closeModal(); break;
@@ -576,6 +584,56 @@ function petCard(ui) {
   </div>`;
 }
 
+/* ══════════════════════════ 🎯 미션 · 📖 도감 · 🏆 업적 (v3.3) ══════════════════════════ */
+function questCard(ui) {
+  const s = ui.s;
+  const qs = questStateOf(s);
+  const q = currentQuest(s);
+  const c = codexStats(s);
+  const achClaimed = claimedAchievementCount(s);
+  const achReady = achievementStatus(s).filter((a) => a.claimable).length;
+
+  const footer = `
+    <div class="row gap6 q-foot">
+      <button class="btn small ghost wide" type="button" data-action="open-codex" data-value="monster">📖 도감 <b style="color:var(--gold)">${c.pct}%</b></button>
+      <button class="btn small ghost wide" type="button" data-action="open-achievements">🏆 업적 <b style="color:var(--green)">${achClaimed}/${ACHIEVEMENTS.length}</b>${achReady ? '<i class="q-alert"></i>' : ''}</button>
+    </div>`;
+
+  if (!q) {
+    return `
+  <div class="card quest-card done">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🎯</span>미션<small>시즌 완료</small></div>
+      <span class="tiny" style="color:var(--gold)">${qs.done}/${QUESTS.length}</span>
+    </div>
+    <div class="tiny muted">모든 미션을 완료했습니다 🎉 도감과 업적을 계속 모아 보세요.</div>
+    ${footer}
+  </div>`;
+  }
+
+  const pr = questProgress(s, q.id);
+  const reward = [q.gold ? `💰${q.gold.toLocaleString()}` : '', q.shards ? `💎${q.shards}` : ''].filter(Boolean).join(' ');
+  return `
+  <div class="card quest-card ${pr.done ? 'ready' : ''}">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🎯</span>미션<small>${esc(q.chapter)} · ${qs.idx + 1}/${QUESTS.length}</small></div>
+      <span class="tiny dim">완료 ${qs.done}개</span>
+    </div>
+    <div class="q-row">
+      <div class="q-mid">
+        <div class="q-name">${esc(q.title)}</div>
+        <div class="q-desc">${esc(q.desc)}</div>
+      </div>
+      <div class="q-num">${Math.min(pr.cur, pr.goal).toLocaleString()}<span>/${pr.goal.toLocaleString()}</span></div>
+    </div>
+    <div class="prog${pr.done ? ' gold' : ''}" style="margin-top:6px"><i style="width:${pr.pct * 100}%"></i></div>
+    <button class="btn block q-claim ${pr.done ? 'ready' : 'ghost'}" type="button" data-action="claim-quest" data-value="${q.id}" ${pr.done ? '' : 'disabled'}>
+      ${pr.done ? `🎁 보상 받기 · ${reward}` : `진행 중 · 보상 ${reward}`}
+    </button>
+    ${footer}
+  </div>`;
+}
+
 /* ══════════════════════════ 사냥/스킬 ══════════════════════════ */
 function tplHunt(ui) {
   const s = ui.s;
@@ -632,6 +690,7 @@ function tplHunt(ui) {
     : `<div class="log-item"><span class="t">—</span><span class="dim">아직 기록이 없습니다.</span></div>`;
 
   return `
+  ${questCard(ui)}
   ${jobCard(ui)}
   ${dungeonCard(ui)}
 
@@ -1172,9 +1231,29 @@ function tplSettings(ui) {
   const s = ui.s;
   const mins = Math.floor((s.records.playMs || 0) / 60000);
   const p = portfolioOf(s);
+  const c = codexStats(s);
+  const qs = questStateOf(s);
+  const achClaimed = claimedAchievementCount(s);
+  const achReady = achievementStatus(s).filter((a) => a.claimable).length;
 
   return `
   ${installCard(ui)}
+
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">📖</span>도감 · 업적<small>수집 메타</small></div>
+      <span class="tiny" style="color:var(--gold)">수집 ${c.pct}%</span>
+    </div>
+    <div class="tiny muted">몬스터 ${c.monsters.seen}/${c.monsters.total} · 지역 ${c.cities.seen}/${c.cities.total} · 장비 ${c.gear.seen}/${c.gear.total} · 펫 ${c.pets.seen}/${c.pets.total}</div>
+    <div class="prog" style="margin-top:7px"><i style="width:${c.pct}%"></i></div>
+    <div class="tiny dim" style="margin-top:6px">${
+      c.milestone ? `마일스톤 ${c.milestone.pct}% · ${c.milestone.label} 적용 중` : '마일스톤 10% 부터 영구 보너스'
+    }${c.next ? ` · 다음 ${c.next.pct}%` : ' · 전체 달성'}</div>
+    <div class="row gap6" style="margin-top:9px">
+      <button class="btn small ghost wide" type="button" data-action="open-codex" data-value="monster">📖 도감 열기</button>
+      <button class="btn small ghost wide" type="button" data-action="open-achievements">🏆 업적 ${achClaimed}/${ACHIEVEMENTS.length}${achReady ? ' ⚡' : ''}</button>
+    </div>
+  </div>
   <div class="card">
     <div class="card-head"><div class="card-title"><span class="t-ico">🏆</span>내 기록</div><span class="tiny dim">게스트</span></div>
     <div class="stat-grid">
@@ -1186,6 +1265,8 @@ function tplSettings(ui) {
       <div class="stat"><div class="k">총자산</div><div class="v">💰${formatGold(p.totalAsset)}</div></div>
       <div class="stat gold"><div class="k">뽑기 횟수</div><div class="v">${fmt((s.gacha && s.gacha.total) || 0)}회</div></div>
       <div class="stat crit"><div class="k">최고 장비 등급</div><div class="v">${rarityName((s.gacha && s.gacha.best) || 'common')}</div></div>
+      <div class="stat gold"><div class="k">미션 완료</div><div class="v">${qs.done}/${QUESTS.length}</div></div>
+      <div class="stat"><div class="k">도감 수집</div><div class="v">${c.pct}%</div></div>
     </div>
   </div>
 
@@ -1217,6 +1298,7 @@ function tplSettings(ui) {
     <div class="kv"><span class="k">동료 펫</span><span class="v">${petDef(s.pet && s.pet.equipped) ? `${petDef(s.pet.equipped).emoji} ${esc(petDef(s.pet.equipped).name)}` : '없음'}</span></div>
     <div class="kv"><span class="k">황금 던전</span><span class="v">${fmt((s.dungeon && s.dungeon.runs) || 0)}회 · 최고 피해 ${fmt((s.dungeon && s.dungeon.best) || 0)}</span></div>
     <div class="kv"><span class="k">장비</span><span class="v">5부위 강화 + 등급 뽑기</span></div>
+    <div class="kv"><span class="k">도감 · 업적</span><span class="v">수집 ${c.pct}% · 업적 ${achClaimed}/${ACHIEVEMENTS.length}</span></div>
     <div class="kv"><span class="k">경제</span><span class="v">골드 하나 (사냥 = 부동산)</span></div>
     <div class="kv"><span class="k">부동산</span><span class="v">전국 ${CITIES.length}개 시군구</span></div>
     <div class="kv"><span class="k">저장 위치</span><span class="v">localStorage</span></div>

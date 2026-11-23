@@ -1,7 +1,7 @@
 // land-rpg / app.js
 // 앱 부트스트랩: 로컬 상태 로드(=게스트) → 전투/렌더/UI 연결 → 루프 → 자동 저장.
 // v3: 로그인·클라우드·Firebase 없음. 네트워크 대기 없이 즉시 시작하고 오프라인에서도 완전 동작.
-import { APP_VERSION, ECON, EQUIP, SKILLS, SAVE_KEY, stageDef, RARITIES, RARITY_INDEX } from './src/data.js';
+import { APP_VERSION, ECON, EQUIP, SKILLS, SAVE_KEY, stageDef, RARITIES, RARITY_INDEX, spriteSrc } from './src/data.js';
 import {
   loadState, saveState, offlineSummary, applyOffline, tryEnhance, tryUpgradeSkill,
   shardPrice, buyShards, pullGear,
@@ -18,6 +18,10 @@ import {
   PET_SPRITES, DUNGEON, petDef, syncPets as syncPetUnlocks, equipPet, upgradePet,
   promoteJob as promoteJobState, dungeonState, startDungeonCooldown,
 } from './src/meta.js';
+import {
+  claimQuest as claimQuestState, claimAchievement as claimAchievementState,
+  achievementStatus, claimedAchievementCount, codexStats, codexDetail, codexCity, codexGear,
+} from './src/quests.js';
 
 // 구형 Safari / 삼성 인터넷 대비 CanvasRenderingContext2D.roundRect 폴리필
 (() => {
@@ -546,6 +550,7 @@ class App {
         this.battle.refreshStats();
         this.save(true);
         this.sound.gacha(r.best);
+        for (const item of r.results) codexGear(this.s, item.rarity); // 📖 장비 등급 도감
         this.ui.render();
         this.showGachaResult(r, n);
       },
@@ -706,6 +711,47 @@ class App {
         this.ui.render();
       },
 
+      /* ── v3.3: 🎯 미션 · 🏆 업적 · 📖 도감 ── */
+      claimQuest: (id) => {
+        this.sound.unlock();
+        const r = claimQuestState(this.s, id, Date.now());
+        if (!r.ok) {
+          this.ui.toast(r.reason || '미션 보상을 받을 수 없습니다', 'red');
+          return;
+        }
+        this.save(true);
+        this.sound.fanfare();
+        const gains = [
+          r.gold ? `💰${r.gold.toLocaleString()}` : '',
+          r.shards ? `💎${r.shards.toLocaleString()}` : '',
+        ].filter(Boolean).join(' ');
+        this.ui.toast(`🎯 미션 완료 · ${gains}`, 'gold');
+        this.ui.addLog(`🎯 <b>${esc(r.quest.title)}</b> 완료 · ${gains}${r.next ? ` → 다음: ${esc(r.next.title)}` : ' · 모든 미션 완료!'}`);
+        this.ui.render();
+      },
+
+      claimAchievement: (id) => {
+        this.sound.unlock();
+        const r = claimAchievementState(this.s, id);
+        if (!r.ok) {
+          this.ui.toast(r.reason, 'red');
+          return;
+        }
+        this.battle.refreshStats(); // 영구 스탯 보너스 반영
+        this.save(true);
+        this.sound.levelUp();
+        const bonus = r.achievement.atkPct || r.achievement.goldPct
+          ? ` · 공격 +${r.achievement.atkPct || 0}% 골드 +${r.achievement.goldPct || 0}%`
+          : '';
+        this.ui.toast(`🏆 업적 달성 · ${r.achievement.icon} ${r.achievement.title} 💎${r.shards}${bonus}`, 'gold');
+        this.ui.addLog(`🏆 <b>${esc(r.achievement.title)}</b> 수령 · 💎${r.shards}${bonus}`);
+        this.ui.render();
+        if (!this.ui.el.modalRoot.classList.contains('hidden')) this.showAchievements();
+      },
+
+      openCodex: (tab) => this.showCodex(tab),
+      openAchievements: () => this.showAchievements(),
+
       resetGame: () => {
         this.ui.modal({
           title: '⚠️ 게임 초기화',
@@ -822,6 +868,7 @@ class App {
     // 건물주 버프 즉시 반영
     this.buffs = computeBuffs(this.s);
     this.battle.refreshStats();
+    if (side === 'buy') codexCity(this.s, key, this.s.land.owned[key]); // 📖 지역 도감 기록(매도해도 유지)
     this.save(true);
     this.ui.toast(
       `${side === 'buy' ? '🏠 매수' : '💰 매도'} ${city.emoji}${city.name} ${q.toLocaleString()}평 · 💰${r.quote.total.toLocaleString()}`,
@@ -862,6 +909,111 @@ class App {
           },
         },
       ],
+    });
+  }
+
+  /* ───────────── 📖 도감 모달 ───────────── */
+  showCodex(tab = 'monster') {
+    const s = this.s;
+    const c = codexStats(s);
+    const d = codexDetail(s);
+    const cur = ['monster', 'city', 'gear', 'pet'].includes(tab) ? tab : 'monster';
+    const tabs = [
+      ['monster', `🐾 몬스터 ${c.monsters.seen}/${c.monsters.total}`],
+      ['city', `🏙️ 부동산 ${c.cities.seen}/${c.cities.total}`],
+      ['gear', `🎒 장비 ${c.gear.seen}/${c.gear.total}`],
+      ['pet', `🐉 펫 ${c.pets.seen}/${c.pets.total}`],
+    ];
+    const tabBar = `<div class="subtabs codex-tabs">${tabs
+      .map(([k, l]) => `<button class="subtab ${cur === k ? 'active' : ''}" type="button" data-action="open-codex" data-value="${k}">${l}</button>`)
+      .join('')}</div>`;
+
+    let body = '';
+    if (cur === 'monster') {
+      body = `<div class="codex-grid">${d.monsters
+        .map(
+          (m) => `<div class="cx ${m.met ? '' : 'lock'} ${m.boss ? 'boss' : ''}">
+            <img src="${spriteSrc(m.name)}" alt="" loading="lazy">
+            <span class="cx-n">${m.met ? esc(m.ko) : '???'}</span>
+            <span class="cx-k">${m.met ? `×${m.kills.toLocaleString()}` : '미해금'}</span>
+          </div>`,
+        )
+        .join('')}</div>
+        <div class="note" style="margin-top:10px">몬스터는 <b>마주치면</b> 해금되고, 처치 수가 함께 기록됩니다. 보스는 금빛 테두리.</div>`;
+    } else if (cur === 'city') {
+      body = d.cities.length
+        ? `<div class="codex-city-list">${d.cities
+            .map(
+              (ct) => `<div class="kv"><span class="k">${ct.emoji} ${esc(ct.name)} <i class="dim">${esc(ct.region)}</i></span><span class="v">${ct.pyeong.toLocaleString()}평</span></div>`,
+            )
+            .join('')}</div>
+          <div class="note" style="margin-top:10px">매수한 지역이 기록됩니다. <b>매도해도 도감 기록은 유지</b>되고, 역대 최대 보유 평수가 남습니다.</div>`
+        : `<div class="empty">아직 매수한 지역이 없습니다.<br>부동산 탭에서 첫 매물을 사면 도감이 열립니다.</div>`;
+    } else if (cur === 'gear') {
+      body = `<div class="codex-gear">${d.gear
+        .map(
+          (g) => `<div class="kv"><span class="k"><span class="rb ${g.id}">${g.name}</span></span><span class="v">${
+            g.got
+              ? `획득 ${g.count > 1 ? `${g.count}회` : '✓'}${g.slots.length ? ` · 장착 ${g.slots.map((sl) => EQUIP[sl].icon).join('')}` : ''}`
+              : '미획득'
+          }</span></div>`,
+        )
+        .join('')}</div>
+        <div class="note" style="margin-top:10px">장비 뽑기로 얻은 등급이 기록됩니다. 전설은 40회 안에 1개 확정(천장).</div>`;
+    } else {
+      body = `<div class="codex-pets">${d.pets
+        .map(
+          (p) => `<div class="cx-pet ${p.unlocked ? '' : 'lock'}">
+            <img src="assets/sprites/pet/${p.sprite}.png" alt="" loading="lazy">
+            <div class="cx-pet-mid"><b>${p.emoji} ${esc(p.name)}</b><span>${p.unlocked ? '해금 완료 · 동행 가능' : `🔒 ${esc(p.cond)}`}</span></div>
+          </div>`,
+        )
+        .join('')}</div>
+        <div class="note" style="margin-top:10px">부동산 조건을 채우면 자동으로 해금됩니다(4종).</div>`;
+    }
+
+    const milestone = c.milestone
+      ? `마일스톤 <b>${c.milestone.pct}%</b> 달성 — ${c.milestone.label} 적용 중`
+      : '아직 마일스톤 없음';
+    const next = c.next ? `<br>다음 ${c.next.pct}% → ${c.next.label}` : '<br>모든 마일스톤 달성! 🎉';
+
+    this.ui.modal({
+      title: `📖 도감 <span class="tiny" style="color:var(--gold)">${c.pct}%</span>`,
+      sub: `몬스터 ${c.monsters.seen}/${c.monsters.total} · 지역 ${c.cities.seen}/${c.cities.total} · 장비 ${c.gear.seen}/${c.gear.total} · 펫 ${c.pets.seen}/${c.pets.total}`,
+      body: `${tabBar}<div style="margin-top:12px"></div>${body}
+        <div class="note gold-note" style="margin-top:10px">수집률 <b>${c.pct}%</b> · ${milestone}${next}</div>`,
+      actions: [{ label: '닫기', style: 'primary', onClick: () => {} }],
+    });
+  }
+
+  /* ───────────── 🏆 업적 모달 ───────────── */
+  showAchievements() {
+    const list = achievementStatus(this.s);
+    const claimed = claimedAchievementCount(this.s);
+    const rows = list
+      .map(
+        (a) => `<div class="ach-row ${a.claimed ? 'done' : ''} ${a.claimable ? 'ready' : ''}">
+          <div class="ach-ico">${a.icon}</div>
+          <div class="ach-mid">
+            <div class="ach-name">${esc(a.title)}<span class="dim"> ${esc(a.desc)}</span></div>
+            <div class="prog tiny-prog"><i style="width:${a.pct * 100}%"></i></div>
+            <div class="tiny dim">${Math.min(a.cur, a.goal).toLocaleString()} / ${a.goal.toLocaleString()}${a.bonusText ? ` · ${a.bonusText}` : ''}</div>
+          </div>
+          <div class="ach-act">${
+            a.claimed
+              ? '<span class="tiny" style="color:var(--green)">수령 ✓</span>'
+              : a.claimable
+                ? `<button class="btn small primary" type="button" data-action="claim-achievement" data-value="${a.id}">💎${a.shards} 수령</button>`
+                : `<span class="tiny dim">💎${a.shards}</span>`
+          }</div>
+        </div>`,
+      )
+      .join('');
+    this.ui.modal({
+      title: '🏆 업적',
+      sub: `${claimed}/${list.length} 수령 · 달성하면 💎 강화석 또는 소폭 영구 보너스를 받습니다.`,
+      body: `<div class="ach-list">${rows}</div>`,
+      actions: [{ label: '닫기', style: 'primary', onClick: () => {} }],
     });
   }
 
