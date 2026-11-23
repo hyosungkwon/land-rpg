@@ -644,7 +644,7 @@ export class Renderer {
       const depth = ((m.id % 3) - 1) * 5 * sc;
       const depthScale = 1 - (m.id % 3) * 0.02;
       const hitAge = now - (m.hitAt || 0);
-      const hit = hitAge >= 0 && hitAge < 120;
+      const hit = hitAge >= 0 && hitAge < 95;
       const pop = hit ? 1 + 0.07 * (1 - hitAge / 120) : 1;
       const bob = Math.sin(now / 260 + m.animSeed) * 2.4 * sc;
       const lungeX = -lunge * 16 * sc;
@@ -676,7 +676,7 @@ export class Renderer {
         if (hit) {
           const white = this.whiteOf(m.name, img);
           if (white) {
-            ctx.globalAlpha = 0.85 * (1 - hitAge / 120);
+            ctx.globalAlpha = 0.6 * (1 - hitAge / 95);
             ctx.drawImage(white, -w / 2, -h / 2, w, h);
             ctx.globalAlpha = Math.max(0, alpha);
           }
