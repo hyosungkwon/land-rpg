@@ -935,7 +935,7 @@ class App {
           (m) => `<div class="cx ${m.met ? '' : 'lock'} ${m.boss ? 'boss' : ''}">
             <img src="${spriteSrc(m.name)}" alt="" loading="lazy">
             <span class="cx-n">${m.met ? esc(m.ko) : '???'}</span>
-            <span class="cx-k">${m.met ? `×${m.kills.toLocaleString()}` : '미해금'}</span>
+            <span class="cx-k">${m.met ? (m.kills > 0 ? `×${m.kills.toLocaleString()}` : '✓') : '미해금'}</span>
           </div>`,
         )
         .join('')}</div>
