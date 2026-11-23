@@ -8,7 +8,11 @@ import {
 import { expNeed, skillEffect, shardPrice } from './state.js';
 import {
   CITIES, LAND, portfolioOf, computeBuffs, buffProgress, formatGold, priceInfo,
+  CITY_BY_KEY, LANDMARK, landmarkLevel, landmarkQuote, landmarkSummary, landmarkRentMul,
 } from './land.js';
+import {
+  activeNews, newsCovers, newsForCity, regionSetStatus, regionSetBuffs, buffText, citySetId, NEWS_INTERVAL_MS,
+} from './region.js';
 import {
   PETS, DUNGEON, PET_MAX_LV, petDef, petProgress, petLevel, petAtkPct, petDmgPct,
   petUpgradeCost, jobOf, jobProgress, dungeonState,
@@ -136,6 +140,7 @@ export class UI {
       case 'enhance10': actions.enhance(btn.dataset.slot, 10); break;
       case 'buy-shards': actions.buyShards(v); break;
       case 'land-sub': this.setLandSub(v); break;
+      case 'landmark': actions.openLandmark(v); break;
       case 'land-trade': actions.landTrade(v, btn.dataset.side); break;
       case 'land-more': actions.landMore(); break;
       case 'land-sort': actions.landSort(v); break;
@@ -339,6 +344,19 @@ export class UI {
         el.textContent = `💰${formatGold(p.landValue)}`;
       } else if (k === 'income') {
         el.textContent = `+💰${formatGold(p.incomePerHour)}/h`;
+      } else if (k === 'news-left') {
+        const n = activeNews(now);
+        el.textContent = n ? mmss(n.endsAt - now) : '—';
+      } else if (k === 'news-prog') {
+        const n = activeNews(now);
+        const span = n ? Math.max(1, n.endsAt - n.startsAt) : 1;
+        el.style.width = `${n ? Math.min(100, Math.max(0, ((now - n.startsAt) / span) * 100)) : 0}%`;
+      } else if (k === 'news-own') {
+        const n = activeNews(now);
+        const owned = (s.land && s.land.owned) || {};
+        let hit = 0;
+        for (const key of Object.keys(owned)) if (newsCovers(n, key)) hit++;
+        el.textContent = hit > 0 ? `내 지역 ${hit}곳 적용 중` : `${n ? n.targetLabel : ''} · 내 지역 해당 없음`;
       }
     });
     // 임대수령 버튼은 적립액에 따라 실시간으로 활성/문구가 바뀐다
@@ -351,6 +369,16 @@ export class UI {
       if (rentBtn.dataset.label) { // 부동산 탭 버튼만 색을 바꾼다(사냥 탭 버튼은 ghost 유지)
         rentBtn.classList.toggle('green', on);
         rentBtn.classList.toggle('ghost', !on);
+      }
+    }
+
+    // 📰 3분마다 호재가 바뀌면 부동산 탭을 다시 그린다(배지·시세·임대수익 갱신)
+    if (this.tab === 'land') {
+      const news = activeNews(now);
+      if (news && this._newsKey !== news.key) {
+        const had = this._newsKey !== undefined;
+        this._newsKey = news.key;
+        if (had) this.render();
       }
     }
   }
@@ -451,7 +479,7 @@ export class UI {
     const built = buildMarketList(this);
     list.innerHTML = built.html;
     const c = document.getElementById('landCount');
-    if (c) c.textContent = `${built.total}개 지역 · ${built.shown}개 표시 · 가격은 실시간 변동(±30% 일일 밴드)`;
+    if (c) c.textContent = `${built.total}개 지역 · ${built.shown}개 표시 · 가격은 실시간 변동(±30% 일일 밴드) + 호재 보정`;
   }
 
   template() {
@@ -681,6 +709,20 @@ function tplHunt(ui) {
     buffs.active
       ? `<div class="tiny" style="margin-top:9px;color:var(--green)">🏢 건물주 버프 · 공격 +${buffs.atkPct}% · 골드 +${buffs.goldPct}% · 체력 +${buffs.hpPct}% · 치명타 +${buffs.critPct}% · 드롭 +${buffs.dropPct}%</div>`
       : `<div class="tiny dim" style="margin-top:9px">🏢 부동산을 사면 영구 버프가 붙습니다. <b style="color:var(--gold)">부동산 탭 → 매물 투자</b></div>`;
+  const extraBuffs = [];
+  if (buffs.setAtkPct || buffs.setGoldPct || buffs.setDropPct) {
+    extraBuffs.push(`공격 +${buffs.setAtkPct || 0}% · 골드 +${buffs.setGoldPct || 0}% · 드롭 +${buffs.setDropPct || 0}%`);
+  }
+  if (buffs.landmarkCount > 0) {
+    extraBuffs.push(`공격 +${buffs.landmarkAtkPct || 0}% · 골드 +${buffs.landmarkGoldPct || 0}%`);
+  }
+  const setLine = extraBuffs.length
+    ? `<div class="tiny" style="margin-top:4px;color:var(--blue)">🗺️ 권역 세트 ${buffs.setCount || 0}개 · 🏛️ 랜드마크 ${buffs.landmarkCount}개 — ${extraBuffs.join(' / ')}</div>`
+    : '';
+  const newsNow = activeNews(Date.now());
+  const newsLine = newsNow
+    ? `<div class="tiny" style="margin-top:4px;color:var(--gold)">📰 ${newsNow.icon} ${esc(newsNow.title)} <span class="dim">· ${esc(newsNow.targetLabel)} 시세 ▲${newsNow.pricePct}% 임대 ▲${newsNow.rentPct}%</span></div>`
+    : '';
 
   const logs = ui.logs.length
     ? ui.logs
@@ -742,6 +784,8 @@ function tplHunt(ui) {
       ${stat('', '공격 속도', (1000 / st.attackMs).toFixed(2), '회/초')}
     </div>
     ${buffLine}
+    ${setLine}
+    ${newsLine}
   </div>
 
   ${petCard(ui)}
@@ -954,6 +998,144 @@ const traitBadge = (key) => {
   return info ? `<span class="tag">${info.icon} ${info.n}</span>` : '';
 };
 
+/* ══════════════════════════ 📰 호재 뉴스 · 🗺️ 권역 세트 · 🏛️ 랜드마크 (v3.4) ══════════════════════════ */
+const newsOwnText = (s, n) => {
+  if (!n) return '';
+  const owned = (s.land && s.land.owned) || {};
+  let hit = 0;
+  let pyeong = 0;
+  for (const [key, qty] of Object.entries(owned)) {
+    if (newsCovers(n, key)) { hit += 1; pyeong += Math.floor(Number(qty) || 0); }
+  }
+  return hit > 0 ? `내 지역 ${hit}곳 ${fmt(pyeong)}평 적용 중` : `${n.targetLabel} · 내 보유 지역은 해당 없음`;
+};
+
+/** 부동산 탭 맨 위 뉴스 티커/배너 */
+function newsBanner(ui, now = Date.now()) {
+  const s = ui.s;
+  const n = activeNews(now);
+  if (!n) return '';
+  const span = Math.max(1, n.endsAt - n.startsAt);
+  const p = Math.min(100, Math.max(0, ((now - n.startsAt) / span) * 100));
+  return `
+  <div class="card news-card">
+    <div class="news-top">
+      <span class="news-live">● LIVE</span>
+      <span class="news-kicker">📰 부동산 호재</span>
+      <span class="news-clock" data-live="news-left">${mmss(n.endsAt - now)}</span>
+    </div>
+    <div class="news-title">${n.icon} ${esc(n.title)}</div>
+    <div class="news-fx">
+      <b>${esc(n.targetLabel)}</b>
+      <span class="up">시세 ▲${n.pricePct}%</span>
+      <span class="up">임대수익 ▲${n.rentPct}%</span>
+    </div>
+    <div class="news-sub" data-live="news-own">${esc(newsOwnText(s, n))}</div>
+    <div class="prog news-prog"><i data-live="news-prog" style="width:${p}%"></i></div>
+    <div class="tiny dim" style="margin-top:5px">3분마다 새 호재 · 지속 3분 · 해당 지역 매물에 바로 적용</div>
+  </div>`;
+}
+
+/** 내 부동산 홈 — 권역 세트 요약 */
+function regionSetMini(ui) {
+  const sets = regionSetStatus(ui.s.land.owned);
+  const active = sets.filter((st) => st.level > 0);
+  const total = {};
+  for (const st of active) {
+    for (const k of Object.keys(st.buffs)) total[k] = (total[k] || 0) + Number(st.buffs[k] || 0);
+  }
+  const chips = active
+    .map((st) => `<span class="set-chip" style="--sc:${st.color}">${st.icon} ${esc(st.name)} Lv.${st.level}</span>`)
+    .join('');
+  return `
+  <div class="card set-mini">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🗺️</span>권역 세트<small>${active.length}/${sets.length} 발동</small></div>
+      <span class="tiny" style="color:${active.length ? 'var(--green)' : 'var(--dim)'}">${active.length ? '지역 시너지 적용 중' : '미발동'}</span>
+    </div>
+    ${active.length
+      ? `<div class="set-chips">${chips}</div>
+         <div class="tiny" style="margin-top:7px;color:var(--blue)">${buffText(total)}</div>`
+      : '<div class="tiny dim">같은 권역 지역을 3곳 이상 모으면 세트 버프가 열립니다 (제주권은 1곳부터).</div>'}
+    <button class="btn small ghost block" style="margin-top:8px" type="button" data-action="land-sub" data-value="buff">세트 현황 보기</button>
+  </div>`;
+}
+
+/** 건물주 버프 탭 — 권역 세트 전체 현황 */
+function regionSetCard(ui) {
+  const sets = regionSetStatus(ui.s.land.owned);
+  const active = sets.filter((st) => st.level > 0).length;
+  const rows = sets
+    .map((st) => {
+      const on = st.level > 0;
+      const need = st.nextNeed;
+      const w = need ? Math.min(100, (st.held / need) * 100) : 100;
+      const buffLine = on
+        ? `${buffText(st.buffs)}${st.nextNeed ? ` <span class="dim">· 다음 ${st.nextNeed}곳</span>` : ' <span class="dim">· 최대</span>'}`
+        : `${st.nextNeed}곳 모으면 ${buffText(st.nextBuffs)}`;
+      return `
+      <div class="set-row ${on ? 'on' : ''}">
+        <div class="set-ico" style="--sc:${st.color}">${st.icon}</div>
+        <div class="set-mid">
+          <div class="set-name">${esc(st.name)}<span class="set-cnt">${st.held}곳${need ? ` / ${need}곳` : ''}</span>${on ? `<span class="set-lv">Lv.${st.level}</span>` : ''}</div>
+          <div class="prog tiny-prog" style="margin-top:4px"><i style="width:${w}%;background:linear-gradient(90deg,#2c6ea8,${st.color})"></i></div>
+          <div class="set-buff">${buffLine}</div>
+        </div>
+      </div>`;
+    })
+    .join('');
+  return `
+  <div class="card set-card">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🗺️</span>권역 세트<small>${active}/${sets.length} 발동</small></div>
+      <span class="tiny dim">지역 시너지</span>
+    </div>
+    <div class="tiny muted">같은 권역 지역을 여러 곳 보유하면 단계별로 세트 버프가 열립니다. 세트 <b>임대수익</b>은 그 권역 매물에만 적용됩니다.</div>
+    ${rows}
+  </div>`;
+}
+
+/** 건물주 버프 탭 — 랜드마크 현황 */
+function landmarkCard(ui) {
+  const s = ui.s;
+  const lms = landmarkSummary(s);
+  const map = s.land.landmarks && typeof s.land.landmarks === 'object' ? s.land.landmarks : {};
+  const rows = Object.keys(map)
+    .filter((k) => CITY_BY_KEY[k] && Math.floor(Number(s.land.owned[k]) || 0) > 0)
+    .sort((a, b) => Math.floor(Number(map[b]) || 0) - Math.floor(Number(map[a]) || 0))
+    .map((k) => {
+      const city = CITY_BY_KEY[k];
+      const lv = landmarkLevel(s, k);
+      const def = LANDMARK.levels[lv - 1] || LANDMARK.levels[0];
+      const next = lv < LANDMARK.maxLevel ? LANDMARK.levels[lv] : null;
+      const q = next ? landmarkQuote(s, k) : null;
+      const cost = q && q.cost ? q.cost : (next ? Math.round(Math.floor(Number(s.land.owned[k]) || 0) * city.base * next.costMul) : 0);
+      return `
+      <div class="lm-row">
+        <div class="lm-ico">${def.icon}</div>
+        <div class="lm-mid">
+          <div class="lm-name">${city.emoji} ${esc(city.name)}<span class="lm-lv">Lv.${lv} ${esc(def.name)}</span></div>
+          <div class="lm-line">임대수익 +${def.rentPct}% · ${fmt(Math.floor(Number(s.land.owned[k]) || 0))}평</div>
+        </div>
+        ${next
+          ? `<button class="mini up" type="button" data-action="landmark" data-value="${k}">💰${formatGold(cost)}</button>`
+          : '<span class="tiny" style="color:var(--gold)">MAX</span>'}
+      </div>`;
+    })
+    .join('');
+  return `
+  <div class="card lm-card">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🏛️</span>랜드마크<small>${lms.count}개 건설</small></div>
+      <span class="tiny dim">Lv.1~3</span>
+    </div>
+    <div class="tiny muted">보유 <b>${LANDMARK.minPyeong}평 이상</b> 지역에 골드를 투자해 <b>상가 → 타워 → 메가 랜드마크</b>로 올립니다. 레벨마다 그 지역 임대수익이 <b>+30% / +70% / +120%</b>로 커집니다.</div>
+    ${rows || '<div class="empty">아직 랜드마크가 없습니다.<br>내 부동산 → 보유 매물의 <b>🏛️ 랜드마크</b> 버튼에서 건설하세요.</div>'}
+    <div class="kv" style="margin-top:8px"><span class="k">랜드마크 보너스</span><span class="v" style="color:var(--green)">공격력 +${lms.atkPct}% · 골드 +${lms.goldPct}%</span></div>
+    <div class="kv"><span class="k">누적 투자</span><span class="v">💰${formatGold(s.land.landmarkSpend || 0)}</span></div>
+  </div>`;
+}
+
 function landTabBar(ui) {
   const sub = (ui.s.land && ui.s.land.sub) || 'home';
   const tabs = [
@@ -968,9 +1150,10 @@ function landTabBar(ui) {
 
 function tplLand(ui) {
   const sub = (ui.s.land && ui.s.land.sub) || 'home';
-  if (sub === 'market') return landTabBar(ui) + tplLandMarket(ui);
-  if (sub === 'buff') return landTabBar(ui) + tplLandBuff(ui);
-  return landTabBar(ui) + tplLandHome(ui);
+  const top = newsBanner(ui);
+  if (sub === 'market') return top + landTabBar(ui) + tplLandMarket(ui);
+  if (sub === 'buff') return top + landTabBar(ui) + tplLandBuff(ui);
+  return top + landTabBar(ui) + tplLandHome(ui);
 }
 
 /* ───────────── 🏠 내 부동산 ───────────── */
@@ -983,11 +1166,18 @@ function tplLandHome(ui) {
     ? p.holdings
         .map((h) => {
           const payback = h.incomePerHour > 0 ? h.value / h.incomePerHour : 0;
-          return `<div class="hold">
+          const lm = h.landmark || 0;
+          const canLm = h.qty >= LANDMARK.minPyeong || lm > 0;
+          const lmBtn = canLm
+            ? `<button class="lm-chip ${lm ? 'on' : ''}" type="button" data-action="landmark" data-value="${h.city.key}">${lm ? `${LANDMARK.levels[lm - 1].icon} Lv.${lm}` : '🏛️ 랜드마크'}</button>`
+            : '';
+          const newsTag = h.news ? '<span class="tag hot">📈 호재</span>' : '';
+          const mulTag = h.rentMul > 1.001 ? `<span class="up">임대 ×${h.rentMul.toFixed(2)}</span>` : '';
+          return `<div class="hold${h.news ? ' hot' : ''}">
             <div class="h-ico">${h.city.emoji}</div>
             <div class="h-mid">
-              <div class="h-name">${esc(h.city.name)}<span class="h-region">${esc(h.city.region)}</span>${traitBadge(h.city.trait)}</div>
-              <div class="h-line"><b>${fmt(h.qty)}평</b><span class="dim"> · ${trendHtml(h.trend)}</span></div>
+              <div class="h-name">${esc(h.city.name)}<span class="h-region">${esc(h.city.region)}</span>${traitBadge(h.city.trait)}${newsTag}${lmBtn}</div>
+              <div class="h-line"><b>${fmt(h.qty)}평</b><span class="dim"> · ${trendHtml(h.trend)}</span>${mulTag ? ` · ${mulTag}` : ''}</div>
               <div class="h-line dim">평가 💰${formatGold(h.value)} · 시간 +💰${formatGold(h.incomePerHour)} · 회수 ${paybackText(payback)}</div>
             </div>
             <div class="m-btns">
@@ -1032,6 +1222,8 @@ function tplLandHome(ui) {
     </div>
   </div>
 
+  ${regionSetMini(ui)}
+
   <div class="card">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🏘️</span>보유 매물</div>
@@ -1064,6 +1256,7 @@ function buildMarketList(ui) {
   const page = Math.max(1, Math.floor(Number(s.land.page) || 1));
 
   const rows = [];
+  const setB = regionSetBuffs(owned);
   for (const c of CITIES) {
     const held = Math.floor(Number(owned[c.key]) || 0);
     if (tier === 'owned') {
@@ -1071,8 +1264,12 @@ function buildMarketList(ui) {
     } else if (tier !== 'all' && String(c.tier) !== String(tier)) continue;
     if (q && !(c.name.includes(q) || c.region.includes(q) || c.tierLabel.includes(q))) continue;
     const info = priceInfo(c, now);
-    const hourlyPerPyeong = c.rentPerMin * 60;
-    rows.push({ c, info, held, hourlyPerPyeong, payback: hourlyPerPyeong > 0 ? info.price / hourlyPerPyeong : 0 });
+    const lm = landmarkLevel(s, c.key);
+    const setId = citySetId(c.key);
+    const setPct = setId ? (setB.rentBySet[setId] || 0) : 0;
+    const rentMul = (1 + setPct / 100) * landmarkRentMul(lm) * (info.news ? 1 + info.news.rentPct / 100 : 1);
+    const hourlyPerPyeong = c.rentPerMin * 60 * rentMul;
+    rows.push({ c, info, held, hourlyPerPyeong, lm, rentMul, payback: hourlyPerPyeong > 0 ? info.price / hourlyPerPyeong : 0 });
   }
 
   if (sort === 'price') rows.sort((a, b) => a.info.price - b.info.price);
@@ -1086,17 +1283,20 @@ function buildMarketList(ui) {
 
   const html = shown.length
     ? shown
-        .map(({ c, info, held, hourlyPerPyeong, payback }) => {
+        .map(({ c, info, held, hourlyPerPyeong, payback, lm, rentMul }) => {
           const seasonal = info.season ? traitBadge(info.season) : '';
           const remain = Math.max(0, c.supply - held);
           const affordable = gold >= info.price;
-          const onePyeongIncome = c.rentPerMin * 60;
-          return `<div class="mkt">
+          const onePyeongIncome = c.rentPerMin * 60 * (rentMul || 1);
+          const newsTag = info.news ? '<span class="tag hot">📈 호재</span>' : '';
+          const lmTag = lm > 0 ? `<span class="tag lm">${LANDMARK.levels[lm - 1].icon} Lv.${lm}</span>` : '';
+          const mulTag = rentMul > 1.001 ? ` · <b class="up">임대 ×${rentMul.toFixed(2)}</b>` : '';
+          return `<div class="mkt${info.news ? ' hot' : ''}">
             <div class="m-ico">${c.emoji}</div>
             <div class="m-mid">
-              <div class="m-name">${esc(c.name)}<span class="m-region">${esc(c.region)}</span>${traitBadge(c.trait)}${seasonal}</div>
+              <div class="m-name">${esc(c.name)}<span class="m-region">${esc(c.region)}</span>${traitBadge(c.trait)}${seasonal}${newsTag}${lmTag}</div>
               <div class="m-line"><b>💰${fmt(info.price)}</b><span class="dim">/평</span> ${trendHtml(info.trend)}</div>
-              <div class="m-line dim">평당 시간 +💰${fmt(onePyeongIncome)} · 회수 ${paybackText(c.base / hourlyPerPyeong)}${held > 0 ? ` · <b class="own">보유 ${fmt(held)}평</b>` : ''}</div>
+              <div class="m-line dim">평당 시간 +💰${fmt(onePyeongIncome)} · 회수 ${paybackText(c.base / hourlyPerPyeong)}${held > 0 ? ` · <b class="own">보유 ${fmt(held)}평</b>` : ''}${mulTag}</div>
               <div class="m-line dim">잔여 ${fmt(remain)}평${!affordable ? ' · <span style="color:var(--dim)">골드 부족</span>' : ''}</div>
             </div>
             <div class="m-btns">
@@ -1150,7 +1350,7 @@ function tplLandMarket(ui) {
     </div>
     <div class="chips" style="margin-top:8px">${chips}</div>
     <div class="chips" style="margin-top:5px">${sorts}</div>
-    <div class="tiny dim" style="margin-top:8px" id="landCount">${list.total}개 지역 · ${list.shown}개 표시 · 가격은 실시간 변동(±30% 일일 밴드)</div>
+    <div class="tiny dim" style="margin-top:8px" id="landCount">${list.total}개 지역 · ${list.shown}개 표시 · 가격은 실시간 변동(±30% 일일 밴드) + 호재 보정</div>
   </div>
 
   <div class="card" style="padding-top:2px" id="landList">${list.html}</div>
@@ -1199,16 +1399,21 @@ function tplLandBuff(ui) {
 
   ${petCard(ui)}
 
+  ${regionSetCard(ui)}
+
+  ${landmarkCard(ui)}
+
   <div class="card">
-    <div class="card-head"><div class="card-title"><span class="t-ico">🧮</span>현재 적용 수치</div></div>
+    <div class="card-head"><div class="card-title"><span class="t-ico">🧮</span>현재 적용 수치</div><span class="tiny dim">건물주 + 세트 + 랜드마크</span></div>
     <div class="kv"><span class="k">보유 지역</span><span class="v">${buffs.cities}곳</span></div>
     <div class="kv"><span class="k">보유 면적</span><span class="v">${fmt(buffs.totalPyeong)}평</span></div>
     <div class="kv"><span class="k">매물 평가액</span><span class="v">💰${formatGold(buffs.landValue)}</span></div>
-    <div class="kv"><span class="k">공격력</span><span class="v" style="color:var(--green)">+${buffs.atkPct}%</span></div>
-    <div class="kv"><span class="k">골드 획득</span><span class="v" style="color:var(--green)">+${buffs.goldPct}%</span></div>
-    <div class="kv"><span class="k">최대 체력</span><span class="v" style="color:var(--green)">+${buffs.hpPct}%</span></div>
-    <div class="kv"><span class="k">치명타</span><span class="v" style="color:var(--green)">+${buffs.critPct}%</span></div>
-    <div class="kv"><span class="k">드롭률</span><span class="v" style="color:var(--green)">+${buffs.dropPct}%</span></div>
+    <div class="kv"><span class="k">공격력</span><span class="v" style="color:var(--green)">+${buffs.atkPct + (buffs.setAtkPct || 0) + (buffs.landmarkAtkPct || 0)}%</span></div>
+    <div class="kv"><span class="k">골드 획득</span><span class="v" style="color:var(--green)">+${Math.round((buffs.goldPct + (buffs.setGoldPct || 0) + (buffs.landmarkGoldPct || 0)) * 10) / 10}%</span></div>
+    <div class="kv"><span class="k">최대 체력</span><span class="v" style="color:var(--green)">+${buffs.hpPct + (buffs.setHpPct || 0)}%</span></div>
+    <div class="kv"><span class="k">치명타</span><span class="v" style="color:var(--green)">+${Math.round((buffs.critPct + (buffs.setCritPct || 0)) * 10) / 10}%</span></div>
+    <div class="kv"><span class="k">드롭률</span><span class="v" style="color:var(--green)">+${buffs.dropPct + (buffs.setDropPct || 0)}%</span></div>
+    <div class="kv"><span class="k">권역 세트 · 랜드마크</span><span class="v" style="color:var(--blue)">${buffs.setCount || 0}/${buffs.setTotal || 7} 세트 · 🏛️${buffs.landmarkCount || 0}개</span></div>
   </div>`;
 }
 
@@ -1235,6 +1440,8 @@ function tplSettings(ui) {
   const qs = questStateOf(s);
   const achClaimed = claimedAchievementCount(s);
   const achReady = achievementStatus(s).filter((a) => a.claimable).length;
+  const setB = regionSetBuffs(s.land.owned);
+  const lms = landmarkSummary(s);
 
   return `
   ${installCard(ui)}
@@ -1301,6 +1508,9 @@ function tplSettings(ui) {
     <div class="kv"><span class="k">도감 · 업적</span><span class="v">수집 ${c.pct}% · 업적 ${achClaimed}/${ACHIEVEMENTS.length}</span></div>
     <div class="kv"><span class="k">경제</span><span class="v">골드 하나 (사냥 = 부동산)</span></div>
     <div class="kv"><span class="k">부동산</span><span class="v">전국 ${CITIES.length}개 시군구</span></div>
+    <div class="kv"><span class="k">권역 세트</span><span class="v">${setB.activeCount || 0}/${setB.total || 7} 발동</span></div>
+    <div class="kv"><span class="k">랜드마크</span><span class="v">🏛️ ${lms.count}개 · 임대 보너스</span></div>
+    <div class="kv"><span class="k">호재 뉴스</span><span class="v">3분마다 갱신 · 기록 ${(s.news && s.news.seen ? s.news.seen.length : 0)}종</span></div>
     <div class="kv"><span class="k">저장 위치</span><span class="v">localStorage</span></div>
     <div class="note" style="margin-top:9px">
       방치 보상은 최대 <b>${ECON.offlineCapHours}시간</b>까지 정산됩니다.

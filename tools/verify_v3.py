@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""land-rpg v3.3.0 검증 (QuickJS + 정적 검사)
+"""land-rpg v3.4.0 검증 (QuickJS + 정적 검사)
 
 1) 모든 JS 파일 문법(파싱) 검사
-2) 정적 검사 (Firebase/로그인 흔적 0, 저장 키 v3, sw 캐시 v3.1)
+2) 정적 검사 (Firebase/로그인 흔적 0, 저장 키 v3, sw 캐시 v3.4)
 3) 통합 경제 단위 검증 (가격 스케일·매수/매도·임대·건물주 버프·강화석 시세·저장 정규화)
 4) 장비 뽑기·등급·연출·효과음 검사 (v3.1)
 5) 밸런스 시뮬레이션 (1~10 쾌적 / 10~22 장비·버프 필요 / 방치보다 적극 플레이가 앞섬)
+6) 펫·전직·던전 (v3.2) · 미션·업적·도감 (v3.3) · 호재 뉴스·권역 세트·랜드마크 (v3.4)
 
 사용: python3 tools/verify_v3.py
 """
@@ -17,8 +18,8 @@ import sys
 import quickjs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FILES = ["src/data.js", "src/land-data.js", "src/land.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/land-data.js", "src/land.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js", "src/render.js", "src/ui.js", "src/sound.js"]
+FILES = ["src/data.js", "src/land-data.js", "src/region.js", "src/land.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/land-data.js", "src/region.js", "src/land.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js", "src/render.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -87,8 +88,9 @@ def main():
     for bad in ["firebase", "signInWithPopup", "Google 로그인", "gstatic", "firebaseio", "googleapis"]:
         ok(bad.lower() not in text_all.lower(), f"Firebase/로그인 흔적 없음: {bad}")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v3.3.0" in read("sw.js"), "SW 캐시 버전 v3.3.0")
-    ok("APP_VERSION = '3.3.0'" in read("src/data.js"), "앱 버전 v3.3.0")
+    ok("land-rpg-v3.4.0" in read("sw.js"), "SW 캐시 버전 v3.4.0")
+    ok("APP_VERSION = '3.4.0'" in read("src/data.js"), "앱 버전 v3.4.0")
+    ok("'./src/region.js'" in read("sw.js"), "sw.js 프리캐시에 region.js 포함")
     ok(os.path.exists(os.path.join(ROOT, "src/sound.js")), "src/sound.js 존재")
     ok("'./src/sound.js'" in read("sw.js"), "sw.js 프리캐시에 sound.js 포함")
     ok(not os.path.exists(os.path.join(ROOT, "src/firebase.js")), "firebase.js 제거")
@@ -906,6 +908,243 @@ def main():
     ok("collectionBonus" in stsrc and "normalizeQuestState" in stsrc and "normalizeCodex" in stsrc, "state 저장 정규화·calcStats 수집 보너스")
     ok(all(x in css2 for x in [".quest-card", ".q-claim.ready", ".codex-grid", ".ach-row"]), "미션·도감·업적 CSS")
     ok("qPulse" in css2, "보상 수령 버튼 반짝임 애니메이션")
+
+    section("[10] 📰 호재 뉴스 · 🗺️ 권역 세트 · 🏛️ 랜드마크 (v3.4.0)")
+    news = js(ctx, """
+      const a = activeNews(0), a2 = activeNews(120000), b = activeNews(180000);
+      const covered = RCITIES.filter(r => newsCovers(a, r.key)).length;
+      const t60 = newsTimer(60000);
+      return {
+        interval: NEWS_INTERVAL_MS,
+        same: a.key === a2.key && a.block === a2.block,
+        nextBlock: b.block, nextDiff: b.key !== a.key,
+        scope: a.scope, target: a.targetLabel, title: a.title, icon: a.icon,
+        price: a.pricePct, rent: a.rentPct, starts: a.startsAt, ends: a.endsAt,
+        covered, total: RCITIES.length,
+        leftSec: Math.round(t60.leftMs / 1000), pct: Math.round(t60.pct * 100),
+        poolSize: NEWS_POOL.length,
+      };
+    """)
+    ok(news["interval"] == 180000, "호재 뉴스 3분 주기", str(news["interval"]))
+    ok(news["same"] is True and news["nextBlock"] == 1 and news["nextDiff"] is True, "같은 3분 블록은 같은 뉴스 · 다음 블록은 새 뉴스", json.dumps({"same": news["same"], "next": news["nextBlock"]}))
+    ok(0 < news["covered"] < news["total"], "뉴스는 일부 지역(권역·지역·섹터)에만 적용", f"{news['covered']}/{news['total']}")
+    ok(news["price"] > 0 and news["rent"] > 0 and len(news["title"]) > 3, "호재는 시세·임대수익 보정을 함께 준다", json.dumps({"p": news["price"], "r": news["rent"]}, ensure_ascii=False))
+    ok(news["starts"] == 0 and news["ends"] == 180000 and news["leftSec"] == 120 and 25 <= news["pct"] <= 40, "뉴스 지속 3분 · 남은 시간·진행률", json.dumps({"left": news["leftSec"], "pct": news["pct"]}))
+    ok(news["poolSize"] >= 10, "호재 뉴스 풀 다양성", str(news["poolSize"]))
+
+    fx = js(ctx, """
+      const news = activeNews(0);
+      const coveredKey = RCITIES.find(r => newsCovers(news, r.key)).key;
+      const uncoveredKey = RCITIES.find(r => !newsCovers(news, r.key) && citySetId(r.key) !== citySetId(coveredKey)).key;
+      const cCity = CITY_BY_KEY[coveredKey], uCity = CITY_BY_KEY[uncoveredKey];
+      const cInfo = priceInfo(cCity, 0), uInfo = priceInfo(uCity, 0);
+      const mLo = Math.round(cInfo.daily * (1 - LAND.band) * (1 + news.pricePct / 100));
+      const mHi = Math.round(cInfo.daily * (1 + LAND.band) * (1 + news.pricePct / 100));
+      const uLo = Math.round(uInfo.daily * (1 - LAND.band)), uHi = Math.round(uInfo.daily * (1 + LAND.band));
+      const s = defaultState(0);
+      s.land.owned[coveredKey] = 20;
+      const p = portfolioOf(s, 0);
+      const setB = regionSetBuffs(s.land.owned);
+      const expectMul = (1 + (setB.rentBySet[citySetId(coveredKey)] || 0) / 100) * (1 + news.rentPct / 100);
+      const base = incomePerMinOf(cCity, 20, 20, 0);
+      return {
+        cNews: !!cInfo.news, uNews: !!uInfo.news,
+        priceOk: cInfo.price >= mLo - 1 && cInfo.price <= mHi + 1,
+        uPriceOk: uInfo.price >= uLo - 1 && uInfo.price <= uHi + 1,
+        mul: newsPriceMul(coveredKey, 0), mulU: newsPriceMul(uncoveredKey, 0),
+        rentMul: newsRentMul(coveredKey, 0), expectMul,
+        ratio: base > 0 ? p.incomePerMin / base : 0,
+        holdingNews: !!p.holdings[0].news,
+        label: cInfo.news ? cInfo.news.targetLabel : '',
+      };
+    """)
+    ok(fx["cNews"] is True and fx["uNews"] is False, "호재 지역만 배지·보정 대상(비호재 지역은 그대로)", json.dumps({"c": fx["cNews"], "u": fx["uNews"]}))
+    ok(fx["priceOk"] is True and fx["uPriceOk"] is True, "호재 지역 시세에 보정 적용 · 비호재 지역은 밴드 유지", json.dumps({"p": fx["priceOk"], "u": fx["uPriceOk"]}))
+    ok(abs(fx["mul"] - fx["rentMul"]) > -1 and fx["mul"] > 1 and fx["mulU"] == 1, "호재 시세 배율은 적용 지역만 1 초과", json.dumps({"a": fx["mul"], "b": fx["mulU"]}))
+    ok(fx["holdingNews"] is True and abs(fx["ratio"] - fx["expectMul"]) < fx["expectMul"] * 0.01 and fx["ratio"] > 1, "호재 임대수익 버프가 실제 임대 계산에 반영", json.dumps({"ratio": round(fx["ratio"], 4), "e": round(fx["expectMul"], 4)}))
+
+    sts = js(ctx, """
+      const s = defaultState(0);
+      const seoul3 = CITIES.filter(c => citySetId(c.key) === 'seoul').slice(0, 3);
+      for (const c of seoul3) s.land.owned[c.key] = 5;
+      const st1 = regionSetStatus(s.land.owned);
+      const se1 = st1.find(x => x.id === 'seoul');
+      const b1 = regionSetBuffs(s.land.owned);
+      const p1 = portfolioOf(s, 0);
+      const base = seoul3.reduce((a, c) => a + incomePerMinOf(c, 5, 5, 0), 0);
+      const nMul = newsCovers(activeNews(0), seoul3[0].key) ? 1 + activeNews(0).rentPct / 100 : 1;
+      const seoul10 = CITIES.filter(c => citySetId(c.key) === 'seoul').slice(0, 10);
+      for (const c of seoul10) s.land.owned[c.key] = 5;
+      const se3 = regionSetStatus(s.land.owned).find(x => x.id === 'seoul');
+      const sg = defaultState(0);
+      sg.level = 20;
+      for (const c of CITIES.filter(x => citySetId(x.key) === 'gyeonggi').slice(0, 3)) sg.land.owned[c.key] = 1;
+      const gb = computeBuffs(sg, 0);
+      const sj = defaultState(0);
+      sj.land.owned[CITIES.find(c => citySetId(c.key) === 'jeju').key] = 2;
+      const jb = regionSetBuffs(sj.land.owned);
+      return {
+        count: REGION_SETS.length,
+        names: REGION_SETS.map(d => d.name),
+        needs: REGION_SETS.map(d => d.levels.map(l => l.need)),
+        coverage: REGION_SETS.reduce((a, d) => a + d.keyList.length, 0),
+        totalCities: CITIES.length,
+        lv: se1.level, held: se1.held, need: se1.nextNeed, rent1: se1.buffs.rentPct, text: se1.buffText,
+        active: b1.activeCount, rentMap: b1.rentBySet.seoul,
+        inc: Math.round(p1.incomePerMin), base: Math.round(base), nMul,
+        lv3: se3.level, rent3: se3.buffs.rentPct, next3: se3.nextNeed,
+        propAtk: gb.atkPct, setAtk: gb.setAtkPct,
+        atkG0: calcStats(sg, {}).atk, atkG1: calcStats(sg, gb).atk,
+        jejuLv: regionSetStatus(sj.land.owned).find(x => x.id === 'jeju').level, jejuGold: jb.goldPct,
+        zero: regionSetBuffs({}).activeCount,
+      };
+    """)
+    ok(sts["count"] == 7 and sts["coverage"] == sts["totalCities"] == 229, "권역 세트 7개 · 전국 229개 지역 누락 없이 매핑", f"{sts['coverage']}/{sts['totalCities']}")
+    ok(sts["names"] == ["서울권", "경기·인천권", "강원권", "충청권", "전라권", "경상권", "제주권"], "권역 세트 이름(서울·경기인천·강원·충청·전라·경상·제주)", json.dumps(sts["names"], ensure_ascii=False))
+    ok(all(0 < n[0] and all(a < b for a, b in zip(n, n[1:])) for n in sts["needs"]) and sts["needs"][0] == [3, 6, 10], "세트 필요 지역 수가 단계마다 증가(서울 3/6/10)", json.dumps(sts["needs"]))
+    ok(sts["lv"] == 1 and sts["held"] == 3 and sts["need"] == 6 and sts["rent1"] == 8 and "임대수익" in sts["text"], "서울 3곳 → 서울권 Lv.1 임대수익 +8%", json.dumps({"lv": sts["lv"], "rent": sts["rent1"]}, ensure_ascii=False))
+    ok(sts["active"] == 1 and sts["rentMap"] == 8, "세트 버프 집계(임대수익 배율)", json.dumps({"a": sts["active"], "r": sts["rentMap"]}))
+    ok(abs(sts["inc"] / max(1, sts["base"]) - 1.08 * sts["nMul"]) < 0.012 and sts["inc"] > sts["base"], "세트 임대수익이 실제 임대 계산에 반영", json.dumps({"inc": sts["inc"], "base": sts["base"], "n": round(sts["nMul"], 3)}))
+    ok(sts["lv3"] == 3 and sts["rent3"] == 26 and sts["next3"] is None, "서울 10곳 → Lv.3 임대수익 +26%", json.dumps({"lv": sts["lv3"], "r": sts["rent3"]}))
+    ok(sts["propAtk"] == 0 and sts["setAtk"] == 4 and sts["atkG1"] > sts["atkG0"], "경기·인천권 공격 버프가 calcStats 에 반영(건물주 버프와 분리)", json.dumps({"set": sts["setAtk"], "a0": sts["atkG0"], "a1": sts["atkG1"]}))
+    ok(sts["jejuLv"] == 1 and sts["jejuGold"] == 3, "제주권은 1곳부터 발동", json.dumps({"lv": sts["jejuLv"], "g": sts["jejuGold"]}))
+    ok(sts["zero"] == 0, "보유 지역이 없으면 세트 버프 0(신규 밸런스 불변)", str(sts["zero"]))
+
+    lmr = js(ctx, """
+      const s = defaultState(0);
+      s.gold = 2000000; s.level = 20;
+      const cheap = CITIES.slice().sort((a, b) => a.base - b.base)[0];
+      s.land.owned[cheap.key] = 3;
+      const q3 = landmarkQuote(s, cheap.key, 0);
+      s.land.owned[cheap.key] = 500;
+      const q1 = landmarkQuote(s, cheap.key, 0);
+      const g0 = s.gold;
+      const r1 = buildLandmark(s, cheap.key, 0);
+      const lv1 = landmarkLevel(s, cheap.key);
+      const inc1 = portfolioOf(s, 0).incomePerMin;
+      const r2 = buildLandmark(s, cheap.key, 0);
+      const inc2 = portfolioOf(s, 0).incomePerMin;
+      const r3 = buildLandmark(s, cheap.key, 0);
+      const inc3 = portfolioOf(s, 0).incomePerMin;
+      const goldAfterBuild = s.gold;
+      const r4 = buildLandmark(s, cheap.key, 0);
+      const sum = landmarkSummary(s);
+      const b = computeBuffs(s, 0);
+      const nMul = newsCovers(activeNews(0), cheap.key) ? 1 + activeNews(0).rentPct / 100 : 1;
+      const base = incomePerMinOf(cheap, 500, 500, 0);
+      const spent = g0 - goldAfterBuild;
+      const poor = defaultState(0); poor.gold = 10; poor.land.owned[cheap.key] = 500;
+      const qp = landmarkQuote(poor, cheap.key, 0);
+      const sell = applyTrade(s, cheap.key, 'sell', s.land.owned[cheap.key], 0);
+      return {
+        reasons: [q3.ok, q1.ok, r1.ok, r2.ok, r3.ok, r4.ok, !!r4.max],
+        levels: [lv1, r2.level, r3.level],
+        rentPct: LANDMARK.levels.map(l => l.rentPct), names: LANDMARK.levels.map(l => l.name),
+        minPyeong: LANDMARK.minPyeong, maxLevel: LANDMARK.maxLevel,
+        cost1: q1.cost, formula1: Math.round(500 * cheap.base * 0.35),
+        inc1, inc2, inc3, base, nMul,
+        sum, setAtk: b.setAtkPct, lmAtk: b.landmarkAtkPct, lmGold: b.landmarkGoldPct,
+        atk0: calcStats(s, {}).atk, atk1: calcStats(s, b).atk,
+        spent, gold: goldAfterBuild, poor: qp.ok, poorReason: qp.reason,
+        sellOk: sell.ok, lmAfterSell: s.land.landmarks[cheap.key] || 0, ownedAfter: s.land.owned[cheap.key] || 0,
+        maxReason: r4.reason,
+      };
+    """)
+    ok(lmr["rentPct"] == [30, 70, 120] and lmr["names"] == ["상가", "타워", "메가 랜드마크"], "랜드마크 3단계 임대수익 +30/70/120%", json.dumps({"r": lmr["rentPct"], "n": lmr["names"]}, ensure_ascii=False))
+    ok(lmr["minPyeong"] == 5 and lmr["reasons"][0] is False and lmr["reasons"][1] is True, "5평 미만 건설 불가 · 5평 이상 견적 성립", json.dumps({"min": lmr["minPyeong"], "r": lmr["reasons"][:2]}))
+    ok(lmr["cost1"] == lmr["formula1"] and lmr["levels"] == [1, 2, 3], "건설 비용 = 보유평 × 기준가 × 계수 · Lv.1→2→3", json.dumps({"c": lmr["cost1"], "f": lmr["formula1"], "lv": lmr["levels"]}))
+    ok(abs(lmr["inc1"] / lmr["base"] - 1.3 * lmr["nMul"]) < 0.01 and abs(lmr["inc3"] / lmr["base"] - 2.2 * lmr["nMul"]) < 0.01 and lmr["inc3"] > lmr["inc2"] > lmr["inc1"], "랜드마크 레벨이 임대수익에 실제 반영(+30/70/120%)", json.dumps({"i1": round(lmr["inc1"], 2), "i3": round(lmr["inc3"], 2), "base": round(lmr["base"], 2)}))
+    ok(lmr["sum"]["count"] == 1 and lmr["sum"]["levels"] == [0, 0, 1] and lmr["lmAtk"] == 1 and lmr["lmGold"] == 0.5, "랜드마크 보유 수 보너스(공격 +1% · 골드 +0.5%)", json.dumps({"s": lmr["sum"], "a": lmr["lmAtk"], "g": lmr["lmGold"]}, ensure_ascii=False))
+    ok(lmr["atk1"] > lmr["atk0"] and lmr["setAtk"] == 0, "랜드마크 보너스가 calcStats 에 반영", f"{lmr['atk0']}→{lmr['atk1']}")
+    ok(lmr["poor"] is False and "골드" in lmr["poorReason"], "골드 부족 시 건설 거부", lmr["poorReason"])
+    ok(lmr["reasons"][4] is True and lmr["reasons"][5] is False and lmr["reasons"][6] is True and "최대" in lmr["maxReason"], "Lv.3 까지 건설 후 최대 레벨", lmr["maxReason"])
+    ok(lmr["sellOk"] is True and lmr["ownedAfter"] == 0 and lmr["lmAfterSell"] == 0, "전량 매도 시 랜드마크 정리", json.dumps({"own": lmr["ownedAfter"], "lm": lmr["lmAfterSell"]}))
+    ok(lmr["spent"] > 0 and abs(lmr["gold"] - (2000000 - lmr["spent"])) < 1, "랜드마크 투자 골드 차감", json.dumps({"spent": lmr["spent"]}))
+
+    nsv = js(ctx, """
+      const old = { ver: 3, level: 30, gold: 5000, shards: 12, maxStage: 10,
+        equip: { weapon: 9 }, gearRarity: { weapon: 'rare' },
+        land: { owned: { '0_0_0': 6 }, accruedRent: 5 },
+        quests: { idx: 3, claimed: ['m01', 'm02', 'm03'], done: 3, at: 0 },
+        pet: { equipped: 'wolf', unlocked: ['wolf'], chosen: true } };
+      const n = normalizeState(old, 0);
+      const bad = normalizeState({
+        gold: 100,
+        land: { owned: { '0_0_0': 6 }, landmarks: { '0_0_0': 9, zzz: 2, '1_0_0': 3 }, landmarkSpend: -50 },
+        news: { seen: [1, 'chip', '0123456789012345678901234567890'], log: [{ title: 't', block: 2 }, 'bad', { id: 5 }], lastBlock: -999 },
+      }, 0);
+      const stable = normalizeState(JSON.parse(JSON.stringify(n)), 0);
+      return {
+        level: n.level, gold: n.gold, owned: n.land.owned['0_0_0'], lm: n.land.landmarks, spend: n.land.landmarkSpend,
+        news: n.news, quest: n.quests.idx, pet: n.pet.equipped, weapon: n.equip.weapon,
+        badLm: bad.land.landmarks, badSeen: bad.news.seen, badBlock: bad.news.lastBlock,
+        badLog: bad.news.log.length, badSpend: bad.land.landmarkSpend, badGold: bad.gold,
+        stable: stable.news.lastBlock === n.news.lastBlock
+          && Object.keys(stable.land.landmarks).length === Object.keys(n.land.landmarks).length
+          && stable.gold === n.gold,
+      };
+    """)
+    ok(nsv["level"] == 30 and nsv["gold"] == 5000 and nsv["owned"] == 6 and nsv["quest"] == 3 and nsv["pet"] == "wolf" and nsv["weapon"] == 9, "v3.3 저장 호환 — 기존 진행도 그대로 유지", json.dumps({k: nsv[k] for k in ["level", "gold", "quest", "pet"]}, ensure_ascii=False))
+    ok(nsv["lm"] == {} and nsv["spend"] == 0 and nsv["news"] == {"seen": [], "log": [], "lastBlock": -1}, "새 필드(news·landmarks) 기본값 병합", json.dumps(nsv["news"], ensure_ascii=False))
+    ok(nsv["badLm"] == {"0_0_0": 3} and nsv["badSpend"] == 0 and nsv["badGold"] == 100, "손상된 랜드마크 값 방어(레벨 상한·미보유 제거)", json.dumps(nsv["badLm"]))
+    ok(nsv["badSeen"] == ["chip"] and nsv["badBlock"] == -1 and nsv["badLog"] == 1, "손상된 뉴스 기록 방어", json.dumps({"s": nsv["badSeen"], "b": nsv["badBlock"], "l": nsv["badLog"]}, ensure_ascii=False))
+    ok(nsv["stable"] is True, "정규화 반복해도 안정")
+
+    rn = js(ctx, """
+      const s = defaultState(0);
+      const n1 = activeNews(0);
+      const a = recordNews(s, n1, 1000);
+      const b = recordNews(s, n1, 2000);
+      const n2 = activeNews(NEWS_INTERVAL_MS);
+      const c = recordNews(s, n2, NEWS_INTERVAL_MS);
+      return { a, b, c, seen: s.news.seen.length, log: s.news.log.length, last: s.news.lastBlock, top: s.news.log[0].title };
+    """)
+    ok(rn["a"] is True and rn["b"] is False and rn["c"] is True and rn["seen"] >= 2 and rn["log"] == 2 and rn["last"] == 1, "호재를 한 번만 기록 · 다음 호재 누적", json.dumps(rn, ensure_ascii=False))
+
+    tpl4 = js(ctx2, """
+      const s = defaultState(0);
+      s.gold = 500000; s.level = 15; s.stage = 5;
+      const seoul = CITIES.filter(c => citySetId(c.key) === 'seoul');
+      for (const c of seoul.slice(0, 4)) s.land.owned[c.key] = 20;
+      s.land.landmarks[seoul[0].key] = 2;
+      s.land.landmarkSpend = 12345;
+      const buffs = computeBuffs(s, 0);
+      const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(5), boss: null, dungeon: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'land', el: {}, install: { hidden: true } };
+      const out = {};
+      for (const sub of ['home', 'market', 'buff']) { s.land.sub = sub; out[sub] = __tpls.land(ui); }
+      out.hunt = __tpls.hunt(ui);
+      out.marketList = __tpls.market(ui).html;
+      const empty = defaultState(0);
+      const ui2 = { s: empty, battle: { stats: calcStats(empty, {}), def: stageDef(1), boss: null, player: { hp: 1 } }, app: { buffs: computeBuffs(empty, 0) }, logs: [], tab: 'land', el: {}, install: { hidden: true } };
+      empty.land.sub = 'buff';
+      out.emptyBuff = __tpls.land(ui2);
+      out.emptyHome = (empty.land.sub = 'home', __tpls.land(ui2));
+      out.bad = /undefined|NaN|\\[object Object\\]/.test(Object.values(out).filter(v => typeof v === 'string').join('\\n'));
+      return out;
+    """)
+    ok(tpl4["bad"] is False, "v3.4 템플릿에 undefined/NaN 누출 없음")
+    ok(all("📰 부동산 호재" in tpl4[k] for k in ["home", "market", "buff"]), "부동산 탭 상단 뉴스 배너(모든 서브탭)", "")
+    ok("data-live=\"news-left\"" in tpl4["home"] and "data-live=\"news-prog\"" in tpl4["home"], "뉴스 남은 시간·진행 바 실시간 갱신", "")
+    ok("권역 세트" in tpl4["home"] and "권역 세트" in tpl4["buff"] and "서울권" in tpl4["buff"], "내 부동산·건물주 버프 탭에 권역 세트 현황", "")
+    ok("랜드마크" in tpl4["buff"] and "Lv.2" in tpl4["buff"], "건물주 버프 탭에 랜드마크 현황", "")
+    ok('data-action=\"landmark\"' in tpl4["home"] and 'data-action=\"landmark\"' in tpl4["buff"], "랜드마크 건설/업그레이드 버튼", "")
+    ok("아직 랜드마크가 없습니다" in tpl4["emptyBuff"] and "📰 부동산 호재" in tpl4["emptyHome"], "새 게임에서도 뉴스·랜드마크 카드가 깨지지 않음", "")
+    ok("📰" in tpl4["hunt"], "사냥 탭에 현재 호재 요약", "")
+
+    regsrc = read("src/region.js")
+    uisrc3 = read("src/ui.js")
+    appsrc3 = read("app.js")
+    stsrc2 = read("src/state.js")
+    lsrc = read("src/land.js")
+    css3 = read("style.css")
+    ok(os.path.exists(os.path.join(ROOT, "src/region.js")), "src/region.js 존재")
+    ok(all(x in regsrc for x in ["REGION_SETS", "NEWS_POOL", "activeNews", "newsCovers", "regionSetStatus", "regionSetBuffs"]), "region.js 모듈 구성")
+    ok(all(x in lsrc for x in ["LANDMARK", "landmarkQuote", "buildLandmark", "landmarkSummary", "landmarkRentMul"]), "land.js 랜드마크 엔진")
+    ok("news" in lsrc and "pricePct" in lsrc and "setAtkPct" in lsrc, "시세·임대수익에 뉴스·세트 반영")
+    ok(all(x in stsrc2 for x in ["recordNews", "normalizeNews", "sanitizeLandmarks", "setAtkPct"]), "state.js 저장 정규화·세트 보너스 반영")
+    ok(all(x in appsrc3 for x in ["checkNews", "openLandmark", "doBuildLandmark", "recordNews", "ownedInNews"]), "뉴스·랜드마크 액션 연결(app.js)")
+    ok(all(x in uisrc3 for x in ["newsBanner", "regionSetCard", "regionSetMini", "landmarkCard", 'data-action="landmark"']), "뉴스·세트·랜드마크 UI 구현")
+    ok(all(x in css3 for x in [".news-card", ".tag.hot", ".lm-chip", ".set-row", ".lm-step"]), "v3.4 뉴스·세트·랜드마크 CSS")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

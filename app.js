@@ -4,13 +4,14 @@
 import { APP_VERSION, ECON, EQUIP, SKILLS, SAVE_KEY, stageDef, RARITIES, RARITY_INDEX, spriteSrc } from './src/data.js';
 import {
   loadState, saveState, offlineSummary, applyOffline, tryEnhance, tryUpgradeSkill,
-  shardPrice, buyShards, pullGear,
+  shardPrice, buyShards, pullGear, recordNews,
 } from './src/state.js';
 import { Battle } from './src/combat.js';
 import {
   computeBuffs, portfolioOf, accrueRent, claimRent, applyTrade, quoteTrade, maxBuyQty,
-  CITY_BY_KEY, formatGold, LAND,
+  CITY_BY_KEY, formatGold, LAND, LANDMARK, landmarkQuote, buildLandmark as buildLandmarkState,
 } from './src/land.js';
+import { activeNews, newsCovers } from './src/region.js';
 import { Renderer } from './src/render.js';
 import { UI } from './src/ui.js';
 import { GameSound } from './src/sound.js';
@@ -109,6 +110,7 @@ class App {
     }
 
     this.ui.render();
+    this.checkNews(now);
     this.bindAudioUnlock();
     // PWA 바로가기(?tab=land) 지원
     try {
@@ -181,6 +183,10 @@ class App {
       if (now - (this.lastPetCheck || 0) > 2000) {
         this.lastPetCheck = now;
         this.checkPets(now);
+      }
+      if (now - (this.lastNewsCheck || 0) > 1000) {
+        this.lastNewsCheck = now;
+        this.checkNews(now);
       }
     } catch (e) {
       this.reportError('save', e);
@@ -332,6 +338,40 @@ class App {
     this.s.lastActiveAt = Date.now();
     saveState(STORAGE, this.s);
     if (immediate) this.lastSave = Date.now();
+  }
+
+  /* ───────────── 📰 호재 뉴스 (v3.4.0) ───────────── */
+  /** 3분마다 바뀌는 호재를 기록하고, 내 보유 지역에 걸리면 알린다 */
+  checkNews(now = Date.now()) {
+    let n;
+    try {
+      n = activeNews(now);
+    } catch (e) {
+      return null;
+    }
+    if (!n) return null;
+    if (this._newsKey === n.key) return n;
+    const had = this._newsKey !== undefined;
+    this._newsKey = n.key;
+    try {
+      if (recordNews(this.s, n, now)) this.save();
+    } catch (e) { /* ignore */ }
+    const hit = this.ownedInNews(n);
+    if (had && hit > 0) {
+      this.ui.toast(`📈 내 지역 호재! ${n.icon} ${n.title} · 임대 ▲${n.rentPct}%`, 'gold');
+    }
+    if (this.ui.tab === 'land') this.ui.render();
+    return n;
+  }
+
+  /** 이 뉴스가 적용되는 내 보유 지역 수 */
+  ownedInNews(news) {
+    const owned = (this.s.land && this.s.land.owned) || {};
+    let hit = 0;
+    for (const key of Object.keys(owned)) {
+      if (Math.floor(Number(owned[key]) || 0) > 0 && newsCovers(news, key)) hit += 1;
+    }
+    return hit;
   }
 
   /* ───────────── 수명주기 ───────────── */
@@ -617,6 +657,7 @@ class App {
         this.ui.updateLandList();
       },
       claimRent: () => this.openClaimRent(),
+      openLandmark: (key) => this.openLandmark(key),
 
       /* ── v3.2: 전직 · 펫 · 황금 던전 ── */
       promoteJob: () => {
@@ -879,6 +920,67 @@ class App {
       this.ui.toast(`🏢 건물주 버프 · 공격 +${b.atkPct}% · 골드 +${b.goldPct}% · 체력 +${b.hpPct}%`, 'gold');
     }
     this.checkPets(); // 거래로 지역·평수·총자산이 바뀌면 펫 해금 확인
+    this.ui.render();
+  }
+
+  /* ───────────── 🏛️ 랜드마크 건설/업그레이드 (v3.4.0) ───────────── */
+  openLandmark(key) {
+    const city = CITY_BY_KEY[key];
+    if (!city) return;
+    const s = this.s;
+    const q = landmarkQuote(s, key, Date.now());
+    const held = Math.floor(Number(s.land.owned[key]) || 0);
+    const lv = q.level || 0;
+    const nextDef = lv < LANDMARK.maxLevel ? LANDMARK.levels[lv] : null;
+    const rows = LANDMARK.levels
+      .map((d) => {
+        const cls = lv === d.lv ? 'cur' : lv > d.lv ? 'done' : '';
+        return `<div class="lm-step ${cls}">
+          <span class="lm-step-ico">${d.icon}</span>
+          <span class="lm-step-n">Lv.${d.lv} ${esc(d.name)}</span>
+          <span class="lm-step-b">임대수익 +${d.rentPct}%</span>
+        </div>`;
+      })
+      .join('');
+    const body = `
+      <div class="tsum">
+        <div><span>지역</span><b>${city.emoji} ${esc(city.name)} <i>${esc(city.region)}</i></b></div>
+        <div><span>보유</span><b>${held.toLocaleString()}평</b></div>
+        <div><span>랜드마크</span><b>${lv ? `Lv.${lv} ${esc(LANDMARK.levels[lv - 1].name)}` : '없음'}</b></div>
+        <div><span>보유 골드</span><b>💰${s.gold.toLocaleString()}</b></div>
+      </div>
+      <div class="lm-levels">${rows}</div>
+      <div class="note" style="margin-top:9px">${
+        nextDef
+          ? `다음 <b>Lv.${nextDef.lv} ${esc(nextDef.name)}</b> · 비용 ${q.cost ? `<b>💰${q.cost.toLocaleString()}</b>` : '계산 중'} · 임대수익 <b>+${nextDef.rentPct}%</b><br>${LANDMARK.minPyeong}평 이상 보유한 지역에만 건설할 수 있습니다.`
+          : '최대 레벨입니다 — 이 지역 임대수익 +120%.'
+      }<br>랜드마크 1개당 건물주 <b>공격력 +${LANDMARK.atkPerLandmark}%</b>(최대 +${LANDMARK.atkCap}%) · <b>골드 +${LANDMARK.goldPerLandmark}%</b>(최대 +${LANDMARK.goldCap}%)</div>`;
+    this.ui.modal({
+      title: `🏛️ ${esc(city.name)} 랜드마크`,
+      sub: q.ok ? `${nextDef.icon} ${esc(nextDef.name)} 건설 · 💰${q.cost.toLocaleString()}` : (q.reason || ''),
+      body,
+      actions: [
+        { label: '닫기', onClick: () => {} },
+        { label: q.ok ? `건설 · 💰${q.cost.toLocaleString()}` : '건설 불가', style: 'primary', onClick: () => this.doBuildLandmark(key) },
+      ],
+    });
+  }
+
+  doBuildLandmark(key) {
+    this.sound.unlock();
+    const r = buildLandmarkState(this.s, key, Date.now());
+    if (!r.ok) {
+      this.ui.toast(r.reason || '랜드마크를 세울 수 없습니다', 'red');
+      return;
+    }
+    this.buffs = computeBuffs(this.s);
+    this.battle.refreshStats();
+    this.save(true);
+    this.sound.levelUp();
+    const city = CITY_BY_KEY[key];
+    const nm = city ? city.name : '지역';
+    this.ui.toast(`🏛️ ${nm} Lv.${r.level} ${r.name} 건설 · 임대수익 +${r.rentPct}% (💰${r.spent.toLocaleString()})`, 'gold');
+    this.ui.addLog(`🏛️ <b>${nm}</b> Lv.${r.level} ${r.name} · 임대수익 +${r.rentPct}%`);
     this.ui.render();
   }
 

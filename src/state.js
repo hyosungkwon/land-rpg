@@ -54,6 +54,8 @@ export function defaultState(now = nowMs()) {
     quests: { idx: 0, claimed: [], done: 0, at: 0 },
     achievements: { claimed: [] },
     codex: { monsters: {}, cities: {}, gear: {} },
+    // v3.4 부동산 전략: 호재 뉴스 기록(뉴스 자체는 시간 기반 결정론이라 저장하지 않는다)
+    news: { seen: [], log: [], lastBlock: -1 },
     land: defaultLand(now),
     records: { totalGold: 0, totalRent: 0, playMs: 0, firstPlay: now },
     lastOffline: null,
@@ -86,6 +88,8 @@ export function normalizeState(raw, now = nowMs()) {
   s.land = { ...d.land, ...(raw.land || {}) };
   s.land.owned = sanitizeOwned(s.land.owned);
   s.land.totalCost = sanitizeOwned(s.land.totalCost);
+  s.land.landmarks = sanitizeLandmarks(s.land.landmarks, s.land.owned);
+  s.land.landmarkSpend = Math.max(0, num(s.land.landmarkSpend, 0));
   s.land.accruedRent = Math.max(0, num(s.land.accruedRent, 0));
   s.land.rentAt = num(s.land.rentAt, now);
   s.land.bestAsset = Math.max(0, num(s.land.bestAsset, 0));
@@ -132,6 +136,9 @@ export function normalizeState(raw, now = nowMs()) {
   s.achievements = normalizeAchievements(raw.achievements);
   s.codex = normalizeCodex(raw.codex, s, now);
 
+  // v3.4: 호재 뉴스 기록 기본값 병합(기존 저장본은 빈 기록으로 시작)
+  s.news = normalizeNews(raw.news);
+
   s.level = Math.max(1, Math.floor(num(s.level, 1)));
   s.exp = Math.max(0, num(s.exp, 0));
   s.gold = Math.max(0, Math.floor(num(s.gold, 0)));
@@ -158,6 +165,43 @@ function sanitizeOwned(v) {
     if (n > 0) out[k] = n;
   }
   return out;
+}
+
+/** 랜드마크: 보유한 지역의 Lv.1~3 만 남긴다 */
+function sanitizeLandmarks(v, owned) {
+  const out = {};
+  if (!v || typeof v !== 'object') return out;
+  const held = owned && typeof owned === 'object' ? owned : {};
+  for (const [k, raw] of Object.entries(v)) {
+    if (!(Math.floor(num(held[k], 0)) > 0)) continue;
+    const lv = Math.min(3, Math.floor(num(raw, 0)));
+    if (lv >= 1) out[k] = lv;
+  }
+  return out;
+}
+
+/** 호재 뉴스 기록(최근 8건 · 본 뉴스 id 목록) 정규화 */
+function normalizeNews(v) {
+  const raw = v && typeof v === 'object' ? v : {};
+  const seen = Array.isArray(raw.seen)
+    ? raw.seen.filter((x) => typeof x === 'string' && x.length > 0 && x.length <= 24).slice(-60)
+    : [];
+  const log = Array.isArray(raw.log)
+    ? raw.log
+      .filter((e) => e && typeof e === 'object' && typeof e.title === 'string')
+      .slice(0, 8)
+      .map((e) => ({
+        id: typeof e.id === 'string' ? e.id.slice(0, 24) : '',
+        block: Math.max(0, Math.floor(num(e.block, 0))),
+        at: Math.max(0, num(e.at, 0)),
+        icon: typeof e.icon === 'string' ? e.icon.slice(0, 8) : '📰',
+        title: e.title.slice(0, 60),
+        target: typeof e.target === 'string' ? e.target.slice(0, 20) : '',
+        pricePct: Math.max(0, num(e.pricePct, 0)),
+        rentPct: Math.max(0, num(e.rentPct, 0)),
+      }))
+    : [];
+  return { seen, log, lastBlock: Math.max(-1, Math.floor(num(raw.lastBlock, -1))) };
 }
 
 const num = (v, d) => (typeof v === 'number' && isFinite(v) ? v : typeof v === 'string' && v !== '' && isFinite(Number(v)) ? Number(v) : d);
@@ -195,6 +239,13 @@ export const NO_BUFF = { atkPct: 0, goldPct: 0, hpPct: 0, dropPct: 0, critPct: 0
  *  v3.2: 전직 단계(영구 공격력·체력 배율) + 동행 펫 패시브를 함께 반영한다. */
 export function calcStats(s, buffs = NO_BUFF) {
   const b = { ...NO_BUFF, ...(buffs || {}) };
+  const add = (v) => (typeof v === 'number' && isFinite(v) ? v : 0);
+  // v3.4.0: 권역 세트 · 랜드마크 보너스는 건물주 버프와 별도로 더해진다.
+  const extraAtk = add(b.setAtkPct) + add(b.landmarkAtkPct);
+  const extraGold = add(b.setGoldPct) + add(b.landmarkGoldPct);
+  const extraHp = add(b.setHpPct);
+  const extraCrit = add(b.setCritPct);
+  const extraDrop = add(b.setDropPct);
   const L = s.level;
   const e = s.equip;
   const gr = s.gearRarity || {};
@@ -210,15 +261,16 @@ export function calcStats(s, buffs = NO_BUFF) {
   const colAtkMul = 1 + (col.atkPct || 0) / 100;
   const baseAtk = 12 + 2.6 * L + 0.035 * L * L;
   const equipAtk = EQUIP.weapon.per * eLv('weapon');
-  const atk = (baseAtk + equipAtk) * (1 + b.atkPct / 100) * jobAtkMul * petAtkMul * colAtkMul;
+  const atk = (baseAtk + equipAtk) * (1 + (b.atkPct + extraAtk) / 100) * jobAtkMul * petAtkMul * colAtkMul;
   const hpMax =
-    (150 + 30 * L + EQUIP.armor.per * eLv('armor') + EQUIP.helmet.per * eLv('helmet')) * (1 + b.hpPct / 100) * jobHpMul;
-  const crit = Math.min(0.5, 0.05 + (EQUIP.ring.per / 100) * eLv('ring') + (b.critPct || 0) / 100);
+    (150 + 30 * L + EQUIP.armor.per * eLv('armor') + EQUIP.helmet.per * eLv('helmet'))
+    * (1 + (b.hpPct + extraHp) / 100) * jobHpMul;
+  const crit = Math.min(0.5, 0.05 + (EQUIP.ring.per / 100) * eLv('ring') + (b.critPct + extraCrit) / 100);
   const critDmg = 2.0;
   const goldMult =
-    1 + (EQUIP.amulet.per / 100) * eLv('amulet') + b.goldPct / 100 + (pet ? pet.goldPct / 100 : 0)
+    1 + (EQUIP.amulet.per / 100) * eLv('amulet') + (b.goldPct + extraGold) / 100 + (pet ? pet.goldPct / 100 : 0)
     + (col.goldPct || 0) / 100;
-  const dropMult = 1 + b.dropPct / 100;
+  const dropMult = 1 + (b.dropPct + extraDrop) / 100;
   const attackMs = Math.max(300, ECON.playerAttackMs - L * 2);
   const dps = (atk / (attackMs / 1000)) * (1 + crit * (critDmg - 1));
   return {
@@ -234,6 +286,9 @@ export function calcStats(s, buffs = NO_BUFF) {
     petId: pet ? pet.id : null,
     collectAtkPct: col.atkPct || 0,
     collectGoldPct: col.goldPct || 0,
+    setAtkPct: extraAtk,
+    setGoldPct: extraGold,
+    setDropPct: extraDrop,
   };
 }
 
@@ -498,4 +553,33 @@ export function applyOffline(s, summary) {
   const levelUps = addExp(s, summary.exp);
   s.lastOffline = { at: nowMs(), ...summary, levelUps };
   return levelUps;
+}
+
+/* ────────────────────────────── 📰 호재 뉴스 기록 (v3.4.0) ────────────────────────────── */
+/**
+ * 지금 적용 중인 호재를 처음 보았을 때 기록한다(부동산 탭 '최근 호재' · 도감 아님).
+ * 뉴스 자체는 시간 기반 결정론이라 저장하지 않고, 본 기록만 남긴다.
+ * @returns {boolean} 새로 기록했으면 true
+ */
+export function recordNews(s, news, now = nowMs()) {
+  if (!s || !news) return false;
+  if (!s.news || typeof s.news !== 'object') s.news = { seen: [], log: [], lastBlock: -1 };
+  if (s.news.lastBlock === news.block) return false;
+  s.news.lastBlock = news.block;
+  if (!Array.isArray(s.news.seen)) s.news.seen = [];
+  if (!s.news.seen.includes(news.id)) s.news.seen.push(news.id);
+  s.news.seen = s.news.seen.slice(-60);
+  if (!Array.isArray(s.news.log)) s.news.log = [];
+  s.news.log.unshift({
+    id: news.id,
+    block: news.block,
+    at: now,
+    icon: news.icon,
+    title: news.title,
+    target: news.targetLabel,
+    pricePct: news.pricePct,
+    rentPct: news.rentPct,
+  });
+  s.news.log = s.news.log.slice(0, 8);
+  return true;
 }

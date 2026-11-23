@@ -11,6 +11,9 @@
 //   - v3.0.6: 장기 방치 복리 스노우볼 완화 — 접속 중 회수 5.5~11.9시간, 오프라인은 온라인의 25%.
 import { LAND_TIERS, LAND_TRAITS, TIER_INCOME_MULTS } from './land-data.js';
 import { PROP_BUFFS } from './data.js';
+import {
+  activeNews, newsForCity, citySetId, regionSetBuffs, regionSetStatus, buffText,
+} from './region.js';
 
 export const LAND = {
   priceScale: 0.1, // 원본 시세(원/평) → 골드/평 (10분의 1)
@@ -26,6 +29,25 @@ export const LAND = {
   rentCapHours: 12,
   seasonMs: 6 * 3600 * 1000, // 계절 특성 6시간 로테이션
   seasonChance: 0.2,
+};
+
+/* ─────────────── 🏛️ 랜드마크 (v3.4.0) ───────────────
+ * 보유 지역(5평 이상)에 골드를 투자해 Lv.1~3 건설·업그레이드.
+ * 레벨에 따라 그 지역의 임대수익이 +30% / +70% / +120% 로 크게 오르고,
+ * 랜드마크를 보유한 수만큼 건물주 보너스(공격력·골드)가 소폭 붙는다.
+ */
+export const LANDMARK = {
+  minPyeong: 5, // 건설에 필요한 최소 보유 평수
+  maxLevel: 3,
+  levels: [
+    { lv: 1, name: '상가', icon: '🏬', rentPct: 30, costMul: 0.35 },
+    { lv: 2, name: '타워', icon: '🏢', rentPct: 70, costMul: 0.9 },
+    { lv: 3, name: '메가 랜드마크', icon: '🏙️', rentPct: 120, costMul: 2.2 },
+  ],
+  atkPerLandmark: 1, // 랜드마크 1개당 공격력 +1%
+  atkCap: 15,
+  goldPerLandmark: 0.5, // 랜드마크 1개당 골드 획득 +0.5%
+  goldCap: 10,
 };
 
 const DAY = 86400000;
@@ -127,12 +149,17 @@ export function priceInfo(city, now = Date.now()) {
   price = Math.min(daily * (1 + LAND.band), Math.max(daily * (1 - LAND.band), price));
   price = Math.max(Math.round(city.base * LAND.floorOfBase), Math.round(price));
 
+  // v3.4.0: 호재 뉴스가 적용된 지역은 시세가 한 번 더 보정된다(밴드 위에 가산).
+  const news = newsForCity(city.key, now);
+  if (news && news.pricePct > 0) price = Math.round(price * (1 + news.pricePct / 100));
+
   return {
     price,
     daily: Math.round(daily),
     trend: daily > 0 ? ((price - daily) / daily) * 100 : 0,
     swingPct: amp * 100,
     season,
+    news: news || null,
   };
 }
 
@@ -177,9 +204,106 @@ export function incomeTraitMod(city, now = Date.now()) {
 }
 
 /** 보유 수량 전체의 분당 임대수익 (골드) */
-export function incomePerMinOf(city, qty, ownedQty = qty, now = Date.now()) {
+export function incomePerMinOf(city, qty, ownedQty = qty, now = Date.now(), rentMul = 1) {
   if (!city || !(qty > 0)) return 0;
-  return qty * city.rentPerMin * incomeTraitMod(city, now) * ownershipMult(ownedQty, city.supply);
+  const mul = Number(rentMul) > 0 ? Number(rentMul) : 1;
+  return qty * city.rentPerMin * incomeTraitMod(city, now) * ownershipMult(ownedQty, city.supply) * mul;
+}
+
+/** 그 지역에 걸린 임대수익 배율(권역 세트 · 랜드마크 · 호재 뉴스) */
+export function cityRentMul(state, key, now = Date.now(), setBuffs = null, news = null) {
+  const owned = ((state || {}).land || {}).owned || {};
+  const sb = setBuffs || regionSetBuffs(owned);
+  const setId = citySetId(key);
+  const setPct = setId && sb.rentBySet ? (sb.rentBySet[setId] || 0) : 0;
+  const lm = landmarkRentMul(landmarkLevel(state, key));
+  const newsMul = news ? 1 + (news.rentPct || 0) / 100 : 1;
+  return (1 + setPct / 100) * lm * newsMul;
+}
+
+/* ─────────────── 🏛️ 랜드마크 ─────────────── */
+/** 그 지역의 랜드마크 레벨(0 = 없음) */
+export function landmarkLevel(state, key) {
+  const lms = state && state.land && state.land.landmarks;
+  if (!lms || typeof lms !== 'object') return 0;
+  const lv = Math.floor(num(lms[key]));
+  return Math.max(0, Math.min(LANDMARK.maxLevel, lv));
+}
+
+/** 랜드마크 레벨 → 임대수익 배율 */
+export function landmarkRentMul(level) {
+  const lv = Math.max(0, Math.min(LANDMARK.maxLevel, Math.floor(Number(level) || 0)));
+  if (!lv) return 1;
+  return 1 + LANDMARK.levels[lv - 1].rentPct / 100;
+}
+
+/** 랜드마크 건설/업그레이드 견적 */
+export function landmarkQuote(state, key, now = Date.now()) {
+  const city = CITY_BY_KEY[key];
+  if (!city) return { ok: false, reason: '알 수 없는 지역입니다.' };
+  const s = state || {};
+  const held = Math.floor(num((((s.land || {}).owned) || {})[key]));
+  const level = landmarkLevel(state, key);
+  const gold = Math.max(0, num(s.gold));
+  if (level >= LANDMARK.maxLevel) {
+    return { ok: false, reason: '이미 최대 레벨입니다.', city, held, level, max: true };
+  }
+  if (held < LANDMARK.minPyeong) {
+    return {
+      ok: false,
+      reason: `${LANDMARK.minPyeong}평 이상 보유해야 랜드마크를 세울 수 있습니다. (보유 ${held.toLocaleString()}평)`,
+      city, held, level, minPyeong: LANDMARK.minPyeong,
+    };
+  }
+  const next = LANDMARK.levels[level];
+  const cost = Math.max(1, Math.round(held * city.base * next.costMul));
+  if (gold < cost) {
+    return {
+      ok: false,
+      reason: `골드가 부족합니다. (필요 💰${cost.toLocaleString()})`,
+      city, held, level, cost, need: cost, gold,
+    };
+  }
+  return {
+    ok: true, city, held, level, next: level + 1, name: next.name, icon: next.icon,
+    cost, rentPct: next.rentPct, gold, after: gold - cost,
+  };
+}
+
+/** 랜드마크 건설/업그레이드 실행 */
+export function buildLandmark(state, key, now = Date.now()) {
+  const q = landmarkQuote(state, key, now);
+  if (!q.ok) return q;
+  const land = state.land;
+  state.gold = Math.floor(num(state.gold) - q.cost);
+  if (!land.landmarks || typeof land.landmarks !== 'object') land.landmarks = {};
+  land.landmarks[key] = q.next;
+  land.landmarkSpend = num(land.landmarkSpend) + q.cost;
+  return { ok: true, ...q, level: q.next, spent: q.cost };
+}
+
+/** 랜드마크 보유 수 → 건물주 소폭 보너스 */
+export function landmarkSummary(state) {
+  const lms = state && state.land && state.land.landmarks;
+  const owned = ((state && state.land && state.land.owned) || {});
+  const levels = [0, 0, 0];
+  let count = 0;
+  if (lms && typeof lms === 'object') {
+    for (const [key, raw] of Object.entries(lms)) {
+      if (!(Math.floor(num(owned[key])) > 0)) continue;
+      const lv = Math.max(0, Math.min(LANDMARK.maxLevel, Math.floor(num(raw))));
+      if (!lv) continue;
+      levels[lv - 1] += 1;
+      count += 1;
+    }
+  }
+  const round1 = (v) => Math.round(v * 10) / 10;
+  return {
+    count,
+    levels,
+    atkPct: Math.min(LANDMARK.atkCap, round1(count * LANDMARK.atkPerLandmark)),
+    goldPct: Math.min(LANDMARK.goldCap, round1(count * LANDMARK.goldPerLandmark)),
+  };
 }
 
 /* ─────────────── 통합 상태의 land 부분 기본값 ─────────────── */
@@ -187,6 +311,8 @@ export function defaultLand(now = Date.now()) {
   return {
     owned: {}, // { cityKey: pyeong }
     totalCost: {}, // { cityKey: 골드 }
+    landmarks: {}, // { cityKey: Lv.1~3 } — v3.4.0
+    landmarkSpend: 0, // 랜드마크 누적 투자(골드)
     accruedRent: 0, // 미수령 임대수익(골드)
     rentAt: now, // 마지막 임대 적립 시각
     bestAsset: 0, // 최고 부동산 평가액
@@ -210,6 +336,8 @@ export function portfolioOf(state, now = Date.now()) {
   const gold = Math.max(0, num(s.gold));
   const owned = land.owned && typeof land.owned === 'object' ? land.owned : {};
   const totalCost = land.totalCost && typeof land.totalCost === 'object' ? land.totalCost : {};
+  const landmarks = land.landmarks && typeof land.landmarks === 'object' ? land.landmarks : {};
+  const setBuffs = regionSetBuffs(owned); // 권역 세트 버프(임대수익 배율 포함)
 
   let value = 0;
   let incomePerMin = 0;
@@ -229,7 +357,12 @@ export function portfolioOf(state, now = Date.now()) {
       continue;
     }
     const info = priceInfo(city, now);
-    const income = incomePerMinOf(city, qty, qty, now);
+    const lm = Math.max(0, Math.min(LANDMARK.maxLevel, Math.floor(num(landmarks[key]))));
+    const setId = citySetId(key);
+    const setRentPct = setId ? (setBuffs.rentBySet[setId] || 0) : 0;
+    const news = info.news || null;
+    const rentMul = (1 + setRentPct / 100) * landmarkRentMul(lm) * (news ? 1 + (news.rentPct || 0) / 100 : 1);
+    const income = incomePerMinOf(city, qty, qty, now, rentMul);
     const v = qty * info.price;
     const cost = num(totalCost[key]);
     value += v;
@@ -247,6 +380,11 @@ export function portfolioOf(state, now = Date.now()) {
       incomePerMin: income,
       incomePerHour: income * 60,
       roiPerHour: v > 0 ? (income * 60 * 100) / v : 0,
+      landmark: lm,
+      setId,
+      setRentPct,
+      rentMul,
+      news,
     });
   }
   holdings.sort((a, b) => b.value - a.value);
@@ -265,6 +403,8 @@ export function portfolioOf(state, now = Date.now()) {
     holdings,
     unknown,
     land,
+    setBuffs,
+    news: activeNews(now),
   };
 }
 
@@ -279,6 +419,15 @@ export function computeBuffs(state, now = Date.now()) {
   const goldPct = Math.min(B.goldCap, Math.floor(p.landValue / B.goldPerAsset) * B.goldPer);
   const critPct = Math.min(B.critCap, Math.floor(buildings / B.critPerCities) * B.critPer);
   const dropPct = Math.min(B.dropCap, Math.floor(p.pyeong / B.dropPerPyeong) * B.dropPer);
+
+  // v3.4.0: 권역 세트 · 랜드마크 보너스는 '건물주 버프'와 별도 항목으로 가산된다.
+  const sets = p.setBuffs || regionSetBuffs(p.land && p.land.owned);
+  const lm = landmarkSummary(state);
+  const setAtkPct = sets.atkPct || 0;
+  const setGoldPct = sets.goldPct || 0;
+  const setDropPct = sets.dropPct || 0;
+  const setHpPct = sets.hpPct || 0;
+  const setCritPct = sets.critPct || 0;
   return {
     atkPct,
     hpPct,
@@ -289,7 +438,23 @@ export function computeBuffs(state, now = Date.now()) {
     cities: p.cities,
     totalPyeong: p.pyeong,
     landValue: p.landValue,
-    active: atkPct + hpPct + goldPct + critPct + dropPct > 0,
+    // 권역 세트
+    setAtkPct,
+    setGoldPct,
+    setDropPct,
+    setHpPct,
+    setCritPct,
+    setRentPct: sets.rentBySet || {},
+    setCount: sets.activeCount || 0,
+    setTotal: sets.total || 0,
+    sets: sets.sets || regionSetStatus(p.land && p.land.owned),
+    // 랜드마크
+    landmarkCount: lm.count,
+    landmarkAtkPct: lm.atkPct,
+    landmarkGoldPct: lm.goldPct,
+    landmarkLevels: lm.levels,
+    active: atkPct + hpPct + goldPct + critPct + dropPct > 0
+      || setAtkPct + setGoldPct + setDropPct + setHpPct + setCritPct > 0 || lm.count > 0,
   };
 }
 
@@ -396,6 +561,8 @@ export function applyTrade(state, key, side, qty, now = Date.now()) {
     } else {
       delete land.owned[key];
       delete land.totalCost[key];
+      // 전량 매도 → 그 지역 랜드마크도 함께 정리(지역이 없으면 세울 수 없다)
+      if (land.landmarks && typeof land.landmarks === 'object') delete land.landmarks[key];
     }
   }
   land.taxPaid = num(land.taxPaid) + quote.fee;
