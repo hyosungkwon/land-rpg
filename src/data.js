@@ -179,6 +179,7 @@ export function stageDef(stage) {
 }
 
 export function monsterSrc(name) {
+  if (name === 'warrior') return 'assets/char/warrior.png'; // 플레이어 캐릭터는 char/ 에 있음
   const m = MONSTERS[name];
   return m && m.art ? `assets/boss/${name}.png` : `assets/monster/${name}.png`;
 }

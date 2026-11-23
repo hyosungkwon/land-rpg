@@ -1,8 +1,12 @@
 # ⚔️ 영지 RPG — 모바일 세로형 방치형 RPG + 부동산 양방향 연계 (1차 프로토타입)
 
 `survival-in-korea` 의 도트 캐릭터·몬스터 아트와 `korea-land-4e0c2` Firebase(부동산 거래소)를
-결합한 **모바일 세로형 PWA 방치형 RPG** 입니다. 이번 단계는 **코드 제작·검증까지만** 수행했고
-Firebase/GitHub 배포와 실제 DB 규칙 반영은 하지 않았습니다.
+결합한 **모바일 세로형 PWA 방치형 RPG** 입니다.
+
+- **라이브**: https://hyosungkwon.github.io/land-rpg/ (GitHub Pages · `main` / root)
+- **저장소**: https://github.com/hyosungkwon/land-rpg (Public)
+- **Firebase**: `korea-land-4e0c2` — 승인된 도메인 `hyosungkwon.github.io` 추가, RTDB 규칙에 `rpg`·`rpg_rankings` 게시 완료
+  (기존 노드 규칙은 그대로 보존)
 
 ---
 
@@ -138,36 +142,31 @@ land-rpg/
 
 ---
 
-## 6. 배포 준비
+## 6. 배포 상태
 
-### 6-1. RTDB 규칙 — 먼저 읽어 주세요 ⚠️
+### 6-1. RTDB 규칙 — 적용 완료 ✅
 
-`database.rules.json` 은 **초안**입니다. 이 워크스페이스에는 `korea-land-4e0c2` 의 **현재 콘솔 규칙 원문이
-없었기 때문에**, 사이트 코드가 실제로 쓰는 경로(`users/{uid}/state`, `rankings`, `pending_income`,
-`companies`, `stockOrders`, `auctions`, `lottery` …)를 근거로 재구성한 뒤
-`rpg/$uid`·`rpg_rankings` 를 덧붙였습니다.
-
-→ **배포 전 반드시 Firebase 콘솔의 현재 규칙과 diff 로 비교**하고, 기존 줄은 그대로 두고 아래 두 노드만 추가하는 편이 안전합니다.
+2026-11-23, 라이브 규칙을 **읽은 그대로 보존**한 상태에서 아래 두 노드만 추가해 게시했습니다.
+기존 노드(users, rankings, companies, board, chat, global_supply, global_listings, pending_income,
+activity_feed, lottery, global_event, auctions, stockOrders, stockTrades, ai_bot_lock, notices)는
+값·조건 모두 변경 없음.
 
 ```json
 "rpg": {
   "$uid": {
     ".read":  "auth != null && auth.uid == $uid",
-    ".write": "auth != null && auth.uid == $uid",
-    ".validate": "newData.hasChildren(['level','stage','savedAt'])"
+    ".write": "auth != null && auth.uid == $uid"
   }
 },
 "rpg_rankings": {
   ".read": true,
-  "$uid": {
-    ".write": "auth != null && auth.uid == $uid",
-    ".validate": "newData.hasChildren(['name','stage','level','time'])"
-  }
+  "$uid": { ".write": "auth != null && auth.uid == $uid" }
 }
 ```
 
-적용: 콘솔 → Realtime Database → 규칙 탭에 붙여넣기(또는 `firebase deploy --only database`).
-적용 후 앱에서 **클라우드 저장** 버튼 → 배지가 🟢 로 바뀌는지 확인 → 다른 기기에서 **불러오기**로 검증.
+- 게시 후 비로그인 REST 검증: `GET /rpg.json` → **401 Permission denied**(본인만), `GET /rpg_rankings.json` → **200 null**(전체 읽기).
+- `database.rules.json` 은 현재 적용된 규칙과 동일한 내용입니다(콘솔 편집기가 줄바꿈을 받지 않아 라이브는 한 줄 형태).
+- `.validate` 는 넣지 않았습니다(쓰기 필드가 늘어나도 저장이 막히지 않도록). 필요하면 콘솔에서 추가하세요.
 
 ### 6-2. Firebase Hosting (권장: 같은 프로젝트 = 같은 authDomain)
 
@@ -187,12 +186,15 @@ firebase deploy --only hosting
 별도 사이트로 올릴 경우 `https://<site>.web.app` 도메인을
 Firebase Auth → 승인된 도메인에 추가해야 Google 팝업 로그인이 동작합니다.
 
-### 6-3. GitHub Pages
+### 6-3. GitHub Pages — 배포 완료 ✅
 
-`land-rpg/` 폴더를 저장소 루트(또는 `docs/`)로 올리고 Pages 활성화.
-`start_url`·`scope`·`sw.js` 가 모두 **상대 경로**라 하위 경로 배포가 가능하지만,
-`<계정>.github.io` 도메인을 Firebase Auth **승인된 도메인**에 추가해야 로그인됩니다.
-Pages 는 커스텀 헤더를 못 주므로 `sw.js` 캐시 갱신은 `const VERSION` 문자열을 올려 처리합니다.
+- 저장소: `hyosungkwon/land-rpg` (Public) · 브랜치 `main` 루트를 그대로 서빙
+- Settings → Pages → Source: **Deploy from a branch**, `main` / `/ (root)`, Enforce HTTPS 켜짐
+- 라이브: **https://hyosungkwon.github.io/land-rpg/** (200 OK 확인)
+- `start_url`·`scope`·`sw.js`·모든 `src`/`assets` 경로가 **상대 경로**라 `/land-rpg/` 서브패스에서 그대로 동작합니다.
+- `package.json`·`tools/`·`node_modules/` 는 `.gitignore` 로 제외되어 배포에 섞이지 않습니다.
+- Pages 는 커스텀 헤더를 못 주므로 `sw.js` 캐시 갱신은 `const VERSION` 문자열을 올려 처리합니다(현재 `land-rpg-v1.0.1`).
+- Firebase Auth **승인된 도메인**에 `hyosungkwon.github.io` 가 추가되어 있어야 Google 로그인 팝업이 동작합니다(추가 완료).
 
 ---
 

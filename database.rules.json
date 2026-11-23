@@ -3,69 +3,79 @@
     "users": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
-        ".write": "auth != null && auth.uid == $uid",
-        "state": {
-          "cash": { ".validate": "newData.isNumber() && newData.val() >= 0" }
-        }
+        ".write": "auth != null && auth.uid == $uid"
       }
     },
     "rankings": {
       ".read": true,
-      "$nick": { ".write": "auth != null" }
+      ".write": "auth != null"
+    },
+    "companies": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "board": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "chat": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "global_supply": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "global_listings": {
+      ".read": true,
+      ".write": "auth != null"
     },
     "pending_income": {
       ".read": "auth != null",
-      "$nick": { ".write": "auth != null" }
+      ".write": "auth != null"
     },
-    "board": { ".read": true, ".write": "auth != null" },
-    "chat": { ".read": true, ".write": "auth != null" },
-    "activity_feed": { ".read": true, ".write": "auth != null" },
-    "market": { ".read": true, ".write": "auth != null" },
-    "cities": { ".read": true, ".write": "auth != null" },
-    "history": { ".read": true, ".write": "auth != null" },
-    "companies": { ".read": true, ".write": "auth != null" },
-    "stockOrders": { ".read": true, ".write": "auth != null" },
-    "stockTrades": { ".read": true, ".write": "auth != null" },
-    "global_event": { ".read": true, ".write": "auth != null" },
-    "global_supply": { ".read": true, ".write": "auth != null" },
-    "global_listings": { ".read": true, ".write": "auth != null" },
-    "auctions": { ".read": true, ".write": "auth != null" },
-    "lottery": { ".read": true, ".write": "auth != null" },
-    "news": { ".read": true, ".write": "auth != null" },
-    "ads": { ".read": true, ".write": "auth != null" },
-    "bots": { ".read": true, ".write": "auth != null" },
-    "orders": { ".read": true, ".write": "auth != null" },
-    "payments": { ".read": "auth != null", ".write": "auth != null" },
-    "ai_bot_lock": { ".read": true, ".write": "auth != null" },
-
+    "activity_feed": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "lottery": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "global_event": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "auctions": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "stockOrders": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "stockTrades": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "ai_bot_lock": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "notices": {
+      ".read": true,
+      ".write": false
+    },
     "rpg": {
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
-        ".write": "auth != null && auth.uid == $uid",
-        ".validate": "newData.hasChildren(['level','stage','savedAt'])",
-        "level": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 9999" },
-        "stage": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 99999" },
-        "gold": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1e15" },
-        "shards": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1e12" },
-        "savedAt": { ".validate": "newData.isNumber()" },
-        "equip": { ".validate": "newData.hasChildren(['weapon','armor','helmet','ring','amulet'])" },
-        "skills": { ".validate": "newData.hasChildren(['strike','whirl','berserk','heal'])" },
-        "$other": { ".validate": true }
+        ".write": "auth != null && auth.uid == $uid"
       }
     },
-
     "rpg_rankings": {
       ".read": true,
       "$uid": {
-        ".write": "auth != null && auth.uid == $uid",
-        ".validate": "newData.hasChildren(['name','stage','level','time'])",
-        "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 24" },
-        "uid": { ".validate": "newData.val() == auth.uid" },
-        "stage": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 99999" },
-        "level": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 9999" },
-        "kills": { ".validate": "newData.isNumber() && newData.val() >= 0" },
-        "time": { ".validate": "newData.isNumber()" },
-        "$other": { ".validate": true }
+        ".write": "auth != null && auth.uid == $uid"
       }
     }
   }
