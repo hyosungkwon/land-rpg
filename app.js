@@ -250,6 +250,7 @@ class App {
   }
 
   save(immediate = false) {
+    if (this._resetting) return; // 초기화 직후(새로고침 전 beforeunload 저장)로 데이터가 되살아나지 않게
     this.battle.writeHp();
     this.s.lastActiveAt = Date.now();
     saveState(STORAGE, this.s);
@@ -430,6 +431,7 @@ class App {
               label: '초기화',
               style: 'primary',
               onClick: () => {
+                this._resetting = true;
                 try {
                   STORAGE && STORAGE.removeItem(SAVE_KEY);
                   STORAGE && STORAGE.removeItem('land_rpg_state_v1'); // 구버전 키도 정리
