@@ -868,15 +868,16 @@ export class Renderer {
     const gy = this.groundY();
     const sc = this.scale();
     const heroX = this.worldX(b.player.x);
-    const home = heroX - 76 * sc;
+    const h = Math.min(this.H * 0.3, 78 * sc) * (pet.id === 'dragon' ? 1.08 : 1);
+    const w = h;
+    // 화면 왼쪽 밖으로 잘리지 않도록 위치를 보정한다(좁은 390px 화면 대응)
+    const home = Math.max(w * 0.5 + 4, heroX - Math.min(76 * sc, w * 0.9));
     const sway = Math.sin(now / 640) * 7 * sc;
     if (this.petX == null || !isFinite(this.petX)) this.petX = home;
     this.petX += (home - this.petX) * Math.min(1, dt / 150);
     const lungeAge = now - (b.petAnimAt || 0);
     const lunge = lungeAge >= 0 && lungeAge < 260 ? Math.sin(Math.PI * (1 - lungeAge / 260)) : 0;
-    const h = Math.min(this.H * 0.3, 78 * sc) * (pet.id === 'dragon' ? 1.08 : 1);
-    const w = h;
-    const x = this.petX + sway + lunge * 56 * sc;
+    const x = Math.max(w * 0.5 + 2, this.petX + sway + lunge * 56 * sc);
     const bob = Math.sin(now / 300 + 1.7) * 2.2 * sc - lunge * 5 * sc;
 
     // 발밑·몸 주변 글로우(펫 색)
@@ -909,7 +910,7 @@ export class Renderer {
       ctx.font = `800 ${Math.round(9 * Math.max(0.85, sc))}px ${FONT}`;
       ctx.textAlign = 'center';
       ctx.fillStyle = hexA(pet.color, 0.95);
-      ctx.fillText(`${pet.emoji || ''} ${pet.name}`.trim(), x, gy - h - 3);
+      ctx.fillText(`${pet.emoji || ''} ${pet.name}`.trim(), Math.max(30 * sc, x), gy - h - 3);
       ctx.restore();
     }
   }

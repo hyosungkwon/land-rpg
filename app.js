@@ -260,7 +260,9 @@ class App {
         this.sound.hit(ev.crit);
         continue;
       } else if (ev.t === 'monsterDeath') {
-        if (ev.isBoss) {
+        if (ev.dungeon) {
+          if (ev.isBoss) this.ui.addLog(`👑 <b>${ev.ko}</b> 황금 보스 격파! (보상은 종료 시)`);
+        } else if (ev.isBoss) {
           this.ui.addLog(`👑 <b>${ev.ko}</b> 처치! 💰${ev.gold.toLocaleString()} 💎${ev.shards}`);
         } else if (ev.shards > 0) {
           this.ui.addLog(`${ev.ko} 처치 · 💰${ev.gold} 💎${ev.shards}`);
