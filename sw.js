@@ -1,6 +1,6 @@
 // land-rpg / sw.js — 오프라인 캐시 (방치형 RPG 는 네트워크 없이도 플레이 가능해야 함)
 // Firebase/CDN 요청은 캐시하지 않고 네트워크로 그대로 보낸다.
-const VERSION = 'land-rpg-v2.0.6';
+const VERSION = 'land-rpg-v2.0.7';
 const CORE = [
   './',
   './index.html',
@@ -68,6 +68,16 @@ self.addEventListener('activate', (event) => {
       const keys = await caches.keys();
       await Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k)));
       await self.clients.claim();
+      // 구버전 앱이 열려 있으면(예: v1 처럼 자동 새로고침 코드가 없는 버전) 새 버전으로 한 번 넘긴다.
+      // 그렇지 않으면 캐시만 새로 바뀌고 화면은 옛 코드로 계속 돌아간다.
+      try {
+        const list = await self.clients.matchAll({ type: 'window' });
+        for (const c of list) {
+          if (c.url && c.url.indexOf(self.registration.scope) === 0 && c.navigate) {
+            c.navigate(c.url).catch(() => {});
+          }
+        }
+      } catch (e) { /* ignore */ }
     })()
   );
 });
