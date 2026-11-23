@@ -512,7 +512,7 @@ export class Renderer {
     const p = b.player;
     const gy = this.groundY();
     const sc = this.scale();
-    const h = Math.min(this.H * 0.48, 138 * sc);
+    const h = Math.min(this.H * 0.44, 118 * sc);
     const w = h;
     const baseX = this.worldX(p.x);
 
