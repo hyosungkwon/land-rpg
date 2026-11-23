@@ -48,6 +48,9 @@ const STORAGE = (() => {
 const esc = (v) =>
   String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// 📲 PWA 설치 완료 표시(브라우저로 다시 열었을 때 설치 버튼을 숨긴다)
+const PWA_INSTALL_KEY = 'land_rpg_pwa_installed_v1';
+
 class App {
   constructor() {
     // 구버전(v1/v2) 저장 키는 v3에서 쓰지 않는다 — 남아 있으면 함께 정리해 '싹 초기화'를 보장
@@ -70,6 +73,9 @@ class App {
     this.lastRentTick = 0;
     this.startedAt = Date.now();
     this.hiddenAt = 0;
+    // 📲 앱 설치 상태 — initInstall() 이 채운다(installApp 참고)
+    this.deferredPrompt = null;
+    this.install = { standalone: false, installed: false, canPrompt: false };
   }
 
   get prop() {
@@ -78,6 +84,7 @@ class App {
 
   async boot() {
     this.ui.init();
+    this.initInstall();
     this.renderer
       .preload(['hero_idle', 'hero_attack', 'hero_skill', ...PET_SPRITES, ...this.stageMonsterNames(this.s.stage)])
       .then(() => this.renderer.resize())
@@ -399,6 +406,82 @@ class App {
     } catch (e) { /* ignore */ }
   }
 
+  /* ───────────── 📲 앱 설치 (PWA · 홈 화면에 추가) ───────────── */
+  isStandalone() {
+    try {
+      if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
+    } catch (e) { /* ignore */ }
+    try {
+      if (window.navigator && window.navigator.standalone === true) return true;
+    } catch (e) { /* ignore */ }
+    return false;
+  }
+
+  initInstall() {
+    let flag = false;
+    try { flag = !!(STORAGE && STORAGE.getItem(PWA_INSTALL_KEY) === '1'); } catch (e) { /* ignore */ }
+    this.deferredPrompt = null;
+    this.install = { standalone: this.isStandalone(), installed: flag, canPrompt: false };
+
+    const markInstalled = (on) => {
+      this.install.installed = on;
+      try {
+        if (!STORAGE) return;
+        if (on) STORAGE.setItem(PWA_INSTALL_KEY, '1');
+        else STORAGE.removeItem(PWA_INSTALL_KEY);
+      } catch (e) { /* ignore */ }
+    };
+
+    // Chrome·삼성 인터넷: 설치 프롬프트를 잡아 두었다가 버튼 클릭 때 그대로 띄운다(원클릭 설치)
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      this.deferredPrompt = e;
+      this.install.canPrompt = true;
+      if (this.install.installed) markInstalled(false); // 지웠다면 다시 설치할 수 있게
+      this.ui.syncInstall();
+    });
+
+    window.addEventListener('appinstalled', () => {
+      this.deferredPrompt = null;
+      this.install.canPrompt = false;
+      markInstalled(true);
+      this.ui.syncInstall();
+      this.ui.toast('📲 홈 화면에 설치 완료! 아이콘으로 바로 실행하세요', 'gold');
+    });
+
+    this.ui.syncInstall();
+  }
+
+  /** 📲 설치 버튼 클릭 — 프롬프트가 있으면 즉시 설치, 없으면 브라우저별 안내 모달 */
+  async installApp() {
+    const p = this.deferredPrompt;
+    if (!p || typeof p.prompt !== 'function') {
+      this.ui.showInstallGuide();
+      return;
+    }
+    this.deferredPrompt = null;
+    try {
+      const prompted = p.prompt();
+      if (prompted && typeof prompted.then === 'function') await prompted;
+      let outcome = 'accepted';
+      if (p.userChoice && typeof p.userChoice.then === 'function') {
+        const choice = await p.userChoice;
+        outcome = (choice && choice.outcome) || 'accepted';
+      }
+      this.install.canPrompt = false;
+      this.ui.syncInstall();
+      if (outcome === 'accepted') {
+        this.ui.toast('📲 설치를 시작했습니다 — 홈 화면에서 확인하세요', 'gold');
+      } else {
+        this.ui.toast('설치를 취소했습니다 · 설정 탭에서 다시 시도할 수 있어요');
+      }
+    } catch (e) {
+      this.install.canPrompt = false;
+      this.ui.syncInstall();
+      this.ui.showInstallGuide();
+    }
+  }
+
   /* ───────────── 사용자 액션 ───────────── */
   makeActions() {
     return {
@@ -422,6 +505,7 @@ class App {
         }
         if (b.challengeBoss(Date.now())) this.ui.render();
       },
+      install: () => this.installApp(),
       toggleAutoBoss: () => {
         this.s.autoBoss = !this.s.autoBoss;
         this.save();

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""land-rpg v3.2.0 검증 (QuickJS + 정적 검사)
+"""land-rpg v3.2.1 검증 (QuickJS + 정적 검사)
 
 1) 모든 JS 파일 문법(파싱) 검사
 2) 정적 검사 (Firebase/로그인 흔적 0, 저장 키 v3, sw 캐시 v3.1)
@@ -87,8 +87,8 @@ def main():
     for bad in ["firebase", "signInWithPopup", "Google 로그인", "gstatic", "firebaseio", "googleapis"]:
         ok(bad.lower() not in text_all.lower(), f"Firebase/로그인 흔적 없음: {bad}")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v3.2.0" in read("sw.js"), "SW 캐시 버전 v3.2.0")
-    ok("APP_VERSION = '3.2.0'" in read("src/data.js"), "앱 버전 v3.2.0")
+    ok("land-rpg-v3.2.1" in read("sw.js"), "SW 캐시 버전 v3.2.1")
+    ok("APP_VERSION = '3.2.1'" in read("src/data.js"), "앱 버전 v3.2.1")
     ok(os.path.exists(os.path.join(ROOT, "src/sound.js")), "src/sound.js 존재")
     ok("'./src/sound.js'" in read("sw.js"), "sw.js 프리캐시에 sound.js 포함")
     ok(not os.path.exists(os.path.join(ROOT, "src/firebase.js")), "firebase.js 제거")
@@ -233,7 +233,7 @@ def main():
       for (const c of CITIES.slice(0, 5)) s.land.owned[c.key] = 40;
       s.land.accruedRent = 1234.5; s.land.bestAsset = 50000; s.land.tradeCount = 3; s.land.taxPaid = 120;
       const buffs = computeBuffs(s, 0);
-      const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(7), boss: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'hunt', el: {} };
+      const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(7), boss: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'hunt', el: {}, install: { standalone: false, installed: false, canPrompt: true, hidden: false } };
       const out = {};
       for (const [k, fn] of Object.entries(__tpls)) {
         if (k === 'market') continue;
@@ -258,6 +258,18 @@ def main():
     ok("전설" in tpl["gear"] and "영웅" in tpl["gear"], "뽑기 확률 안내(전설·영웅)", "")
     ok("게임 초기화" in tpl["settings"] and "localStorage" in tpl["settings"], "설정 탭 구성", "")
     ok("효과음" in tpl["settings"], "설정 탭 효과음 토글", "")
+    ok("홈 화면에 앱으로 설치" in tpl["settings"] and 'data-action="install"' in tpl["settings"], "설정 탭 상단 앱 설치 카드", "")
+
+    hidden_install = js(ctx2, """
+      const s = defaultState(0);
+      const mk = (inst) => ({ s, battle: { stats: calcStats(s, {}), def: stageDef(1), boss: null, player: { hp: 1 } }, app: { buffs: {} }, logs: [], tab: 'settings', el: {}, install: inst });
+      const none = __tpls.settings(mk(undefined));
+      const standalone = __tpls.settings(mk({ standalone: true, installed: false, canPrompt: false, hidden: true }));
+      const installed = __tpls.settings(mk({ standalone: false, installed: true, canPrompt: false, hidden: true }));
+      return { none: none.indexOf('홈 화면에 앱으로 설치') >= 0, standalone: standalone.indexOf('홈 화면에 앱으로 설치') >= 0, installed: installed.indexOf('홈 화면에 앱으로 설치') >= 0 };
+    """)
+    ok(hidden_install["standalone"] is False and hidden_install["installed"] is False, "standalone·설치 완료 시 설치 카드 숨김", json.dumps(hidden_install))
+    ok(hidden_install["none"] is False, "설치 상태 정보가 없으면 카드를 그리지 않음(다른 탭·테스트 안전)", json.dumps(hidden_install))
 
     section("[5] 장비 뽑기 · 등급 연출 · 효과음 (v3.1)")
     rar = js(ctx, """
@@ -614,7 +626,25 @@ def main():
     except Exception as e:  # noqa: BLE001
         ok(False, "펫 스프라이트 검사", str(e))
 
-    section("[7] 밸런스 시뮬레이션 (60분)")
+    section("[7] 📲 앱 설치 (PWA · v3.2.1)")
+    appjs = read("app.js")
+    uijs = read("src/ui.js")
+    html = read("index.html")
+    css = read("style.css")
+    ok("'beforeinstallprompt'" in appjs and "e.preventDefault()" in appjs and "this.deferredPrompt = e" in appjs, "beforeinstallprompt → preventDefault → deferredPrompt 보관")
+    ok("display-mode: standalone" in appjs and "navigator.standalone" in appjs, "standalone(이미 앱으로 실행 중) 판별")
+    ok("'appinstalled'" in appjs and "syncInstall" in appjs and "설치 완료" in appjs, "appinstalled → 완료 토스트·버튼 숨김")
+    ok("p.prompt()" in appjs and "userChoice" in appjs and "outcome" in appjs, "클릭 시 deferredPrompt.prompt() 원클릭 설치·결과 처리")
+    ok("installApp" in appjs and "install: () => this.installApp()" in appjs, "설치 액션 연결(app.js)")
+    ok('id="installBtn"' in html and 'data-action="install"' in html, "상단 헤더 📲 설치 버튼")
+    ok('class="install-btn hidden"' in html, "헤더 설치 버튼은 기본 숨김(상태에 따라 표시)")
+    ok('case \'install\'' in uijs and "syncInstall()" in uijs and "showInstallGuide()" in uijs, "설치 버튼 핸들러·상태 반영·안내(ui.js)")
+    ok("📲 홈 화면에 앱으로 설치" in uijs and 'data-action="install"' in uijs, "설정 탭 상단 📲 설치 카드")
+    ok(all(x in uijs for x in ["삼성 인터넷", "Chrome", "현재 페이지 추가", "홈 화면", "⋮"]), "프롬프트 없는 환경(인앱·이미 설치) 단계별 안내")
+    ok(".install-btn" in css and ".install-card" in css and ".install-steps" in css, "설치 버튼·카드·안내 CSS")
+    ok("display: none !important" in css and ".install-btn.prompt" in css, "설치 상태별 표시/숨김 스타일")
+
+    section("[8] 밸런스 시뮬레이션 (60분)")
     import importlib.util
     spec = importlib.util.spec_from_file_location("bs", os.path.join(ROOT, "tools/balance_sim.py"))
     bs = importlib.util.module_from_spec(spec)

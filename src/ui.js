@@ -57,6 +57,7 @@ export class UI {
       offlinePill: document.getElementById('offlinePill'),
       soundBtn: document.getElementById('soundBtn'),
       soundIco: document.getElementById('soundIco'),
+      installBtn: document.getElementById('installBtn'),
     };
     this.logs = [];
     this.lastLive = 0;
@@ -141,6 +142,7 @@ export class UI {
       case 'pet-upgrade': actions.upgradePet(v); break;
       case 'dungeon': actions.enterDungeon(v); break;
       case 'reset': actions.resetGame(); break;
+      case 'install': actions.install(); break;
       case 'close-modal': this.closeModal(); break;
       default: break;
     }
@@ -245,6 +247,41 @@ export class UI {
 
   syncSound() {
     this.refreshHeader();
+  }
+
+  /* ───────────── 📲 앱 설치 (PWA) ───────────── */
+  /** app.js 의 설치 상태를 화면에 반영한다 — standalone/설치완료면 헤더·설정 카드를 숨김 */
+  syncInstall() {
+    const st = (this.app && this.app.install) || {};
+    this.install = {
+      standalone: !!st.standalone,
+      installed: !!st.installed,
+      canPrompt: !!st.canPrompt,
+      hidden: !!st.standalone || !!st.installed,
+    };
+    const btn = this.el.installBtn;
+    if (btn) {
+      btn.classList.toggle('hidden', this.install.hidden);
+      btn.classList.toggle('prompt', this.install.canPrompt);
+      btn.setAttribute('aria-hidden', this.install.hidden ? 'true' : 'false');
+    }
+    if (this.tab === 'settings') this.render();
+  }
+
+  /** 설치 프롬프트가 없는 환경(인앱 브라우저 등)에서 보여 주는 단계별 안내 */
+  showInstallGuide() {
+    this.modal({
+      title: '📲 홈 화면에 앱으로 설치',
+      sub: '주소창 없이 전체 화면으로 열리고, 홈 화면 아이콘으로 바로 시작합니다.',
+      body: `<div class="install-steps">
+               <div class="step"><b>1</b><span>화면 <b>오른쪽 위 ⋮</b> (또는 <b>≡</b>) 메뉴를 엽니다.</span></div>
+               <div class="step"><b>2</b><span><b>삼성 인터넷</b>(또는 <b>Chrome</b>)<b>으로 열기</b>를 선택합니다.<i>카카오톡·네이버 등 인앱 브라우저로 열려 있으면 먼저 이 단계가 필요합니다.</i></span></div>
+               <div class="step"><b>3</b><span>주소창의 <b>↓ 아이콘</b>을 누르거나 <b>≡ → 현재 페이지 추가 → 홈 화면</b>을 선택합니다.</span></div>
+             </div>
+             <div class="note" style="margin-top:10px">설치하면 홈 화면의 <b>⚔️ 영지 RPG</b> 아이콘으로 바로 실행됩니다. 저장 데이터는 그대로 유지됩니다.</div>
+             <div class="tiny dim" style="margin-top:7px">아이폰은 Safari에서 <b>공유 → 홈 화면에 추가</b>를 선택하세요.</div>`,
+      actions: [{ label: '확인', style: 'primary', onClick: () => {} }],
+    });
   }
 
   refreshPanelLive(now) {
@@ -1117,12 +1154,27 @@ function tplLandBuff(ui) {
 }
 
 /* ══════════════════════════ 설정 ══════════════════════════ */
+function installCard(ui) {
+  const st = ui.install;
+  if (!st || st.hidden) return '';
+  return `
+  <div class="card install-card">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">📲</span>홈 화면에 앱으로 설치<small>${st.canPrompt ? '원클릭 설치' : '방법 안내'}</small></div>
+    </div>
+    <div class="tiny muted">주소창 없이 전체 화면으로 실행되고, 홈 화면 아이콘으로 바로 시작합니다. 오프라인에서도 동작합니다.</div>
+    <button class="btn primary block" style="margin-top:9px" data-action="install">📲 ${st.canPrompt ? '한 번에 앱으로 설치' : '앱으로 설치하는 방법'}</button>
+    <div class="tiny dim" style="margin-top:7px">설치 창이 뜨지 않으면 삼성 인터넷·Chrome 메뉴에서 <b>현재 페이지 추가 → 홈 화면</b>을 선택하세요.</div>
+  </div>`;
+}
+
 function tplSettings(ui) {
   const s = ui.s;
   const mins = Math.floor((s.records.playMs || 0) / 60000);
   const p = portfolioOf(s);
 
   return `
+  ${installCard(ui)}
   <div class="card">
     <div class="card-head"><div class="card-title"><span class="t-ico">🏆</span>내 기록</div><span class="tiny dim">게스트</span></div>
     <div class="stat-grid">
