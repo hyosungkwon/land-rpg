@@ -640,6 +640,9 @@ export class Renderer {
         sink = k * 16 * sc;
         rot = k * 0.35;
       }
+      // 줄 서 있는 몬스터끼리 완전히 겹치지 않도록 아주 얕은 깊이차를 준다
+      const depth = ((m.id % 3) - 1) * 5 * sc;
+      const depthScale = 1 - (m.id % 3) * 0.02;
       const hitAge = now - (m.hitAt || 0);
       const hit = hitAge >= 0 && hitAge < 120;
       const pop = hit ? 1 + 0.07 * (1 - hitAge / 120) : 1;
@@ -655,7 +658,7 @@ export class Renderer {
       ctx.fill();
 
       const cxp = x + lungeX;
-      const cyp = gy - h * 0.5 + bob + sink;
+      const cyp = gy - h * 0.5 + bob + sink + depth;
       if (m.isBoss) {
         const grd = ctx.createRadialGradient(cxp, cyp, 6, cxp, cyp, h * 0.8);
         grd.addColorStop(0, 'rgba(255,70,50,0.22)');
@@ -668,7 +671,7 @@ export class Renderer {
         ctx.save();
         ctx.translate(cxp, cyp);
         if (rot) ctx.rotate(rot);
-        ctx.scale(pop, pop);
+        ctx.scale(pop * depthScale, pop * depthScale);
         ctx.drawImage(img, -w / 2, -h / 2, w, h);
         if (hit) {
           const white = this.whiteOf(m.name, img);
@@ -913,7 +916,7 @@ export class Renderer {
     if (!m) return;
     const bw = Math.min(W * 0.72, 320);
     const bx = (W - bw) / 2;
-    const by = 52; // 상단 DOM 칩(스테이지/보스 버튼) 아래로
+    const by = 62; // 상단 DOM 칩(스테이지/보스 버튼) 아래로
     const pctv = Math.max(0, m.hp / m.maxHp);
     const remain = Math.max(0, b.bossEnds - (typeof now === 'number' ? now : Date.now()));
     ctx.fillStyle = 'rgba(8,10,16,0.72)';

@@ -7,7 +7,7 @@ import {
 } from './state.js';
 
 const ATTACK_STOP_GAP = 220; // 이 거리에서 멈추고 때린다(캐릭터 스프라이트가 겹치지 않는 간격)
-const QUEUE_GAP = 210; // 뒤에 줄 서는 몬스터가 벌어지는 간격
+const QUEUE_GAP = 300; // 뒤에 줄 서는 몬스터가 벌어지는 간격
 
 export class Battle {
   constructor(state, getBuffs, rng = Math.random, startAt = Date.now()) {
