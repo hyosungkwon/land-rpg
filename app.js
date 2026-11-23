@@ -45,6 +45,10 @@ const esc = (v) =>
 
 class App {
   constructor() {
+    // 구버전(v1/v2) 저장 키는 v3에서 쓰지 않는다 — 남아 있으면 함께 정리해 '싹 초기화'를 보장
+    try {
+      if (STORAGE && !STORAGE.getItem(SAVE_KEY)) STORAGE.removeItem('land_rpg_state_v1');
+    } catch (e) { /* ignore */ }
     this.s = loadState(STORAGE);
     this.buffs = computeBuffs(this.s);
     this.battle = new Battle(this.s, () => this.buffs);

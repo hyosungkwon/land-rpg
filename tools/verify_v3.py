@@ -86,7 +86,7 @@ def main():
     for bad in ["firebase", "signInWithPopup", "Google 로그인", "gstatic", "firebaseio", "googleapis"]:
         ok(bad.lower() not in text_all.lower(), f"Firebase/로그인 흔적 없음: {bad}")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v3.0.4" in read("sw.js"), "SW 캐시 버전 v3.0.1")
+    ok("land-rpg-v3.0.5" in read("sw.js"), "SW 캐시 버전 v3.0.1")
     ok(not os.path.exists(os.path.join(ROOT, "src/firebase.js")), "firebase.js 제거")
     ok(not os.path.exists(os.path.join(ROOT, "src/property.js")), "구 property.js 제거")
     sw = read("sw.js")
