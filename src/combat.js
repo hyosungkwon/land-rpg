@@ -119,9 +119,11 @@ export class Battle {
     // 스테이지마다 처치 수 기준으로 몬스터 종류를 돌려가며 등장
     const pick = normals[(this.s.totalKills + this.monsters.length) % normals.length];
     const m = this.makeMonster(pick, false, now);
-    // 같은 위치에서 겹쳐 나오지 않도록 오른쪽 몬스터 뒤로 최소 간격을 띄운다
+    // 같은 위치에서 겹쳐 나오지 않도록 오른쪽 몬스터 뒤로 최소 간격을 띄운다.
+    // 이미 줄이 길면(화면 밖) 잠시 대기 → 화면 밖 몬스터의 체력바만 떠 보이는 현상 방지
     const right = this.monsters.reduce((mx, o) => (o.x > mx ? o.x : mx), 0);
-    if (m.x < right + 140) m.x = right + 140;
+    if (right > 780) return;
+    if (m.x < right + 150) m.x = right + 150;
     this.monsters.push(m);
   }
 

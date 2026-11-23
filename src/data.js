@@ -17,7 +17,7 @@ export const ECON = {
   playerRange: 340, // 공격 사거리(월드 단위) — 줄 서는 몬스터까지 닿게
   playerX: 250, // 플레이어 고정 x
   spawnX: 900, // 몬스터 등장 x
-  maxMonsters: 3,
+  maxMonsters: 2,
   reviveMs: 3000, // 사망 후 부활 대기
   bossTimeLimitMs: 60000,
 
