@@ -485,6 +485,14 @@ button {
   background: rgba(255, 255, 255, 0.028);
   border: 1px solid var(--line);
 }
+/* v3.6: 장비 행은 [아이콘·이름] 줄 + [강화 버튼 4개] 줄로 나눈다 */
+.gear-row { flex-wrap: wrap; gap: 7px; }
+.g-top { display: flex; align-items: center; gap: 10px; flex: 1 1 100%; min-width: 0; }
+.g-acts { display: flex; gap: 5px; flex: 1 1 100%; }
+.g-acts .btn { flex: 1 1 0; min-width: 0; padding: 0 5px; min-height: 31px; font-size: 11px; }
+.g-acts .btn .cost { font-size: 9.5px; }
+.g-acts .g-max { color: var(--gold); border-color: rgba(255, 207, 92, 0.32); }
+.g-acts .g-max:disabled { color: var(--dim); border-color: var(--line); }
 .skill-row + .skill-row, .gear-row + .gear-row { margin-top: 7px; }
 .s-ico, .g-ico {
   flex: 0 0 38px;
@@ -1469,3 +1477,62 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .tr-desc { font-size: 9.5px; color: var(--dim); margin-top: 2px; line-height: 1.45; }
 .tr-now { font-size: 9.5px; color: var(--blue); margin-top: 3px; font-variant-numeric: tabular-nums; }
 .tr-act { flex: 0 0 auto; }
+
+/* ───────────── v3.6.0 💾 세이브 코드 백업 · 임대 일괄 수령 ───────────── */
+.rent-card { border-color: rgba(94, 225, 163, 0.24); }
+.rent-meta { display: flex; flex-wrap: wrap; gap: 5px 8px; font-size: 10.5px; color: var(--dim); margin-top: 4px; }
+.rent-meta b { color: var(--txt); font-variant-numeric: tabular-nums; }
+
+.save-card {
+  border-color: rgba(105, 192, 255, 0.28);
+  background: linear-gradient(180deg, rgba(105, 192, 255, 0.06), var(--card));
+}
+.save-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.save-meta span {
+  font-size: 10.5px;
+  color: var(--sub);
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+}
+.save-meta b { color: var(--txt); font-variant-numeric: tabular-nums; }
+.save-undo { margin-top: 6px; color: var(--blue); border-color: rgba(105, 192, 255, 0.3); }
+.save-undo small { font-size: 9.5px; color: var(--dim); font-weight: 700; margin-left: 3px; }
+
+.save-code {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 9px;
+  resize: vertical;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--txt);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  word-break: break-all;
+  letter-spacing: 0.2px;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.save-code:focus { outline: none; border-color: rgba(105, 192, 255, 0.55); box-shadow: 0 0 0 2px rgba(105, 192, 255, 0.14); }
+.save-code-meta { display: flex; flex-wrap: wrap; gap: 5px; font-size: 9.5px; color: var(--dim); margin-top: 5px; font-variant-numeric: tabular-nums; }
+
+.save-preview { border: 1px solid var(--line); border-radius: 11px; overflow: hidden; margin-bottom: 8px; }
+.sp-row {
+  display: grid;
+  grid-template-columns: 1fr 76px 76px;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 9px;
+  font-size: 11px;
+  border-bottom: 1px solid var(--line);
+}
+.sp-row:last-child { border-bottom: 0; }
+.sp-head { background: rgba(255, 255, 255, 0.04); font-size: 9.5px; color: var(--dim); font-weight: 800; }
+.sp-k { color: var(--sub); font-weight: 700; }
+.sp-a { text-align: right; color: var(--sub); font-variant-numeric: tabular-nums; }
+.sp-b { text-align: right; color: var(--gold); font-weight: 900; font-variant-numeric: tabular-nums; }

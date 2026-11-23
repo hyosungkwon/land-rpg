@@ -1,11 +1,12 @@
 // land-rpg / app.js
 // 앱 부트스트랩: 로컬 상태 로드(=게스트) → 전투/렌더/UI 연결 → 루프 → 자동 저장.
 // v3: 로그인·클라우드·Firebase 없음. 네트워크 대기 없이 즉시 시작하고 오프라인에서도 완전 동작.
-import { APP_VERSION, ECON, EQUIP, SKILLS, SAVE_KEY, stageDef, RARITIES, RARITY_INDEX, spriteSrc } from './src/data.js';
+import { APP_VERSION, ECON, EQUIP, EQUIP_MAX_LV, SKILLS, SAVE_KEY, stageDef, RARITIES, RARITY_INDEX, spriteSrc, enhanceCost } from './src/data.js';
 import {
   loadState, saveState, offlineSummary, applyOffline, tryEnhance, tryUpgradeSkill,
-  shardPrice, buyShards, pullGear, recordNews,
+  shardPrice, buyShards, pullGear, recordNews, enhanceMaxCount, normalizeState,
 } from './src/state.js';
+import { encodeSave, decodeSave, summarizeSave } from './src/savecode.js';
 import { Battle } from './src/combat.js';
 import {
   computeBuffs, portfolioOf, accrueRent, claimRent, applyTrade, quoteTrade, maxBuyQty,
@@ -60,6 +61,8 @@ const esc = (v) =>
 
 // 📲 PWA 설치 완료 표시(브라우저로 다시 열었을 때 설치 버튼을 숨긴다)
 const PWA_INSTALL_KEY = 'land_rpg_pwa_installed_v1';
+// 💾 v3.6: 세이브 코드 복원 직전의 세이브를 보관하는 키(같은 저장 키 체계를 건드리지 않는다)
+const PREV_SAVE_KEY = `${SAVE_KEY}_prev`;
 
 class App {
   constructor() {
@@ -86,6 +89,9 @@ class App {
     // 📲 앱 설치 상태 — initInstall() 이 채운다(installApp 참고)
     this.deferredPrompt = null;
     this.install = { standalone: false, installed: false, canPrompt: false };
+    // 💾 v3.6: 복원 직전에 보관해 둔 세이브(설정 탭 '직전 세이브로 복구')
+    this.prevSave = this.readPrevSave();
+    this._pendingSave = null;
   }
 
   get prop() {
@@ -613,9 +619,26 @@ class App {
         this.showGachaResult(r, n);
       },
       enhance: (slot, times) => {
-        const r = tryEnhance(this.s, slot, times);
+        if (!(slot in EQUIP)) return;
+        const before = this.s.equip[slot];
+        if (before >= EQUIP_MAX_LV) {
+          this.ui.toast(`${EQUIP[slot].name}은(는) 이미 최대 강화입니다`);
+          return;
+        }
+        const want = times === 'max'
+          ? enhanceMaxCount(this.s, slot)
+          : Math.max(1, Math.floor(Number(times) || 1));
+        if (want <= 0) {
+          this.ui.toast(`강화석이 부족합니다 (💎${enhanceCost(before)} 필요)`, 'red');
+          return;
+        }
+        const r = tryEnhance(this.s, slot, want);
         if (r.done > 0) {
-          this.ui.toast(`${EQUIP[slot].icon} ${EQUIP[slot].name} +${this.s.equip[slot]} (💎${r.spent})`, 'green');
+          const tail = r.max ? ' · 최대 도달' : r.done < want ? ' · 강화석 소진' : '';
+          this.ui.toast(
+            `${EQUIP[slot].icon} ${EQUIP[slot].name} +${before} → +${this.s.equip[slot]} (+${r.done}강 · 💎${r.spent}${tail})`,
+            'green',
+          );
           this.battle.refreshStats();
           this.save();
           this.ui.render();
@@ -674,7 +697,11 @@ class App {
         this.s.land.page = 1;
         this.ui.updateLandList();
       },
-      claimRent: () => this.openClaimRent(),
+      claimRent: () => this.claimRentNow(),
+      rentInfo: () => this.openClaimRent(),
+      saveExport: () => this.openSaveExport(),
+      saveImport: () => this.openSaveImport(),
+      saveUndo: () => this.openSaveUndo(),
       openLandmark: (key) => this.openLandmark(key),
 
       /* ── v3.2: 전직 · 펫 · 황금 던전 ── */
@@ -858,7 +885,7 @@ class App {
     const price = quoteTrade(key, side, 1, this.s, now).price;
     let qty = side === 'buy' ? Math.min(max, 10) : 1;
     const chips = side === 'buy'
-      ? [1, 10, 100, 1000].filter((n) => n < max).concat([max])
+      ? [1, 10, 50, 100, 1000].filter((n) => n < max).concat([max])
       : [Math.floor(held / 2), held].filter((n, i, arr) => n > 0 && arr.indexOf(n) === i);
 
     const body = `
@@ -1007,34 +1034,304 @@ class App {
     this.ui.render();
   }
 
-  openClaimRent() {
-    const amt = Math.floor(Number(this.s.land.accruedRent) || 0);
-    if (amt < 1) {
+  /* ───────────── 💤 임대수익 (v3.6: 원탭 일괄 수령) ───────────── */
+  /** 보유한 모든 매물의 임대수익을 한 번에 수령한다(모달 없이 바로). */
+  claimRentNow() {
+    this.accrueRent(Date.now(), 1); // 방금까지 쌓인 분까지 반영
+    const before = portfolioOf(this.s);
+    const got = claimRent(this.s);
+    if (got < 1) {
       this.ui.toast('아직 쌓인 임대수익이 없습니다');
       return;
     }
+    this.s.records.totalRent = (this.s.records.totalRent || 0) + got;
+    this.save(true);
+    try { this.sound.coin('gold'); } catch (e) { /* ignore */ }
+    this.ui.toast(
+      `💤 임대수익 💰${got.toLocaleString()} 일괄 수령 · 보유 ${before.cities}곳 ${before.pyeong.toLocaleString()}평분`,
+      'gold',
+    );
+    this.checkPets();
+    this.ui.render();
+  }
+
+  /** 임대수익 내역 (지역별 시간당 임대 상위 + 합계) */
+  openClaimRent() {
     const p = portfolioOf(this.s);
+    const amt = Math.floor(Number(this.s.land.accruedRent) || 0);
+    if (!p.cities) {
+      this.ui.toast('보유한 매물이 없습니다 — 먼저 매물을 사면 임대수익이 쌓입니다');
+      return;
+    }
+    const rows = p.holdings
+      .slice()
+      .sort((a, b) => b.incomePerHour - a.incomePerHour)
+      .slice(0, 8)
+      .map((h) => `<div class="kv"><span class="k">${h.city.emoji} ${esc(h.city.name)} <span class="dim">${Math.floor(h.qty).toLocaleString()}평</span></span><span class="v">+💰${formatGold(h.incomePerHour)}/h</span></div>`)
+      .join('');
+    const more = p.holdings.length > 8 ? `<div class="tiny dim" style="margin-top:4px">외 ${p.holdings.length - 8}곳</div>` : '';
     this.ui.modal({
-      title: '💤 임대수익 수령',
-      sub: `💰 ${amt.toLocaleString()}`,
-      body: `<div class="note">보유 매물 ${p.cities}곳 · ${p.pyeong.toLocaleString()}평에서 쌓인 임대수익을 골드로 받습니다.<br>
-        받은 골드는 바로 장비 강화 재료(강화석)나 추가 매물에 쓸 수 있습니다.</div>`,
+      title: '💤 임대수익 내역',
+      sub: `쌓인 금액 💰${amt.toLocaleString()}`,
+      body: `<div class="tsum">
+               <div><span>보유 지역</span><b>${p.cities}곳 · ${p.pyeong.toLocaleString()}평</b></div>
+               <div><span>시간당 임대</span><b>+💰${formatGold(p.incomePerHour)}</b></div>
+               <div><span>하루 임대</span><b>+💰${formatGold(p.incomePerHour * 24)}</b></div>
+               <div><span>누적 수령</span><b class="gold">💰${formatGold(p.land.totalRentClaimed || 0)}</b></div>
+             </div>
+             <div class="note" style="margin-top:9px">모든 매물의 임대수익을 <b>한 번에</b> 받습니다. 수령 버튼은 부동산 탭 카드에서 바로 누를 수 있습니다.</div>
+             <div style="margin-top:7px">${rows}${more}</div>`,
       actions: [
-        { label: '취소', onClick: () => {} },
+        { label: '닫기', onClick: () => {} },
         {
-          label: '수령',
+          label: amt >= 1 ? `💤 모두 수령 · 💰${amt.toLocaleString()}` : '아직 쌓이는 중',
           style: 'primary',
-          onClick: () => {
-            const got = claimRent(this.s);
-            this.s.records.totalRent = (this.s.records.totalRent || 0) + got;
-            this.save(true);
-            this.ui.toast(`💤 임대수익 💰${got.toLocaleString()} 수령`, 'gold');
-            this.checkPets();
-            this.ui.render();
-          },
+          onClick: () => this.claimRentNow(),
         },
       ],
     });
+  }
+
+  /* ───────────── 💾 세이브 코드 백업 / 복원 (v3.6) ───────────── */
+  /** 복원 직전에 보관한 세이브의 원본 상태 */
+  readPrevState() {
+    try {
+      const raw = STORAGE && STORAGE.getItem(PREV_SAVE_KEY);
+      if (!raw) return null;
+      const data = JSON.parse(raw);
+      const state = data && data.state ? data.state : data;
+      return state && typeof state === 'object' && !Array.isArray(state) ? state : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /** 복원 직전에 보관한 세이브의 요약(설정 탭 '직전 세이브로 복구' 노출 판단) */
+  readPrevSave() {
+    const state = this.readPrevState();
+    if (!state) return null;
+    try {
+      return summarizeSave(state);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /** 지금 세이브를 '직전 세이브'로 보관한다(덮어쓰기 사고 대비) */
+  writePrevSave(state) {
+    try {
+      STORAGE && STORAGE.setItem(PREV_SAVE_KEY, JSON.stringify({ at: Date.now(), state }));
+    } catch (e) { /* 저장 공간 부족 — 복원 자체는 계속한다 */ }
+    try {
+      this.prevSave = summarizeSave(state);
+    } catch (e) {
+      this.prevSave = null;
+    }
+    return this.prevSave;
+  }
+
+  openSaveExport() {
+    this.save(true);
+    let code = '';
+    try {
+      code = encodeSave(this.s);
+    } catch (e) {
+      code = '';
+    }
+    if (!code) {
+      this.ui.toast('세이브 코드를 만들지 못했습니다', 'red');
+      return;
+    }
+    const sum = summarizeSave(this.s);
+    this.ui.modal({
+      title: '📤 세이브 코드 내보내기',
+      sub: `Lv.${sum.level} · S${sum.stage} · 보유 ${sum.cities}곳 · 환생 ${sum.rebirth}회`,
+      body: `<div class="note">아래 코드 하나에 지금 진행도(레벨·장비·부동산·펫·미션·환생)가 모두 담깁니다. 복사해 메모·메일·다른 기기에 보관하세요.</div>
+             <textarea id="saveCodeOut" class="save-code" readonly rows="6" spellcheck="false" autocomplete="off">${esc(code)}</textarea>
+             <div class="save-code-meta"><span>${code.length.toLocaleString()}자</span><span>·</span><span>약 ${(code.length / 1024).toFixed(1)}KB</span><span>·</span><span>형식 LANDRPG3</span></div>
+             <div class="tiny dim" style="margin-top:7px">코드를 잃으면 되살릴 수 없습니다. 복사가 안 되면 코드를 길게 눌러 전체 선택 후 복사하세요.</div>`,
+      actions: [
+        { label: '닫기', onClick: () => {} },
+        { label: '📋 복사하기', style: 'primary', keepOpen: true, onClick: () => this.copySaveCode(code) },
+      ],
+    });
+  }
+
+  /** 클립보드 복사 — 권한이 막히면 텍스트 영역 선택 + execCommand 로 폴백 */
+  async copySaveCode(code) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(code);
+        this.ui.toast('📋 세이브 코드를 복사했습니다', 'green');
+        return;
+      }
+    } catch (e) { /* 권한 거부·미지원 → 아래 폴백 */ }
+    const ta = document.getElementById('saveCodeOut');
+    try {
+      if (ta && document.execCommand) {
+        ta.focus();
+        ta.select();
+        if (ta.setSelectionRange) ta.setSelectionRange(0, ta.value.length);
+        if (document.execCommand('copy')) {
+          this.ui.toast('📋 세이브 코드를 복사했습니다 (선택 복사)', 'green');
+          return;
+        }
+      }
+    } catch (e) { /* ignore */ }
+    if (ta) {
+      try {
+        ta.focus();
+        ta.select();
+      } catch (e) { /* ignore */ }
+    }
+    this.ui.toast('복사 권한이 없습니다 — 코드를 길게 눌러 선택한 뒤 복사해 주세요', 'red');
+  }
+
+  openSaveImport(prefill = '') {
+    this._pendingSave = null;
+    this.ui.modal({
+      title: '📥 세이브 코드 불러오기',
+      sub: '붙여넣기 → 검증 → 미리보기 → 복원',
+      body: `<textarea id="saveCodeIn" class="save-code" rows="6" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="LANDRPG3:...">${esc(prefill)}</textarea>
+             <div class="tiny" id="saveCodeMsg" style="margin-top:6px">코드를 붙여넣고 <b>검증 · 미리보기</b>를 누르세요.</div>
+             <div class="note" style="margin-top:9px">복원하면 지금 진행도가 코드의 세이브로 바뀝니다(되돌릴 수 없음).
+             잘못된 코드·손상된 코드는 거부되고 <b>기존 세이브는 그대로</b> 남습니다.</div>`,
+      actions: [
+        { label: '취소', onClick: () => {} },
+        { label: '🔍 검증 · 미리보기', style: 'primary', keepOpen: true, onClick: () => this.previewSaveCode() },
+      ],
+    });
+    const ta = document.getElementById('saveCodeIn');
+    if (ta) setTimeout(() => { try { ta.focus(); } catch (e) { /* ignore */ } }, 60);
+  }
+
+  /** 코드를 검증하고, 현재 세이브와 비교한 미리보기를 보여 준다(복원은 아직 안 함) */
+  previewSaveCode() {
+    const ta = document.getElementById('saveCodeIn');
+    const code = ta ? ta.value : '';
+    const d = decodeSave(code);
+    const msg = document.getElementById('saveCodeMsg');
+    if (!d.ok) {
+      if (msg) msg.innerHTML = `<span style="color:var(--red)">⚠️ ${esc(d.reason || '읽을 수 없는 코드입니다')}</span>`;
+      this.ui.toast(d.reason || '세이브 코드를 읽을 수 없습니다', 'red');
+      return;
+    }
+    this._pendingSave = d.state;
+    const next = d.summary;
+    const cur = summarizeSave(this.s);
+    const cmp = (icon, label, a, b, unit = '') => `<div class="sp-row">
+        <span class="sp-k">${icon} ${label}</span>
+        <b class="sp-a">${a.toLocaleString()}${unit}</b>
+        <b class="sp-b">${b.toLocaleString()}${unit}</b>
+      </div>`;
+    this.ui.modal({
+      title: '💾 세이브 복원 미리보기',
+      sub: '지금 진행도와 비교한 뒤 복원하세요',
+      body: `<div class="save-preview">
+               <div class="sp-row sp-head"><span class="sp-k">항목</span><b class="sp-a">지금</b><b class="sp-b">코드</b></div>
+               ${cmp('⭐', '레벨', cur.level, next.level)}
+               ${cmp('🏔️', '최고 스테이지', cur.stage, next.stage)}
+               ${cmp('🏢', '보유 지역', cur.cities, next.cities, '곳')}
+               ${cmp('♾️', '환생', cur.rebirth, next.rebirth, '회')}
+             </div>
+             <div class="kv"><span class="k">💰 골드</span><span class="v">${cur.gold.toLocaleString()} → <b class="gold">${next.gold.toLocaleString()}</b></span></div>
+             <div class="kv"><span class="k">💎 강화석</span><span class="v">${cur.shards.toLocaleString()} → <b class="gold">${next.shards.toLocaleString()}</b></span></div>
+             <div class="kv"><span class="k">⚔️ 장비 총 강화</span><span class="v">+${cur.equipLv} → <b class="gold">+${next.equipLv}</b></span></div>
+             <div class="note" style="margin-top:9px">복원하면 지금 세이브는 <b>직전 세이브</b>로 보관되어 설정 탭에서 되돌릴 수 있습니다.
+             방치 보상·임대수익은 복원 시점부터 새로 쌓입니다.</div>`,
+      actions: [
+        { label: '뒤로', onClick: () => this.openSaveImport(code) },
+        { label: `💾 복원 · Lv.${next.level}`, style: 'primary', onClick: () => this.restoreSaveCode() },
+      ],
+    });
+  }
+
+  restoreSaveCode() {
+    const next = this._pendingSave;
+    this._pendingSave = null;
+    if (!next) {
+      this.ui.toast('복원할 세이브가 없습니다 — 코드를 다시 검증해 주세요', 'red');
+      return;
+    }
+    this.writePrevSave(JSON.parse(JSON.stringify(this.s))); // 지금 세이브를 직전 세이브로
+    try {
+      saveState(STORAGE, next);
+    } catch (e) {
+      this.ui.toast('세이브를 저장하지 못했습니다 (저장 공간 부족)', 'red');
+      return;
+    }
+    try {
+      this.applySaveState(next);
+      try { this.sound.levelUp(); } catch (e) { /* ignore */ }
+      this.ui.toast(`💾 세이브 복원 완료 — Lv.${next.level} · S${Math.max(next.peakStage || 1, next.maxStage || 1)}`, 'green');
+    } catch (e) {
+      this.reportError && this.reportError('restore', e);
+      this.ui.toast('복원 중 문제가 있어 새로고침합니다', 'red');
+      setTimeout(() => location.reload(), 700);
+    }
+  }
+
+  openSaveUndo() {
+    const state = this.readPrevState();
+    if (!state) {
+      this.ui.toast('되돌릴 직전 세이브가 없습니다');
+      return;
+    }
+    let sum;
+    try {
+      sum = summarizeSave(state);
+    } catch (e) {
+      this.ui.toast('직전 세이브를 읽을 수 없습니다', 'red');
+      return;
+    }
+    this.ui.modal({
+      title: '↩️ 직전 세이브로 복구',
+      sub: `Lv.${sum.level} · S${sum.stage} · 보유 ${sum.cities}곳 · 환생 ${sum.rebirth}회`,
+      body: `<div class="note">세이브를 복원하기 직전에 보관해 둔 상태입니다. 지금 진행도는 이 세이브로 바뀌고, 지금 세이브는 다시 '직전 세이브'로 보관됩니다.</div>`,
+      actions: [
+        { label: '취소', onClick: () => {} },
+        { label: '↩️ 복구', style: 'primary', onClick: () => this.undoPrevSave(state) },
+      ],
+    });
+  }
+
+  undoPrevSave(state) {
+    if (!state || typeof state !== 'object') {
+      this.ui.toast('되돌릴 직전 세이브가 없습니다');
+      return;
+    }
+    let next;
+    try {
+      next = normalizeState(state, Date.now());
+    } catch (e) {
+      this.ui.toast('직전 세이브를 읽을 수 없습니다', 'red');
+      return;
+    }
+    this.writePrevSave(JSON.parse(JSON.stringify(this.s)));
+    try {
+      saveState(STORAGE, next);
+    } catch (e) {
+      this.ui.toast('세이브를 저장하지 못했습니다 (저장 공간 부족)', 'red');
+      return;
+    }
+    this.applySaveState(next);
+    this.ui.toast(`↩️ 직전 세이브로 복구 — Lv.${next.level} · S${next.peakStage}`, 'green');
+  }
+
+  /** 로드된 세이브를 앱 전체(전투·렌더·UI)에 다시 연결한다 */
+  applySaveState(next) {
+    this.s = next;
+    try { syncPetUnlocks(this.s); } catch (e) { /* ignore */ }
+    this.buffs = computeBuffs(this.s);
+    this.battle = new Battle(this.s, () => this.buffs);
+    if (this.renderer && typeof this.renderer.setBattle === 'function') this.renderer.setBattle(this.battle);
+    if (this.renderer) this.renderer.effects = this.s.effects !== false;
+    try { this.sound.setEnabled(this.s.soundOn !== false); } catch (e) { /* ignore */ }
+    this._newsKey = undefined;
+    this.lastSave = Date.now();
+    this.lastRentTick = 0;
+    this.ui.render();
+    this.ui.refreshLive(Date.now());
   }
 
   /* ───────────── ♾️ 환생(초월) 모달 ───────────── */

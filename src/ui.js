@@ -5,7 +5,7 @@ import {
   APP_VERSION, ECON, EQUIP, EQUIP_MAX_LV, SKILLS, skillCost, enhanceCost,
   RARITIES, RARITY_INDEX, GACHA, gachaCost, rarityBonusLv,
 } from './data.js';
-import { expNeed, skillEffect, shardPrice } from './state.js';
+import { expNeed, skillEffect, shardPrice, enhanceMaxCount } from './state.js';
 import {
   CITIES, LAND, portfolioOf, computeBuffs, buffProgress, formatGold, priceInfo,
   CITY_BY_KEY, LANDMARK, landmarkLevel, landmarkQuote, landmarkSummary, landmarkRentMul,
@@ -140,7 +140,9 @@ export class UI {
       case 'cast': actions.castSkill(v); break;
       case 'upgrade-skill': actions.upgradeSkill(v); break;
       case 'enhance': actions.enhance(btn.dataset.slot, 1); break;
+      case 'enhance5': actions.enhance(btn.dataset.slot, 5); break;
       case 'enhance10': actions.enhance(btn.dataset.slot, 10); break;
+      case 'enhancemax': actions.enhance(btn.dataset.slot, 'max'); break;
       case 'buy-shards': actions.buyShards(v); break;
       case 'land-sub': this.setLandSub(v); break;
       case 'landmark': actions.openLandmark(v); break;
@@ -149,6 +151,10 @@ export class UI {
       case 'land-sort': actions.landSort(v); break;
       case 'land-tier': actions.landTier(v); break;
       case 'claim-rent': actions.claimRent(); break;
+      case 'rent-info': actions.rentInfo(); break;
+      case 'save-export': actions.saveExport(); break;
+      case 'save-import': actions.saveImport(); break;
+      case 'save-undo': actions.saveUndo(); break;
       case 'promote': actions.promoteJob(); break;
       case 'rebirth': actions.rebirth(); break;
       case 'rebirth-traits': actions.openRebirthTraits(); break;
@@ -921,20 +927,25 @@ function tplGear(ui) {
       const effLv = lv + bonus;
       const cur = def.per * effLv;
       const next = def.per * (effLv + 1);
+      const maxN = maxed ? 0 : enhanceMaxCount(s, slot);
       const unitText = (v) => (slot === 'ring' ? `${v.toFixed(1)}%` : slot === 'amulet' ? `+${Math.round(v)}%` : `+${fmt(v)}`);
       return `
       <div class="gear-row">
-        <div class="g-ico">${def.icon}</div>
-        <div class="g-mid">
-          <div class="g-name">${def.name}${rarityBadge(rid)}<span class="lv">+${lv}</span></div>
-          <div class="g-stat">${def.stat} ${unitText(cur)}${maxed ? ' · 최대' : ` → <b style="color:var(--green)">${unitText(next)}</b>`}</div>
-          ${bonus > 0 ? `<div class="g-rar">등급 보정 +${bonus}강 상당</div>` : ''}
+        <div class="g-top">
+          <div class="g-ico">${def.icon}</div>
+          <div class="g-mid">
+            <div class="g-name">${def.name}${rarityBadge(rid)}<span class="lv">+${lv}</span></div>
+            <div class="g-stat">${def.stat} ${unitText(cur)}${maxed ? ' · 최대' : ` → <b style="color:var(--green)">${unitText(next)}</b>`}</div>
+            ${bonus > 0 ? `<div class="g-rar">등급 보정 +${bonus}강 상당</div>` : ''}
+          </div>
         </div>
-        <div class="s-actions">
+        <div class="g-acts">
           <button class="btn small blue" data-action="enhance" data-slot="${slot}" ${maxed || s.shards < cost ? 'disabled' : ''}>
-            ${maxed ? 'MAX' : `💎${cost}`}
+            ${maxed ? 'MAX' : `+1 <span class="cost">💎${fmt(cost)}</span>`}
           </button>
-          <button class="btn small ghost" data-action="enhance10" data-slot="${slot}" ${maxed ? 'disabled' : ''}>×10</button>
+          <button class="btn small ghost" data-action="enhance5" data-slot="${slot}" ${maxN < 1 ? 'disabled' : ''}>+5</button>
+          <button class="btn small ghost" data-action="enhance10" data-slot="${slot}" ${maxN < 1 ? 'disabled' : ''}>+10</button>
+          <button class="btn small ghost g-max" data-action="enhancemax" data-slot="${slot}" ${maxN < 1 ? 'disabled' : ''}>최대${maxN > 0 ? ` +${maxN}` : ''}</button>
         </div>
       </div>`;
     })
@@ -960,7 +971,8 @@ function tplGear(ui) {
     </div>
     <div style="margin-top:10px">${rows}</div>
     <div class="note" style="margin-top:10px">
-      강화는 <b>실패 없이 100% 성공</b>합니다. 강화석은 사냥 드롭·보스 처치·스테이지 클리어·뽑기 분해로 모입니다.
+      강화는 <b>실패 없이 100% 성공</b>합니다. 강화석은 사냥 드롭·보스 처치·스테이지 클리어·뽑기 분해로 모입니다.<br>
+      <b>+5 · +10 · 최대</b>는 강화석이 닿는 만큼 한 번에 올립니다(모자라면 가능한 만큼만).
       ${s.equip.ring === 0 ? '<br>반지는 치명타 확률, 부적은 골드 획득량을 올립니다.' : ''}
     </div>
   </div>
@@ -1243,18 +1255,26 @@ function tplLandHome(ui) {
     </div>
   </div>
 
-  <div class="card">
+  <div class="card rent-card">
     <div class="card-head">
-      <div class="card-title"><span class="t-ico">💤</span>미수령 임대수익</div>
+      <div class="card-title"><span class="t-ico">💤</span>미수령 임대수익<small>보유 ${p.cities}곳 합산</small></div>
       <span class="tiny dim">시간 +💰${formatGold(p.incomePerHour)}</span>
     </div>
     <div class="rent-num" data-live="rent">💰${fmt(Math.floor(p.accruedRent))}</div>
-    <button class="btn ${p.accruedRent >= 1 ? 'green' : 'ghost'} block" style="margin-top:8px" data-action="claim-rent" data-live-rent-btn data-label="임대수익 수령" data-empty="쌓이는 중…" ${p.accruedRent >= 1 ? '' : 'disabled'}>
-      ${p.accruedRent >= 1 ? '임대수익 수령' : '쌓이는 중…'}
-    </button>
+    <div class="rent-meta">
+      <span>🏘️ <b>${p.cities}</b>곳 · <b>${fmt(p.pyeong)}</b>평</span>
+      <span>⚡ 접속 중 100% 적립</span>
+      ${p.cities ? '' : '<span class="dim">매물을 사면 임대가 쌓입니다</span>'}
+    </div>
+    <div class="row gap6" style="margin-top:9px">
+      <button class="btn ${p.accruedRent >= 1 ? 'green' : 'ghost'} grow" data-action="claim-rent" data-live-rent-btn data-label="💤 임대수익 일괄 수령" data-empty="쌓이는 중…" ${p.accruedRent >= 1 ? '' : 'disabled'}>
+        ${p.accruedRent >= 1 ? '💤 임대수익 일괄 수령' : '쌓이는 중…'}
+      </button>
+      <button class="btn small ghost" style="flex:0 0 auto" type="button" data-action="rent-info">내역</button>
+    </div>
     <div class="note" style="margin-top:9px">
-      접속 중에는 <b>100%</b>, 앱을 닫아둔 동안은 <b>${Math.round(LAND.rentOfflineRate * 100)}%</b>(최대 ${LAND.rentCapHours}시간)만 적립됩니다.
-      수령한 골드는 바로 추가 매수·장비 강화에 쓸 수 있습니다.
+      보유한 모든 매물의 임대수익을 <b>한 번에</b> 받습니다. 접속 중에는 <b>100%</b>, 앱을 닫아둔 동안은 <b>${Math.round(LAND.rentOfflineRate * 100)}%</b>(최대 ${LAND.rentCapHours}시간)만 적립됩니다.
+      수령한 골드는 바로 추가 매수·장비 강화에 씁니다.
     </div>
   </div>
 
@@ -1478,6 +1498,7 @@ function tplSettings(ui) {
   const achReady = achievementStatus(s).filter((a) => a.claimable).length;
   const setB = regionSetBuffs(s.land.owned);
   const lms = landmarkSummary(s);
+  const prevSave = (ui.app && ui.app.prevSave) || null;
 
   return `
   ${installCard(ui)}
@@ -1516,6 +1537,28 @@ function tplSettings(ui) {
       <div class="stat crit"><div class="k">환생</div><div class="v">${rebirthStatus(s).count}회</div></div>
       <div class="stat gold"><div class="k">초월석</div><div class="v">${fmt(rebirthStatus(s).points)}P</div></div>
     </div>
+  </div>
+
+  <div class="card save-card">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">💾</span>세이브 코드 백업<small>기기 이동 · 복원</small></div>
+      <span class="tiny dim">Lv.${s.level} · S${Math.max(s.peakStage || 1, s.maxStage || 1, s.stage || 1)}</span>
+    </div>
+    <div class="tiny muted">기기를 바꾸거나 브라우저 데이터를 지울 때, 지금 진행도를 <b>코드 한 줄</b>로 보관합니다.</div>
+    <div class="save-meta">
+      <span>⭐ Lv.<b>${s.level}</b></span>
+      <span>🏔️ S<b>${Math.max(s.peakStage || 1, s.maxStage || 1)}</b></span>
+      <span>🏢 <b>${p.cities}</b>곳</span>
+      <span>♾️ <b>${rebirthStatus(s).count}</b>회</span>
+    </div>
+    <div class="row gap6" style="margin-top:9px">
+      <button class="btn small blue wide" type="button" data-action="save-export">📤 내보내기 (복사)</button>
+      <button class="btn small ghost wide" type="button" data-action="save-import">📥 불러오기 (복원)</button>
+    </div>
+    ${prevSave
+      ? `<button class="btn small ghost block save-undo" type="button" data-action="save-undo">↩️ 직전 세이브로 복구 <small>Lv.${prevSave.level} · S${prevSave.stage} · ${prevSave.cities}곳</small></button>`
+      : ''}
+    <div class="tiny dim" style="margin-top:7px">복원은 <b>레벨·최고 스테이지·보유 지역·환생</b>을 미리 보여 주고 확인 뒤에만 실행합니다. 잘못된 코드는 거부되고 기존 세이브는 그대로 남습니다.</div>
   </div>
 
   <div class="card">

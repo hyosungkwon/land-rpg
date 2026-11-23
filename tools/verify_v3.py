@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""land-rpg v3.5.0 검증 (QuickJS + 정적 검사)
+"""land-rpg v3.6.0 검증 (QuickJS + 정적 검사)
 
 1) 모든 JS 파일 문법(파싱) 검사
 2) 정적 검사 (Firebase/로그인 흔적 0, 저장 키 v3, sw 캐시 v3.5)
@@ -8,6 +8,7 @@
 5) 밸런스 시뮬레이션 (1~10 쾌적 / 10~22 장비·버프 필요 / 방치보다 적극 플레이가 앞섬)
 6) 펫·전직·던전 (v3.2) · 미션·업적·도감 (v3.3) · 호재 뉴스·권역 세트·랜드마크 (v3.4)
 7) ♾️ 환생·초월 특성·무한 스테이지 (v3.5)
+8) 💾 세이브 코드 인코딩/디코딩·체크섬·손상 거부·일괄 강화·빠른 매수 (v3.6)
 
 사용: python3 tools/verify_v3.py
 """
@@ -19,8 +20,8 @@ import sys
 import quickjs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FILES = ["src/data.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js", "src/render.js", "src/ui.js", "src/sound.js"]
+FILES = ["src/data.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/render.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -89,8 +90,10 @@ def main():
     for bad in ["firebase", "signInWithPopup", "Google 로그인", "gstatic", "firebaseio", "googleapis"]:
         ok(bad.lower() not in text_all.lower(), f"Firebase/로그인 흔적 없음: {bad}")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v3.5.0" in read("sw.js"), "SW 캐시 버전 v3.5.0")
-    ok("APP_VERSION = '3.5.0'" in read("src/data.js"), "앱 버전 v3.5.0")
+    ok("land-rpg-v3.6.0" in read("sw.js"), "SW 캐시 버전 v3.6.0")
+    ok("APP_VERSION = '3.6.0'" in read("src/data.js"), "앱 버전 v3.6.0")
+    ok(os.path.exists(os.path.join(ROOT, "src/savecode.js")), "src/savecode.js 존재")
+    ok("'./src/savecode.js'" in read("sw.js"), "sw.js 프리캐시에 savecode.js 포함")
     ok("'./src/rebirth.js'" in read("sw.js"), "sw.js 프리캐시에 rebirth.js 포함")
     ok("'./src/region.js'" in read("sw.js"), "sw.js 프리캐시에 region.js 포함")
     ok(os.path.exists(os.path.join(ROOT, "src/sound.js")), "src/sound.js 존재")
@@ -263,6 +266,10 @@ def main():
     ok("게임 초기화" in tpl["settings"] and "localStorage" in tpl["settings"], "설정 탭 구성", "")
     ok("효과음" in tpl["settings"], "설정 탭 효과음 토글", "")
     ok("홈 화면에 앱으로 설치" in tpl["settings"] and 'data-action="install"' in tpl["settings"], "설정 탭 상단 앱 설치 카드", "")
+    ok("세이브 코드 백업" in tpl["settings"] and 'data-action="save-export"' in tpl["settings"] and 'data-action="save-import"' in tpl["settings"], "설정 탭 💾 세이브 코드 백업 카드(내보내기·불러오기)", "")
+    ok("일괄 수령" in tpl["land"] and 'data-action="rent-info"' in tpl["land"], "부동산 탭 임대수익 일괄 수령 UI", "")
+    ok(all(x in tpl["gear"] for x in ['data-action="enhance"', 'data-action="enhance5"', 'data-action="enhance10"', 'data-action="enhancemax"']), "장비 탭 일괄 강화(+1·+5·+10·최대) 버튼", "")
+    ok("최대 +" in tpl["gear"], "장비 최대 강화 버튼에 가능 횟수 표시", "")
 
     hidden_install = js(ctx2, """
       const s = defaultState(0);
@@ -1372,6 +1379,178 @@ def main():
     ok(all(x in appsrc5 for x in ["openRebirthConfirm", "doRebirth", "showRebirthTraits", "doUpgradeRebirthTrait", "rebirth: () => this.openRebirthConfirm()", 'data-action="rebirth-trait"']), "환생 액션·특성 버튼 연결(app.js)", "")
     ok(all(x in uisrc5 for x in ['data-action="rebirth"', 'data-action="rebirth-traits"', "case 'rebirth-trait'", "rebirthCard", "inf-badge"]), "환생·특성·∞ UI 구현(ui.js)", "")
     ok(all(x in css5 for x in [".rebirth-card", ".rb-list", ".trait-row", ".inf-badge", ".rb-points"]), "v3.5 환생·특성 CSS", "")
+
+    section("[12] 💾 세이브 코드 백업 · 복원 · 편의성 (v3.6.0)")
+    sc = js(ctx, """
+      const s = defaultState(1700000000000);
+      s.level = 42; s.gold = 1234567; s.shards = 600; s.stage = 30; s.maxStage = 30; s.peakStage = 30;
+      s.equip = { weapon: 21, armor: 10, helmet: 4, ring: 2, amulet: 1 };
+      s.gearRarity = { weapon: 'hero', armor: 'rare', helmet: 'advanced', ring: 'common', amulet: 'legend' };
+      s.jobTier = 2;
+      s.pet = { equipped: 'dragon', unlocked: ['wolf', 'fox', 'owl', 'dragon'], chosen: true, levels: { wolf: 5, fox: 3, owl: 2, dragon: 7 } };
+      s.quests = { idx: 6, claimed: QUESTS.slice(0, 6).map((q) => q.id), done: 6, at: 1 };
+      s.achievements = { claimed: ACHIEVEMENTS.slice(0, 2).map((a) => a.id) };
+      s.codex.cities[CITIES[0].key] = { p: 40, t: 5 };
+      s.rebirth = { count: 2, points: 30, totalPoints: 120, traits: { atk: 3, gold: 2 }, bestStage: 30, at: 1 };
+      s.memo = '한글 ⚔️ 복원 테스트 ✅';
+      for (const c of CITIES.slice(0, 4)) s.land.owned[c.key] = 50;
+      s.land.accruedRent = 777;
+      s.land.assetHistory = [{ t: 1, v: 100 }, { t: 2, v: 200 }];
+      s.land.q = '서울'; s.land.page = 3; s.land.sort = 'price'; s.land.sub = 'market';
+      const code = encodeSave(s);
+      const d = decodeSave(code);
+      const n = d.state;
+      return {
+        prefix: code.indexOf('LANDRPG3:') === 0,
+        len: code.length,
+        ok: d.ok,
+        same: {
+          level: n.level, gold: n.gold, shards: n.shards, stage: n.stage, peak: n.peakStage,
+          equip: n.equip.weapon, rarity: n.gearRarity.weapon, job: n.jobTier, pet: n.pet.equipped,
+          petLv: n.pet.levels.dragon, quests: n.quests.done, ach: n.achievements.claimed.length,
+          codexCity: n.codex.cities[CITIES[0].key] ? n.codex.cities[CITIES[0].key].p : 0,
+          codexGear: n.codex.gear.legend || 0, rebirth: n.rebirth.count, traits: n.rebirth.traits.atk,
+          memo: n.memo, owned: Object.keys(n.land.owned).length, rent: Math.round(n.land.accruedRent),
+        },
+        compact: {
+          hist: n.land.assetHistory.length, page: n.land.page, q: n.land.q,
+          sort: n.land.sort, sub: n.land.sub,
+          freshActive: n.lastActiveAt > 1700000000000, freshRent: n.land.rentAt > 1700000000000,
+        },
+        orig: { hist: s.land.assetHistory.length, page: s.land.page, q: s.land.q, sub: s.land.sub },
+        summary: d.summary,
+      };
+    """)
+    ok(sc["prefix"] is True and sc["ok"] is True, "세이브 코드 LANDRPG3 형식으로 인코딩·디코딩", str(sc.get("len")))
+    ok(sc["len"] < 3000, "세이브 코드 길이 3KB 미만(중반 세이브)", str(sc["len"]))
+    same = sc["same"]
+    ok(same["level"] == 42 and same["gold"] == 1234567 and same["shards"] == 600 and same["stage"] == 30 and same["peak"] == 30, "레벨·골드·강화석·스테이지 왕복 보존", json.dumps(same, ensure_ascii=False))
+    ok(same["equip"] == 21 and same["rarity"] == "hero" and same["job"] == 2, "장비 강화·등급·전직 왕복 보존", json.dumps(same, ensure_ascii=False))
+    ok(same["pet"] == "dragon" and same["petLv"] == 7 and same["quests"] == 6 and same["ach"] == 2, "펫·미션·업적 왕복 보존", json.dumps(same, ensure_ascii=False))
+    ok(same["codexCity"] == 50 and same["codexGear"] >= 1, "도감(지역 평수·장비 등급) 왕복 보존", json.dumps(same, ensure_ascii=False))
+    ok(same["rebirth"] == 2 and same["traits"] == 3 and same["owned"] == 4 and same["rent"] == 777, "환생·부동산·임대수익 왕복 보존", json.dumps(same, ensure_ascii=False))
+    ok(same["memo"] == "한글 ⚔️ 복원 테스트 ✅", "UTF-8(한글·이모지) 안전 인코딩", same["memo"])
+    c = sc["compact"]
+    ok(c["hist"] == 0 and c["page"] == 1 and c["q"] == "" and c["sort"] == "roi" and c["sub"] == "home", "코드에는 화면 상태·자산 그래프를 담지 않음", json.dumps(c, ensure_ascii=False))
+    ok(c["freshActive"] is True and c["freshRent"] is True, "복원 시각 기준으로 방치·임대 시계가 새로 시작", json.dumps(c, ensure_ascii=False))
+    ok(sc["orig"]["hist"] == 2 and sc["orig"]["page"] == 3 and sc["orig"]["sub"] == "market", "인코딩이 원본 저장본을 바꾸지 않음", json.dumps(sc["orig"], ensure_ascii=False))
+    sm = sc["summary"]
+    ok(sm["level"] == 42 and sm["stage"] == 30 and sm["cities"] == 4 and sm["rebirth"] == 2, "미리보기 요약(레벨·최고 스테이지·보유 지역·환생)", json.dumps(sm, ensure_ascii=False))
+
+    bad = js(ctx, """
+      const s = defaultState(0); s.level = 9;
+      const code = encodeSave(s);
+      const flip = (c, i) => c.slice(0, i) + (c[i] === 'A' ? 'B' : 'A') + c.slice(i + 1);
+      const pick = (r) => ({ ok: r.ok, code: r.code || '', reason: r.reason || '', hasState: !!r.state });
+      return {
+        payload: pick(decodeSave(flip(code, Math.floor(code.length / 2)))),
+        checksum: pick(decodeSave(flip(code, code.length - 1))),
+        cut: pick(decodeSave(code.slice(0, 30))),
+        empty: pick(decodeSave('')),
+        spaces: pick(decodeSave('   ')),
+        plain: pick(decodeSave('안녕하세요 그냥 텍스트')),
+        v2: pick(decodeSave('LANDRPG2:aaaa.bbbbbbbb')),
+        json: pick(decodeSave(encodePayload('not json'))),
+        shape: pick(decodeSave(encodePayload('[1,2,3]'))),
+        num: pick(decodeSave(encodePayload('42'))),
+        wrappedOk: decodeSave(' ' + code.slice(0, 40) + '\\n' + code.slice(40) + ' \\n').ok,
+        good: decodeSave(code).ok,
+      };
+    """)
+    ok(bad["payload"]["ok"] is False and bad["payload"]["code"] == "checksum" and not bad["payload"]["hasState"], "한 글자만 바뀐 코드는 체크섬으로 거부", json.dumps(bad["payload"], ensure_ascii=False))
+    ok(bad["checksum"]["ok"] is False and bad["checksum"]["code"] == "checksum", "체크섬만 바뀐 코드도 거부", json.dumps(bad["checksum"], ensure_ascii=False))
+    ok(bad["cut"]["ok"] is False and bad["cut"]["code"] == "format", "잘린 코드 거부", json.dumps(bad["cut"], ensure_ascii=False))
+    ok(bad["empty"]["ok"] is False and bad["spaces"]["ok"] is False and bad["empty"]["code"] == "empty", "빈 입력 거부", json.dumps(bad["empty"], ensure_ascii=False))
+    ok(bad["plain"]["ok"] is False and bad["plain"]["code"] == "prefix" and not bad["plain"]["hasState"], "세이브 코드가 아닌 텍스트 거부", json.dumps(bad["plain"], ensure_ascii=False))
+    ok(bad["v2"]["ok"] is False and bad["v2"]["code"] == "prefix", "다른 버전(LANDRPG2) 코드 거부", json.dumps(bad["v2"], ensure_ascii=False))
+    ok(bad["json"]["ok"] is False and bad["json"]["code"] == "json", "체크섬이 맞아도 JSON 이 아니면 거부", json.dumps(bad["json"], ensure_ascii=False))
+    ok(bad["shape"]["ok"] is False and bad["shape"]["code"] == "shape" and bad["num"]["ok"] is False, "객체가 아닌 세이브 데이터 거부", json.dumps(bad["shape"], ensure_ascii=False))
+    ok(bad["wrappedOk"] is True and bad["good"] is True, "줄바꿈·공백이 섞여 붙여넣어도 복원 가능", json.dumps(bad, ensure_ascii=False))
+
+    hard = js(ctx, """
+      const raw = { ver: 3, level: -5, gold: -100, shards: -3, stage: 0, maxStage: 0,
+        equip: { weapon: 999, armor: -4 }, gearRarity: { weapon: 'nope' },
+        rebirth: { count: -2, points: -10, traits: { atk: 99, hack: 5 } },
+        land: { owned: { nope: 5, '11110': -3 }, landmarks: { '11110': 9 } },
+        pet: { equipped: 'dragon', unlocked: ['dragon', 'alien'], levels: { dragon: 99 } } };
+      const d = decodeSave(encodePayload(JSON.stringify(raw)));
+      return { ok: d.ok, level: d.state.level, gold: d.state.gold, shards: d.state.shards,
+               stage: d.state.stage, weapon: d.state.equip.weapon, armor: d.state.equip.armor,
+               rarity: d.state.gearRarity.weapon, rebirth: d.state.rebirth.count,
+               traits: Object.keys(d.state.rebirth.traits).join(','), owned: Object.keys(d.state.land.owned).length,
+               pet: d.state.pet.equipped, petLv: d.state.pet.levels.dragon,
+               negOwned: Object.prototype.hasOwnProperty.call(d.state.land.owned, '11110') };
+    """)
+    ok(hard["ok"] is True and hard["level"] == 1 and hard["gold"] == 0 and hard["shards"] == 0 and hard["stage"] == 1, "손상 값(음수 레벨·골드·스테이지)은 정규화로 정리", json.dumps(hard, ensure_ascii=False))
+    ok(hard["weapon"] == 100 and hard["armor"] == 0 and hard["rarity"] == "common", "장비 강화 상한·음수·미지 등급 정리", json.dumps(hard, ensure_ascii=False))
+    ok(hard["rebirth"] == 0 and hard["traits"] == "atk" and hard["owned"] == 1 and hard["negOwned"] is False, "환생·특성·부동산 손상 값 정리", json.dumps(hard, ensure_ascii=False))
+    ok(hard["pet"] == "dragon" and hard["petLv"] == 10, "펫 레벨 상한 정리(99 → 10)", json.dumps(hard, ensure_ascii=False))
+
+    enh = js(ctx, """
+      const s = defaultState(0);
+      s.shards = 5000;
+      const maxAll = enhanceMaxCount(s, 'weapon');
+      const r5 = tryEnhance(s, 'weapon', 5);
+      const after5 = s.equip.weapon;
+      const shards5 = s.shards;
+      const rest = enhanceMaxCount(s, 'weapon');
+      const rMax = tryEnhance(s, 'weapon', rest);
+      const poor = defaultState(0);
+      poor.shards = 1;
+      const rPoor = tryEnhance(poor, 'weapon', 5);
+      const cap = defaultState(0);
+      cap.shards = 100000;
+      cap.equip.weapon = 99;
+      const capMax = enhanceMaxCount(cap, 'weapon');
+      const rCap = tryEnhance(cap, 'weapon', 5);
+      const slotless = enhanceMaxCount(s, 'cape');
+      const part = defaultState(0);
+      part.shards = 7;
+      const rPart = tryEnhance(part, 'weapon', 5);
+      return {
+        maxAll, after5, r5: [r5.ok, r5.done], rest, rMax: [rMax.ok, rMax.done, !!rMax.max],
+        lv: s.equip.weapon, shards: s.shards, shards5,
+        poor: [rPoor.ok, rPoor.done, rPoor.reason], capMax, capLv: cap.equip.weapon, rCap: [rCap.ok, rCap.done, !!rCap.max],
+        slotless, capped: s.equip.weapon <= 100,
+        partial: [rPart.ok, rPart.done, rPart.reason], partialLv: part.equip.weapon,
+      };
+    """)
+    ok(enh["maxAll"] > 10 and enh["maxAll"] == enh["after5"] + enh["rest"], "+1~최대까지 일괄 강화 가능 횟수 계산", json.dumps(enh, ensure_ascii=False))
+    ok(enh["after5"] == 5 and enh["r5"] == [True, 5], "+5 버튼이 5강을 한 번에 올림", json.dumps(enh["r5"], ensure_ascii=False))
+    ok(enh["rMax"][0] is True and enh["rMax"][1] > 0 and enh["lv"] == enh["maxAll"] and enh["shards"] >= 0, "최대 강화가 강화석이 닿는 만큼 한 번에 올림", json.dumps(enh, ensure_ascii=False))
+    ok(enh["poor"] == [False, 0, "강화석이 부족합니다."], "강화석 부족 시 +5도 아무것도 바꾸지 않고 실패", json.dumps(enh["poor"], ensure_ascii=False))
+    ok(enh["partial"] == [True, 2, "강화석이 부족합니다."] and enh["partialLv"] == 2, "강화석이 5강에 못 미치면 가능한 만큼만 올림(+2)", json.dumps(enh["partial"], ensure_ascii=False))
+    ok(enh["capMax"] == 1 and enh["capLv"] == 100 and enh["rCap"] == [True, 1, True], "100강 상한에서 최대 1강만 오르고 MAX 표시", json.dumps(enh, ensure_ascii=False))
+    ok(enh["slotless"] == 0, "알 수 없는 부위는 0강", str(enh["slotless"]))
+
+    trade = js(ctx, """
+      const s = defaultState(0);
+      s.gold = 200000;
+      const key = CITIES.slice().sort((a, b) => a.base - b.base)[0].key;
+      const max = maxBuyQty(key, s, 0);
+      const q1 = quoteTrade(key, 'buy', 1, s, 0);
+      const q10 = quoteTrade(key, 'buy', 10, s, 0);
+      const q50 = quoteTrade(key, 'buy', 50, s, 0);
+      const qMax = quoteTrade(key, 'buy', max, s, 0);
+      const over = quoteTrade(key, 'buy', 100000, s, 0);
+      return { max, ok: [q1.ok, q10.ok, q50.ok, qMax.ok], over: [over.ok, over.reason],
+               total50: q50.ok ? q50.total + q50.fee : 0 };
+    """)
+    ok(trade["max"] > 50 and all(trade["ok"]), "빠른 매수 단위(+1·+10·+50·최대) 견적이 모두 유효", json.dumps(trade, ensure_ascii=False))
+    ok(trade["over"][0] is False, "잔여 공급을 넘는 수량은 거부", json.dumps(trade["over"], ensure_ascii=False))
+
+    appsrc6 = read("app.js")
+    uisrc6 = read("src/ui.js")
+    css6 = read("style.css")
+    scsrc = read("src/savecode.js")
+    ok(all(x in scsrc for x in ["SAVE_CODE_PREFIX", "encodeSave", "decodeSave", "summarizeSave", "saveChecksum", "utf8Encode", "utf8Decode"]), "savecode.js 구성(인코딩·디코딩·체크섬·요약)", "")
+    ok("LANDRPG3:" in scsrc and "Math.imul" in scsrc, "코드 접두사 LANDRPG3 · FNV-1a 체크섬", "")
+    ok(all(x in appsrc6 for x in ["encodeSave", "decodeSave", "summarizeSave", "copySaveCode", "previewSaveCode", "restoreSaveCode", "applySaveState", "openSaveUndo", "navigator.clipboard", "execCommand"]), "앱 — 내보내기(클립보드+폴백)·미리보기·복원·되돌리기 연결", "")
+    ok("claimRentNow" in appsrc6 and "rentInfo" in appsrc6, "임대수익 원탭 일괄 수령 + 내역 모달", "")
+    ok("[1, 10, 50, 100, 1000]" in appsrc6, "매수 모달 빠른 수량 버튼(+1·+10·+50·최대)", "")
+    ok(all(x in uisrc6 for x in ['data-action="save-export"', 'data-action="save-import"', 'data-action="save-undo"', 'data-action="enhance5"', 'data-action="enhancemax"', 'data-action="rent-info"', "case 'save-export'", "case 'enhancemax'"]), "UI 액션 연결(백업·강화·임대)", "")
+    ok(all(x in css6 for x in [".save-card", ".save-code", ".save-preview", ".g-acts", ".rent-meta"]), "v3.6 세이브·일괄 강화 CSS", "")
+    ok("lang-rpg" not in css6, "CSS 깨짐 없음", "")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

@@ -473,11 +473,28 @@ export function pullGear(s, times = 1, rng = Math.random) {
   };
 }
 
+/** 지금 보유 강화석으로 한 번에 올릴 수 있는 최대 강화 횟수 (0 ~ 남은 단계) */
+export function enhanceMaxCount(s, slot) {
+  if (!s || !(slot in EQUIP)) return 0;
+  let lv = Math.max(0, Math.floor(num((s.equip || {})[slot], 0)));
+  let shards = Math.max(0, num(s.shards, 0));
+  let n = 0;
+  while (lv < EQUIP_MAX_LV) {
+    const cost = enhanceCost(lv);
+    if (shards < cost) break;
+    shards -= cost;
+    lv += 1;
+    n += 1;
+  }
+  return n;
+}
+
 export function tryEnhance(s, slot, times = 1) {
   if (!(slot in EQUIP)) return { ok: false, reason: '알 수 없는 부위입니다.' };
+  const want = Math.max(0, Math.min(EQUIP_MAX_LV + 1, Math.floor(Number(times) || 0)));
   let done = 0;
   let spent = 0;
-  for (let i = 0; i < times; i++) {
+  for (let i = 0; i < want; i++) {
     if (s.equip[slot] >= EQUIP_MAX_LV) return { ok: done > 0, reason: '최대 강화 단계입니다.', done, spent, max: true };
     const cost = enhanceCost(s.equip[slot]);
     if (s.shards < cost) return { ok: done > 0, reason: '강화석이 부족합니다.', done, spent, need: cost };
