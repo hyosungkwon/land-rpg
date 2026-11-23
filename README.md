@@ -193,7 +193,7 @@ Firebase Auth → 승인된 도메인에 추가해야 Google 팝업 로그인이
 - 라이브: **https://hyosungkwon.github.io/land-rpg/** (200 OK 확인)
 - `start_url`·`scope`·`sw.js`·모든 `src`/`assets` 경로가 **상대 경로**라 `/land-rpg/` 서브패스에서 그대로 동작합니다.
 - `package.json`·`tools/`·`node_modules/` 는 `.gitignore` 로 제외되어 배포에 섞이지 않습니다.
-- Pages 는 커스텀 헤더를 못 주므로 `sw.js` 캐시 갱신은 `const VERSION` 문자열을 올려 처리합니다(현재 `land-rpg-v1.0.1`).
+- Pages 는 커스텀 헤더를 못 주므로 `sw.js` 캐시 갱신은 `const VERSION` 문자열을 올려 처리합니다(현재 `land-rpg-v1.0.2`).
 - Firebase Auth **승인된 도메인**에 `hyosungkwon.github.io` 가 추가되어 있어야 Google 로그인 팝업이 동작합니다(추가 완료).
 
 ---
