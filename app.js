@@ -15,7 +15,7 @@ import { Renderer } from './src/render.js';
 import { UI } from './src/ui.js';
 import { GameSound } from './src/sound.js';
 import {
-  PET_SPRITES, DUNGEON, petDef, syncPets as syncPetUnlocks, equipPet,
+  PET_SPRITES, DUNGEON, petDef, syncPets as syncPetUnlocks, equipPet, upgradePet,
   promoteJob as promoteJobState, dungeonState, startDungeonCooldown,
 } from './src/meta.js';
 
@@ -571,6 +571,21 @@ class App {
         this.save();
         this.sound.ui();
         this.ui.toast(`🐾 ${r.pet.emoji} ${r.pet.name} 동행 시작`, 'green');
+        this.ui.render();
+      },
+
+      upgradePet: (id) => {
+        const r = upgradePet(this.s, id);
+        if (!r.ok) {
+          this.ui.toast(r.reason, 'red');
+          return;
+        }
+        const def = petDef(id);
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.levelUp();
+        this.ui.toast(`🐾 ${def ? def.emoji : ''} ${def ? def.name : '펫'} Lv.${r.lv} 강화! (💎${r.spent})`, 'green');
+        this.ui.addLog(`🐾 <b>${def ? def.name : '펫'}</b> 강화 Lv.${r.lv} (💎${r.spent})`);
         this.ui.render();
       },
 

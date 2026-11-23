@@ -10,7 +10,8 @@ import {
   CITIES, LAND, portfolioOf, computeBuffs, buffProgress, formatGold, priceInfo,
 } from './land.js';
 import {
-  PETS, DUNGEON, petDef, petProgress, jobOf, jobProgress, dungeonState,
+  PETS, DUNGEON, PET_MAX_LV, petDef, petProgress, petLevel, petAtkPct, petDmgPct,
+  petUpgradeCost, jobOf, jobProgress, dungeonState,
 } from './meta.js';
 
 const esc = (v) =>
@@ -137,6 +138,7 @@ export class UI {
       case 'claim-rent': actions.claimRent(); break;
       case 'promote': actions.promoteJob(); break;
       case 'pet-equip': actions.equipPet(v); break;
+      case 'pet-upgrade': actions.upgradePet(v); break;
       case 'dungeon': actions.enterDungeon(v); break;
       case 'reset': actions.resetGame(); break;
       case 'close-modal': this.closeModal(); break;
@@ -496,20 +498,30 @@ function petCard(ui) {
     const unlocked = unlockedIds.includes(def.id);
     const on = ps.equipped === def.id;
     const pr = petProgress(s, def.id);
+    const lv = petLevel(s, def.id);
+    const cost = petUpgradeCost(lv);
+    const maxed = lv >= PET_MAX_LV;
     return `
       <div class="pet-row ${on ? 'on' : ''} ${unlocked ? '' : 'lock'}">
         <img class="pet-thumb" src="assets/sprites/pet/${def.sprite}.png" alt="" loading="lazy">
         <div class="pet-mid">
-          <div class="pet-name">${def.emoji} ${esc(def.name)}${on ? '<span class="pet-on">동행 중</span>' : ''}</div>
+          <div class="pet-name">${def.emoji} ${esc(def.name)}<span class="lv">Lv.${lv}</span>${on ? '<span class="pet-on">동행 중</span>' : ''}</div>
           <div class="pet-desc">${esc(def.desc)}</div>
-          <div class="pet-stats">공격 ${Math.round(def.dmgPct * 100)}% · 공격력 +${def.atkPct}%${def.goldPct ? ` · 골드 +${def.goldPct}%` : ''}</div>
+          <div class="pet-stats">공격 ${Math.round(petDmgPct(s, def.id) * 100)}% · 공격력 +${petAtkPct(s, def.id)}%${def.goldPct ? ` · 골드 +${def.goldPct}%` : ''}</div>
           ${unlocked ? '' : `<div class="pet-cond">🔒 ${esc(def.cond)} · ${pr.text}</div><div class="prog tiny-prog"><i style="width:${pr.pct * 100}%"></i></div>`}
         </div>
-        ${on
-          ? '<button class="mini on" type="button" disabled>동행</button>'
-          : unlocked
-            ? `<button class="mini equip" type="button" data-action="pet-equip" data-value="${def.id}">교체</button>`
-            : '<button class="mini" type="button" disabled>잠김</button>'}
+        <div class="s-actions pet-acts">
+          ${on
+            ? '<button class="mini on" type="button" disabled>동행</button>'
+            : unlocked
+              ? `<button class="mini equip" type="button" data-action="pet-equip" data-value="${def.id}">교체</button>`
+              : '<button class="mini" type="button" disabled>잠김</button>'}
+          ${unlocked
+            ? maxed
+              ? '<button class="mini" type="button" disabled>MAX</button>'
+              : `<button class="mini up" type="button" data-action="pet-upgrade" data-value="${def.id}" ${s.shards < cost ? 'disabled' : ''}>💎${cost}</button>`
+            : ''}
+        </div>
       </div>`;
   }).join('');
 
@@ -522,6 +534,7 @@ function petCard(ui) {
     ${rows}
     <div class="note" style="margin-top:9px">
       부동산이 자라면 <b>자동 해금</b>됩니다. 장착한 펫은 <b>1.5초마다 함께 공격</b>하고, 동행 중에는 패시브가 적용됩니다.
+      강화(💎) 1단계마다 함께 공격·공격력 패시브가 <b>+10%</b>씩 오릅니다(최대 Lv.${PET_MAX_LV}).
     </div>
   </div>`;
 }

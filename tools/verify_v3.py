@@ -538,6 +538,32 @@ def main():
     ok(petbat["none"]["hits"] == 0 and petbat["none"]["active"] is False, "펫 없으면 동행 공격 없음", json.dumps(petbat["none"]))
     ok(petbat["wolf"]["hits"] >= 2 and petbat["wolf"]["dmg"] > 0 and petbat["wolf"]["active"] is True, "펫이 1.5초마다 함께 공격", json.dumps(petbat["wolf"]))
 
+
+    petup = js(ctx, """
+      const s = defaultState(0);
+      s.level = 20;
+      s.shards = 100;
+      s.pet = { equipped: 'wolf', unlocked: ['wolf'], chosen: true, levels: { wolf: 1 } };
+      const atk0 = calcStats(s, {}).atk;
+      const pct0 = petAtkPct(s, 'wolf');
+      const c1 = petUpgradeCost(1);
+      const r1 = upgradePet(s, 'wolf');
+      const left = s.shards;
+      const atk1 = calcStats(s, {}).atk;
+      const pct1 = petAtkPct(s, 'wolf');
+      const dm = petDmgPct(s, 'wolf');
+      const bad = upgradePet(s, 'dragon');
+      s.shards = 0;
+      const poor = upgradePet(s, 'wolf');
+      s.pet.levels.wolf = PET_MAX_LV;
+      const maxed = upgradePet(s, 'wolf');
+      return { c1, ok: r1.ok, lv: r1.lv, spent: r1.spent, left, atk0, atk1, pct0, pct1, dmgPct: Math.round(dm * 100),
+               bad: bad.ok, poor: poor.ok, maxed: maxed.ok, maxFlag: !!maxed.max };
+    """)
+    ok(petup["ok"] is True and petup["lv"] == 2 and petup["spent"] == petup["c1"] and petup["left"] == 100 - petup["c1"], "펫 강화 — 강화석 소모·레벨 상승", json.dumps(petup))
+    ok(petup["atk1"] > petup["atk0"] and petup["pct1"] > petup["pct0"] and petup["dmgPct"] > 55, "펫 강화가 공격 패시브·동행 피해에 반영", json.dumps({"atk0": petup["atk0"], "atk1": petup["atk1"], "pct0": petup["pct0"], "pct1": petup["pct1"], "dmgPct": petup["dmgPct"]}))
+    ok(petup["bad"] is False and petup["poor"] is False and petup["maxed"] is False and petup["maxFlag"] is True, "미해금/강화석 부족/최대 레벨 거부", json.dumps({k: petup[k] for k in ["bad", "poor", "maxed", "maxFlag"]}))
+
     compat = js(ctx, """
       const old = { ver: 3, level: 40, gold: 7777, shards: 12, stage: 9, maxStage: 9,
         land: { owned: { '0_0_0': 5 } }, records: { totalGold: 100 } };
@@ -548,8 +574,8 @@ def main():
         badPet: bad.pet, badJob: bad.jobTier, badCd: bad.dungeonCooldown, badBest: bad.dungeon.best, badRuns: bad.dungeon.runs,
       };
     """)
-    ok(compat["level"] == 40 and compat["gold"] == 7777 and compat["pet"] == {"equipped": None, "unlocked": [], "chosen": False} and compat["job"] == 0 and compat["cd"] == 0, "v3.1 저장 호환(펫·전직·던전 기본값 병합)", json.dumps(compat, ensure_ascii=False))
-    ok(compat["badPet"] == {"equipped": None, "unlocked": ["fox"], "chosen": False} and compat["badJob"] == 3 and compat["badCd"] == 0 and compat["badBest"] == 0 and compat["badRuns"] == 0, "손상된 펫/전직/던전 값 방어", json.dumps({k: compat[k] for k in ["badPet", "badJob", "badCd", "badBest", "badRuns"]}, ensure_ascii=False))
+    ok(compat["level"] == 40 and compat["gold"] == 7777 and compat["pet"] == {"equipped": None, "unlocked": [], "chosen": False, "levels": {}} and compat["job"] == 0 and compat["cd"] == 0, "v3.1 저장 호환(펫·전직·던전 기본값 병합)", json.dumps(compat, ensure_ascii=False))
+    ok(compat["badPet"] == {"equipped": None, "unlocked": ["fox"], "chosen": False, "levels": {"fox": 1}} and compat["badJob"] == 3 and compat["badCd"] == 0 and compat["badBest"] == 0 and compat["badRuns"] == 0, "손상된 펫/전직/던전 값 방어", json.dumps({k: compat[k] for k in ["badPet", "badJob", "badCd", "badBest", "badRuns"]}, ensure_ascii=False))
 
     tpl2 = js(ctx2, """
       const s = defaultState(0);
@@ -574,8 +600,8 @@ def main():
     ok("drawPet" in rsrc2 and "drawDungeonHud" in rsrc2 and "drawPromoteBanner" in rsrc2, "펫 동행·던전 HUD·전직 배너 렌더 구현")
     ok("petHit" in read("src/combat.js") and "activePet" in read("src/combat.js") and "startDungeon" in read("src/combat.js"), "펫 동행 전투·던전 전투 구현")
     ok("fanfare()" in read("src/sound.js"), "전직 팡파르 효과음")
-    ok(all(k in read("app.js") for k in ["promoteJob", "equipPet", "enterDungeon", "checkPets", "showDungeonResult"]), "전직·펫·던전 액션 연결")
-    ok('data-action="promote"' in read("src/ui.js") and 'data-action="pet-equip"' in read("src/ui.js") and 'data-action="dungeon"' in read("src/ui.js"), "전직·펫·던전 버튼 연결")
+    ok(all(k in read("app.js") for k in ["promoteJob", "equipPet", "upgradePet", "enterDungeon", "checkPets", "showDungeonResult"]), "전직·펫·던전 액션 연결")
+    ok(all(x in read("src/ui.js") for x in ['data-action="promote"', 'data-action="pet-equip"', 'data-action="pet-upgrade"', 'data-action="dungeon"']), "전직·펫·던전 버튼 연결")
     ok("'./src/meta.js'" in read("sw.js"), "sw.js 프리캐시에 meta.js 포함")
     pet_files = [f"assets/sprites/pet/pet_{n}.png" for n in ("wolf", "fox", "owl", "dragon")]
     ok(all(os.path.exists(os.path.join(ROOT, f)) for f in pet_files), "펫 스프라이트 4종 파일", ", ".join(f for f in pet_files if not os.path.exists(os.path.join(ROOT, f))))

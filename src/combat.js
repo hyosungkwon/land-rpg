@@ -5,7 +5,7 @@ import { ECON, SKILLS, stageDef, monsterKo } from './data.js';
 import {
   calcStats, currentHp, skillEffect, killReward, registerKill, clearStage, monsterStats,
 } from './state.js';
-import { DUNGEON, PET_ATTACK_MS, equippedPet, dungeonReward } from './meta.js';
+import { DUNGEON, PET_ATTACK_MS, equippedPet, petDmgPct, dungeonReward } from './meta.js';
 
 const ATTACK_STOP_GAP = 260; // 이 거리에서 멈추고 때린다(캐릭터 스프라이트가 겹치지 않는 간격)
 const QUEUE_GAP = 300; // 뒤에 줄 서는 몬스터가 벌어지는 간격
@@ -322,7 +322,7 @@ export class Battle {
     if (!target) return;
     this.petLast = now;
     this.petAnimAt = now;
-    let dmg = this.stats.atk * pet.dmgPct * (0.9 + this.rng() * 0.2);
+    let dmg = this.stats.atk * petDmgPct(this.s, pet.id) * (0.9 + this.rng() * 0.2);
     if (this.berserkUntil > now) dmg *= 1 + skillEffect('berserk', this.s.skills.berserk.lv) * 0.5;
     let crit = false;
     if (this.rng() < this.stats.crit) {

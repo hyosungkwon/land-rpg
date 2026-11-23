@@ -7,7 +7,7 @@ import {
   RARITIES, RARITY_INDEX, RARITY_IDS, GACHA, gachaCost, rarityBonusLv,
 } from './data.js';
 import { defaultLand } from './land.js';
-import { PET_IDS, JOB_MAX, jobOf, equippedPet } from './meta.js';
+import { PET_IDS, PET_MAX_LV, JOB_MAX, jobOf, equippedPet, petLevel, petAtkPct } from './meta.js';
 
 const nowMs = () => Date.now();
 
@@ -98,10 +98,17 @@ export function normalizeState(raw, now = nowMs()) {
   // v3.2: 펫/전직/던전 기본값 병합 (없는 저장본은 그대로 진행도 유지)
   const rawPet = raw.pet && typeof raw.pet === 'object' ? raw.pet : {};
   const petIds = Array.isArray(rawPet.unlocked) ? rawPet.unlocked.filter((id) => PET_IDS.includes(id)) : [];
+  const rawLevels = rawPet.levels && typeof rawPet.levels === 'object' ? rawPet.levels : {};
+  const petLevels = {};
+  for (const id of PET_IDS) {
+    if (!petIds.includes(id)) continue;
+    petLevels[id] = clamp(Math.floor(num(rawLevels[id], 1)), 1, PET_MAX_LV);
+  }
   s.pet = {
     equipped: petIds.includes(rawPet.equipped) ? rawPet.equipped : null,
     unlocked: PET_IDS.filter((id) => petIds.includes(id)),
     chosen: rawPet.chosen === true,
+    levels: petLevels,
   };
   s.jobTier = clamp(Math.floor(num(raw.jobTier, 0)), 0, JOB_MAX);
   s.jobAt = Math.max(0, num(raw.jobAt, 0));
@@ -185,7 +192,7 @@ export function calcStats(s, buffs = NO_BUFF) {
   const pet = equippedPet(s);
   const jobAtkMul = 1 + (job.atkPct || 0) / 100;
   const jobHpMul = 1 + (job.hpPct || 0) / 100;
-  const petAtkMul = 1 + (pet ? pet.atkPct : 0) / 100;
+  const petAtkMul = 1 + (pet ? petAtkPct(s, pet.id) : 0) / 100;
   const baseAtk = 12 + 2.6 * L + 0.035 * L * L;
   const equipAtk = EQUIP.weapon.per * eLv('weapon');
   const atk = (baseAtk + equipAtk) * (1 + b.atkPct / 100) * jobAtkMul * petAtkMul;

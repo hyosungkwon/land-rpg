@@ -77,6 +77,54 @@ export function petDef(id) {
   return (id && PET_BY_ID[id]) || null;
 }
 
+/* ── 펫 강화: 강화석으로 레벨 1~10, 레벨당 함께 공격·패스워드 효과 +10% ── */
+export const PET_MAX_LV = 10;
+
+/** 해당 펫의 강화 레벨(기본 1) */
+export function petLevel(state, id) {
+  const lv = state && state.pet && state.pet.levels && state.pet.levels[id];
+  return Math.max(1, Math.min(PET_MAX_LV, Math.floor(Number(lv) || 1)));
+}
+
+/** 함께 공격 피해 비율(강화 레벨 반영) */
+export function petDmgPct(state, id) {
+  const def = petDef(id);
+  if (!def) return 0;
+  return def.dmgPct * (1 + 0.1 * (petLevel(state, id) - 1));
+}
+
+/** 동행 패시브 공격력(%)입니다(강화 레벨 반영). */
+export function petAtkPct(state, id) {
+  const def = petDef(id);
+  if (!def) return 0;
+  return Math.round(def.atkPct * (1 + 0.1 * (petLevel(state, id) - 1)) * 10) / 10;
+}
+
+/** 다음 강화 비용(강화석) — 최대치면 0 */
+export function petUpgradeCost(lv) {
+  const cur = Math.max(1, Math.min(PET_MAX_LV, Math.floor(Number(lv) || 1)));
+  if (cur >= PET_MAX_LV) return 0;
+  return Math.ceil(8 * Math.pow(1.4, cur - 1));
+}
+
+/** 펫 강화 실행(강화석 소모). */
+export function upgradePet(state, id) {
+  const def = petDef(id);
+  if (!def) return { ok: false, reason: '알 수 없는 펫입니다.' };
+  const unlocked = (state.pet && state.pet.unlocked) || [];
+  if (!unlocked.includes(id)) return { ok: false, reason: '아직 해금되지 않은 펫입니다.' };
+  const lv = petLevel(state, id);
+  if (lv >= PET_MAX_LV) return { ok: false, reason: '최대 강화 단계입니다.', max: true };
+  const cost = petUpgradeCost(lv);
+  if (Math.max(0, Math.floor(state.shards || 0)) < cost) {
+    return { ok: false, reason: `강화석이 부족힙니다. (필요 💎${cost})`, need: cost };
+  }
+  state.shards = Math.floor(state.shards - cost);
+  if (!state.pet.levels || typeof state.pet.levels !== 'object') state.pet.levels = {};
+  state.pet.levels[id] = lv + 1;
+  return { ok: true, lv: lv + 1, spent: cost, cost: petUpgradeCost(lv + 1) };
+}
+
 /** 펫 티어(0부터). 장착/비교용 */
 export function petTier(id) {
   const p = petDef(id);
@@ -121,6 +169,7 @@ export function petProgress(state, id, now = Date.now()) {
 export function syncPets(state, now = Date.now()) {
   if (!state.pet || typeof state.pet !== 'object') state.pet = { equipped: null, unlocked: [], chosen: false };
   const raw = state.pet;
+  if (!raw.levels || typeof raw.levels !== 'object') raw.levels = {};
   const have = new Set(Array.isArray(raw.unlocked) ? raw.unlocked.filter((id) => !!PET_BY_ID[id]) : []);
   const beforeEquipped = PET_BY_ID[raw.equipped] ? raw.equipped : null;
 
@@ -135,13 +184,15 @@ export function syncPets(state, now = Date.now()) {
 
   const unlocked = PETS.filter((d) => have.has(d.id)).map((d) => d.id);
   const best = unlocked.length ? unlocked[unlocked.length - 1] : null; // PETS 는 티어 오름차순
+  const levels = {};
+  for (const id of unlocked) levels[id] = petLevel(state, id);
   let equipped = beforeEquipped;
   if (!raw.chosen) equipped = best;
   else if (!equipped || !have.has(equipped)) equipped = best;
   // 자동 장착 상태에서 더 높은 펫이 새로 열리면 함께 올려준다
   if (!raw.chosen && best && petTier(best) > petTier(equipped)) equipped = best;
 
-  state.pet = { equipped, unlocked, chosen: !!raw.chosen };
+  state.pet = { equipped, unlocked, chosen: !!raw.chosen, levels };
   return { newly, equipped, changed: newly.length > 0 || equipped !== beforeEquipped };
 }
 
