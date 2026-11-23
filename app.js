@@ -919,10 +919,10 @@ class App {
     const d = codexDetail(s);
     const cur = ['monster', 'city', 'gear', 'pet'].includes(tab) ? tab : 'monster';
     const tabs = [
-      ['monster', `🐾 몬스터 ${c.monsters.seen}/${c.monsters.total}`],
-      ['city', `🏙️ 부동산 ${c.cities.seen}/${c.cities.total}`],
-      ['gear', `🎒 장비 ${c.gear.seen}/${c.gear.total}`],
-      ['pet', `🐉 펫 ${c.pets.seen}/${c.pets.total}`],
+      ['monster', '🐾 몬스터'],
+      ['city', '🏙️ 부동산'],
+      ['gear', '🎒 장비'],
+      ['pet', '🐉 펫'],
     ];
     const tabBar = `<div class="subtabs codex-tabs">${tabs
       .map(([k, l]) => `<button class="subtab ${cur === k ? 'active' : ''}" type="button" data-action="open-codex" data-value="${k}">${l}</button>`)
@@ -930,7 +930,8 @@ class App {
 
     let body = '';
     if (cur === 'monster') {
-      body = `<div class="codex-grid">${d.monsters
+      body = `<div class="codex-sum">몬스터 ${c.monsters.seen}/${c.monsters.total} · 처치 ${c.monsters.kills.toLocaleString()}</div>
+        <div class="codex-grid">${d.monsters
         .map(
           (m) => `<div class="cx ${m.met ? '' : 'lock'} ${m.boss ? 'boss' : ''}">
             <img src="${spriteSrc(m.name)}" alt="" loading="lazy">
@@ -941,16 +942,18 @@ class App {
         .join('')}</div>
         <div class="note" style="margin-top:10px">몬스터는 <b>마주치면</b> 해금되고, 처치 수가 함께 기록됩니다. 보스는 금빛 테두리.</div>`;
     } else if (cur === 'city') {
-      body = d.cities.length
+      body = `<div class="codex-sum">지역 ${c.cities.seen}/${c.cities.total} · 매수한 지역이 기록됩니다</div>
+        ${d.cities.length
         ? `<div class="codex-city-list">${d.cities
             .map(
               (ct) => `<div class="kv"><span class="k">${ct.emoji} ${esc(ct.name)} <i class="dim">${esc(ct.region)}</i></span><span class="v">${ct.pyeong.toLocaleString()}평</span></div>`,
             )
             .join('')}</div>
-          <div class="note" style="margin-top:10px">매수한 지역이 기록됩니다. <b>매도해도 도감 기록은 유지</b>되고, 역대 최대 보유 평수가 남습니다.</div>`
-        : `<div class="empty">아직 매수한 지역이 없습니다.<br>부동산 탭에서 첫 매물을 사면 도감이 열립니다.</div>`;
+          <div class="note" style="margin-top:10px"><b>매도해도 도감 기록은 유지</b>되고, 역대 최대 보유 평수가 남습니다.</div>`
+        : `<div class="empty">아직 매수한 지역이 없습니다.<br>부동산 탭에서 첫 매물을 사면 도감이 열립니다.</div>`}`;
     } else if (cur === 'gear') {
-      body = `<div class="codex-gear">${d.gear
+      body = `<div class="codex-sum">장비 등급 ${c.gear.seen}/${c.gear.total}</div>
+        <div class="codex-gear">${d.gear
         .map(
           (g) => `<div class="kv"><span class="k"><span class="rb ${g.id}">${g.name}</span></span><span class="v">${
             g.got
@@ -961,7 +964,8 @@ class App {
         .join('')}</div>
         <div class="note" style="margin-top:10px">장비 뽑기로 얻은 등급이 기록됩니다. 전설은 40회 안에 1개 확정(천장).</div>`;
     } else {
-      body = `<div class="codex-pets">${d.pets
+      body = `<div class="codex-sum">펫 ${c.pets.seen}/${c.pets.total}</div>
+        <div class="codex-pets">${d.pets
         .map(
           (p) => `<div class="cx-pet ${p.unlocked ? '' : 'lock'}">
             <img src="assets/sprites/pet/${p.sprite}.png" alt="" loading="lazy">
