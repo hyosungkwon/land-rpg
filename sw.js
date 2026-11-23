@@ -1,6 +1,6 @@
 // land-rpg / sw.js — 오프라인 캐시 (방치형 RPG 는 네트워크 없이도 플레이 가능해야 함)
 // Firebase/CDN 요청은 캐시하지 않고 네트워크로 그대로 보낸다.
-const VERSION = 'land-rpg-v2.0.4';
+const VERSION = 'land-rpg-v2.0.5';
 const CORE = [
   './',
   './index.html',
@@ -48,8 +48,15 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(VERSION);
-      // 개별 add: 한 파일이 실패해도 나머지는 캐시된다.
-      await Promise.all(CORE.map((url) => cache.add(url).catch(() => null)));
+      // cache:'reload' 로 브라우저 HTTP 캐시를 건너뛰고 항상 최신 파일을 담는다.
+      // (GitHub Pages 는 max-age=600 이라 그냥 add 하면 최대 10분 묵은 파일이 들어올 수 있음)
+      await Promise.all(
+        CORE.map((url) =>
+          fetch(new Request(url, { cache: 'reload' }))
+            .then((res) => (res && res.ok ? cache.put(url, res) : null))
+            .catch(() => null)
+        )
+      );
       await self.skipWaiting();
     })()
   );

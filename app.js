@@ -304,6 +304,16 @@ class App {
       .then((reg) => {
         // 새 버전이 대기 중이면 바로 활성화 요청(삼성 인터넷은 skipWaiting 만으로도 교체됨)
         if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        // 설치가 끝나는 즉시(대기 상태 진입) 활성화 요청
+        reg.addEventListener('updatefound', () => {
+          const sw = reg.installing;
+          if (!sw) return;
+          sw.addEventListener('statechange', () => {
+            if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+              sw.postMessage({ type: 'SKIP_WAITING' });
+            }
+          });
+        });
         reg.update && reg.update().catch(() => {});
       })
       .catch(() => {});
