@@ -247,6 +247,16 @@ export class UI {
         el.textContent = `+💰${formatGold(p.incomePerHour)}/h`;
       }
     });
+    // 임대수령 버튼은 적립액에 따라 실시간으로 활성/문구가 바뀐다
+    const rentBtn = document.querySelector('[data-live-rent-btn]');
+    if (rentBtn) {
+      const on = s.land.accruedRent >= 1;
+      const label = on ? rentBtn.dataset.label || '수령' : rentBtn.dataset.empty || '쌓이는 중…';
+      if (rentBtn.textContent.trim() !== label) rentBtn.textContent = label;
+      if (rentBtn.disabled === on) rentBtn.disabled = !on;
+      rentBtn.classList.toggle('green', on && !!rentBtn.dataset.label);
+      rentBtn.classList.toggle('ghost', !on);
+    }
   }
 
   /* ───────────── 토스트 / 모달 ───────────── */
@@ -442,7 +452,7 @@ function tplHunt(ui) {
     </div>
     <div class="row" style="margin-top:4px">
       <span class="tiny dim">미수령 임대수익 <b data-live="rent" style="color:var(--green)">💰${fmt(Math.floor(p.accruedRent))}</b></span>
-      <button class="btn small ghost" data-action="claim-rent" ${p.accruedRent >= 1 ? '' : 'disabled'}>수령</button>
+      <button class="btn small ghost" data-action="claim-rent" data-live-rent-btn ${p.accruedRent >= 1 ? '' : 'disabled'}>수령</button>
     </div>
   </div>
 
@@ -670,7 +680,7 @@ function tplLandHome(ui) {
       <span class="tiny dim">시간 +💰${formatGold(p.incomePerHour)}</span>
     </div>
     <div class="rent-num" data-live="rent">💰${fmt(Math.floor(p.accruedRent))}</div>
-    <button class="btn ${p.accruedRent >= 1 ? 'green' : 'ghost'} block" style="margin-top:8px" data-action="claim-rent" ${p.accruedRent >= 1 ? '' : 'disabled'}>
+    <button class="btn ${p.accruedRent >= 1 ? 'green' : 'ghost'} block" style="margin-top:8px" data-action="claim-rent" data-live-rent-btn data-label="임대수익 수령" data-empty="쌓이는 중…" ${p.accruedRent >= 1 ? '' : 'disabled'}>
       ${p.accruedRent >= 1 ? '임대수익 수령' : '쌓이는 중…'}
     </button>
     <div class="note" style="margin-top:9px">
