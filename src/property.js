@@ -1,7 +1,8 @@
 // land-rpg / src/property.js
-// korea-land-4e0c2 의 users/{uid}/state → RPG 영구 버프 계산.
+// korea-land users/{uid}/state → RPG 영구 버프 + 자산 요약.
 // 순수 함수만 둔다(파이어베이스 접근은 firebase.js).
 import { PROP_BUFFS, ECON } from './data.js';
+import { portfolioOf, EMPTY_PORTFOLIO, formatWon } from './land.js';
 
 export const EMPTY_PROP = {
   connected: false, // 로그인 + 부동산 데이터 읽기 성공
@@ -11,30 +12,35 @@ export const EMPTY_PROP = {
   buildings: 0,
   totalPyeong: 0,
   pendingIncome: 0,
+  landValue: 0,
+  totalAsset: 0,
+  incomePerMin: 0,
+  incomePerHour: 0,
+  holdings: [],
+  unknown: [],
   raw: null,
 };
 
 /** RTDB users/{uid}/state 스냅샷을 RPG가 쓰는 형태로 정규화 */
 export function normalizeProperty(stateVal, pendingIncome = 0) {
-  if (!stateVal || typeof stateVal !== 'object') return { ...EMPTY_PROP, pendingIncome: Number(pendingIncome) || 0 };
-  const owned = stateVal.owned && typeof stateVal.owned === 'object' ? stateVal.owned : {};
-  let buildings = 0;
-  let totalPyeong = 0;
-  for (const [, qty] of Object.entries(owned)) {
-    const q = Number(qty) || 0;
-    if (q > 0) {
-      buildings += 1;
-      totalPyeong += q;
-    }
+  if (!stateVal || typeof stateVal !== 'object') {
+    return { ...EMPTY_PROP, pendingIncome: Number(pendingIncome) || 0 };
   }
+  const p = portfolioOf(stateVal, Date.now());
   return {
     connected: true,
-    nickname: String(stateVal.nickname || ''),
-    cash: Number(stateVal.cash) || 0,
-    bestAsset: Number(stateVal.bestAsset) || 0,
-    buildings,
-    totalPyeong,
+    nickname: p.nickname,
+    cash: p.cash,
+    bestAsset: p.bestAsset,
+    buildings: p.regions,
+    totalPyeong: p.pyeong,
     pendingIncome: Number(pendingIncome) || 0,
+    landValue: p.landValue,
+    totalAsset: p.totalAsset,
+    incomePerMin: p.incomePerMin,
+    incomePerHour: p.incomePerHour,
+    holdings: p.holdings,
+    unknown: p.unknown,
     raw: stateVal,
   };
 }
@@ -95,8 +101,5 @@ export function propertySummary(prop) {
 }
 
 export function formatMan(n) {
-  const v = Number(n) || 0;
-  if (Math.abs(v) >= 100000000) return `${(v / 100000000).toFixed(1)}억`;
-  if (Math.abs(v) >= 10000) return `${(v / 10000).toFixed(1)}만`;
-  return v.toLocaleString();
+  return formatWon(n);
 }

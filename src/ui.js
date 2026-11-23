@@ -3,6 +3,7 @@
 import { APP_VERSION, ECON, EQUIP, EQUIP_MAX_LV, SKILLS, skillCost, enhanceCost } from './data.js';
 import { expNeed, exchangeStatus, skillEffect } from './state.js';
 import { buffProgress, dividendReward, formatMan } from './property.js';
+import { CITIES, priceInfo, portfolioOf, formatWon, LAND } from './land.js';
 
 const esc = (v) =>
   String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -56,6 +57,33 @@ export class UI {
       this.setTab(b.dataset.tab);
     });
 
+    // 상단 통합 로그인/계정 버튼 (앱에서 유일한 로그인 진입점)
+    this.el.badge.addEventListener('click', () => {
+      const st = this.cloud.statusInfo();
+      if (!st.signedIn) this.app.actions.signIn();
+      else this.setTab('land');
+    });
+
+    // 부동산 매물 검색 (입력 중 포커스/커서 유지)
+    this._searchTimer = 0;
+    this.el.panelInner.addEventListener('input', (e) => {
+      const el = e.target;
+      if (!el || el.id !== 'landSearch') return;
+      const v = el.value;
+      const pos = el.selectionStart;
+      clearTimeout(this._searchTimer);
+      this._searchTimer = setTimeout(() => {
+        this.s.land.q = v;
+        this.s.land.page = 1;
+        this.render();
+        const n = document.getElementById('landSearch');
+        if (n) {
+          n.focus();
+          try { n.setSelectionRange(pos, pos); } catch (err) { /* ignore */ }
+        }
+      }, 260);
+    });
+
     document.body.addEventListener('click', (e) => {
       if (!e.target || !e.target.closest) return;
       const btn = e.target.closest('[data-action]');
@@ -94,6 +122,13 @@ export class UI {
       case 'login': actions.signIn(); break;
       case 'logout': actions.signOut(); break;
       case 'sync': actions.refreshCloud(); break;
+      case 'land-sub': this.setLandSub(v); break;
+      case 'land-trade': actions.landTrade(v, btn.dataset.side); break;
+      case 'land-more': actions.landMore(); break;
+      case 'land-sort': actions.landSort(v); break;
+      case 'land-tier': actions.landTier(v); break;
+      case 'land-refresh': actions.refreshLand(); break;
+      case 'claim-rent': actions.claimRent(); break;
       case 'claim-dividend': actions.claimDividend(); break;
       case 'exchange-max': {
         const inp = document.getElementById('exchangeGold');
@@ -126,6 +161,13 @@ export class UI {
     }
     this.tab = tab;
     [...this.el.tabbar.querySelectorAll('.tab')].forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
+    this.el.panel.scrollTop = 0;
+    this.render();
+  }
+
+  setLandSub(sub) {
+    const ok = ['home', 'market', 'rpg'];
+    this.s.land.sub = ok.includes(sub) ? sub : 'home';
     this.el.panel.scrollTop = 0;
     this.render();
   }
@@ -213,13 +255,27 @@ export class UI {
         el.disabled = left > 0;
       } else if (k === 'dps') {
         el.textContent = fmt(b ? b.stats.dps : 0);
+      } else if (k === 'rent') {
+        el.textContent = `₩${fmt(Math.floor(s.land.accruedRent || 0))}`;
+      } else if (k === 'cash') {
+        el.textContent = `₩${fmt((this.app.prop && this.app.prop.cash) || 0)}`;
       }
     });
   }
 
   setSync(info) {
+    const signedIn = !!info.signedIn;
     this.el.badge.dataset.kind = info.kind || 'guest';
-    this.el.syncLabel.textContent = info.label;
+    this.el.badge.classList.toggle('login-cta', !signedIn);
+    if (!signedIn) {
+      this.el.syncLabel.textContent = 'Google 로그인';
+      this.el.badge.title = '한 번 로그인하면 RPG와 부동산이 함께 연결됩니다';
+      return;
+    }
+    const nick = info.nickname || '내 계정';
+    const short =
+      info.kind === 'sync' ? '동기화' : info.kind === 'local' ? '로컬' : info.kind === 'loading' ? '연결 중' : info.label;
+    this.el.syncLabel.textContent = `${nick} · ${short}`;
     this.el.badge.title = info.detail || '';
   }
 
@@ -472,8 +528,274 @@ function tplGear(ui) {
   </div>`;
 }
 
-/* ══════════════════════════ 부동산 연계 ══════════════════════════ */
+/* ══════════════════════════ 부동산 (내 자산 · 매물 투자 · RPG 연계) ══════════════════════════ */
+
+const paybackText = (hours) => {
+  if (!isFinite(hours) || hours <= 0) return '—';
+  const min = hours * 60;
+  if (min < 60) return `${Math.max(1, Math.round(min))}분`;
+  if (hours < 48) return `${hours.toFixed(1)}시간`;
+  return `${Math.round(hours / 24)}일`;
+};
+
+const trendHtml = (t) => {
+  const up = t >= 0;
+  const v = Math.abs(t);
+  return `<span class="trend ${up ? 'up' : 'down'}">${up ? '▲' : '▼'}${v.toFixed(1)}%</span>`;
+};
+
+const traitBadge = (key) => {
+  const info = key && TRAIT_VIEW[key];
+  return info ? `<span class="tag ${info.cls || ''}">${info.icon} ${info.n}</span>` : '';
+};
+const TRAIT_VIEW = {
+  CHEAP_BUILD: { icon: '🔨', n: '건축 특구' },
+  HIGH_TAX: { icon: '💰', n: '세무 도시' },
+  GROWTH: { icon: '🚀', n: '성장' },
+  SAFE_HAVEN: { icon: '🛡️', n: '안전' },
+  FREE_TRADE: { icon: '🤝', n: '자유 무역' },
+  TOURISM_HUB: { icon: '🏖️', n: '관광' },
+  TECH_VALLEY: { icon: '💻', n: '테크' },
+};
+
+function landTabBar(ui) {
+  const sub = (ui.s.land && ui.s.land.sub) || 'home';
+  const tabs = [
+    ['home', '🏠 내 부동산'],
+    ['market', '🛒 매물 투자'],
+    ['rpg', '⚡ RPG 연계'],
+  ];
+  return `<div class="subtabs">${tabs
+    .map(([k, l]) => `<button class="subtab ${sub === k ? 'active' : ''}" data-action="land-sub" data-value="${k}">${l}</button>`)
+    .join('')}</div>`;
+}
+
 function tplLand(ui) {
+  const sub = (ui.s.land && ui.s.land.sub) || 'home';
+  if (sub === 'market') return landTabBar(ui) + tplLandMarket(ui);
+  if (sub === 'rpg') return landTabBar(ui) + tplLandRpg(ui);
+  return landTabBar(ui) + tplLandHome(ui);
+}
+
+/* ───────────── 🏠 내 부동산 ───────────── */
+function tplLandHome(ui) {
+  const s = ui.s;
+  const cloud = ui.cloud;
+  const status = cloud.statusInfo();
+
+  if (!status.signedIn) {
+    return `<div class="card">
+        <div class="card-head"><div class="card-title"><span class="t-ico">🏢</span>부동산 계정 연결</div><span class="tiny dim">${esc(status.label)}</span></div>
+        <div class="tiny muted" style="line-height:1.7">
+          상단의 <b>Google 로그인</b> 버튼 <b>한 번</b>이면 끝입니다.<br>
+          같은 로그인으로 RPG(<b>rpg/{uid}</b>)와 부동산(<b>users/{uid}/state</b>)이 동시에 연결되어,
+          매물 투자·임대수익·건물주 버프·골드 환전을 이 앱 하나에서 쓸 수 있습니다.
+        </div>
+        <div class="note" style="margin-top:10px">로그인 없이도 RPG 사냥은 그대로 진행되고, 진행도는 이 기기에 저장됩니다.</div>
+      </div>`;
+  }
+
+  const raw = cloud.prop;
+  if (!raw) {
+    return `<div class="card">
+        <div class="card-head"><div class="card-title"><span class="t-ico">🏢</span>${esc(status.nickname || '내 부동산')}</div><span class="tiny dim">데이터 없음</span></div>
+        <div class="note warn">계정은 로그인됐지만 부동산 상태를 읽지 못했습니다. 새로고침을 눌러 다시 확인해 주세요.</div>
+        <div class="row gap6" style="margin-top:10px">
+          <button class="btn small ghost wide" data-action="land-refresh">새로고침</button>
+          <button class="btn small ghost wide" data-action="logout">로그아웃</button>
+        </div>
+      </div>`;
+  }
+
+  const now = Date.now();
+  const p = portfolioOf(raw, now);
+  const rent = Math.floor(Number(s.land.accruedRent) || 0);
+
+  const holdings = p.holdings.length
+    ? p.holdings
+        .map((h) => {
+          const payback = h.incomePerHour > 0 ? h.price / h.incomePerHour : 0;
+          return `<div class="hold">
+            <div class="h-ico">${h.city.emoji}</div>
+            <div class="h-mid">
+              <div class="h-name">${esc(h.city.name)}<span class="h-region">${esc(h.city.region)}</span>${traitBadge(h.city.trait)}</div>
+              <div class="h-line"><b>${fmt(h.qty)}평</b><span class="dim"> · ${trendHtml(h.trend)}</span></div>
+              <div class="h-line dim">평가 ₩${formatWon(h.value)} · 시간 +₩${formatWon(h.incomePerHour)} · 회수 ${paybackText(payback)}</div>
+            </div>
+            <button class="mini sell" data-action="land-trade" data-value="${h.city.key}" data-side="sell">매도</button>
+          </div>`;
+        })
+        .join('')
+    : `<div class="empty">아직 보유한 매물이 없습니다.<br>
+         <button class="btn small blue" style="margin-top:8px" data-action="land-sub" data-value="market">매물 투자 하러 가기</button>
+       </div>`;
+
+  return `
+  <div class="card land-hero">
+    <div class="row">
+      <div class="lh-label">내 부동산 총자산</div>
+      <span class="tiny dim">${esc(p.nickname || '플레이어')}</span>
+    </div>
+    <div class="lh-total">₩${fmt(p.totalAsset)}</div>
+    <div class="lh-sub">현금 <b data-live="cash">₩${fmt(p.cash)}</b> · 매물 평가 ₩${formatWon(p.landValue)}</div>
+    <div class="lgrid">
+      <div><span>보유 지역</span><b>${p.regions}곳</b></div>
+      <div><span>총 면적</span><b>${fmt(p.pyeong)}평</b></div>
+      <div><span>시간당 임대</span><b class="gold">+₩${formatWon(p.incomePerHour)}</b></div>
+      <div><span>최고 자산</span><b>₩${formatWon(Math.max(p.bestAsset, p.totalAsset))}</b></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">💤</span>미수령 임대수익</div>
+      <span class="tiny dim">시간 +₩${formatWon(p.incomePerHour)}</span>
+    </div>
+    <div class="rent-num" data-live="rent">₩${fmt(rent)}</div>
+    <button class="btn ${rent >= 1 ? 'green' : 'ghost'} block" style="margin-top:8px" data-action="claim-rent" ${rent >= 1 ? '' : 'disabled'}>
+      ${rent >= 1 ? `₩${fmt(rent)} 수령` : '쌓이는 중…'}
+    </button>
+    <div class="note" style="margin-top:9px">
+      접속 중에는 <b>100%</b>, 앱을 닫아둔 동안은 원작과 같이 <b>5%</b>(최대 ${LAND.rentCapHours}시간)만 적립됩니다.
+      수령하면 <b>users/{uid}/state/cash</b> 에 실제로 더해집니다.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🏘️</span>보유 매물</div>
+      <span class="tiny dim">${p.holdings.length}건 · ${fmt(p.pyeong)}평</span>
+    </div>
+    ${holdings}
+    <div class="row gap6" style="margin-top:10px">
+      <button class="btn small ghost wide" data-action="land-sub" data-value="market">매물 투자</button>
+      <button class="btn small ghost wide" data-action="land-refresh">새로고침</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><div class="card-title"><span class="t-ico">📋</span>계정</div><span class="tiny dim">${esc(status.label)}</span></div>
+    <div class="kv"><span class="k">닉네임</span><span class="v">${esc(p.nickname || '—')}</span></div>
+    <div class="kv"><span class="k">거래 횟수</span><span class="v">${fmt(Number(raw.tradeCount) || 0)}회</span></div>
+    <div class="kv"><span class="k">누적 거래세</span><span class="v">₩${formatWon(Number(raw.krTax) || 0)}</span></div>
+    <div class="kv"><span class="k">거래소 판매 대기</span><span class="v gold">₩${formatWon(Number(raw._pendingIncome) || 0)}</span></div>
+    <button class="btn small ghost block" style="margin-top:9px" data-action="logout">로그아웃</button>
+  </div>`;
+}
+
+/* ───────────── 🛒 매물 투자 ───────────── */
+function tplLandMarket(ui) {
+  const s = ui.s;
+  const status = ui.cloud.statusInfo();
+  if (!status.signedIn || !ui.cloud.prop) {
+    return `<div class="card">
+      <div class="card-head"><div class="card-title"><span class="t-ico">🛒</span>매물 투자</div><span class="tiny dim">로그인 필요</span></div>
+      <div class="tiny muted" style="line-height:1.7">상단 <b>Google 로그인</b> 한 번이면 전국 229개 시군구 매물을 이 화면에서 바로 사고팔 수 있습니다.</div>
+      <div class="note" style="margin-top:10px">가격·수익률은 korea-land 원본 데이터(초기가·분당 임대수익·최대 공급·지역 특성)를 그대로 씁니다.</div>
+    </div>`;
+  }
+
+  const now = Date.now();
+  const raw = ui.cloud.prop;
+  const owned = (raw && raw.owned) || {};
+  const cash = Number(raw && raw.cash) || 0;
+  const q = String(s.land.q || '').trim();
+  const tier = s.land.tier || 'all';
+  const sort = s.land.sort || 'roi';
+  const page = Math.max(1, Math.floor(Number(s.land.page) || 1));
+
+  const rows = [];
+  for (const c of CITIES) {
+    const held = Math.floor(Number(owned[c.key]) || 0);
+    if (tier === 'owned') {
+      if (held <= 0) continue;
+    } else if (tier !== 'all' && String(c.tier) !== String(tier)) continue;
+    if (q && !(c.name.includes(q) || c.region.includes(q) || c.tierLabel.includes(q))) continue;
+    const info = priceInfo(c, now);
+    const tierMult = [4, 2, 1][c.tier] ?? 1;
+    const hourlyPerPyeong = c.income * 60 * tierMult;
+    rows.push({ c, info, held, hourlyPerPyeong, payback: hourlyPerPyeong > 0 ? info.price / hourlyPerPyeong : 0 });
+  }
+
+  if (sort === 'price') rows.sort((a, b) => a.info.price - b.info.price);
+  else if (sort === 'trend') rows.sort((a, b) => b.info.trend - a.info.trend);
+  else if (sort === 'name') rows.sort((a, b) => a.c.name.localeCompare(b.c.name, 'ko'));
+  else rows.sort((a, b) => a.payback - b.payback);
+
+  const PAGE = 24;
+  const shown = rows.slice(0, page * PAGE);
+
+  const chips = [
+    ['all', '전체'],
+    ['0', '군'],
+    ['1', '시'],
+    ['2', '구'],
+    ['owned', '보유'],
+  ]
+    .map(([k, l]) => `<button class="chip ${String(tier) === k ? 'on' : ''}" data-action="land-tier" data-value="${k}">${l}</button>`)
+    .join('');
+
+  const sorts = [
+    ['roi', '회수 빠른순'],
+    ['price', '가격 낮은순'],
+    ['trend', '급등순'],
+    ['name', '이름순'],
+  ]
+    .map(([k, l]) => `<button class="chip ${sort === k ? 'on' : ''}" data-action="land-sort" data-value="${k}">${l}</button>`)
+    .join('');
+
+  const list = shown.length
+    ? shown
+        .map(({ c, info, held, hourlyPerPyeong, payback }) => {
+          const seasonal = info.season ? traitBadge(info.season) : '';
+          const remain = Math.max(0, c.supply - held);
+          return `<div class="mkt">
+            <div class="m-ico">${c.emoji}</div>
+            <div class="m-mid">
+              <div class="m-name">${esc(c.name)}<span class="m-region">${esc(c.region)}</span>${traitBadge(c.trait)}${seasonal}</div>
+              <div class="m-line"><b>₩${fmt(info.price)}</b><span class="dim">/평</span> ${trendHtml(info.trend)}</div>
+              <div class="m-line dim">시간 +₩${formatWon(hourlyPerPyeong)}/평 · 회수 ${paybackText(payback)}${held > 0 ? ` · <b class="own">보유 ${fmt(held)}평</b>` : ''}</div>
+              <div class="m-line dim">잔여 ${formatWon(remain)}평</div>
+            </div>
+            <div class="m-btns">
+              <button class="mini buy" data-action="land-trade" data-value="${c.key}" data-side="buy">매수</button>
+              <button class="mini sell" data-action="land-trade" data-value="${c.key}" data-side="sell" ${held > 0 ? '' : 'disabled'}>매도</button>
+            </div>
+          </div>`;
+        })
+        .join('')
+    : `<div class="empty">조건에 맞는 매물이 없습니다.</div>`;
+
+  return `
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🛒</span>매물 투자</div>
+      <span class="tiny dim">현금 <b class="gold" data-live="cash">₩${fmt(cash)}</b></span>
+    </div>
+    <div class="srch">
+      <span>🔎</span>
+      <input id="landSearch" type="text" inputmode="search" autocomplete="off" placeholder="지역·시군구 검색 (예: 강남, 경기권)" value="${esc(s.land.q || '')}">
+    </div>
+    <div class="chips" style="margin-top:8px">${chips}</div>
+    <div class="chips" style="margin-top:5px">${sorts}</div>
+    <div class="tiny dim" style="margin-top:8px">${rows.length}개 매물 · ${shown.length}개 표시 · 가격은 실시간 변동(±30% 일일 밴드)</div>
+  </div>
+
+  <div class="card" style="padding-top:2px">
+    ${list}
+    ${shown.length < rows.length
+      ? `<button class="btn small ghost block" style="margin-top:10px" data-action="land-more">더 보기 (${shown.length}/${rows.length})</button>`
+      : ''}
+  </div>
+
+  <div class="note">
+    매수·매도는 <b>users/{uid}/state</b> 에 원자적으로 반영됩니다(다른 필드 보존). 거래세 0.01%,
+    소유 지분이 커질수록 평당 수익이 줄어드는 원작 규칙 그대로입니다.
+  </div>`;
+}
+
+/* ───────────── ⚡ RPG 연계 ───────────── */
+function tplLandRpg(ui) {
   const s = ui.s;
   const cloud = ui.cloud;
   const prop = ui.app.prop;
@@ -484,12 +806,11 @@ function tplLand(ui) {
 
   const accountCard = !signedIn
     ? `<div class="card">
-        <div class="card-head"><div class="card-title"><span class="t-ico">🏢</span>부동산 계정</div><span class="tiny dim">${esc(status.label)}</span></div>
-        <div class="tiny muted" style="line-height:1.6;margin-bottom:11px">
-          구글 계정으로 로그인하면 <b>korea-land-4e0c2</b> 부동산 데이터를 읽어
-          건물주 버프를 받고, 모은 골드를 부동산 현금으로 환전할 수 있습니다.
+        <div class="card-head"><div class="card-title"><span class="t-ico">⚡</span>RPG 연계</div><span class="tiny dim">${esc(status.label)}</span></div>
+        <div class="tiny muted" style="line-height:1.7">
+          상단 <b>Google 로그인</b> 한 번으로 부동산 계정과 연결하면
+          <b>건물주 버프</b>와 <b>골드 → 현금 환전</b>이 열립니다.
         </div>
-        <button class="btn primary block" data-action="login">Google 로그인</button>
         <div class="note" style="margin-top:9px">로그인 없이도 게임은 localStorage 로 정상 진행됩니다.</div>
       </div>`
     : `<div class="card">
@@ -502,10 +823,11 @@ function tplLand(ui) {
              <div class="kv"><span class="k">최고 자산</span><span class="v">₩${formatMan(prop.bestAsset)}</span></div>
              <div class="kv"><span class="k">보유 지역</span><span class="v">${prop.buildings}곳</span></div>
              <div class="kv"><span class="k">총 보유 면적</span><span class="v">${fmt(prop.totalPyeong)}평</span></div>
-             <div class="kv"><span class="k">미수령 배당</span><span class="v gold">₩${fmt(prop.pendingIncome)}</span></div>`
+             <div class="kv"><span class="k">시간당 임대</span><span class="v gold">+₩${formatMan(prop.incomePerHour || 0)}</span></div>
+             <div class="kv"><span class="k">거래소 판매 대기</span><span class="v">₩${fmt(prop.pendingIncome)}</span></div>`
           : `<div class="note warn">계정은 로그인됐지만 부동산 상태를 읽지 못했습니다. 땅을 한 번이라도 보유한 계정인지 확인해 주세요.</div>`}
         <div class="row gap6" style="margin-top:10px">
-          <button class="btn small ghost wide" data-action="sync">새로고침</button>
+          <button class="btn small ghost wide" data-action="land-refresh">새로고침</button>
           <button class="btn small ghost wide" data-action="logout">로그아웃</button>
         </div>
       </div>`;
@@ -551,7 +873,7 @@ function tplLand(ui) {
       <div class="card-title"><span class="t-ico">🎁</span>배당 → 강화석</div>
       <span class="tiny dim">₩${fmt(ECON.dividendShardPer)}당 💎1</span>
     </div>
-    <div class="kv"><span class="k">미수령 배당</span><span class="v gold">₩${fmt(div.pending)}</span></div>
+    <div class="kv"><span class="k">미수령 배당(거래소 판매 대기)</span><span class="v gold">₩${fmt(div.pending)}</span></div>
     <div class="kv"><span class="k">환산 가능 강화석</span><span class="v" style="color:var(--blue)">💎 ${fmt(div.shards)}</span></div>
     <button class="btn ${div.shards > 0 ? 'green' : 'ghost'} block" style="margin-top:10px" data-action="claim-dividend" ${div.shards > 0 ? '' : 'disabled'}>
       ${div.shards > 0 ? `강화석 ${fmt(div.shards)}개 수령` : '수령할 배당이 없습니다'}
@@ -594,6 +916,7 @@ function tplLand(ui) {
       </div>`
     : ''}`;
 }
+
 
 /* ══════════════════════════ 랭킹/설정 ══════════════════════════ */
 function tplMore(ui) {

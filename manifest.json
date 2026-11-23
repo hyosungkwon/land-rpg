@@ -1,7 +1,7 @@
 {
-  "name": "영지 RPG · 부동산 방치형",
+  "name": "영지 RPG · 부동산 거래소",
   "short_name": "영지 RPG",
-  "description": "부동산 거래소와 양방향으로 연동되는 모바일 세로형 방치형 RPG",
+  "description": "Google 로그인 한 번으로 부동산 거래소와 방치형 RPG를 함께 즐기는 모바일 PWA",
   "lang": "ko",
   "dir": "ltr",
   "start_url": "./",
@@ -19,6 +19,6 @@
   ],
   "shortcuts": [
     { "name": "사냥 화면", "url": "./?tab=hunt" },
-    { "name": "부동산 연계", "url": "./?tab=land" }
+    { "name": "부동산", "url": "./?tab=land" }
   ]
 }

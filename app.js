@@ -8,6 +8,7 @@ import {
 import { Battle } from './src/combat.js';
 import { CLOUD } from './src/firebase.js';
 import { normalizeProperty, computeBuffs, dividendReward, EMPTY_PROP } from './src/property.js';
+import { CITY_BY_KEY, quoteTrade, maxBuyQty, rentAccrual, formatWon, LAND } from './src/land.js';
 import { Renderer } from './src/render.js';
 import { UI } from './src/ui.js';
 
@@ -37,6 +38,10 @@ const STORAGE = (() => {
   }
 })();
 
+const won = (n) => Math.floor(Number(n) || 0).toLocaleString('ko-KR');
+const esc = (v) =>
+  String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 class App {
   constructor() {
     this.s = loadState(STORAGE);
@@ -53,6 +58,8 @@ class App {
     this.lastSave = 0;
     this.lastCloud = 0;
     this.lastRank = 0;
+    this.lastRentTick = 0;
+    this._rentSettled = false;
     this.startedAt = Date.now();
     this.offlineChecked = new Date(this.s.lastActiveAt).toDateString();
     this.hiddenAt = 0;
@@ -141,9 +148,13 @@ class App {
       this.reportError('ui', e);
     }
 
-    // 3) 자동 저장 / 클라우드 동기화
+    // 3) 자동 저장 / 임대수익 적립 / 클라우드 동기화
     try {
       this.s.records.playMs = (this.s.records.playMs || 0) + dt;
+      if (now - this.lastRentTick >= 1000) {
+        this.lastRentTick = now;
+        this.accrueRent(now, 1);
+      }
       if (now - this.lastSave > 8000) {
         this.lastSave = now;
         this.save();
@@ -251,6 +262,26 @@ class App {
     }
   }
 
+  /* ───────────── 부동산 임대수익 적립 ─────────────
+   * 원작과 동일: 접속 중에는 100%, 앱을 닫아둔 동안은 5%만 적립한다.
+   * 적립값은 RPG 저장소(rpg/{uid})에 함께 저장되고, 수령할 때 DB cash 에 반영된다.
+   */
+  accrueRent(now, rate = 1) {
+    const l = this.s.land;
+    if (!l) return 0;
+    const from = Number(l.rentAt) || 0;
+    if (!from) {
+      l.rentAt = now;
+      return 0;
+    }
+    const elapsed = Math.max(0, now - from);
+    const income = this.prop && this.prop.connected ? this.prop.incomePerMin : 0;
+    const gain = rate >= 1 ? rentAccrual(income, elapsed, 1) : rentAccrual(income, elapsed, rate);
+    if (gain > 0) l.accruedRent = (Number(l.accruedRent) || 0) + gain;
+    l.rentAt = now;
+    return gain;
+  }
+
   save(immediate = false) {
     this.battle.writeHp();
     this.s.lastActiveAt = Date.now();
@@ -263,10 +294,14 @@ class App {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') {
         this.hiddenAt = Date.now();
+        this.accrueRent(Date.now(), 1);
         this.save(true);
         if (this.cloud.signedIn) this.pushCloud(true).catch(() => {});
       } else {
         const away = Date.now() - (this.hiddenAt || Date.now());
+        // 자리를 비운 동안의 임대수익은 5%만 적립 (원작 오프라인 수익률)
+        const rent = this.accrueRent(Date.now(), LAND.rentOfflineRate);
+        if (rent >= 1) this.ui.toast(`💤 방치 임대수익 +₩${formatWon(rent)} (5%)`, 'gold');
         if (away > 120000) {
           // 백그라운드에 있던 시간도 방치 보상으로 정산
           const summary = offlineSummary({ ...this.s, lastActiveAt: this.hiddenAt }, Date.now(), this.buffs);
@@ -361,6 +396,12 @@ class App {
     this.prop = raw ? normalizeProperty(raw, pending) : { ...EMPTY_PROP };
     this.buffs = computeBuffs(this.prop);
     this.battle.refreshStats();
+    // 로그인/새로고침 직후 한 번만: 앱을 닫아둔 동안의 임대수익을 5%로 정산
+    if (this.prop.connected && !this._rentSettled) {
+      this._rentSettled = true;
+      const gain = this.accrueRent(Date.now(), LAND.rentOfflineRate);
+      if (gain >= 100) this.ui.toast(`🏢 방치 중 임대수익 +₩${formatWon(gain)} 적립 (5%)`, 'gold');
+    }
     this.ui.render();
   }
 
@@ -410,6 +451,7 @@ class App {
       equip: s.equip, skills: s.skills, stage: s.stage, killsInStage: s.killsInStage,
       totalKills: s.totalKills, bossKills: s.bossKills, maxStage: s.maxStage,
       autoBoss: s.autoBoss, exchange: s.exchange, claim: s.claim, records: s.records,
+      land: { accruedRent: s.land.accruedRent, rentAt: s.land.rentAt },
       createdAt: s.createdAt,
     };
   }
@@ -483,6 +525,34 @@ class App {
           this.ui.toast(r.reason || '강화할 수 없습니다', 'red');
         }
       },
+      /* ── 부동산 게임 (내 자산 · 매물 투자) ── */
+      landTrade: (key, side) => this.openLandTrade(key, side),
+      landMore: () => {
+        this.s.land.page = Math.max(1, Math.floor(Number(this.s.land.page) || 1)) + 1;
+        this.ui.render();
+      },
+      landSort: (k) => {
+        this.s.land.sort = k;
+        this.s.land.page = 1;
+        this.save();
+        this.ui.render();
+      },
+      landTier: (k) => {
+        this.s.land.tier = k;
+        this.s.land.page = 1;
+        this.save();
+        this.ui.render();
+      },
+      refreshLand: async () => {
+        if (!this.cloud.signedIn) {
+          this.ui.toast('상단의 Google 로그인 후 이용할 수 있습니다', 'red');
+          return;
+        }
+        await this.cloud.refreshProperty();
+        this.syncProperty();
+        this.ui.toast('부동산 정보를 새로고침했습니다', 'green');
+      },
+      claimRent: () => this.openClaimRent(),
       signIn: async () => {
         this.ui.toast('구글 로그인 창을 여는 중…');
         const r = await this.cloud.signIn();
@@ -612,6 +682,155 @@ class App {
         });
       },
     };
+  }
+
+  /* ───────────── 부동산 거래 모달 ───────────── */
+  openLandTrade(key, side) {
+    const city = CITY_BY_KEY[key];
+    if (!city) return;
+    if (!this.cloud.signedIn || !this.cloud.prop) {
+      this.ui.toast('상단의 Google 로그인 후 이용할 수 있습니다', 'red');
+      return;
+    }
+    const raw = this.cloud.prop;
+    const now = Date.now();
+    const held = Math.floor(Number((raw.owned || {})[key]) || 0);
+    const max = side === 'buy' ? maxBuyQty(key, raw, now) : held;
+    if (max <= 0) {
+      this.ui.toast(side === 'buy' ? '현금이 부족하거나 잔여 공급이 없습니다' : '보유한 매물이 없습니다', 'red');
+      return;
+    }
+    const price = quoteTrade(key, side, 1, raw, now).price;
+    const cash = Number(raw.cash) || 0;
+    let qty = side === 'buy' ? Math.min(max, 10) : 1;
+    const chips = side === 'buy'
+      ? [10, 100, 1000].filter((n) => n < max).concat([max])
+      : [Math.floor(held / 2), held].filter((n, i, arr) => n > 0 && arr.indexOf(n) === i);
+
+    const body = `
+      <div class="tsum">
+        <div><span>지역</span><b>${city.emoji} ${esc(city.name)} <i>${esc(city.region)}</i></b></div>
+        <div><span>현재가</span><b>₩${won(price)}/평</b></div>
+        <div><span>${side === 'buy' ? '보유 / 잔여' : '보유'}</span><b>${won(held)}평${side === 'buy' ? ` / ${won(Math.max(0, city.supply - held))}평` : ''}</b></div>
+        <div><span>부동산 현금</span><b>₩${won(cash)}</b></div>
+      </div>
+      <div class="input-row" style="margin-top:10px">
+        <input id="landQty" type="number" inputmode="numeric" min="1" max="${max}" step="1" value="${qty}">
+        <button class="btn small ghost" id="landQtyMax" type="button">최대</button>
+      </div>
+      <div class="chips" style="margin-top:7px" id="landQtyChips">
+        ${chips.map((n) => `<button class="chip" type="button" data-q="${n}">${n === max && side === 'buy' ? `최대 ${won(n)}평` : `${won(n)}평`}</button>`).join('')}
+      </div>
+      <div class="note" id="landPrev" style="margin-top:9px"></div>`;
+
+    this.ui.modal({
+      title: side === 'buy' ? '🏠 매수' : '💰 매도',
+      sub: `${city.name} · ${city.region} · 거래세 0.01%`,
+      body,
+      actions: [
+        { label: '취소', onClick: () => {} },
+        { label: side === 'buy' ? '매수 확정' : '매도 확정', style: 'primary', onClick: () => this.doLandTrade(key, side, qty) },
+      ],
+    });
+
+    const inp = document.getElementById('landQty');
+    const prev = document.getElementById('landPrev');
+    const refresh = () => {
+      const q = Math.max(1, Math.min(max, Math.floor(Number(inp.value) || 1)));
+      qty = q;
+      const quote = quoteTrade(key, side, q, raw, now);
+      if (!quote.ok) {
+        prev.innerHTML = `<span style="color:var(--red)">${esc(quote.reason)}</span>`;
+        return;
+      }
+      prev.innerHTML =
+        side === 'buy'
+          ? `총 <b>₩${won(quote.total)}</b> + 거래세 ₩${won(quote.fee)}<br>거래 후 현금 <b>₩${won(quote.after)}</b>`
+          : `총 <b>₩${won(quote.total)}</b> − 거래세 ₩${won(quote.fee)}<br>받는 금액 <b class="gold">₩${won(quote.total - quote.fee)}</b> · 거래 후 현금 ₩${won(quote.after)}`;
+    };
+    inp.addEventListener('input', refresh);
+    inp.addEventListener('change', () => {
+      inp.value = String(Math.max(1, Math.min(max, Math.floor(Number(inp.value) || 1))));
+      refresh();
+    });
+    document.getElementById('landQtyMax').addEventListener('click', () => {
+      inp.value = String(max);
+      refresh();
+    });
+    document.getElementById('landQtyChips').addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-q]');
+      if (!b) return;
+      inp.value = b.dataset.q;
+      refresh();
+    });
+    refresh();
+  }
+
+  async doLandTrade(key, side, qty) {
+    const city = CITY_BY_KEY[key];
+    const q = Math.floor(Number(qty) || 0);
+    if (!city || q <= 0) return;
+    if (this._trading) return;
+    this._trading = true;
+    this.ui.toast('거래 처리 중…');
+    try {
+      const r = await this.cloud.tradeLand(key, side, q);
+      if (!r.ok) {
+        this.ui.toast(r.reason === 'login' ? '로그인이 필요합니다' : `거래 실패: ${r.reason}`, 'red');
+        return;
+      }
+      this.syncProperty();
+      this.save(true);
+      const total = r.quote ? r.quote.total : 0;
+      this.ui.toast(
+        `${side === 'buy' ? '🏠 매수' : '💰 매도'} ${city.emoji}${city.name} ${won(q)}평 · ₩${won(total)}`,
+        side === 'buy' ? 'green' : 'gold',
+      );
+    } catch (e) {
+      this.ui.toast('거래 중 오류가 발생했습니다', 'red');
+    } finally {
+      this._trading = false;
+    }
+  }
+
+  openClaimRent() {
+    const amt = Math.floor(Number(this.s.land.accruedRent) || 0);
+    if (!this.cloud.signedIn) {
+      this.ui.toast('상단의 Google 로그인 후 이용할 수 있습니다', 'red');
+      return;
+    }
+    if (amt < 1) {
+      this.ui.toast('아직 쌓인 임대수익이 없습니다');
+      return;
+    }
+    this.ui.modal({
+      title: '💤 임대수익 수령',
+      sub: `₩${won(amt)}`,
+      body: `<div class="note">수령하면 부동산 계정의 <b>users/{uid}/state/cash</b> 에 더해집니다.<br>RPG 골드와는 별개이며, 다른 부동산 필드는 그대로 보존됩니다.</div>`,
+      actions: [
+        { label: '취소', onClick: () => {} },
+        { label: '수령', style: 'primary', onClick: () => this.doClaimRent(amt) },
+      ],
+    });
+  }
+
+  async doClaimRent(amt) {
+    if (this._claiming) return;
+    this._claiming = true;
+    try {
+      const r = await this.cloud.claimRent(amt);
+      if (!r.ok) {
+        this.ui.toast(r.reason === 'login' ? '로그인이 필요합니다' : String(r.reason || '수령에 실패했습니다'), 'red');
+        return;
+      }
+      this.s.land.accruedRent = Math.max(0, (Number(this.s.land.accruedRent) || 0) - amt);
+      this.s.land.rentAt = Date.now();
+      this.syncProperty();
+      this.save(true);
+      this.ui.toast(`💤 임대수익 ₩${won(amt)} 수령 완료`, 'gold');
+    } finally {
+      this._claiming = false;
+    }
   }
 
   async doExchange(gold, cash) {

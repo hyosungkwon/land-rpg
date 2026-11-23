@@ -732,3 +732,105 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   .q { width: 34px; height: 34px; }
   .q-ico { font-size: 15px; }
 }
+
+/* ───────────── 부동산 통합 (v2.1) ───────────── */
+/* 상단 통합 로그인 버튼: 게스트일 때 배지가 그대로 로그인 버튼이 된다 */
+.badge.login-cta {
+  cursor: pointer;
+  color: #04121f;
+  background: linear-gradient(135deg, #8fd3ff, #4aa8ea);
+  border-color: rgba(180, 230, 255, 0.6);
+  font-weight: 800;
+  padding: 5px 11px;
+  box-shadow: 0 2px 10px rgba(74, 168, 234, 0.25);
+}
+.badge.login-cta .dot { background: #04121f; }
+.badge.login-cta:active { transform: scale(0.97); }
+
+/* 서브탭 */
+.subtabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+}
+.subtab {
+  padding: 8px 4px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+  color: var(--sub);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.subtab.active { background: rgba(255, 207, 92, 0.14); color: var(--gold); border: 1px solid rgba(255, 207, 92, 0.35); }
+
+/* 내 부동산 요약 */
+.land-hero { background: linear-gradient(160deg, rgba(255, 207, 92, 0.1), rgba(18, 26, 42, 0.9) 55%); }
+.lh-label { font-size: 10.5px; color: var(--sub); font-weight: 700; }
+.lh-total { font-size: 26px; font-weight: 900; letter-spacing: -0.8px; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.lh-sub { font-size: 10.5px; color: var(--sub); margin-top: 3px; }
+.lh-sub b { color: var(--txt); }
+.lgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 11px; }
+.lgrid > div {
+  padding: 8px 9px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--line);
+}
+.lgrid span { display: block; font-size: 9.5px; color: var(--dim); font-weight: 700; }
+.lgrid b { display: block; font-size: 13px; font-weight: 800; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.lgrid b.gold { color: var(--gold); }
+
+.rent-num { font-size: 22px; font-weight: 900; color: var(--green); font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
+
+/* 보유 매물 행 */
+.hold { display: flex; align-items: center; gap: 9px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.hold:last-child { border-bottom: 0; }
+.h-ico { flex: 0 0 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); }
+.h-mid { flex: 1 1 auto; min-width: 0; }
+.h-name { font-size: 12.5px; font-weight: 800; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.h-region { font-size: 9.5px; color: var(--dim); font-weight: 700; }
+.h-line { font-size: 10.5px; color: var(--sub); margin-top: 2px; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h-line b { color: var(--txt); }
+.h-line b.own { color: var(--gold); }
+
+.tag { font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 6px; color: var(--sub); background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); white-space: nowrap; }
+
+/* 매물 카드 */
+.mkt { display: flex; align-items: center; gap: 9px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.mkt:last-child { border-bottom: 0; }
+.m-ico { flex: 0 0 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 17px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); }
+.m-mid { flex: 1 1 auto; min-width: 0; }
+.m-name { font-size: 12px; font-weight: 800; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.m-region { font-size: 9px; color: var(--dim); font-weight: 700; }
+.m-line { font-size: 10.5px; color: var(--sub); margin-top: 1.5px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.m-line b { color: var(--txt); font-size: 11.5px; }
+.m-btns { flex: 0 0 auto; display: flex; flex-direction: column; gap: 4px; }
+.mini { min-width: 44px; height: 26px; padding: 0 8px; border-radius: 8px; font-size: 10.5px; font-weight: 800; border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.05); }
+.mini.buy { color: #c9f5df; border-color: rgba(94, 225, 163, 0.4); background: rgba(94, 225, 163, 0.12); }
+.mini.sell { color: #ffd9c9; border-color: rgba(255, 140, 100, 0.35); background: rgba(255, 140, 100, 0.1); }
+.mini:disabled { opacity: 0.35; }
+.mini:active { transform: scale(0.96); }
+
+.trend { font-weight: 800; font-size: 10px; }
+.trend.up { color: #ff7b7b; }
+.trend.down { color: #6fa8ff; }
+
+.srch { display: flex; align-items: center; gap: 7px; padding: 0 10px; height: 38px; border-radius: 10px; background: rgba(0, 0, 0, 0.35); border: 1px solid var(--line-2); }
+.srch span { font-size: 12px; opacity: 0.7; }
+.srch input { flex: 1 1 auto; min-width: 0; border: 0; outline: none; background: none; color: var(--txt); font-size: 14px; font-weight: 700; height: 100%; }
+.srch input::placeholder { color: var(--dim); font-weight: 600; }
+
+.empty { padding: 18px 8px; text-align: center; font-size: 11px; color: var(--dim); line-height: 1.7; }
+
+/* 거래 모달 */
+.tsum > div { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; padding: 3px 0; }
+.tsum span { color: var(--sub); }
+.tsum b { font-weight: 800; font-variant-numeric: tabular-nums; }
+.tsum i { font-style: normal; color: var(--dim); font-size: 10px; font-weight: 700; }

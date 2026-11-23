@@ -2,7 +2,10 @@
 // korea-land-4e0c2 프로젝트 연동 (korea-land-site/js/firebase.js 와 동일한 설정).
 // - Google 로그인 + RTDB 읽기(users/{uid}/state, pending_income/{nickname}, rankings)
 // - RPG 저장은 rpg/{uid} 에 시도하고, 보안 규칙 미반영으로 거부되면 localStorage 모드로 폴백.
+// - 부동산 매수/매도·임대수익 수령은 users/{uid}/state **전체 트랜잭션**으로 처리해
+//   다른 필드(achievements, dm, bank, jobs …)를 한 개도 잃지 않는다. (preserve)
 // - 골드→현금 환전은 users/{uid}/state/cash 트랜잭션(원자적).
+import { applyTrade, portfolioOf } from './land.js';
 
 const SDK = 'https://www.gstatic.com/firebasejs/10.8.0';
 const FIREBASE_CONFIG = {
@@ -239,6 +242,89 @@ export class Cloud {
     }
   }
 
+  /**
+   * users/{uid}/state 전체를 대상으로 하는 안전한 부분 변경.
+   * mutator(curState) 는 새 state 를 반환해야 하며, 기존 필드를 모두 복사해 두어야 한다.
+   * (전체 set 이 아니라 트랜잭션이므로 동시에 들어온 다른 변경도 보존된다)
+   */
+  async mutateState(mutator) {
+    if (!this.user) return { ok: false, reason: 'login' };
+    const f = this.f || (await this.loadSdk());
+    let reason = '';
+    try {
+      const r = await withTimeout(
+        f.runTransaction(f.ref(this.db, `users/${this.uid}/state`), (cur) => {
+          const out = mutator(cur && typeof cur === 'object' ? cur : {});
+          if (!out || typeof out !== 'object') {
+            reason = reason || '변경 내용이 없습니다.';
+            return undefined; // 중단
+          }
+          return out;
+        }),
+        12000,
+        'state transaction',
+      );
+      const val = r && r.snapshot ? r.snapshot.val() : null;
+      if (val) this.setPropertyState(val);
+      return { ok: true, state: val };
+    } catch (e) {
+      this.lastError = String(e && (e.code || e.message));
+      return { ok: false, reason: reason || 'rules', error: this.lastError };
+    }
+  }
+
+  /** 트랜잭션 결과 state 를 로컬 사본에 반영 (pending income 유지) */
+  setPropertyState(val) {
+    const pending = this.prop && this.prop._pendingIncome ? this.prop._pendingIncome : 0;
+    this.prop = val ? { ...val, _pendingIncome: pending } : null;
+  }
+
+  /** 부동산 매수/매도 — 표시 가격이 아니라 트랜잭션 시점의 최신 상태로 검증한다. */
+  async tradeLand(key, side, qty) {
+    if (!this.user) return { ok: false, reason: 'login' };
+    const f = this.f || (await this.loadSdk());
+    // 트랜잭션은 로컬 캐시를 기준으로 시작하므로, 먼저 최신 state 를 읽어 둔다.
+    if (!this.prop) await this.refreshProperty();
+    let applied = null;
+    try {
+      const r = await withTimeout(
+        f.runTransaction(f.ref(this.db, `users/${this.uid}/state`), (cur) => {
+          const base = cur && typeof cur === 'object' ? cur : {};
+          const out = applyTrade(base, key, side, qty, Date.now());
+          applied = out;
+          if (!out.ok) return undefined; // 잔여 공급/현금 부족 → 중단
+          return out.state;
+        }),
+        12000,
+        'land trade',
+      );
+      const val = r && r.snapshot ? r.snapshot.val() : null;
+      if (val) this.setPropertyState(val);
+      if (!applied || !applied.ok) return { ok: false, reason: (applied && applied.reason) || '거래가 취소되었습니다.' };
+      return { ok: true, quote: applied.quote, state: val };
+    } catch (e) {
+      this.lastError = String(e && (e.code || e.message));
+      return { ok: false, reason: (applied && applied.reason) || 'rules', error: this.lastError };
+    }
+  }
+
+  /** 미수령 임대수익 → 부동산 현금 (전체 state 트랜잭션) */
+  async claimRent(amount) {
+    const amt = Math.floor(Number(amount) || 0);
+    if (!this.user) return { ok: false, reason: 'login' };
+    if (amt <= 0) return { ok: false, reason: '수령할 수익이 없습니다.' };
+    if (!this.prop) await this.refreshProperty();
+    const r = await this.mutateState((cur) => {
+      const next = { ...cur };
+      next.cash = (Number(cur.cash) || 0) + amt;
+      const p = portfolioOf(next, Date.now());
+      next.bestAsset = Math.max(Number(cur.bestAsset) || 0, Math.floor(p.totalAsset));
+      return next;
+    });
+    if (!r.ok) return { ok: false, reason: r.reason === 'login' ? 'login' : '거래를 반영하지 못했습니다.', error: r.error };
+    return { ok: true, cash: Number((r.state || {}).cash) || 0 };
+  }
+
   /** 골드 → 부동산 현금. users/{uid}/state/cash 원자적 증가 */
   async addCash(cash) {
     if (!this.user) return { ok: false, reason: 'login' };
@@ -251,7 +337,7 @@ export class Cloud {
       );
       const newVal = r && r.snapshot ? Number(r.snapshot.val()) || 0 : null;
       if (this.prop) this.prop.cash = newVal === null ? (Number(this.prop.cash) || 0) + cash : newVal;
-      return { ok: true, cash: newVal };
+      return { ok: true, cash: newVal, snapshot: r && r.snapshot ? r.snapshot : null };
     } catch (e) {
       this.lastError = String(e && (e.code || e.message));
       return { ok: false, reason: 'rules', error: this.lastError };

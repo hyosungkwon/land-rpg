@@ -8,8 +8,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="영지 RPG">
-<meta name="description" content="부동산 거래소와 연동되는 모바일 방치형 RPG 프로토타입">
-<title>⚔️ 영지 RPG · 방치형</title>
+<meta name="description" content="Google 로그인 한 번으로 부동산 거래소와 방치형 RPG를 함께 즐기는 모바일 PWA">
+<title>⚔️ 영지 RPG · 부동산 거래소</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -22,9 +22,9 @@
   <!-- 상단 상태줄: 동기화 상태 + 재화 -->
   <header class="hud" id="hud">
     <div class="hud-l">
-      <span class="badge" id="syncBadge" data-kind="guest">
-        <i class="dot"></i><b id="syncLabel">로컬 저장</b>
-      </span>
+      <button class="badge login-cta" id="syncBadge" type="button" data-kind="guest" aria-label="Google 로그인">
+        <i class="dot"></i><b id="syncLabel">Google 로그인</b>
+      </button>
     </div>
     <div class="hud-r">
       <span class="res"><span class="ico">💰</span><b id="goldVal">0</b></span>
@@ -74,7 +74,7 @@
   <nav class="tabbar" id="tabbar">
     <button class="tab active" data-tab="hunt" type="button"><span>⚔️</span><b>사냥/스킬</b></button>
     <button class="tab" data-tab="gear" type="button"><span>🎒</span><b>장비/강화</b></button>
-    <button class="tab" data-tab="land" type="button"><span>🏢</span><b>부동산 연계</b></button>
+    <button class="tab" data-tab="land" type="button"><span>🏢</span><b>부동산</b></button>
     <button class="tab" data-tab="more" type="button"><span>🏆</span><b>랭킹/설정</b></button>
   </nav>
 </div>

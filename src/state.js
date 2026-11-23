@@ -36,6 +36,8 @@ export function defaultState(now = nowMs()) {
     effects: true,
     exchange: { day: '', used: 0 },
     claim: { dividendWatermark: 0 },
+    // 부동산 게임 UI/임대수익 적립 상태 (사냥 진행도와 별개)
+    land: { sub: 'home', q: '', tier: 'all', sort: 'roi', page: 1, accruedRent: 0, rentAt: now },
     records: { totalGold: 0, playMs: 0, firstPlay: now },
     lastOffline: null,
   };
@@ -54,6 +56,14 @@ export function normalizeState(raw, now = nowMs()) {
   }
   s.exchange = { ...d.exchange, ...(raw.exchange || {}) };
   s.claim = { ...d.claim, ...(raw.claim || {}) };
+  s.land = { ...d.land, ...(raw.land || {}) };
+  s.land.accruedRent = Math.max(0, num(s.land.accruedRent, 0));
+  s.land.rentAt = num(s.land.rentAt, now);
+  s.land.page = Math.max(1, Math.floor(num(s.land.page, 1)));
+  if (!['home', 'market', 'rpg'].includes(s.land.sub)) s.land.sub = 'home';
+  if (!['all', '0', '1', '2', 'owned'].includes(String(s.land.tier))) s.land.tier = 'all';
+  if (!['roi', 'price', 'trend', 'name'].includes(s.land.sort)) s.land.sort = 'roi';
+  s.land.q = typeof s.land.q === 'string' ? s.land.q.slice(0, 30) : '';
   s.records = { ...d.records, ...(raw.records || {}) };
 
   s.level = Math.max(1, Math.floor(num(s.level, 1)));
