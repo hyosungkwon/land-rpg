@@ -910,7 +910,9 @@ export class Renderer {
       ctx.font = `800 ${Math.round(9 * Math.max(0.85, sc))}px ${FONT}`;
       ctx.textAlign = 'center';
       ctx.fillStyle = hexA(pet.color, 0.95);
-      ctx.fillText(`${pet.emoji || ''} ${pet.name}`.trim(), Math.max(30 * sc, x), gy - h - 3);
+      const label = `${pet.emoji || ''} ${pet.name}`.trim();
+      const tw = ctx.measureText(label).width || 0;
+      ctx.fillText(label, Math.max(tw / 2 + 3, x), gy - h - 3);
       ctx.restore();
     }
   }
