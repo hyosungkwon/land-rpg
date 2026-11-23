@@ -314,11 +314,7 @@ class App {
       let done = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (done) return;
-        try {
-          if (sessionStorage.getItem('land_rpg_sw_reloaded') === '1') return;
-          sessionStorage.setItem('land_rpg_sw_reloaded', '1');
-        } catch (e) { /* ignore */ }
-        done = true;
+        done = true; // 페이지당 한 번만 (새로고침 뒤에는 컨트롤러가 최신이라 다시 발생하지 않음)
         this.save(true);
         setTimeout(() => location.reload(), 350);
       });
