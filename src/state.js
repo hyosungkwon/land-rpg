@@ -227,7 +227,7 @@ export function gearRarityAvg(s) {
   const ids = Object.keys(gr);
   if (!ids.length) return 0;
   const sum = ids.reduce((a, k) => a + (RARITY_INDEX[gr[k]] || 0), 0);
-  return Math.round(sum / ids.length);
+  return Math.ceil(sum / ids.length - 1e-9);
 }
 
 export function weaponRarityIdx(s) {

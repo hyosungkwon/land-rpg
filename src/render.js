@@ -60,7 +60,7 @@ export class Renderer {
     this.drops = []; // 몬스터 사망 시 튀어오르는 금화/보석 (자석 드롭)
     this.bossAlert = 0; // BOSS 등장 경고 시작 시각
     this.onLoot = null; // (kind) => void  · 코인/보석이 캐릭터에 빨려 들어올 때
-    this._rar = { weapon: 0, avg: 0 };
+    this._rar = { weapon: 0, avg: 0, hasLegend: false };
     this.shake = 0;
     this.flash = 0; // 흰색 화면 플래시
     this.redFlash = 0; // 피격 붉은 플래시
@@ -493,7 +493,7 @@ export class Renderer {
   syncRarity() {
     const s = this.battle && this.battle.s;
     const gr = s && s.gearRarity;
-    if (!gr) { this._rar = { weapon: 0, avg: 0 }; return this._rar; }
+    if (!gr) { this._rar = { weapon: 0, avg: 0, hasLegend: false }; return this._rar; }
     const key = `${gr.weapon}|${gr.armor}|${gr.helmet}|${gr.ring}|${gr.amulet}`;
     if (this._rarKey === key) return this._rar;
     this._rarKey = key;
@@ -501,13 +501,14 @@ export class Renderer {
     const sum = ids.reduce((a, k) => a + (RARITY_INDEX[gr[k]] || 0), 0);
     this._rar = {
       weapon: RARITY_INDEX[gr.weapon] || 0,
-      avg: ids.length ? Math.round(sum / ids.length) : 0,
+      avg: ids.length ? Math.ceil(sum / ids.length - 1e-9) : 0,
+      hasLegend: ids.some((k) => gr[k] === 'legend'),
     };
     return this._rar;
   }
 
   drawAura(ctx, px, gy, h, sc, now) {
-    const idx = this._rar.avg;
+    const idx = this._rar.hasLegend ? RARITIES.length - 1 : this._rar.avg;
     const info = RARITIES[idx] || RARITIES[0];
     const pulse = 0.5 + 0.5 * Math.sin(now / 420);
     const strength = 0.26 + idx * 0.14;
