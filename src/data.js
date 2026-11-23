@@ -2,7 +2,7 @@
 // 밸런스·몬스터·장비·스킬 정의. DOM 의존 없음(헤드리스 테스트 가능).
 // v3: 게스트 전용 통합 경제 — 골드 하나로 사냥과 부동산을 함께 굴린다.
 
-export const APP_VERSION = '3.0.5';
+export const APP_VERSION = '3.1.0';
 export const SAVE_KEY = 'land_rpg_unified_v3';
 export const SAVE_VERSION = 3;
 
@@ -175,6 +175,74 @@ export const EQUIP = {
   ring: { name: '반지', icon: '💍', stat: '치명타', per: 0.5, unit: '%', desc: '강화 1당 치명타 확률 +0.5%' },
   amulet: { name: '부적', icon: '🧿', stat: '골드 획득', per: 2, unit: '%', desc: '강화 1당 골드 획득 +2%' },
 };
+
+/* ────────────────────────────── 장비 등급(뽑기) ──────────────────────────────
+ * v3.1: 강화 레벨(0~100)은 그대로 두고, 장비 '등급'을 뽑기로 얻는다.
+ *  - 등급은 강화 레벨에 준하는 보정(RARITY_BONUS_LV)을 더해 스탯을 올린다.
+ *  - 일반=황금 / 고급=초록 / 레어=파랑 / 영웅=보라 / 전설=불타는 적금빛(파티클)
+ *  - 오라·검기 색은 캐릭터에 장착된 등급에서 그대로 나온다(render.js).
+ */
+export const RARITIES = [
+  {
+    id: 'common', name: '일반', weight: 52, bonusLv: 0, dust: 2,
+    color: '#ffcf5c', glow: 'rgba(255,207,92,0.55)',
+    slash: { core: '#fff3cf', mid: '#ffd76a', glow: '#ffb347' },
+  },
+  {
+    id: 'advanced', name: '고급', weight: 28, bonusLv: 4, dust: 6,
+    color: '#5ee1a3', glow: 'rgba(94,225,163,0.55)',
+    slash: { core: '#eafff4', mid: '#5ee1a3', glow: '#1f9c66' },
+  },
+  {
+    id: 'rare', name: '레어', weight: 13, bonusLv: 9, dust: 14,
+    color: '#69c0ff', glow: 'rgba(105,192,255,0.6)',
+    slash: { core: '#eaf7ff', mid: '#69c0ff', glow: '#2f7fd8' },
+  },
+  {
+    id: 'hero', name: '영웅', weight: 5.5, bonusLv: 16, dust: 30,
+    color: '#b98bff', glow: 'rgba(185,139,255,0.62)',
+    slash: { core: '#f3e8ff', mid: '#b98bff', glow: '#7d45e0' },
+  },
+  {
+    id: 'legend', name: '전설', weight: 1.5, bonusLv: 25, dust: 70, fire: true,
+    color: '#ff7a3d', glow: 'rgba(255,122,61,0.7)',
+    slash: { core: '#fff2c4', mid: '#ff9a3d', glow: '#ff3b2f' },
+  },
+];
+
+export const RARITY_INDEX = RARITIES.reduce((m, r, i) => { m[r.id] = i; return m; }, {});
+export const RARITY_IDS = RARITIES.map((r) => r.id);
+
+/** 등급 id → 강화 레벨 환산 보정 */
+export function rarityBonusLv(id) {
+  const r = RARITIES[RARITY_INDEX[id] || 0];
+  return r ? r.bonusLv : 0;
+}
+export function rarityInfo(id) {
+  return RARITIES[RARITY_INDEX[id] || 0];
+}
+
+/* ────────────────────────────── 뽑기 규칙 ──────────────────────────────
+ * 골드 또는 강화석으로 1회/10회. 10회는 10% 할인 + 최소 레어 1개 보장.
+ * 40회 안에 전설 1개 확정(천장). 중복은 강화석으로 자동 분해된다.
+ */
+export const GACHA = {
+  goldCost: 600,
+  shardCost: 10,
+  tenDiscount: 0.9,
+  pityLegend: 40,
+  tenGuarantee: 'rare',
+  maxSlotsPerPull: 10,
+};
+
+/** 뽑기 가격 계산 — cur: 'gold' | 'shards', times: 1 | 10 */
+export function gachaCost(cur = 'gold', times = 1) {
+  const n = times >= 10 ? 10 : 1;
+  const key = cur === 'shards' ? 'shards' : 'gold';
+  const unit = key === 'shards' ? GACHA.shardCost : GACHA.goldCost;
+  const amount = Math.round(unit * n * (n === 10 ? GACHA.tenDiscount : 1));
+  return { cur: key, n, amount };
+}
 
 export const ENHANCE_COST_BASE = 2;
 export const ENHANCE_COST_GROWTH = 1.06;

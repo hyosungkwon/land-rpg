@@ -1,7 +1,10 @@
 // land-rpg / src/ui.js
 // 하단 탭 UI · HUD · 토스트/모달. 상태는 app.js 를 통해 읽고, 조작은 actions 로 넘긴다.
 // v3: 게스트 전용 — 로그인/클라우드 UI 없이 [사냥/스킬 | 장비/강화 | 부동산 | 설정].
-import { APP_VERSION, ECON, EQUIP, EQUIP_MAX_LV, SKILLS, skillCost, enhanceCost } from './data.js';
+import {
+  APP_VERSION, ECON, EQUIP, EQUIP_MAX_LV, SKILLS, skillCost, enhanceCost,
+  RARITIES, RARITY_INDEX, GACHA, gachaCost, rarityBonusLv,
+} from './data.js';
 import { expNeed, skillEffect, shardPrice } from './state.js';
 import {
   CITIES, LAND, portfolioOf, computeBuffs, buffProgress, formatGold, priceInfo,
@@ -44,6 +47,8 @@ export class UI {
       modalCard: document.getElementById('modalCard'),
       boot: document.getElementById('boot'),
       offlinePill: document.getElementById('offlinePill'),
+      soundBtn: document.getElementById('soundBtn'),
+      soundIco: document.getElementById('soundIco'),
     };
     this.logs = [];
     this.lastLive = 0;
@@ -90,6 +95,11 @@ export class UI {
 
     this.el.bossBtn.addEventListener('click', () => this.app.actions.challengeBoss());
 
+    if (this.el.soundBtn) {
+      this.el.soundBtn.addEventListener('click', () => this.app.actions.toggleSound());
+    }
+    this.syncSound();
+
     this.el.modalRoot.addEventListener('click', (e) => {
       if (e.target.closest('[data-modal-close]')) this.closeModal();
     });
@@ -104,6 +114,9 @@ export class UI {
       case 'boss': actions.challengeBoss(); break;
       case 'toggle-auto': actions.toggleAutoBoss(); break;
       case 'toggle-effects': actions.toggleEffects(); break;
+      case 'toggle-sound': actions.toggleSound(); break;
+      case 'gacha': actions.pullGacha(Number(v) || 1); break;
+      case 'gacha-cur': actions.gachaCur(v); break;
       case 'cast': actions.castSkill(v); break;
       case 'upgrade-skill': actions.upgradeSkill(v); break;
       case 'enhance': actions.enhance(btn.dataset.slot, 1); break;
@@ -210,6 +223,16 @@ export class UI {
     const setT = (el, v) => { if (el && el.textContent !== v) el.textContent = v; };
     setT(this.el.asset, p.pyeong.toLocaleString());
     setT(this.el.rentHr, `+${formatGold(p.incomePerHour)}/h`);
+    const on = this.s.soundOn !== false;
+    if (this.el.soundIco && this.el.soundIco.textContent !== (on ? '🔊' : '🔇')) this.el.soundIco.textContent = on ? '🔊' : '🔇';
+    if (this.el.soundBtn) {
+      this.el.soundBtn.classList.toggle('off', !on);
+      this.el.soundBtn.setAttribute('aria-label', on ? '효과음 끄기' : '효과음 켜기');
+    }
+  }
+
+  syncSound() {
+    this.refreshHeader();
   }
 
   refreshPanelLive(now) {
@@ -490,6 +513,68 @@ function tplHunt(ui) {
 }
 
 /* ══════════════════════════ 장비/강화 ══════════════════════════ */
+const rarityBadge = (id) => {
+  const r = RARITIES[RARITY_INDEX[id] || 0];
+  return `<span class="rb ${r.id}">${r.name}</span>`;
+};
+
+const rarityName = (id) => (RARITIES[RARITY_INDEX[id] || 0] || RARITIES[0]).name;
+
+function gachaCard(ui) {
+  const s = ui.s;
+  const g = s.gacha || { pity: 0, total: 0, best: 'common', cur: 'gold' };
+  const cur = g.cur === 'shards' ? 'shards' : 'gold';
+  const unit = cur === 'shards' ? '💎' : '💰';
+  const c1 = gachaCost(cur, 1);
+  const c10 = gachaCost(cur, 10);
+  const can1 = (s[cur] || 0) >= c1.amount;
+  const can10 = (s[cur] || 0) >= c10.amount;
+  const pity = Math.max(0, Math.min(GACHA.pityLegend - 1, Math.floor(g.pity || 0)));
+  const left = GACHA.pityLegend - pity;
+
+  const equipped = Object.entries(EQUIP)
+    .map(([slot, def]) => `<span class="eq-chip">${def.icon}${rarityBadge(s.gearRarity[slot])}</span>`)
+    .join('');
+
+  const rates = RARITIES.map(
+    (r) => `<span class="rate-chip"><span class="rb ${r.id}">${r.name}</span><b>${r.weight}%</b></span>`,
+  ).join('');
+
+  return `
+  <div class="card gacha-card">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🎁</span>장비 뽑기 <small>일반 → 전설</small></div>
+      <span class="tiny dim">최고 <b style="color:var(--gold)">${rarityName(g.best)}</b></span>
+    </div>
+    <div class="rates">${rates}</div>
+    <div class="row" style="margin-top:8px">
+      <span class="tiny muted">천장까지 <b style="color:var(--gold)">${left}회</b> <span class="dim">· ${GACHA.pityLegend}회 내 전설 확정</span></span>
+      <span class="tiny dim">누적 ${fmt(g.total)}회</span>
+    </div>
+    <div class="prog" style="margin-top:5px"><i style="width:${(pity / GACHA.pityLegend) * 100}%"></i></div>
+    <div class="row gap8" style="margin-top:9px">
+      <div class="chips grow" style="margin:0">
+        <button class="chip ${cur === 'gold' ? 'on' : ''}" data-action="gacha-cur" data-value="gold">💰 골드</button>
+        <button class="chip ${cur === 'shards' ? 'on' : ''}" data-action="gacha-cur" data-value="shards">💎 강화석</button>
+      </div>
+      <span class="tiny dim">보유 ${unit}<b style="color:var(--txt)" data-live="${cur}">${fmt(s[cur])}</b></span>
+    </div>
+    <div class="gacha-btns">
+      <button class="btn gacha-btn" data-action="gacha" data-value="1" ${can1 ? '' : 'disabled'}>
+        🎁 1회<small>${unit}${fmt(c1.amount)}</small>
+      </button>
+      <button class="btn gacha-btn ten" data-action="gacha" data-value="10" ${can10 ? '' : 'disabled'}>
+        🎉 10회 연속<small>${unit}${fmt(c10.amount)} · 레어+ 보장</small>
+      </button>
+    </div>
+    <div class="equipped">${equipped}</div>
+    <div class="note" style="margin-top:9px">
+      더 높은 등급은 <b>자동 장착</b>, 중복·교체된 장비는 <b>강화석으로 자동 분해</b>됩니다.
+      등급은 강화 레벨에 <b>보정</b>으로 더해지고, 발밑 <b>오라</b>와 <b>검기 색</b>이 장착 등급을 따라갑니다.
+    </div>
+  </div>`;
+}
+
 function tplGear(ui) {
   const s = ui.s;
   const st = ui.battle.stats;
@@ -500,17 +585,21 @@ function tplGear(ui) {
   const rows = Object.entries(EQUIP)
     .map(([slot, def]) => {
       const lv = s.equip[slot];
+      const rid = s.gearRarity[slot];
+      const bonus = rarityBonusLv(rid);
       const maxed = lv >= EQUIP_MAX_LV;
       const cost = enhanceCost(lv);
-      const cur = def.per * lv;
-      const next = def.per * (lv + 1);
+      const effLv = lv + bonus;
+      const cur = def.per * effLv;
+      const next = def.per * (effLv + 1);
       const unitText = (v) => (slot === 'ring' ? `${v.toFixed(1)}%` : slot === 'amulet' ? `+${Math.round(v)}%` : `+${fmt(v)}`);
       return `
       <div class="gear-row">
         <div class="g-ico">${def.icon}</div>
         <div class="g-mid">
-          <div class="g-name">${def.name}<span class="lv">+${lv}</span></div>
+          <div class="g-name">${def.name}${rarityBadge(rid)}<span class="lv">+${lv}</span></div>
           <div class="g-stat">${def.stat} ${unitText(cur)}${maxed ? ' · 최대' : ` → <b style="color:var(--green)">${unitText(next)}</b>`}</div>
+          ${bonus > 0 ? `<div class="g-rar">등급 보정 +${bonus}강 상당</div>` : ''}
         </div>
         <div class="s-actions">
           <button class="btn small blue" data-action="enhance" data-slot="${slot}" ${maxed || s.shards < cost ? 'disabled' : ''}>
@@ -523,6 +612,8 @@ function tplGear(ui) {
     .join('');
 
   return `
+  ${gachaCard(ui)}
+
   <div class="card">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🎒</span>장비 강화 <small>5부위</small></div>
@@ -540,18 +631,19 @@ function tplGear(ui) {
     </div>
     <div style="margin-top:10px">${rows}</div>
     <div class="note" style="margin-top:10px">
-      강화는 <b>실패 없이 100% 성공</b>합니다. 강화석은 사냥 드롭·보스 처치·스테이지 클리어로 모입니다.
+      강화는 <b>실패 없이 100% 성공</b>합니다. 강화석은 사냥 드롭·보스 처치·스테이지 클리어·뽑기 분해로 모입니다.
       ${s.equip.ring === 0 ? '<br>반지는 치명타 확률, 부적은 골드 획득량을 올립니다.' : ''}
     </div>
   </div>
 
   <div class="card">
-    <div class="card-head"><div class="card-title"><span class="t-ico">📈</span>부위별 효과</div></div>
+    <div class="card-head"><div class="card-title"><span class="t-ico">📈</span>부위별 효과</div><span class="tiny dim">등급 보정 포함</span></div>
     <div class="kv"><span class="k">⚔️ 무기</span><span class="v">공격력 +${EQUIP.weapon.per}/강화</span></div>
     <div class="kv"><span class="k">🛡️ 갑옷</span><span class="v">체력 +${EQUIP.armor.per}/강화</span></div>
     <div class="kv"><span class="k">🪖 투구</span><span class="v">체력 +${EQUIP.helmet.per}/강화</span></div>
     <div class="kv"><span class="k">💍 반지</span><span class="v">치명타 +${EQUIP.ring.per}%/강화</span></div>
     <div class="kv"><span class="k">🧿 부적</span><span class="v">골드 +${EQUIP.amulet.per}%/강화</span></div>
+    <div class="kv"><span class="k">🏅 등급 보정</span><span class="v">일반 +0 · 고급 +4 · 레어 +9 · 영웅 +16 · 전설 +25강</span></div>
   </div>
 
   <div class="card">
@@ -885,6 +977,8 @@ function tplSettings(ui) {
       <div class="stat gold"><div class="k">누적 사냥 골드</div><div class="v">${formatGold(s.records.totalGold || 0)}</div></div>
       <div class="stat"><div class="k">플레이 시간</div><div class="v">${mins < 60 ? `${mins}분` : `${Math.floor(mins / 60)}시간 ${mins % 60}분`}</div></div>
       <div class="stat"><div class="k">총자산</div><div class="v">💰${formatGold(p.totalAsset)}</div></div>
+      <div class="stat gold"><div class="k">뽑기 횟수</div><div class="v">${fmt((s.gacha && s.gacha.total) || 0)}회</div></div>
+      <div class="stat crit"><div class="k">최고 장비 등급</div><div class="v">${rarityName((s.gacha && s.gacha.best) || 'common')}</div></div>
     </div>
   </div>
 
@@ -899,6 +993,10 @@ function tplSettings(ui) {
       <button class="switch ${s.effects ? 'on' : ''}" data-action="toggle-effects"></button>
     </div>
     <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
+      <span class="tiny">효과음 <span class="dim">타격·코인·보스·뽑기</span></span>
+      <button class="switch ${s.soundOn !== false ? 'on' : ''}" data-action="toggle-sound"></button>
+    </div>
+    <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
       <span class="tiny">저장 방식</span>
       <span class="tiny" style="color:var(--gold)">이 기기에 자동 저장 (로그인 없음)</span>
     </div>
@@ -908,6 +1006,7 @@ function tplSettings(ui) {
   <div class="card">
     <div class="card-head"><div class="card-title"><span class="t-ico">ℹ️</span>앱 정보</div></div>
     <div class="kv"><span class="k">버전</span><span class="v">${APP_VERSION} · 게스트 통합</span></div>
+    <div class="kv"><span class="k">장비</span><span class="v">5부위 강화 + 등급 뽑기</span></div>
     <div class="kv"><span class="k">경제</span><span class="v">골드 하나 (사냥 = 부동산)</span></div>
     <div class="kv"><span class="k">부동산</span><span class="v">전국 ${CITIES.length}개 시군구</span></div>
     <div class="kv"><span class="k">저장 위치</span><span class="v">localStorage</span></div>

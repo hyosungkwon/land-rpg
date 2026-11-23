@@ -1,10 +1,10 @@
 // land-rpg / app.js
 // 앱 부트스트랩: 로컬 상태 로드(=게스트) → 전투/렌더/UI 연결 → 루프 → 자동 저장.
 // v3: 로그인·클라우드·Firebase 없음. 네트워크 대기 없이 즉시 시작하고 오프라인에서도 완전 동작.
-import { APP_VERSION, ECON, EQUIP, SKILLS, SAVE_KEY, stageDef } from './src/data.js';
+import { APP_VERSION, ECON, EQUIP, SKILLS, SAVE_KEY, stageDef, RARITIES, RARITY_INDEX } from './src/data.js';
 import {
   loadState, saveState, offlineSummary, applyOffline, tryEnhance, tryUpgradeSkill,
-  shardPrice, buyShards,
+  shardPrice, buyShards, pullGear,
 } from './src/state.js';
 import { Battle } from './src/combat.js';
 import {
@@ -13,6 +13,7 @@ import {
 } from './src/land.js';
 import { Renderer } from './src/render.js';
 import { UI } from './src/ui.js';
+import { GameSound } from './src/sound.js';
 
 // 구형 Safari / 삼성 인터넷 대비 CanvasRenderingContext2D.roundRect 폴리필
 (() => {
@@ -55,6 +56,8 @@ class App {
     this.renderer = new Renderer(document.getElementById('battle'));
     this.renderer.setBattle(this.battle);
     this.renderer.effects = this.s.effects !== false;
+    this.sound = new GameSound(this.s.soundOn !== false);
+    this.renderer.onLoot = (kind) => this.sound.coin(kind);
     this.ui = new UI(this);
     this.actions = this.makeActions();
     this.lastTs = 0;
@@ -89,6 +92,7 @@ class App {
     }
 
     this.ui.render();
+    this.bindAudioUnlock();
     // PWA 바로가기(?tab=land) 지원
     try {
       const tabParam = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('tab');
@@ -217,7 +221,10 @@ class App {
 
   handleEvents(events, now) {
     for (const ev of events) {
-      if (ev.t === 'monsterDeath') {
+      if (ev.t === 'hit') {
+        this.sound.hit(ev.crit);
+        continue;
+      } else if (ev.t === 'monsterDeath') {
         if (ev.isBoss) {
           this.ui.addLog(`👑 <b>${ev.ko}</b> 처치! 💰${ev.gold.toLocaleString()} 💎${ev.shards}`);
         } else if (ev.shards > 0) {
@@ -227,6 +234,7 @@ class App {
         this.ui.toast(`⬆️ 레벨 업! Lv.${ev.level}`, 'green');
         this.ui.addLog(`<b>레벨 업</b> Lv.${ev.level} · 체력 완충`);
         this.ui.renderIfNeeded();
+        this.sound.levelUp();
       } else if (ev.t === 'stageClear') {
         this.ui.toast(`🏅 스테이지 ${ev.stage} 클리어! 💎+${ev.bonus}`, 'gold');
         this.ui.addLog(`<b>스테이지 ${ev.stage} 클리어</b> → ${ev.next} (보너스 💎${ev.bonus})`);
@@ -235,6 +243,7 @@ class App {
         this.renderer.preload(this.stageMonsterNames(this.s.stage)).catch(() => {});
       } else if (ev.t === 'bossStart') {
         this.ui.addLog(`⚔️ <b>${ev.ko}</b> 등장 — ${ECON.bossTimeLimitMs / 1000}초 제한`);
+        this.sound.boss();
       } else if (ev.t === 'bossFail') {
         const why = ev.why === 'timeout' ? '시간 초과' : '전투 불능';
         this.ui.toast(`보스 퇴치 실패 (${why}) · 조금 더 강해져서 재도전`, 'red');
@@ -262,6 +271,16 @@ class App {
   }
 
   /* ───────────── 수명주기 ───────────── */
+  /** 모바일 브라우저 정책: 첫 터치/클릭/키 입력에서 AudioContext unlock */
+  bindAudioUnlock() {
+    const unlock = () => {
+      try { this.sound.unlock(); } catch (e) { /* ignore */ }
+    };
+    ['pointerdown', 'touchstart', 'keydown', 'click'].forEach((ev) => {
+      document.addEventListener(ev, unlock, { passive: true });
+    });
+  }
+
   bindLifecycle() {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') {
@@ -361,6 +380,37 @@ class App {
         this.renderer.effects = this.s.effects;
         this.save();
         this.ui.render();
+      },
+      toggleSound: () => {
+        this.s.soundOn = this.s.soundOn === false;
+        this.sound.setEnabled(this.s.soundOn);
+        if (this.s.soundOn) {
+          this.sound.unlock();
+          this.sound.ui();
+        }
+        this.save();
+        this.ui.render();
+        this.ui.syncSound();
+        this.ui.toast(this.s.soundOn ? '🔊 효과음 켜짐' : '🔇 효과음 꺼짐');
+      },
+      gachaCur: (cur) => {
+        this.s.gacha.cur = cur === 'shards' ? 'shards' : 'gold';
+        this.save();
+        this.ui.render();
+      },
+      pullGacha: (times) => {
+        this.sound.unlock();
+        const n = Number(times) >= 10 ? 10 : 1;
+        const r = pullGear(this.s, n, Math.random);
+        if (!r.ok) {
+          this.ui.toast(r.reason || '뽑기할 수 없습니다', 'red');
+          return;
+        }
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.gacha(r.best);
+        this.ui.render();
+        this.showGachaResult(r, n);
       },
       enhance: (slot, times) => {
         const r = tryEnhance(this.s, slot, times);
@@ -579,6 +629,40 @@ class App {
           },
         },
       ],
+    });
+  }
+
+  showGachaResult(r, n) {
+    const counts = {};
+    for (const item of r.results) counts[item.rarity] = (counts[item.rarity] || 0) + 1;
+    const summary = RARITIES.filter((x) => counts[x.id])
+      .map((x) => `<span class="rate-chip"><span class="rb ${x.id}">${x.name}</span>×${counts[x.id]}</span>`)
+      .join('');
+    const rows = r.results
+      .map((item) => {
+        const def = EQUIP[item.slot];
+        const tag = item.equipped
+          ? item.replaced && item.shards
+            ? `교체 장착 · 이전 분해 +💎${item.shards}`
+            : 'NEW 자동 장착'
+          : `중복 분해 +💎${item.shards}`;
+        return `<div class="gr-row ${item.equipped ? '' : 'dust'}">
+          <span class="ico">${def.icon}</span>
+          <span class="nm">${def.name}</span>
+          <span class="rb ${item.rarity}">${item.name}</span>
+          <span class="tag">${tag}</span>
+        </div>`;
+      })
+      .join('');
+    const best = RARITIES[RARITY_INDEX[r.best] || 0];
+    const unit = r.cur === 'shards' ? '💎' : '💰';
+    this.ui.modal({
+      title: '🎁 장비 뽑기 결과',
+      sub: `${n}회 · ${unit}${r.spent.toLocaleString()} 사용 · 최고 ${best.name}`,
+      body: `<div class="gr-sum">${summary}</div>
+             <div class="gacha-result">${rows}</div>
+             <div class="note" style="margin-top:9px">분해 💎+${r.shards} · 천장까지 ${r.pityLeft}회 · 누적 ${r.total}회</div>`,
+      actions: [{ label: '확인', style: 'primary', onClick: () => {} }],
     });
   }
 

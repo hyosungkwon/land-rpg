@@ -2,7 +2,7 @@
 // 상단 Canvas 자동사냥 뷰 렌더러. 전투 로직은 combat.js, 여기서는 그리기만 한다.
 // v2: 새 스프라이트(대기/공격/스킬 3프레임) + 검기 아크·타격 스파크·스킬 이펙트.
 //     배경은 오프스크린 캔버스에 한 번만 그려 매 프레임 비용을 줄인다(모바일 발열/멈춤 방지).
-import { ECON, THEMES, spriteSrc } from './data.js';
+import { ECON, THEMES, spriteSrc, RARITIES, RARITY_INDEX } from './data.js';
 
 const rnd = (seed) => {
   const x = Math.sin(seed * 127.1) * 43758.5453;
@@ -12,6 +12,16 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
 const easeOut = (t) => 1 - (1 - clamp(t, 0, 1)) * (1 - clamp(t, 0, 1));
 const FONT = 'system-ui, -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
+
+/** #rrggbb → rgba() */
+function hexA(hex, a) {
+  const h = String(hex || '#ffffff').replace('#', '');
+  const n = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const r = parseInt(n.slice(0, 2), 16) || 0;
+  const g = parseInt(n.slice(2, 4), 16) || 0;
+  const b = parseInt(n.slice(4, 6), 16) || 0;
+  return `rgba(${r},${g},${b},${a})`;
+}
 
 /** 둥근 사각형 경로(구형 브라우저 호환: arcTo 사용) */
 function roundRect(ctx, x, y, w, h, r) {
@@ -47,6 +57,10 @@ export class Renderer {
     this.arcs = []; // 검기 아크 (월드 단위 x, 시작시각)
     this.fx = []; // 스킬 이펙트
     this.embers = [];
+    this.drops = []; // 몬스터 사망 시 튀어오르는 금화/보석 (자석 드롭)
+    this.bossAlert = 0; // BOSS 등장 경고 시작 시각
+    this.onLoot = null; // (kind) => void  · 코인/보석이 캐릭터에 빨려 들어올 때
+    this._rar = { weapon: 0, avg: 0 };
     this.shake = 0;
     this.flash = 0; // 흰색 화면 플래시
     this.redFlash = 0; // 피격 붉은 플래시
@@ -190,8 +204,10 @@ export class Renderer {
     for (const ev of events) {
       if (ev.t === 'hit') {
         this.addFloater(ev.x, ev.dmg, ev.crit, ev.kind);
-        this.burst(ev.x, ev.crit ? '#ffd76a' : '#fff1cf', ev.crit ? 12 : 7, ev.isBoss);
+        this.burst(ev.x, ev.crit ? '#ffd76a' : '#fff1cf', ev.crit ? 18 : 8, ev.isBoss);
         if (ev.crit) {
+          this.burst(ev.x, '#ff6a4d', 7, false);
+          this.rings.push({ x: ev.x, life: 1, r: 12, color: '#ffd76a', wide: 1.8 });
           this.shake = Math.max(this.shake, 6);
           this.flash = Math.max(this.flash, 0.22);
         } else {
@@ -222,6 +238,7 @@ export class Renderer {
           this.flash = Math.max(this.flash, 0.3);
         }
         if (ev.gold) this.addFloater(ev.x, `+${ev.gold}`, false, 'gold');
+        this.spawnLoot(ev, now);
       } else if (ev.t === 'skill') {
         this.fx.push({ key: ev.key, x: ev.x || ECON.playerX, t0: now, dur: ev.key === 'whirl' ? 560 : ev.key === 'strike' ? 420 : 760 });
         if (ev.key === 'whirl') {
@@ -253,6 +270,7 @@ export class Renderer {
       } else if (ev.t === 'bossStart') {
         this.shake = 8;
         this.flash = Math.max(this.flash, 0.16);
+        this.bossAlert = now;
       } else if (ev.t === 'levelUp') {
         this.rings.push({ x: ECON.playerX, life: 1, r: 10, color: '#ffe08a', wide: 1.2 });
       }
@@ -287,6 +305,256 @@ export class Renderer {
         color,
         s: 1.6 + Math.random() * 2.2,
       });
+    }
+  }
+
+  /* ─────────── 코인/보석 자석 드롭 ───────────
+   * 몬스터가 죽으면 금화·보석이 포물선으로 튀어오르고, 0.4초 뒤 캐릭터로 빨려 들어간다.
+   */
+  spawnLoot(ev, now = Date.now()) {
+    if (!this.effects) return;
+    const gy = this.groundY();
+    const px = this.worldX(ev.x);
+    const coins = ev.isBoss ? 9 : Math.max(2, Math.min(6, 1 + Math.round(Math.log10(Math.max(10, ev.gold || 10)) * 1.6)));
+    for (let i = 0; i < coins; i++) this.pushDrop(px, gy, 'gold', now, i);
+    const gems = Math.min(3, Math.max(0, ev.shards || 0));
+    for (let i = 0; i < gems; i++) this.pushDrop(px, gy, 'gem', now, i + coins);
+    if (this.drops.length > 60) this.drops.splice(0, this.drops.length - 60);
+  }
+
+  pushDrop(x, gy, kind, now, i) {
+    const sc = this.scale();
+    this.drops.push({
+      kind,
+      x: x + (Math.random() - 0.5) * 18 * sc,
+      y: gy - 10 * sc,
+      sx: null,
+      sy: null,
+      vx: (Math.random() - 0.5) * 190,
+      vy: -210 - Math.random() * 120,
+      t0: now + i * 22,
+      delay: 400 + i * 26,
+      spin: Math.random() * Math.PI * 2,
+      pop: 0.85 + Math.random() * 0.4,
+    });
+  }
+
+  drawLoot(ctx, dt, now) {
+    if (!this.drops.length) return;
+    const gy = this.groundY();
+    const sc = this.scale();
+    const tx = this.worldX(ECON.playerX);
+    const ty = gy - 58 * sc;
+    const keep = [];
+    for (const d of this.drops) {
+      const age = now - d.t0;
+      if (age < 0) { keep.push(d); continue; }
+      if (age < d.delay) {
+        // 포물선으로 튀어오르는 구간
+        d.x += (d.vx * dt) / 1000;
+        d.vy += 620 * (dt / 1000);
+        d.y += (d.vy * dt) / 1000;
+        d.spin += (dt / 1000) * 7;
+        if (d.y > gy - 3) {
+          d.y = gy - 3;
+          if (Math.abs(d.vy) < 40) d.vy = 0;
+          else d.vy = -Math.abs(d.vy) * 0.42;
+          d.vx *= 0.72;
+        }
+        this.drawLootIcon(ctx, d.x, d.y, d, sc);
+        keep.push(d);
+      } else {
+        // 자석 구간: 캐릭터 쪽으로 가속하며 빨려 들어간다
+        if (d.sx === null) { d.sx = d.x; d.sy = d.y; }
+        const k = clamp((age - d.delay) / 300, 0, 1);
+        const e = k * k;
+        d.x = lerp(d.sx, tx, e);
+        d.y = lerp(d.sy, ty, e) - Math.sin(Math.PI * k) * 26 * sc;
+        d.spin += (dt / 1000) * 12;
+        if (k >= 1) {
+          if (this.onLoot) { try { this.onLoot(d.kind); } catch (err) { /* ignore */ } }
+          for (let i = 0; i < 3; i++) {
+            this.sparks.push({
+              x: ECON.playerX + (Math.random() - 0.5) * 20,
+              y: ty + (Math.random() - 0.5) * 20,
+              life: 1, vx: (Math.random() - 0.5) * 70, vy: -30 - Math.random() * 50,
+              color: d.kind === 'gem' ? '#9fd8ff' : '#ffe08a', s: 1.6 + Math.random() * 1.6,
+            });
+          }
+          continue; // 수집 완료 → 목록에서 제거
+        }
+        // 자석 궤적 잔상
+        ctx.globalAlpha = 0.28;
+        ctx.fillStyle = d.kind === 'gem' ? '#9fd8ff' : '#ffd76a';
+        ctx.beginPath();
+        ctx.arc(d.x, d.y, 3.2 * sc, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        this.drawLootIcon(ctx, d.x, d.y, d, sc);
+        keep.push(d);
+      }
+    }
+    this.drops = keep;
+  }
+
+  drawLootIcon(ctx, x, y, d, sc) {
+    const s = (d.kind === 'gem' ? 8.5 : 7.5) * sc * (d.pop || 1);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.shadowColor = d.kind === 'gem' ? 'rgba(120,200,255,0.85)' : 'rgba(255,200,80,0.85)';
+    ctx.shadowBlur = 8 * sc;
+    if (d.kind === 'gem') {
+      const grd = ctx.createLinearGradient(0, -s, 0, s);
+      grd.addColorStop(0, '#eaf8ff');
+      grd.addColorStop(0.45, '#7fd3ff');
+      grd.addColorStop(1, '#3b7bd8');
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.moveTo(0, -s);
+      ctx.lineTo(s * 0.78, -s * 0.18);
+      ctx.lineTo(0, s);
+      ctx.lineTo(-s * 0.78, -s * 0.18);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, -s);
+      ctx.lineTo(0, s);
+      ctx.moveTo(-s * 0.78, -s * 0.18);
+      ctx.lineTo(s * 0.78, -s * 0.18);
+      ctx.stroke();
+    } else {
+      const grd = ctx.createRadialGradient(-s * 0.3, -s * 0.3, s * 0.15, 0, 0, s);
+      grd.addColorStop(0, '#fff6cf');
+      grd.addColorStop(0.55, '#ffd24a');
+      grd.addColorStop(1, '#c98a08');
+      ctx.fillStyle = grd;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, s * (0.72 + Math.abs(Math.cos(d.spin)) * 0.28), s, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,247,210,0.9)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, s * (0.4 + Math.abs(Math.cos(d.spin)) * 0.2), s * 0.62, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  /** BOSS 등장 경고 배너 (1.5초 슬라이드) */
+  drawBossAlert(ctx, W, now) {
+    if (!this.bossAlert) return;
+    const DUR = 1500;
+    const age = now - this.bossAlert;
+    if (age < 0 || age > DUR) { this.bossAlert = 0; return; }
+    const inK = easeOut(clamp(age / 240, 0, 1));
+    const outK = clamp((DUR - age) / 320, 0, 1);
+    const alpha = Math.min(inK, outK);
+    const w = Math.min(W * 0.84, 330);
+    const hgt = 52;
+    const x = (W - w) / 2;
+    const y = lerp(-hgt - 10, this.H * 0.34 - hgt / 2, inK);
+    const pulse = 0.65 + 0.35 * Math.sin(age / 90);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    // 바깥 붉은 글로우
+    ctx.shadowColor = 'rgba(255,40,40,0.85)';
+    ctx.shadowBlur = 22 * pulse;
+    const g = ctx.createLinearGradient(x, y, x, y + hgt);
+    g.addColorStop(0, 'rgba(190,20,28,0.95)');
+    g.addColorStop(0.5, 'rgba(120,8,16,0.95)');
+    g.addColorStop(1, 'rgba(190,20,28,0.95)');
+    ctx.fillStyle = g;
+    roundRect(ctx, x, y, w, hgt, 10);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = `rgba(255,190,120,${0.55 + 0.35 * pulse})`;
+    ctx.lineWidth = 2;
+    roundRect(ctx, x + 1, y + 1, w - 2, hgt - 2, 9);
+    ctx.stroke();
+    // 좌우 경고 삼각형
+    ctx.fillStyle = '#ffd76a';
+    ctx.font = `900 15px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.fillText('◤', x + 16, y + hgt * 0.62);
+    ctx.fillText('◥', x + w - 16, y + hgt * 0.62);
+    ctx.fillStyle = '#fff3e0';
+    ctx.font = `900 ${Math.round(20 * Math.min(1.2, Math.max(0.85, this.W / 390)))}px ${FONT}`;
+    ctx.fillText('⚠ BOSS APPEAR!', x + w / 2, y + hgt * 0.5);
+    const boss = this.battle && this.battle.boss;
+    ctx.fillStyle = 'rgba(255,220,190,0.92)';
+    ctx.font = `700 11px ${FONT}`;
+    ctx.fillText(boss ? `${boss.ko} 등장 — 60초 제한` : '보스 등장 — 60초 제한', x + w / 2, y + hgt * 0.82);
+    ctx.restore();
+  }
+
+  /* ─────────── 장비 등급 색 (오라·검기) ─────────── */
+  syncRarity() {
+    const s = this.battle && this.battle.s;
+    const gr = s && s.gearRarity;
+    if (!gr) { this._rar = { weapon: 0, avg: 0 }; return this._rar; }
+    const key = `${gr.weapon}|${gr.armor}|${gr.helmet}|${gr.ring}|${gr.amulet}`;
+    if (this._rarKey === key) return this._rar;
+    this._rarKey = key;
+    const ids = Object.keys(gr);
+    const sum = ids.reduce((a, k) => a + (RARITY_INDEX[gr[k]] || 0), 0);
+    this._rar = {
+      weapon: RARITY_INDEX[gr.weapon] || 0,
+      avg: ids.length ? Math.round(sum / ids.length) : 0,
+    };
+    return this._rar;
+  }
+
+  drawAura(ctx, px, gy, h, sc, now) {
+    const idx = this._rar.avg;
+    const info = RARITIES[idx] || RARITIES[0];
+    const pulse = 0.5 + 0.5 * Math.sin(now / 420);
+    const strength = 0.26 + idx * 0.14;
+    // 발밑 그라디언트
+    const grd = ctx.createRadialGradient(px, gy + 2, 3, px, gy + 2, h * 0.62);
+    grd.addColorStop(0, hexA(info.color, strength * (0.75 + pulse * 0.2)));
+    grd.addColorStop(0.55, hexA(info.color, strength * 0.35));
+    grd.addColorStop(1, hexA(info.color, 0));
+    ctx.fillStyle = grd;
+    ctx.fillRect(px - h * 0.8, gy - h * 0.55, h * 1.6, h * 0.95);
+    // 회전하는 오라 링
+    ctx.save();
+    ctx.strokeStyle = hexA(info.color, 0.55 + 0.3 * pulse);
+    ctx.lineWidth = (1.8 + idx * 0.7) * sc;
+    ctx.beginPath();
+    ctx.ellipse(px, gy + 1, h * 0.31 * (1 + 0.045 * pulse), h * 0.1 * (1 + 0.08 * pulse), 0, 0, Math.PI * 2);
+    ctx.stroke();
+    if (idx >= 2) {
+      ctx.strokeStyle = hexA(info.color, 0.3 + 0.2 * pulse);
+      ctx.lineWidth = 1.1 * sc;
+      ctx.beginPath();
+      ctx.ellipse(px, gy + 1, h * 0.42 * (1 + 0.05 * pulse), h * 0.14 * (1 + 0.06 * pulse), 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+    // 등급별 입자
+    if (idx >= 1 && this.embers.length < 130) {
+      const chance = idx >= 4 ? 0.9 : idx === 3 ? 0.45 : 0.22;
+      if (Math.random() < chance) {
+        this.embers.push({
+          x: ECON.playerX + (Math.random() - 0.5) * 54,
+          y: gy - Math.random() * 10,
+          vy: -34 - Math.random() * (idx >= 4 ? 86 : 44),
+          life: 1,
+          s: 1.2 + Math.random() * (idx >= 4 ? 2.4 : 1.6),
+          color: idx >= 4 ? (Math.random() < 0.5 ? '#ffd76a' : '#ff5a2f') : info.color,
+        });
+      }
+    }
+    // 전설: 불타는 적금빛 화염
+    if (idx >= 4) {
+      const f = ctx.createLinearGradient(px, gy - h * 0.9, px, gy);
+      f.addColorStop(0, 'rgba(255,90,40,0)');
+      f.addColorStop(0.6, `rgba(255,122,61,${0.10 + 0.06 * pulse})`);
+      f.addColorStop(1, `rgba(255,210,80,${0.16 + 0.08 * pulse})`);
+      ctx.fillStyle = f;
+      ctx.fillRect(px - h * 0.34, gy - h * 0.95, h * 0.68, h * 0.95);
     }
   }
 
@@ -330,6 +598,7 @@ export class Renderer {
     this.drawAmbient(ctx, dt, W, H);
 
     if (this.battle) {
+      this.syncRarity();
       this.drawMonsters(ctx, t, dt);
       this.drawPlayer(ctx, t, dt);
       if (this.effects) {
@@ -338,12 +607,16 @@ export class Renderer {
         this.drawRings(ctx, dt);
         this.drawSparks(ctx, dt);
         this.drawEmbers(ctx, dt);
+        this.drawLoot(ctx, dt, t);
         this.drawFloaters(ctx, dt, t);
+        this.drawBossAlert(ctx, W, t);
       } else {
         this.fx = [];
         this.rings = [];
         this.sparks = [];
         this.floaters = [];
+        this.drops = [];
+        this.bossAlert = 0;
       }
       this.drawBossBar(ctx, W, t);
     }
@@ -535,6 +808,9 @@ export class Renderer {
     ctx.ellipse(px, gy + 2, w * 0.3, w * 0.085, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    // 장비 등급 오라 (발밑·주변 색)
+    if (this.effects && !dead) this.drawAura(ctx, px, gy, h, sc, now);
+
     // 광폭 아우라
     if (b.berserkUntil > now) {
       const a = 0.2 + Math.sin(now / 90) * 0.08;
@@ -578,11 +854,13 @@ export class Renderer {
       let near = null;
       for (const m of b.monsters) if (!m.dead && !m.dying && (!near || m.x < near.x)) near = m;
       const reach = near ? Math.max(30 * sc, this.worldX(near.x) - px) : 62 * sc;
-      this.drawSlash(ctx, px, gy, h, sc, atkK, p.attackKind, Math.min(reach * 0.82, 132 * sc));
+      const wIdx = this._rar.weapon;
+      const pal = (RARITIES[wIdx] || RARITIES[0]).slash;
+      this.drawSlash(ctx, px, gy, h, sc, atkK, p.attackKind, Math.min(reach * 0.82, 132 * sc), pal, wIdx);
     }
   }
 
-  drawSlash(ctx, px, gy, h, sc, k, kind, rIn) {
+  drawSlash(ctx, px, gy, h, sc, k, kind, rIn, pal, rarityIdx = 0) {
     const cx = px + h * 0.1;
     const cy = gy - h * 0.56;
     const r = Math.max(26 * sc, rIn || h * 0.52);
@@ -590,26 +868,37 @@ export class Renderer {
     const start = -1.25;
     const sweep = lerp(0.25, 1.85, easeOut(k));
     const alpha = fade * (kind === 'whirl' ? 0.75 : 0.95);
-    const gold = kind === 'strike' ? '#ffe9a8' : '#fff3cf';
+    const core = kind === 'strike' ? '#ffe9a8' : (pal && pal.core) || '#fff3cf';
+    const mid = kind === 'strike' ? '#ffc94d' : (pal && pal.mid) || '#ffd76a';
+    const glow = kind === 'strike' ? '#ffb347' : (pal && pal.glow) || '#ffb347';
     ctx.save();
     ctx.lineCap = 'round';
+    // 전설: 불타는 외곽 광휘
+    if (rarityIdx >= 4 && kind !== 'strike') {
+      ctx.globalAlpha = alpha * 0.42;
+      ctx.strokeStyle = '#ff3b2f';
+      ctx.lineWidth = 26 * sc * fade;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, start, start + sweep);
+      ctx.stroke();
+    }
     // 바깥 글로우
-    ctx.globalAlpha = alpha * 0.35;
-    ctx.strokeStyle = kind === 'strike' ? '#ffb347' : '#ffd76a';
+    ctx.globalAlpha = alpha * (0.35 + rarityIdx * 0.05);
+    ctx.strokeStyle = glow;
     ctx.lineWidth = 20 * sc * fade;
     ctx.beginPath();
     ctx.arc(cx, cy, r, start, start + sweep);
     ctx.stroke();
     // 본체
     ctx.globalAlpha = alpha;
-    ctx.strokeStyle = '#ffc94d';
+    ctx.strokeStyle = mid;
     ctx.lineWidth = 9 * sc * fade;
     ctx.beginPath();
     ctx.arc(cx, cy, r, start, start + sweep);
     ctx.stroke();
     // 코어
     ctx.globalAlpha = alpha;
-    ctx.strokeStyle = gold;
+    ctx.strokeStyle = core;
     ctx.lineWidth = 3.5 * sc;
     ctx.beginPath();
     ctx.arc(cx, cy, r, start, start + sweep);
@@ -863,7 +1152,7 @@ export class Renderer {
     for (const e of this.embers) {
       e.y += (e.vy * dt) / 1000;
       ctx.globalAlpha = Math.max(0, e.life) * 0.8;
-      ctx.fillStyle = e.life > 0.5 ? '#ffb066' : '#ff6a4d';
+      ctx.fillStyle = e.color || (e.life > 0.5 ? '#ffb066' : '#ff6a4d');
       const x = this.worldX(e.x);
       ctx.beginPath();
       ctx.arc(x, e.y, e.s * (0.5 + e.life), 0, Math.PI * 2);
@@ -871,6 +1160,7 @@ export class Renderer {
       e.life -= dt / 900;
     }
     this.embers = this.embers.filter((e) => e.life > 0);
+    if (this.embers.length > 180) this.embers.splice(0, this.embers.length - 180);
     ctx.globalAlpha = 1;
   }
 
@@ -886,24 +1176,41 @@ export class Renderer {
       const y = gy - 46 * sc + f.y;
       ctx.globalAlpha = Math.min(1, f.life * 1.7);
       ctx.textAlign = 'center';
-      const base = f.crit ? 24 : f.kind === 'gold' ? 13 : f.kind === 'heal' ? 16 : 16;
-      const pop = f.age < 130 ? 1 + (1 - f.age / 130) * 0.45 : 1;
-      ctx.font = `900 ${base * Math.max(0.8, sc) * pop}px ${FONT}`;
-      ctx.lineWidth = 3.5;
-      ctx.strokeStyle = 'rgba(0,0,0,0.7)';
-      const color =
-        f.kind === 'gold'
-          ? '#ffd76a'
-          : f.kind === 'hurt'
-          ? '#ff8080'
-          : f.kind === 'heal'
-          ? '#9dffb4'
-          : f.crit
-          ? '#ffe08a'
-          : '#ffffff';
-      ctx.fillStyle = color;
-      ctx.strokeText(f.text, x, y);
-      ctx.fillText(f.text, x, y);
+      const base = f.crit ? 30 : f.kind === 'gold' ? 13 : f.kind === 'heal' ? 16 : 16;
+      const pop = f.age < 130 ? 1 + (1 - f.age / 130) * 0.5 : 1;
+      const size = base * Math.max(0.8, sc) * pop;
+      if (f.crit) {
+        // 크리티컬: 더 크고 굵은 외곽선 + 붉은/금빛 강조
+        ctx.font = `900 ${size}px ${FONT}`;
+        ctx.lineJoin = 'round';
+        ctx.shadowColor = 'rgba(255,110,50,0.95)';
+        ctx.shadowBlur = 16;
+        ctx.lineWidth = 6.5;
+        ctx.strokeStyle = 'rgba(70,6,0,0.92)';
+        ctx.strokeText(f.text, x, y);
+        ctx.shadowBlur = 0;
+        const cg = ctx.createLinearGradient(0, y - size, 0, y + size * 0.3);
+        cg.addColorStop(0, '#fffbe6');
+        cg.addColorStop(0.45, '#ffd76a');
+        cg.addColorStop(1, '#ff6a2a');
+        ctx.fillStyle = cg;
+        ctx.fillText(f.text, x, y);
+      } else {
+        ctx.font = `900 ${size}px ${FONT}`;
+        ctx.lineWidth = 3.5;
+        ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+        const color =
+          f.kind === 'gold'
+            ? '#ffd76a'
+            : f.kind === 'hurt'
+            ? '#ff8080'
+            : f.kind === 'heal'
+            ? '#9dffb4'
+            : '#ffffff';
+        ctx.fillStyle = color;
+        ctx.strokeText(f.text, x, y);
+        ctx.fillText(f.text, x, y);
+      }
       f.life -= dt / 900;
     }
     this.floaters = this.floaters.filter((f) => f.life > 0);

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""land-rpg v3.0.0 게스트 통합판 검증 (QuickJS + 정적 검사)
+"""land-rpg v3.1.0 검증 (QuickJS + 정적 검사)
 
 1) 모든 JS 파일 문법(파싱) 검사
-2) 게스트 전용 정적 검사 (Firebase/로그인 흔적 0, 저장 키 v3, sw 캐시 v3)
+2) 정적 검사 (Firebase/로그인 흔적 0, 저장 키 v3, sw 캐시 v3.1)
 3) 통합 경제 단위 검증 (가격 스케일·매수/매도·임대·건물주 버프·강화석 시세·저장 정규화)
-4) 밸런스 시뮬레이션 (1~10 쾌적 / 10~22 장비·버프 필요 / 방치보다 적극 플레이가 앞섬)
+4) 장비 뽑기·등급·연출·효과음 검사 (v3.1)
+5) 밸런스 시뮬레이션 (1~10 쾌적 / 10~22 장비·버프 필요 / 방치보다 적극 플레이가 앞섬)
 
 사용: python3 tools/verify_v3.py
 """
@@ -17,7 +18,7 @@ import quickjs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FILES = ["src/data.js", "src/land-data.js", "src/land.js", "src/state.js", "src/combat.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/land-data.js", "src/land.js", "src/state.js", "src/combat.js", "src/render.js", "src/ui.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/land-data.js", "src/land.js", "src/state.js", "src/combat.js", "src/render.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -86,7 +87,10 @@ def main():
     for bad in ["firebase", "signInWithPopup", "Google 로그인", "gstatic", "firebaseio", "googleapis"]:
         ok(bad.lower() not in text_all.lower(), f"Firebase/로그인 흔적 없음: {bad}")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v3.0.6" in read("sw.js"), "SW 캐시 버전 v3.0.6")
+    ok("land-rpg-v3.1.0" in read("sw.js"), "SW 캐시 버전 v3.1.0")
+    ok("APP_VERSION = '3.1.0'" in read("src/data.js"), "앱 버전 v3.1.0")
+    ok(os.path.exists(os.path.join(ROOT, "src/sound.js")), "src/sound.js 존재")
+    ok("'./src/sound.js'" in read("sw.js"), "sw.js 프리캐시에 sound.js 포함")
     ok(not os.path.exists(os.path.join(ROOT, "src/firebase.js")), "firebase.js 제거")
     ok(not os.path.exists(os.path.join(ROOT, "src/property.js")), "구 property.js 제거")
     sw = read("sw.js")
@@ -249,9 +253,138 @@ def main():
     ok(all(v > 200 for v in tpl["lens"].values()), "모든 탭/서브탭이 렌더됨", json.dumps(tpl["lens"]))
     ok("매물" in tpl["land"] and "건물주" in tpl["land"], "부동산 탭 구성", "")
     ok("강화석 구매" in tpl["gear"] and "장비 강화" in tpl["gear"], "장비 탭 구성", "")
+    ok("장비 뽑기" in tpl["gear"] and "10회 연속" in tpl["gear"], "장비 탭 상단 뽑기 카드", "")
+    ok("천장" in tpl["gear"] and "자동 분해" in tpl["gear"], "뽑기 천장/분해 안내", "")
+    ok("전설" in tpl["gear"] and "영웅" in tpl["gear"], "뽑기 확률 안내(전설·영웅)", "")
     ok("게임 초기화" in tpl["settings"] and "localStorage" in tpl["settings"], "설정 탭 구성", "")
+    ok("효과음" in tpl["settings"], "설정 탭 효과음 토글", "")
 
-    section("[5] 밸런스 시뮬레이션 (60분)")
+    section("[5] 장비 뽑기 · 등급 연출 · 효과음 (v3.1)")
+    rar = js(ctx, """
+      return {
+        names: RARITIES.map(r => r.name),
+        ids: RARITIES.map(r => r.id),
+        colors: RARITIES.map(r => r.color),
+        bonus: RARITIES.map(r => r.bonusLv),
+        weightSum: RARITIES.reduce((a, r) => a + r.weight, 0),
+        fire: !!RARITIES[4].fire,
+        legendSlash: RARITIES[4].slash.mid,
+      };
+    """)
+    ok(rar["names"] == ["일반", "고급", "레어", "영웅", "전설"], "등급 5단계 순서", json.dumps(rar["names"], ensure_ascii=False))
+    ok(rar["weightSum"] == 100, "등급 확률 합 100%", str(rar["weightSum"]))
+    ok(len(set(rar["colors"])) == 5, "등급별 고유 색", json.dumps(rar["colors"]))
+    ok(rar["bonus"] == [0, 4, 9, 16, 25], "등급 보정 레벨(+0/4/9/16/25)", json.dumps(rar["bonus"]))
+    ok(rar["fire"] is True and rar["ids"][4] == "legend", "전설=불타는 적금빛 플래그", str(rar["fire"]))
+
+    def rgb(h):
+        return tuple(int(h[i:i + 2], 16) for i in (1, 3, 5))
+
+    cols = [rgb(x) for x in rar["colors"]]
+    ok(cols[0][0] > 200 and cols[0][1] > 150 and cols[0][2] < 140, "일반=황금", str(rar["colors"][0]))
+    ok(cols[1][1] == max(cols[1]) and cols[1][1] > cols[1][0], "고급=초록", str(rar["colors"][1]))
+    ok(cols[2][2] == max(cols[2]) and cols[2][2] > cols[2][0], "레어=파랑", str(rar["colors"][2]))
+    ok(cols[3][0] > 140 and cols[3][2] > 200 and cols[3][1] < cols[3][2], "영웅=보라", str(rar["colors"][3]))
+    ok(cols[4][0] == max(cols[4]) and cols[4][1] < cols[4][0] and cols[4][2] < 120, "전설=적금빛", str(rar["colors"][4]))
+
+    gc = js(ctx, """
+      return {
+        g1: gachaCost('gold', 1).amount, g10: gachaCost('gold', 10).amount,
+        s1: gachaCost('shards', 1).amount, s10: gachaCost('shards', 10).amount,
+      };
+    """)
+    ok(gc["g1"] == 600 and gc["g10"] == 5400 and gc["s1"] == 10 and gc["s10"] == 90, "뽑기 가격(골드/강화석·10% 할인)", json.dumps(gc))
+
+    p1 = js(ctx, """
+      const s = defaultState(0); s.gold = 1000; s.shards = 0;
+      const atk0 = calcStats(s, {}).atk;
+      const r = pullGear(s, 1, (function(){const a=[0.999,0.0];let i=0;return function(){return a[(i++)%a.length];};})());
+      return { ok: r.ok, rarity: s.gearRarity.weapon, gold: s.gold, spent: r.spent, pity: s.gacha.pity,
+               atk0, atk1: calcStats(s, {}).atk, equipped: r.results[0].equipped, best: s.gacha.best };
+    """)
+    ok(p1["ok"] and p1["gold"] == 400 and p1["spent"] == 600, "1회 뽑기 골드 차감", json.dumps(p1))
+    ok(p1["rarity"] == "legend" and p1["equipped"] is True, "높은 등급 자동 장착", json.dumps(p1))
+    ok(p1["atk1"] > p1["atk0"], "등급이 실제 스탯에 반영", f"공격력 {p1['atk0']} → {p1['atk1']}")
+    ok(p1["pity"] == 0 and p1["best"] == "legend", "전설 획득 → 천장 초기화·최고등급 기록", json.dumps(p1))
+
+    p2 = js(ctx, """
+      const s = defaultState(0); s.gold = 5000; s.shards = 0; s.gearRarity.weapon = 'legend';
+      const r = pullGear(s, 1, (function(){const a=[0.999,0.0];let i=0;return function(){return a[(i++)%a.length];};})());
+      return { rarity: s.gearRarity.weapon, shards: s.shards, equipped: r.results[0].equipped, dust: r.results[0].shards };
+    """)
+    ok(p2["rarity"] == "legend" and p2["equipped"] is False, "동급 중복은 장착하지 않음", json.dumps(p2))
+    ok(p2["shards"] == 70 and p2["dust"] == 70, "중복 장비 → 강화석 자동 분해", json.dumps(p2))
+
+    p3 = js(ctx, """
+      const s = defaultState(0); s.gold = 600; s.shards = 0; s.gearRarity.weapon = 'advanced';
+      const r = pullGear(s, 1, (function(){const a=[0.999,0.0];let i=0;return function(){return a[(i++)%a.length];};})());
+      return { rarity: s.gearRarity.weapon, shards: s.shards, equipped: r.results[0].equipped, replaced: r.results[0].replaced };
+    """)
+    ok(p3["rarity"] == "legend" and p3["equipped"] is True and p3["replaced"] == "advanced" and p3["shards"] == 6, "교체 장착 + 이전 등급 분해", json.dumps(p3))
+
+    p4 = js(ctx, """
+      const s = defaultState(0); s.gold = 5400; s.shards = 0;
+      const r = pullGear(s, 10, () => 0);
+      const idx = r.results.map(x => RARITY_INDEX[x.rarity]);
+      return { ok: r.ok, len: r.results.length, gold: s.gold, maxIdx: Math.max.apply(null, idx), spent: r.spent,
+               pity: s.gacha.pity, total: s.gacha.total, slots: r.results.every(x => !!EQUIP[x.slot]) };
+    """)
+    ok(p4["ok"] and p4["len"] == 10 and p4["gold"] == 0 and p4["spent"] == 5400, "10회 연속 뽑기(5,400골드)", json.dumps(p4))
+    ok(p4["maxIdx"] >= 2, "10회 최소 레어 1개 보장", json.dumps(p4))
+    ok(p4["pity"] == 10 and p4["total"] == 10 and p4["slots"] is True, "천장 카운터·부위 배정", json.dumps(p4))
+
+    p5 = js(ctx, """
+      const s = defaultState(0); s.gold = 600; s.gacha.pity = 39;
+      const r = pullGear(s, 1, () => 0);
+      return { rarity: r.results[0].rarity, pity: s.gacha.pity, left: r.pityLeft };
+    """)
+    ok(p5["rarity"] == "legend" and p5["pity"] == 0 and p5["left"] == 40, "40회 천장 → 전설 확정", json.dumps(p5))
+
+    p6 = js(ctx, """
+      const s = defaultState(0); s.gold = 100;
+      const r = pullGear(s, 1);
+      return { ok: r.ok, reason: r.reason, gold: s.gold, total: s.gacha.total };
+    """)
+    ok(p6["ok"] is False and p6["gold"] == 100 and p6["total"] == 0, "재화 부족 시 뽑기 거부", json.dumps(p6, ensure_ascii=False))
+
+    p7 = js(ctx, """
+      const s = defaultState(0); s.shards = 100; s.gacha.cur = 'shards';
+      const r = pullGear(s, 1, (function(){const a=[0.999,0.0];let i=0;return function(){return a[(i++)%a.length];};})());
+      return { cur: r.cur, spent: r.spent, shards: s.shards, rarity: s.gearRarity.weapon };
+    """)
+    ok(p7["cur"] == "shards" and p7["spent"] == 10 and p7["shards"] == 90 and p7["rarity"] == "legend", "강화석 결제 뽑기", json.dumps(p7))
+
+    nv = js(ctx, """
+      const old = { ver: 3, level: 16, exp: 120, gold: 12345, shards: 77,
+        equip: { weapon: 7, armor: 3, helmet: 2, ring: 1, amulet: 4 }, skills: { strike: { lv: 2, last: 5 } },
+        stage: 7, killsInStage: 4, maxStage: 7, bossReady: false,
+        land: { owned: { '0_0_0': 3 }, accruedRent: 10 }, records: { totalGold: 900 } };
+      const n = normalizeState(old, 0);
+      const bad = normalizeState({ gearRarity: { weapon: 'dragon' }, gacha: { pity: 999, cur: 'cash', best: 'dragon', total: -5 }, soundOn: false }, 0);
+      const was = normalizeState(JSON.parse(JSON.stringify(n)), 0);
+      return {
+        level: n.level, gold: n.gold, weapon: n.equip.weapon, owned: n.land.owned['0_0_0'],
+        gr: n.gearRarity, pity: n.gacha.pity, cur: n.gacha.cur, sound: n.soundOn, stable: was.gold === n.gold && was.level === 16,
+        badGr: bad.gearRarity.weapon, badPity: bad.gacha.pity, badCur: bad.gacha.cur, badBest: bad.gacha.best, badSound: bad.soundOn,
+      };
+    """)
+    ok(nv["level"] == 16 and nv["gold"] == 12345 and nv["weapon"] == 7 and nv["owned"] == 3 and nv["stable"] is True, "기존 v3 저장 진행도 유지", json.dumps(nv.get("pity")))
+    ok(nv["gr"]["weapon"] == "common" and nv["pity"] == 0 and nv["cur"] == "gold" and nv["sound"] is True, "신규 필드 기본값 병합", json.dumps(nv["gr"]))
+    ok(nv["badGr"] == "common" and nv["badPity"] == 39 and nv["badCur"] == "gold" and nv["badBest"] == "common" and nv["badSound"] is False, "손상된 등급/천장/사운드 방어", json.dumps({k: nv[k] for k in ['badGr', 'badPity', 'badCur', 'badBest', 'badSound']}))
+
+    rsrc = read("src/render.js")
+    ok("BOSS APPEAR" in rsrc, "BOSS 등장 경고 배너 구현")
+    ok("spawnLoot" in rsrc and "drawLoot" in rsrc and "onLoot" in rsrc, "코인/보석 자석 드롭 구현")
+    ok("drawAura" in rsrc and "RARITIES" in rsrc and "drawSlash" in rsrc, "등급 오라·검기 색 구현")
+    ok("rgba(70,6,0,0.92)" in rsrc and "crit" in rsrc, "크리티컬 강조 숫자 렌더")
+    ssrc = read("src/sound.js")
+    ok("AudioContext" in ssrc and "createOscillator" in ssrc and "createBuffer" in ssrc, "Web Audio 합성음 구현")
+    ok(all(k in ssrc for k in ["hit(crit", "coin(kind", "boss()", "gacha(rarity", "unlock()"]), "효과음 5종·unlock 구현")
+    ok("soundBtn" in read("index.html"), "상단 스피커 아이콘")
+    ok("bindAudioUnlock" in read("app.js") and "toggleSound" in read("app.js") and "pullGacha" in read("app.js"), "첫 터치 unlock·효과음 토글·뽑기 액션 연결")
+    ok("data-action=\"toggle-sound\"" in read("src/ui.js"), "설정 탭 효과음 스위치")
+
+    section("[6] 밸런스 시뮬레이션 (60분)")
     import importlib.util
     spec = importlib.util.spec_from_file_location("bs", os.path.join(ROOT, "tools/balance_sim.py"))
     bs = importlib.util.module_from_spec(spec)

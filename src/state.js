@@ -4,6 +4,7 @@
 import {
   ECON, EQUIP, EQUIP_MAX_LV, SKILLS, SKILL_UPGRADE_MAX,
   SAVE_KEY, SAVE_VERSION, enhanceCost, skillCost, skillPowerMul,
+  RARITIES, RARITY_INDEX, RARITY_IDS, GACHA, gachaCost, rarityBonusLv,
 } from './data.js';
 import { defaultLand } from './land.js';
 
@@ -21,6 +22,10 @@ export function defaultState(now = nowMs()) {
     shards: ECON.startShards,
     hp: null, // null = 최대치
     equip: { weapon: 0, armor: 0, helmet: 0, ring: 0, amulet: 0 },
+    // v3.1 장비 등급(뽑기) — 부위별로 하나씩 장착된다.
+    gearRarity: { weapon: 'common', armor: 'common', helmet: 'common', ring: 'common', amulet: 'common' },
+    gacha: { pity: 0, total: 0, best: 'common', legend: 0, cur: 'gold' },
+    soundOn: true,
     skills: {
       strike: { lv: 0, last: 0 },
       whirl: { lv: 0, last: 0 },
@@ -52,6 +57,18 @@ export function normalizeState(raw, now = nowMs()) {
     const v = (raw.skills || {})[k];
     s.skills[k] = typeof v === 'object' && v ? { lv: num(v.lv, 0), last: num(v.last, 0) } : { lv: num(v, 0), last: 0 };
   }
+  s.gearRarity = { ...d.gearRarity };
+  for (const k of Object.keys(d.gearRarity)) {
+    const v = raw.gearRarity && raw.gearRarity[k];
+    s.gearRarity[k] = typeof v === 'string' && RARITY_IDS.includes(v) ? v : 'common';
+  }
+  s.gacha = { ...d.gacha, ...(raw.gacha && typeof raw.gacha === 'object' ? raw.gacha : {}) };
+  s.gacha.pity = clamp(Math.floor(num(s.gacha.pity, 0)), 0, GACHA.pityLegend - 1);
+  s.gacha.total = Math.max(0, Math.floor(num(s.gacha.total, 0)));
+  s.gacha.legend = Math.max(0, Math.floor(num(s.gacha.legend, 0)));
+  if (!RARITY_IDS.includes(s.gacha.best)) s.gacha.best = 'common';
+  if (s.gacha.cur !== 'shards') s.gacha.cur = 'gold';
+  s.soundOn = s.soundOn !== false;
   s.land = { ...d.land, ...(raw.land || {}) };
   s.land.owned = sanitizeOwned(s.land.owned);
   s.land.totalCost = sanitizeOwned(s.land.totalCost);
@@ -135,13 +152,16 @@ export function calcStats(s, buffs = NO_BUFF) {
   const b = { ...NO_BUFF, ...(buffs || {}) };
   const L = s.level;
   const e = s.equip;
+  const gr = s.gearRarity || {};
+  // 등급 보정: 장비 강화 레벨에 등급 환산 레벨을 더한다(전설 +25강 상당).
+  const eLv = (slot) => e[slot] + rarityBonusLv(gr[slot]);
   const baseAtk = 12 + 2.6 * L + 0.035 * L * L;
-  const equipAtk = EQUIP.weapon.per * e.weapon;
+  const equipAtk = EQUIP.weapon.per * eLv('weapon');
   const atk = (baseAtk + equipAtk) * (1 + b.atkPct / 100);
-  const hpMax = (150 + 30 * L + EQUIP.armor.per * e.armor + EQUIP.helmet.per * e.helmet) * (1 + b.hpPct / 100);
-  const crit = Math.min(0.5, 0.05 + (EQUIP.ring.per / 100) * e.ring + (b.critPct || 0) / 100);
+  const hpMax = (150 + 30 * L + EQUIP.armor.per * eLv('armor') + EQUIP.helmet.per * eLv('helmet')) * (1 + b.hpPct / 100);
+  const crit = Math.min(0.5, 0.05 + (EQUIP.ring.per / 100) * eLv('ring') + (b.critPct || 0) / 100);
   const critDmg = 2.0;
-  const goldMult = 1 + (EQUIP.amulet.per / 100) * e.amulet + b.goldPct / 100;
+  const goldMult = 1 + (EQUIP.amulet.per / 100) * eLv('amulet') + b.goldPct / 100;
   const dropMult = 1 + b.dropPct / 100;
   const attackMs = Math.max(300, ECON.playerAttackMs - L * 2);
   const dps = (atk / (attackMs / 1000)) * (1 + crit * (critDmg - 1));
@@ -197,6 +217,111 @@ export function buyShards(s, count) {
   s.gold -= cost;
   s.shards += n;
   return { ok: true, n, cost, price };
+}
+
+/* ────────────────────────────── 장비 뽑기 (v3.1) ────────────────────────────── */
+
+/** 현재 장착 등급의 평균 인덱스(오라 색) · 무기 등급 인덱스(검기 색) */
+export function gearRarityAvg(s) {
+  const gr = (s && s.gearRarity) || {};
+  const ids = Object.keys(gr);
+  if (!ids.length) return 0;
+  const sum = ids.reduce((a, k) => a + (RARITY_INDEX[gr[k]] || 0), 0);
+  return Math.round(sum / ids.length);
+}
+
+export function weaponRarityIdx(s) {
+  const gr = (s && s.gearRarity) || {};
+  return RARITY_INDEX[gr.weapon] || 0;
+}
+
+/** 가중치 뽑기 — 0(일반) ~ 4(전설) 인덱스 반환 */
+function rollRarityIdx(rng) {
+  const total = RARITIES.reduce((a, r) => a + r.weight, 0);
+  let x = rng() * total;
+  for (let i = 0; i < RARITIES.length; i++) {
+    x -= RARITIES[i].weight;
+    if (x <= 0) return i;
+  }
+  return 0;
+}
+
+/**
+ * 장비 뽑기. 등급이 더 높으면 자동 장착(이전 장비는 분해), 같거나 낮으면 자동 분해.
+ * @returns {{ok:boolean, results?:Array, spent?:number, cur?:string, shards?:number, best?:string, pity?:number, pityLeft?:number, reason?:string}}
+ */
+export function pullGear(s, times = 1, rng = Math.random) {
+  const n = times >= 10 ? 10 : 1;
+  if (!s.gacha) s.gacha = { pity: 0, total: 0, best: 'common', legend: 0, cur: 'gold' };
+  if (!s.gearRarity) s.gearRarity = { weapon: 'common', armor: 'common', helmet: 'common', ring: 'common', amulet: 'common' };
+  const pay = gachaCost(s.gacha.cur, n);
+  const have = Math.max(0, Math.floor(s[pay.cur] || 0));
+  if (have < pay.amount) {
+    return {
+      ok: false,
+      reason: `${pay.cur === 'shards' ? '강화석' : '골드'}이 부족합니다. (필요 ${pay.cur === 'shards' ? '💎' : '💰'}${pay.amount.toLocaleString()})`,
+      need: pay.amount,
+      cur: pay.cur,
+    };
+  }
+
+  // 1) 등급 먼저 뽑는다(천장·10연차 보장을 적용한 뒤 장착/분해).
+  const rolled = [];
+  let pity = Math.max(0, Math.min(GACHA.pityLegend - 1, Math.floor(s.gacha.pity || 0)));
+  for (let i = 0; i < n; i++) {
+    let idx;
+    if (pity >= GACHA.pityLegend - 1) idx = RARITIES.length - 1; // 천장 도달 → 전설 확정
+    else idx = rollRarityIdx(rng);
+    if (idx === RARITIES.length - 1) pity = 0;
+    else pity += 1;
+    rolled.push(idx);
+  }
+  const gIdx = RARITY_INDEX[GACHA.tenGuarantee] || 2;
+  if (n === 10 && !rolled.some((i) => i >= gIdx)) rolled[n - 1] = gIdx; // 10회 최소 레어 보장
+
+  // 2) 비용 차감 → 부위 배정 → 자동 장착/분해
+  s[pay.cur] -= pay.amount;
+  const slots = Object.keys(s.gearRarity);
+  const results = [];
+  let dust = 0;
+  let bestIdx = 0;
+  let legends = 0;
+  for (const idx of rolled) {
+    const rarity = RARITIES[idx];
+    const slot = slots[Math.floor(rng() * slots.length)] || 'weapon';
+    const curIdx = RARITY_INDEX[s.gearRarity[slot]] || 0;
+    const equipped = idx > curIdx;
+    let shards = 0;
+    let replaced = null;
+    if (equipped) {
+      replaced = s.gearRarity[slot];
+      s.gearRarity[slot] = rarity.id;
+      if (curIdx > 0) shards += RARITIES[curIdx].dust; // 교체된 이전 장비 분해
+    } else {
+      shards += rarity.dust; // 중복 장비 분해
+    }
+    if (shards > 0) { s.shards += shards; dust += shards; }
+    if (idx > bestIdx) bestIdx = idx;
+    if (idx === RARITIES.length - 1) legends += 1;
+    results.push({ slot, rarity: rarity.id, name: rarity.name, equipped, replaced, shards });
+  }
+
+  s.gacha.pity = pity;
+  s.gacha.total += n;
+  s.gacha.legend += legends;
+  if (bestIdx > (RARITY_INDEX[s.gacha.best] || 0)) s.gacha.best = RARITIES[bestIdx].id;
+
+  return {
+    ok: true,
+    results,
+    spent: pay.amount,
+    cur: pay.cur,
+    shards: dust,
+    best: RARITIES[bestIdx].id,
+    pity,
+    pityLeft: GACHA.pityLegend - pity,
+    total: s.gacha.total,
+  };
 }
 
 export function tryEnhance(s, slot, times = 1) {

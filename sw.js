@@ -1,5 +1,5 @@
 // land-rpg / sw.js — 오프라인 캐시 (게스트 전용: 네트워크가 없어도 처음부터 끝까지 플레이)
-const VERSION = 'land-rpg-v3.0.6';
+const VERSION = 'land-rpg-v3.1.0';
 const CORE = [
   './',
   './index.html',
@@ -11,6 +11,7 @@ const CORE = [
   './src/combat.js',
   './src/render.js',
   './src/ui.js',
+  './src/sound.js',
   './src/land.js',
   './src/land-data.js',
   './icons/icon-192.png',

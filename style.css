@@ -822,3 +822,118 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .tsum span { color: var(--sub); }
 .tsum b { font-weight: 800; font-variant-numeric: tabular-nums; }
 .tsum i { font-style: normal; color: var(--dim); font-size: 10px; font-weight: 700; }
+
+/* ───────────── v3.1 효과음 · 장비 등급 뽑기 ───────────── */
+.snd-btn {
+  width: 28px;
+  height: 26px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid var(--line);
+  transition: transform 0.1s, opacity 0.15s;
+}
+.snd-btn.off { opacity: 0.48; }
+.snd-btn:active { transform: scale(0.92); }
+
+/* 등급 배지 */
+.rb {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 9.5px;
+  font-weight: 900;
+  letter-spacing: 0.2px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.rb.common { color: #2a1c00; background: linear-gradient(180deg, #ffe9a8, #ffb020); }
+.rb.advanced { color: #04240f; background: linear-gradient(180deg, #9df3c8, #2fae73); }
+.rb.rare { color: #001a2b; background: linear-gradient(180deg, #a8ddff, #2f8fd8); }
+.rb.hero { color: #1a0033; background: linear-gradient(180deg, #dcc4ff, #8b4fe0); }
+.rb.legend {
+  color: #2a0500;
+  background: linear-gradient(100deg, #ffe08a, #ff9a3d 45%, #ff3b2f);
+  box-shadow: 0 0 10px rgba(255, 122, 61, 0.55);
+  animation: legendGlow 1.6s ease-in-out infinite;
+}
+@keyframes legendGlow {
+  0%, 100% { box-shadow: 0 0 8px rgba(255, 122, 61, 0.45); }
+  50% { box-shadow: 0 0 16px rgba(255, 170, 70, 0.85); }
+}
+
+/* 뽑기 카드 */
+.gacha-card {
+  border-color: rgba(255, 207, 92, 0.24);
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(255, 207, 92, 0.1), rgba(255, 207, 92, 0) 60%),
+    var(--card);
+}
+.rates { display: flex; gap: 4px; flex-wrap: wrap; }
+.rate-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px 2px 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  font-size: 9.5px;
+  font-weight: 800;
+  color: var(--dim);
+}
+.rate-chip b { color: var(--sub); font-variant-numeric: tabular-nums; }
+.gacha-btns { display: grid; grid-template-columns: 1fr 1.4fr; gap: 7px; margin-top: 9px; }
+.gacha-btn {
+  min-height: 58px;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 14.5px;
+  border-radius: 12px;
+  color: var(--gold);
+  background: linear-gradient(135deg, rgba(255, 208, 92, 0.2), rgba(255, 171, 31, 0.08));
+  border-color: rgba(255, 207, 92, 0.42);
+}
+.gacha-btn small { font-size: 10px; font-weight: 800; opacity: 0.82; }
+.gacha-btn.ten {
+  color: #2a1600;
+  background: linear-gradient(135deg, #ffd970, #ffa41f);
+  border-color: rgba(255, 224, 150, 0.65);
+  box-shadow: 0 6px 18px rgba(255, 160, 20, 0.22);
+}
+.gacha-btn.ten small { color: rgba(42, 22, 0, 0.78); }
+.equipped { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 10px; }
+.eq-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 5px;
+  border-radius: 9px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+}
+.g-rar { font-size: 9.5px; color: var(--gold); opacity: 0.85; font-weight: 700; margin-top: 2px; }
+
+/* 뽑기 결과 모달 */
+.gr-sum { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 8px; }
+.gacha-result { display: flex; flex-direction: column; gap: 5px; max-height: 46vh; overflow-y: auto; }
+.gr-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  font-size: 11.5px;
+}
+.gr-row .ico { font-size: 15px; }
+.gr-row .nm { font-weight: 800; }
+.gr-row .tag { margin-left: auto; font-size: 10px; font-weight: 800; color: var(--green); text-align: right; }
+.gr-row.dust .tag { color: var(--dim); }
