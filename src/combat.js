@@ -6,8 +6,8 @@ import {
   calcStats, currentHp, skillEffect, killReward, registerKill, clearStage,
 } from './state.js';
 
-const ATTACK_STOP_GAP = 240; // 이 거리에서 멈추고 때린다(캐릭터 스프라이트가 겹치지 않는 간격)
-const QUEUE_GAP = 80; // 뒤에 줄 서는 몬스터가 벌어지는 간격
+const ATTACK_STOP_GAP = 220; // 이 거리에서 멈추고 때린다(캐릭터 스프라이트가 겹치지 않는 간격)
+const QUEUE_GAP = 210; // 뒤에 줄 서는 몬스터가 벌어지는 간격
 
 export class Battle {
   constructor(state, getBuffs, rng = Math.random, startAt = Date.now()) {
@@ -119,6 +119,9 @@ export class Battle {
     // 스테이지마다 처치 수 기준으로 몬스터 종류를 돌려가며 등장
     const pick = normals[(this.s.totalKills + this.monsters.length) % normals.length];
     const m = this.makeMonster(pick, false, now);
+    // 같은 위치에서 겹쳐 나오지 않도록 오른쪽 몬스터 뒤로 최소 간격을 띄운다
+    const right = this.monsters.reduce((mx, o) => (o.x > mx ? o.x : mx), 0);
+    if (m.x < right + 140) m.x = right + 140;
     this.monsters.push(m);
   }
 
@@ -165,7 +168,7 @@ export class Battle {
     for (const m of alive) {
       if (!Number.isFinite(m.x)) m.x = ECON.spawnX;
       if (!Number.isFinite(m.hp)) m.hp = m.maxHp;
-      const standX = ahead + (m.isBoss ? 100 : 0);
+      const standX = ahead + (m.isBoss ? 60 : 0);
       ahead = standX + QUEUE_GAP * (m.isBoss ? 1.5 : 1);
       const dist = m.x - p.x;
       if (m.x > standX + 2) {
