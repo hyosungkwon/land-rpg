@@ -1,6 +1,6 @@
 // land-rpg / sw.js — 오프라인 캐시 (방치형 RPG 는 네트워크 없이도 플레이 가능해야 함)
 // Firebase/CDN 요청은 캐시하지 않고 네트워크로 그대로 보낸다.
-const VERSION = 'land-rpg-v1.0.1';
+const VERSION = 'land-rpg-v1.0.2';
 const CORE = [
   "./",
   "./index.html",
