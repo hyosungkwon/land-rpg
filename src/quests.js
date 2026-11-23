@@ -15,7 +15,7 @@ const nowMs = () => Date.now();
 
 /* ══════════════════════════ 🎯 단계별 미션 ══════════════════════════
  * type 은 questValue() 가 상태에서 읽는 측정 항목이다.
- *  - kills·bossKills·stage(maxStage)·level·gacha·dungeon·job·equipLv : 누적/최고 기록(되돌아가지 않음)
+ *  - kills·bossKills·stage(maxStage·peakStage)·level·gacha·dungeon·job·equipLv : 누적/최고 기록(되돌아가지 않음)
  *  - cities·pyeong : 현재 보유 부동산
  * 보상은 💰 골드 / 💎 강화석. 한 줄로 이어지며, 수령하면 다음 미션이 열린다.
  */
@@ -264,7 +264,7 @@ export function questValue(state, type) {
   switch (type) {
     case 'kills': return Math.max(0, Math.floor(num(s.totalKills)));
     case 'bossKills': return Math.max(0, Math.floor(num(s.bossKills)));
-    case 'stage': return Math.max(1, Math.floor(num(s.maxStage, 1)));
+    case 'stage': return Math.max(1, Math.floor(num(s.maxStage, 1)), Math.floor(num(s.peakStage, 1)));
     case 'level': return Math.max(1, Math.floor(num(s.level, 1)));
     case 'gacha': return Math.max(0, Math.floor(num(s.gacha && s.gacha.total)));
     case 'dungeon': return Math.max(0, Math.floor(num(s.dungeon && s.dungeon.runs)));

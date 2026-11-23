@@ -2,7 +2,7 @@
 // 밸런스·몬스터·장비·스킬 정의. DOM 의존 없음(헤드리스 테스트 가능).
 // v3: 게스트 전용 통합 경제 — 골드 하나로 사냥과 부동산을 함께 굴린다.
 
-export const APP_VERSION = '3.4.0';
+export const APP_VERSION = '3.5.0';
 export const SAVE_KEY = 'land_rpg_unified_v3';
 export const SAVE_VERSION = 3;
 
@@ -60,6 +60,61 @@ export const ECON = {
   offlineRate: 0.5, // 방치 시 실제 획득의 50%
   offlineKillsPerSec: 0.22,
 };
+
+/* ────────────────────────────── 무한 스테이지 확장 (v3.5) ──────────────────────────────
+ * S1~30은 기존 곡선을 **그대로** 쓴다(회귀 테스트·밸런스 유지).
+ * S31부터는 '∞ 확장 구간'으로 넘어가며, 같은 지수 곡선을 그대로 이어 붙이면
+ * 몬스터 체력이 감당 불가능해지므로 완만한 곡선으로 갈아탄다.
+ *  - 체력 ×1.035 / 공격 ×1.028 / 골드 ×1.06 / 경험치 ×1.04 (스테이지당)
+ *  - 스테이지 목록·테마·보스는 기존 STAGES/THEMES 순환을 그대로 이어 무한히 정의된다.
+ *  - 환생 특성(영구 배율)이 이 구간을 밀어 올리는 성장 동력이다.
+ */
+export const INFINITE = {
+  baseStage: 30, // 이 스테이지까지는 기존 곡선
+  startStage: 31, // 여기부터 ∞ 확장 구간(UI 배지)
+  hpGrowth: 1.035,
+  atkGrowth: 1.028,
+  goldGrowth: 1.06,
+  expGrowth: 1.04,
+};
+
+/** ∞ 확장 구간인가 */
+export function isInfiniteStage(stage) {
+  return Math.floor(Number(stage) || 0) >= INFINITE.startStage;
+}
+
+/** 일반 몬스터 1마리 기준 체력(보스·변형 배율 제외) — S1~30은 기존 식과 동일 */
+export function monsterBaseHp(stage) {
+  const s = Math.max(1, Math.floor(Number(stage) || 1));
+  if (s <= INFINITE.baseStage) {
+    const late = 1 + Math.max(0, s - 10) * ECON.monsterHpLateBoost;
+    return ECON.monsterHpBase * Math.pow(ECON.monsterHpGrowth, s - 1) * late;
+  }
+  return monsterBaseHp(INFINITE.baseStage) * Math.pow(INFINITE.hpGrowth, s - INFINITE.baseStage);
+}
+
+/** 일반 몬스터 1마리 기준 공격력(보스 배율 제외) */
+export function monsterBaseAtk(stage) {
+  const s = Math.max(1, Math.floor(Number(stage) || 1));
+  if (s <= INFINITE.baseStage) {
+    return ECON.monsterAtkBase * Math.pow(ECON.monsterAtkGrowth, s - 1);
+  }
+  return monsterBaseAtk(INFINITE.baseStage) * Math.pow(INFINITE.atkGrowth, s - INFINITE.baseStage);
+}
+
+/** 처치 기본 골드(보스 배율·배율 버프 제외) */
+export function stageGoldBase(stage) {
+  const s = Math.max(1, Math.floor(Number(stage) || 1));
+  if (s <= INFINITE.baseStage) return ECON.goldBase * Math.pow(ECON.goldGrowth, s - 1);
+  return stageGoldBase(INFINITE.baseStage) * Math.pow(INFINITE.goldGrowth, s - INFINITE.baseStage);
+}
+
+/** 처치 기본 경험치(보스 배율 제외) */
+export function stageExpBase(stage) {
+  const s = Math.max(1, Math.floor(Number(stage) || 1));
+  if (s <= INFINITE.baseStage) return ECON.expBase * Math.pow(ECON.expGrowth, s - 1);
+  return stageExpBase(INFINITE.baseStage) * Math.pow(INFINITE.expGrowth, s - INFINITE.baseStage);
+}
 
 /* ────────────────────────────── 테마 ────────────────────────────── */
 export const THEMES = [
@@ -139,13 +194,16 @@ export function stageDef(stage) {
   const base = STAGES[(s - 1) % STAGES.length];
   const theme = THEMES[(s - 1) % THEMES.length];
   const loop = Math.floor((s - 1) / STAGES.length);
+  const infinite = s >= INFINITE.startStage;
   return {
     num: s,
     normals: base.normals,
     boss: base.boss,
     theme,
-    themeName: theme.name + (loop > 0 ? ` ${loop + 1}` : ''),
+    themeName: theme.name + (loop > 0 ? ` ${loop + 1}` : '') + (infinite ? ' ∞' : ''),
     loop,
+    infinite,
+    tier: s <= 20 ? 'normal' : s < INFINITE.startStage ? 'loop' : 'infinity',
   };
 }
 

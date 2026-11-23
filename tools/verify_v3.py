@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""land-rpg v3.4.0 검증 (QuickJS + 정적 검사)
+"""land-rpg v3.5.0 검증 (QuickJS + 정적 검사)
 
 1) 모든 JS 파일 문법(파싱) 검사
-2) 정적 검사 (Firebase/로그인 흔적 0, 저장 키 v3, sw 캐시 v3.4)
+2) 정적 검사 (Firebase/로그인 흔적 0, 저장 키 v3, sw 캐시 v3.5)
 3) 통합 경제 단위 검증 (가격 스케일·매수/매도·임대·건물주 버프·강화석 시세·저장 정규화)
 4) 장비 뽑기·등급·연출·효과음 검사 (v3.1)
 5) 밸런스 시뮬레이션 (1~10 쾌적 / 10~22 장비·버프 필요 / 방치보다 적극 플레이가 앞섬)
 6) 펫·전직·던전 (v3.2) · 미션·업적·도감 (v3.3) · 호재 뉴스·권역 세트·랜드마크 (v3.4)
+7) ♾️ 환생·초월 특성·무한 스테이지 (v3.5)
 
 사용: python3 tools/verify_v3.py
 """
@@ -18,8 +19,8 @@ import sys
 import quickjs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FILES = ["src/data.js", "src/land-data.js", "src/region.js", "src/land.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/land-data.js", "src/region.js", "src/land.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js", "src/render.js", "src/ui.js", "src/sound.js"]
+FILES = ["src/data.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js", "src/render.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -88,8 +89,9 @@ def main():
     for bad in ["firebase", "signInWithPopup", "Google 로그인", "gstatic", "firebaseio", "googleapis"]:
         ok(bad.lower() not in text_all.lower(), f"Firebase/로그인 흔적 없음: {bad}")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v3.4.0" in read("sw.js"), "SW 캐시 버전 v3.4.0")
-    ok("APP_VERSION = '3.4.0'" in read("src/data.js"), "앱 버전 v3.4.0")
+    ok("land-rpg-v3.5.0" in read("sw.js"), "SW 캐시 버전 v3.5.0")
+    ok("APP_VERSION = '3.5.0'" in read("src/data.js"), "앱 버전 v3.5.0")
+    ok("'./src/rebirth.js'" in read("sw.js"), "sw.js 프리캐시에 rebirth.js 포함")
     ok("'./src/region.js'" in read("sw.js"), "sw.js 프리캐시에 region.js 포함")
     ok(os.path.exists(os.path.join(ROOT, "src/sound.js")), "src/sound.js 존재")
     ok("'./src/sound.js'" in read("sw.js"), "sw.js 프리캐시에 sound.js 포함")
@@ -1145,6 +1147,215 @@ def main():
     ok(all(x in appsrc3 for x in ["checkNews", "openLandmark", "doBuildLandmark", "recordNews", "ownedInNews"]), "뉴스·랜드마크 액션 연결(app.js)")
     ok(all(x in uisrc3 for x in ["newsBanner", "regionSetCard", "regionSetMini", "landmarkCard", 'data-action="landmark"']), "뉴스·세트·랜드마크 UI 구현")
     ok(all(x in css3 for x in [".news-card", ".tag.hot", ".lm-chip", ".set-row", ".lm-step"]), "v3.4 뉴스·세트·랜드마크 CSS")
+
+    section("[11] ♾️ 환생(초월) · 무한 스테이지 (v3.5.0)")
+    rbd = js(ctx, """
+      return {
+        need: REBIRTH.stageReq,
+        ids: REBIRTH_TRAITS.map(t => t.id),
+        names: REBIRTH_TRAITS.map(t => t.name),
+        maxLv: REBIRTH_TRAITS.map(t => t.maxLv),
+        points: [18, 19, 20, 21, 25, 30, 50, 100].map(s => rebirthPointsFor(s)),
+        mono: (function () { let bad = 0; let prev = -1; for (let s = 1; s <= 150; s++) { const p = rebirthPointsFor(s); if (p < prev) bad++; prev = p; } return bad; })(),
+        totalCost: traitTotalCost(REBIRTH_TRAITS[0], 20),
+        costs: [0, 1, 5, 19].map(l => traitCost(l)),
+      };
+    """)
+    ok(rbd["need"] == 20 and rbd["points"][:3] == [0, 0, 3], "환생 해금 S20 · S20 지급 3P", json.dumps(rbd["points"][:3]))
+    ok(len(rbd["ids"]) == 6 and len(set(rbd["ids"])) == 6 and all(v == 20 for v in rbd["maxLv"]), "영구 특성 6종(각 Lv.1~20)", json.dumps(rbd["ids"]))
+    ok(rbd["mono"] == 0 and rbd["points"][4] > rbd["points"][3] and rbd["points"][5] > rbd["points"][4] * 1.5 and rbd["points"][7] > rbd["points"][6] * 2, "스테이지가 높을수록 지수·계단식으로 포인트 증가", json.dumps(rbd["points"]))
+    ok(rbd["costs"] == [3, 5, 13, 41] and rbd["totalCost"] == 440, "특성 비용 = 3 + 2×레벨 · 만렙 총 440P", json.dumps({"c": rbd["costs"], "t": rbd["totalCost"]}))
+
+    rbr = js(ctx, """
+      const s = defaultState(0);
+      s.level = 42; s.exp = 500; s.stage = 25; s.maxStage = 25;
+      s.gold = 123456; s.shards = 777;
+      s.equip = { weapon: 40, armor: 20, helmet: 10, ring: 5, amulet: 3 };
+      s.gearRarity = { weapon: 'legend', armor: 'rare', helmet: 'advanced', ring: 'common', amulet: 'hero' };
+      s.gacha = { pity: 7, total: 30, best: 'legend', legend: 1, cur: 'gold' };
+      s.jobTier = 2;
+      s.skills.strike.lv = 5;
+      s.pet = { equipped: 'fox', unlocked: ['wolf', 'fox'], chosen: true, levels: { wolf: 3, fox: 2 } };
+      const cheap = CITIES.slice().sort((a, b) => a.base - b.base);
+      s.land.owned[cheap[0].key] = 30; s.land.owned[cheap[1].key] = 10;
+      s.land.landmarks[cheap[0].key] = 2; s.land.landmarkSpend = 5000; s.land.accruedRent = 321;
+      s.quests = { idx: 5, claimed: ['m01', 'm02', 'm03', 'm04', 'm05'], done: 5, at: 0 };
+      s.achievements = { claimed: ['a_land1'] };
+      s.codex.monsters = { Slime: 12 };
+      s.dungeon = { best: 4321, runs: 2, last: null };
+      const low = defaultState(0); low.maxStage = 19; low.stage = 19;
+      const lowStatus = rebirthStatus(low);
+      const lowTry = doRebirth(low, 1000);
+      const before = rebirthStatus(s);
+      const r = doRebirth(s, 5000);
+      const land = portfolioOf(s, 0);
+      return {
+        lowCan: lowStatus.can, lowTry: lowTry.ok, lowStage: low.stage, lowLevel: low.level, lowGold: low.gold,
+        can: before.can, gain: r.ok ? r.points : 0, fromStage: r.from.maxStage, fromLevel: r.from.level,
+        count: s.rebirth.count, points: s.rebirth.points, totalPoints: s.rebirth.totalPoints, best: s.rebirth.bestStage, at: s.rebirth.at,
+        level: s.level, exp: s.exp, stage: s.stage, maxStage: s.maxStage, kills: s.killsInStage, bossReady: s.bossReady,
+        job: s.jobTier, gold: s.gold, startGold: rebirthStartGold(s), hp: s.hp, equip: s.equip,
+        shards: s.shards, skill: s.skills.strike.lv, gear: s.gearRarity, gacha: s.gacha.total, pet: s.pet,
+        cities: Object.keys(s.land.owned).length, pyeong: land.pyeong, landmark: s.land.landmarks[cheap[0].key],
+        rent: s.land.accruedRent, spend: s.land.landmarkSpend, quest: s.quests.idx, ach: s.achievements.claimed.length,
+        codex: s.codex.monsters.Slime, dungeon: s.dungeon.runs, peak: s.peakStage,
+        gainFormula: rebirthPointsFor(25),
+      };
+    """)
+    ok(rbr["lowCan"] is False and rbr["lowTry"] is False and rbr["lowStage"] == 19 and rbr["lowLevel"] == 1 and rbr["lowGold"] == 500, "S20 미만은 환생 거부(상태 불변)", json.dumps({k: rbr[k] for k in ["lowCan", "lowTry", "lowStage", "lowLevel"]}))
+    ok(rbr["can"] is True and rbr["gain"] == rbr["gainFormula"] and rbr["count"] == 1 and rbr["points"] == rbr["gain"] and rbr["totalPoints"] == rbr["gain"] and rbr["best"] == 25 and rbr["at"] == 5000, "환생 → 초월석 지급·회차/기록 누적", json.dumps({k: rbr[k] for k in ["gain", "count", "points", "best", "at"]}))
+    ok(rbr["level"] == 1 and rbr["exp"] == 0 and rbr["stage"] == 1 and rbr["maxStage"] == 1 and rbr["kills"] == 0 and rbr["bossReady"] is False and rbr["job"] == 0 and rbr["hp"] is None, "초기화 — 레벨·스테이지·전직·전투 상태", json.dumps({k: rbr[k] for k in ["level", "exp", "stage", "maxStage", "job", "hp"]}))
+    ok(rbr["equip"] == {"weapon": 0, "armor": 0, "helmet": 0, "ring": 0, "amulet": 0}, "초기화 — 장비 강화 0강", json.dumps(rbr["equip"]))
+    ok(rbr["gold"] == 500 and rbr["startGold"] == 500, "초기화 — 보유 골드가 시작 골드로", json.dumps({"g": rbr["gold"]}))
+    ok(rbr["shards"] == 777 and rbr["skill"] == 5 and rbr["gear"]["weapon"] == "legend" and rbr["gacha"] == 30, "유지 — 강화석·스킬 레벨·장비 등급·뽑기 기록", json.dumps({k: rbr[k] for k in ["shards", "skill", "gacha"]}))
+    ok(rbr["pet"]["equipped"] == "fox" and rbr["pet"]["levels"] == {"wolf": 3, "fox": 2} and rbr["pet"]["unlocked"] == ["wolf", "fox"], "유지 — 동료 펫 해금·레벨", json.dumps(rbr["pet"], ensure_ascii=False))
+    ok(rbr["cities"] == 2 and rbr["pyeong"] == 40 and rbr["landmark"] == 2 and rbr["rent"] == 321 and rbr["spend"] == 5000, "유지 — 부동산·랜드마크·임대수익", json.dumps({k: rbr[k] for k in ["cities", "pyeong", "landmark", "rent"]}))
+    ok(rbr["quest"] == 5 and rbr["ach"] == 1 and rbr["codex"] == 12 and rbr["dungeon"] == 2 and rbr["peak"] == 25, "유지 — 미션·업적·도감·던전 기록(peakStage)", json.dumps({k: rbr[k] for k in ["quest", "ach", "codex", "dungeon", "peak"]}))
+
+    rbt = js(ctx, """
+      const plain = defaultState(0); plain.level = 30;
+      const base = calcStats(plain, {});
+      const s = defaultState(0); s.level = 30;
+      s.rebirth = { count: 1, points: 2, totalPoints: 2, traits: {}, bestStage: 30, at: 0 };
+      const poor = upgradeTrait(s, 'atk');
+      s.rebirth.points = 5;
+      const c1 = upgradeTrait(s, 'atk');
+      const level1 = traitLevel(s, 'atk');
+      s.rebirth.points = 9999;
+      for (let i = 0; i < 40; i++) upgradeTrait(s, 'atk');
+      const maxLv = traitLevel(s, 'atk');
+      const maxTry = upgradeTrait(s, 'atk');
+      const atkOnly = calcStats(s, {});
+      for (const id of ['hp', 'gold', 'shard', 'critDmg', 'startGold']) for (let i = 0; i < 20; i++) upgradeTrait(s, id);
+      const bonus = rebirthBonus(s);
+      const full = calcStats(s, {});
+      const startGold = rebirthStartGold(s);
+      const bad = upgradeTrait(s, 'nope');
+      const old = defaultState(0); old.maxStage = 30; old.stage = 20;
+      const r = doRebirth(old, 1000);
+      return {
+        poor: poor.ok, c1: c1.ok, level1, cost1: c1.cost, left1: c1.points,
+        maxLv, maxTry: maxTry.ok, maxFlag: !!maxTry.max, bad: bad.ok,
+        baseAtk: base.atk, atkOnly: atkOnly.atk, atkPctMax: bonus.atkPct,
+        baseHp: base.hpMax, hp: full.hpMax, hpPct: bonus.hpPct, goldPct: bonus.goldPct, shardPct: bonus.shardPct,
+        baseGoldMul: base.goldMult, goldMul: full.goldMult, baseDrop: base.dropMult, drop: full.dropMult,
+        critDmg: full.critDmg, totalLv: bonus.totalLv, startGold,
+        rbGold: old.gold, rbStart: rebirthStartGold(old),
+      };
+    """)
+    ok(rbt["poor"] is False and rbt["c1"] is True and rbt["level1"] == 1 and rbt["cost1"] == 3 and rbt["left1"] == 2, "특성 업그레이드 — 초월석 소모·레벨 상승", json.dumps({k: rbt[k] for k in ["poor", "c1", "level1", "cost1", "left1"]}))
+    ok(rbt["maxLv"] == 20 and rbt["maxTry"] is False and rbt["maxFlag"] is True and rbt["bad"] is False, "특성 Lv.20 상한 · 알 수 없는 특성 거부", json.dumps({k: rbt[k] for k in ["maxLv", "maxTry", "maxFlag", "bad"]}))
+    ok(rbt["atkPctMax"] == 80 and rbt["atkOnly"] > rbt["baseAtk"] * 1.75 and rbt["atkOnly"] < rbt["baseAtk"] * 1.85, "공격 특성 만렙 +80% 가 calcStats 에 반영", f"{rbt['baseAtk']}→{rbt['atkOnly']}")
+    ok(rbt["hpPct"] == 100 and rbt["hp"] > rbt["baseHp"] * 1.95, "체력 특성 +100% 가 최대 체력에 반영", f"{rbt['baseHp']}→{rbt['hp']}")
+    ok(abs((rbt["goldMul"] - rbt["baseGoldMul"]) - 1.0) < 0.001 and abs((rbt["drop"] - rbt["baseDrop"]) - 1.2) < 0.001 and rbt["critDmg"] == 2.6, "골드 +100% · 강화석 +120% · 치명타 피해 +0.6", json.dumps({"g": rbt["goldMul"], "d": rbt["drop"], "c": rbt["critDmg"]}))
+    ok(rbt["totalLv"] == 120 and rbt["startGold"] == 10500 and rbt["rbGold"] == rbt["rbStart"], "시작 골드 특성 → 환생 직후 골드 10,500", json.dumps({"lv": rbt["totalLv"], "s": rbt["startGold"], "g": rbt["rbGold"]}))
+
+    rbs = js(ctx, """
+      const old = { ver: 3, level: 30, gold: 900, shards: 5, stage: 12, maxStage: 12,
+        land: { owned: { '0_0_0': 6 } }, quests: { idx: 6, claimed: [] } };
+      const n = normalizeState(old, 0);
+      const bad = normalizeState({ rebirth: { count: -3, points: 'x', totalPoints: '9', traits: { atk: 99, nope: 4, hp: '2' }, bestStage: 0, at: -1 }, peakStage: -5, maxStage: 3 }, 0);
+      const keep = normalizeState({ maxStage: 3, stage: 2, peakStage: 44, rebirth: { count: 2, points: 10, totalPoints: 20, traits: { atk: 3 }, bestStage: 40, at: 5 } }, 0);
+      const stable = normalizeState(JSON.parse(JSON.stringify(keep)), 0);
+      return {
+        level: n.level, gold: n.gold, maxStage: n.maxStage, peak: n.peakStage, rebirth: n.rebirth,
+        bad: bad.rebirth, badPeak: bad.peakStage, badGold: bad.gold,
+        keepPeak: keep.peakStage, keepMax: keep.maxStage, keepQuest: questValue(keep, 'stage'),
+        stable: stable.rebirth.count === keep.rebirth.count && stable.peakStage === keep.peakStage && JSON.stringify(stable.rebirth) === JSON.stringify(keep.rebirth),
+      };
+    """)
+    ok(rbs["level"] == 30 and rbs["gold"] == 900 and rbs["maxStage"] == 12 and rbs["peak"] == 12 and rbs["rebirth"] == {"count": 0, "points": 0, "totalPoints": 0, "traits": {}, "bestStage": 1, "at": 0}, "v3.4 저장 호환 — 기존 진행도 유지 + rebirth 기본값", json.dumps(rbs["rebirth"], ensure_ascii=False))
+    ok(rbs["bad"]["count"] == 0 and rbs["bad"]["points"] == 0 and rbs["bad"]["traits"] == {"atk": 20, "hp": 2} and rbs["bad"]["bestStage"] == 1 and rbs["bad"]["at"] == 0 and rbs["badPeak"] == 3, "손상된 환생 기록 방어(음수·미지 특성·레벨 상한)", json.dumps(rbs["bad"], ensure_ascii=False))
+    ok(rbs["keepPeak"] == 44 and rbs["keepMax"] == 3 and rbs["keepQuest"] == 44, "환생 후 미션·업적 진행도는 peakStage 로 유지", json.dumps({"p": rbs["keepPeak"], "q": rbs["keepQuest"]}))
+    ok(rbs["stable"] is True, "환생 기록 정규화 반복해도 안정")
+
+    inf = js(ctx, """
+      const legacyHp = (s) => {
+        const late = 1 + Math.max(0, s - 10) * ECON.monsterHpLateBoost;
+        return ECON.monsterHpBase * Math.pow(ECON.monsterHpGrowth, s - 1) * late;
+      };
+      const diff = [];
+      for (let s = 1; s <= 30; s++) {
+        if (Math.round(monsterBaseHp(s)) !== Math.round(legacyHp(s))) diff.push('hp' + s);
+        if (monsterStats(s, false, 1).hp !== Math.round(legacyHp(s))) diff.push('m' + s);
+      }
+      const defs = [30, 31, 50, 100, 250, 1000].map(s => stageDef(s));
+      const bad = defs.filter(d => !d || !Array.isArray(d.normals) || d.normals.length !== 3 || !MONSTERS[d.boss] || !d.theme || !d.themeName).length;
+      const hp = [29, 30, 31, 50, 100, 1000].map(s => Math.round(monsterBaseHp(s)));
+      const atk = [30, 50, 100].map(s => Math.round(monsterBaseAtk(s)));
+      const gold = [30, 50, 100].map(s => Math.round(stageGoldBase(s)));
+      const exp = [30, 50, 100].map(s => Math.round(stageExpBase(s)));
+      return { diff, bad, inf: defs.map(d => !!d.infinite), theme: defs[3].themeName, tier: defs.map(d => d.tier),
+        hp, atk, gold, exp, boss: monsterStats(50, true, 1), normal: monsterStats(50, false, 1),
+        ratio31: monsterBaseHp(31) / monsterBaseHp(30), ratio30: monsterBaseHp(30) / monsterBaseHp(29) };
+    """)
+    ok(inf["diff"] == [], "S1~30 몬스터 수치가 기존과 완전히 동일(회귀 없음)", json.dumps(inf["diff"]))
+    ok(inf["bad"] == 0 and inf["inf"] == [False, True, True, True, True, True], "S31·S50·S100·S250·S1000 스테이지 정의(몬스터·보스·테마)", json.dumps(inf["inf"]))
+    ok("∞" in inf["theme"] and inf["tier"][3] == "infinity", "무한 구간 표기(∞ · tier)", inf["theme"])
+    ok(all(inf["hp"][i] < inf["hp"][i + 1] for i in range(len(inf["hp"]) - 1)) and inf["ratio31"] < inf["ratio30"] and abs(inf["ratio31"] - 1.035) < 0.0001, "S31 이후 완만한 무한 곡선(체력 단조 증가)", json.dumps({"hp": inf["hp"], "r31": round(inf["ratio31"], 4), "r30": round(inf["ratio30"], 4)}))
+    ok(all(inf["atk"][i] < inf["atk"][i + 1] for i in range(2)) and all(inf["gold"][i] < inf["gold"][i + 1] for i in range(2)) and all(inf["exp"][i] < inf["exp"][i + 1] for i in range(2)), "공격·골드·경험치도 무한 구간에서 계속 성장", json.dumps({"a": inf["atk"], "g": inf["gold"], "e": inf["exp"]}))
+    ok(abs(inf["boss"]["hp"] - inf["normal"]["hp"] * 3.6) <= 2 and inf["gold"][2] < 1000000, "보스 배율 유지 · 골드 인플레 억제", json.dumps({"b": inf["boss"]["hp"], "n": inf["normal"]["hp"], "g100": inf["gold"][2]}))
+    ok(inf["hp"][4] > inf["hp"][3] * 5, "S100 은 S50 보다 한 단계 더 깊은 구간", json.dumps({"s50": inf["hp"][3], "s100": inf["hp"][4]}))
+
+    deep = js(ctx, """
+      const rng = (function (seed) { let x = seed; return function () { x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296; }; })(11);
+      const s = defaultState(0);
+      s.level = 60; s.stage = 50; s.maxStage = 50;
+      s.gearRarity = { weapon: 'legend', armor: 'legend', helmet: 'legend', ring: 'legend', amulet: 'legend' };
+      s.equip = { weapon: 80, armor: 80, helmet: 80, ring: 80, amulet: 80 };
+      s.jobTier = 3;
+      s.pet = { equipped: 'dragon', unlocked: ['wolf', 'fox', 'owl', 'dragon'], chosen: true, levels: { wolf: 10, fox: 10, owl: 10, dragon: 10 } };
+      s.rebirth = { count: 3, points: 0, totalPoints: 300, traits: { atk: 20, hp: 20, gold: 10, critDmg: 10 }, bestStage: 50, at: 0 };
+      for (const c of CITIES.slice().sort((a, b) => a.base - b.base).slice(0, 20)) s.land.owned[c.key] = 60;
+      const buffs = computeBuffs(s, 0);
+      const b = new Battle(s, () => buffs, rng, 0);
+      let t = 0; let clears = 0; let fails = 0; let deaths = 0;
+      for (let i = 0; i < 4000; i++) {
+        t += 50; b.tick(50, t);
+        for (const e of b.drainEvents()) {
+          if (e.t === 'stageClear') clears++;
+          if (e.t === 'bossFail') fails++;
+          if (e.t === 'playerDeath') deaths++;
+        }
+      }
+      return { clears, fails, deaths, stage: s.stage, dps: calcStats(s, buffs).dps };
+    """)
+    ok(deep["clears"] >= 1 and deep["stage"] > 50 and deep["fails"] == 0, "환생 빌드로 S50 이후 무한 구간을 실제로 돌파(전투 시뮬레이션)", json.dumps(deep))
+
+    tpl5 = js(ctx2, """
+      const s = defaultState(0);
+      s.level = 26; s.stage = 25; s.maxStage = 25;
+      s.rebirth = { count: 1, points: 120, totalPoints: 300, traits: { atk: 5, gold: 3 }, bestStage: 25, at: 0 };
+      const buffs = computeBuffs(s, 0);
+      const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(25), boss: null, dungeon: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'hunt', el: {}, install: { hidden: true } };
+      const hunt = __tpls.hunt(ui);
+      const set = __tpls.settings(ui);
+      const lowS = defaultState(0);
+      const ui2 = { s: lowS, battle: { stats: calcStats(lowS, {}), def: stageDef(1), boss: null, player: { hp: 1 } }, app: { buffs: computeBuffs(lowS, 0) }, logs: [], tab: 'hunt', el: {}, install: { hidden: true } };
+      const low = __tpls.hunt(ui2);
+      const deepS = defaultState(0);
+      deepS.stage = 100; deepS.maxStage = 100; deepS.level = 70;
+      const ui3 = { s: deepS, battle: { stats: calcStats(deepS, {}), def: stageDef(100), boss: null, player: { hp: 1 } }, app: { buffs: computeBuffs(deepS, 0) }, logs: [], tab: 'hunt', el: {}, install: { hidden: true } };
+      const deepHunt = __tpls.hunt(ui3);
+      return { hunt, set, low, deepHunt, bad: /undefined|NaN|\\[object Object\\]/.test(hunt + set + low + deepHunt) };
+    """)
+    ok(tpl5["bad"] is False, "v3.5 템플릿에 undefined/NaN 누출 없음")
+    ok("환생 (초월)" in tpl5["hunt"] and 'data-action="rebirth"' in tpl5["hunt"] and 'data-action="rebirth-traits"' in tpl5["hunt"], "사냥 탭에 환생 카드·버튼", "")
+    ok("환생하기 · +" in tpl5["hunt"] and "초월석" in tpl5["hunt"] and "초월 특성" in tpl5["hunt"], "환생 카드에 예정 포인트·획득 특성 요약", "")
+    ok("S20 해금" in tpl5["low"] and "환생 · 조건 미달" in tpl5["low"], "S20 미만에서는 잠금 상태로 안내", "")
+    ok("환생" in tpl5["set"] and "초월석" in tpl5["set"], "설정 탭에도 환생 카드·기록", "")
+    ok("∞" in tpl5["deepHunt"] and "inf-badge" in tpl5["deepHunt"], "S31+ 스테이지에 ∞ 배지 표시", "")
+
+    rbsrc = read("src/rebirth.js")
+    uisrc5 = read("src/ui.js")
+    appsrc5 = read("app.js")
+    stsrc5 = read("src/state.js")
+    css5 = read("style.css")
+    ok(os.path.exists(os.path.join(ROOT, "src/rebirth.js")) and all(x in rbsrc for x in ["REBIRTH", "REBIRTH_TRAITS", "rebirthPointsFor", "doRebirth", "upgradeTrait", "normalizeRebirth", "rebirthBonus"]), "rebirth.js 모듈 구성", "")
+    ok(all(x in stsrc5 for x in ["normalizeRebirth", "rebirthBonus", "peakStage", "monsterBaseHp", "stageGoldBase"]), "state.js — 환생 정규화·특성 스탯·무한 스케일 연결", "")
+    ok(all(x in appsrc5 for x in ["openRebirthConfirm", "doRebirth", "showRebirthTraits", "doUpgradeRebirthTrait", "rebirth: () => this.openRebirthConfirm()", 'data-action="rebirth-trait"']), "환생 액션·특성 버튼 연결(app.js)", "")
+    ok(all(x in uisrc5 for x in ['data-action="rebirth"', 'data-action="rebirth-traits"', "case 'rebirth-trait'", "rebirthCard", "inf-badge"]), "환생·특성·∞ UI 구현(ui.js)", "")
+    ok(all(x in css5 for x in [".rebirth-card", ".rb-list", ".trait-row", ".inf-badge", ".rb-points"]), "v3.5 환생·특성 CSS", "")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

@@ -21,6 +21,9 @@ import {
   QUESTS, ACHIEVEMENTS, questStateOf, currentQuest, questProgress, codexStats,
   achievementStatus, claimedAchievementCount,
 } from './quests.js';
+import {
+  REBIRTH, REBIRTH_TRAITS, rebirthStatus, rebirthBonus, traitLevel, traitCost, traitSummary,
+} from './rebirth.js';
 
 const esc = (v) =>
   String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -147,6 +150,9 @@ export class UI {
       case 'land-tier': actions.landTier(v); break;
       case 'claim-rent': actions.claimRent(); break;
       case 'promote': actions.promoteJob(); break;
+      case 'rebirth': actions.rebirth(); break;
+      case 'rebirth-traits': actions.openRebirthTraits(); break;
+      case 'rebirth-trait': actions.upgradeRebirthTrait(v); break;
       case 'pet-equip': actions.equipPet(v); break;
       case 'pet-upgrade': actions.upgradePet(v); break;
       case 'dungeon': actions.enterDungeon(v); break;
@@ -210,7 +216,7 @@ export class UI {
     setT(this.el.shard, fmt(s.shards));
 
     const def = b.def;
-    setT(this.el.stageNum, `스테이지 ${s.stage}`);
+    setT(this.el.stageNum, `스테이지 ${s.stage}${def.infinite ? ' ∞' : ''}`);
     setT(this.el.themeName, def.themeName);
 
     // 처치 게이지
@@ -533,6 +539,35 @@ function jobCard(ui) {
   </div>`;
 }
 
+/* ══════════════════════════ ♾️ 환생(초월) · 영구 특성 (v3.5) ══════════════════════════ */
+function rebirthCard(ui) {
+  const s = ui.s;
+  const st = rebirthStatus(s);
+  const b = rebirthBonus(s);
+  const totalLv = b.totalLv;
+  const maxLv = REBIRTH_TRAITS.reduce((a, t) => a + t.maxLv, 0);
+  return `
+  <div class="card rebirth-card ${st.can ? 'ready' : ''}">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">♾️</span>환생 (초월)<small>${st.count > 0 ? `${st.count}회차` : `S${st.need} 해금`}</small></div>
+      <span class="rb-points" data-live="rb-points">초월석 <b>${fmt(st.points)}</b>P</span>
+    </div>
+    <div class="tiny muted">사냥 회차만 새로 시작합니다 — <b>부동산·랜드마크·임대수익, 동료 펫, 장비 등급, 업적·도감·미션</b>은 그대로 남습니다.</div>
+    <div class="row tiny" style="margin-top:8px">
+      <span style="color:${st.can ? 'var(--gold)' : 'var(--sub)'}">이번 회차 최고 <b>S${st.stage}</b> / S${st.need}</span>
+      <span class="dim">환생 시 <b style="color:var(--gold)">+${st.gain}P</b></span>
+    </div>
+    <div class="prog${st.can ? ' gold' : ''}" style="margin-top:5px"><i style="width:${st.pct * 100}%"></i></div>
+    <div class="row gap6" style="margin-top:9px">
+      <button class="btn small ${st.can ? 'primary' : 'ghost'} wide" type="button" data-action="rebirth" ${st.can ? '' : 'disabled'}>
+        ♾️ ${st.can ? `환생하기 · +${st.gain}P` : '환생 · 조건 미달'}
+      </button>
+      <button class="btn small ghost wide" type="button" data-action="rebirth-traits">✨ 영구 특성 <b style="color:var(--gold)">${totalLv}/${maxLv}</b></button>
+    </div>
+    <div class="tiny" style="margin-top:7px;color:${totalLv ? 'var(--blue)' : 'var(--sub)'}">${totalLv ? `초월 특성 — ${traitSummary(s)}` : '아직 특성이 없습니다 — 초월석으로 <b>영구 배율</b>을 올리세요.'}</div>
+  </div>`;
+}
+
 function dungeonCard(ui) {
   const s = ui.s;
   const b = ui.battle;
@@ -734,12 +769,13 @@ function tplHunt(ui) {
   return `
   ${questCard(ui)}
   ${jobCard(ui)}
+  ${rebirthCard(ui)}
   ${dungeonCard(ui)}
 
   <div class="card">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🗺️</span>${esc(b.def.themeName)} 사냥터<small>Lv.${s.level}</small></div>
-      <span class="tiny dim">스테이지 <b data-live="stage" style="color:var(--txt)">${s.stage}</b></span>
+      <span class="tiny dim">스테이지 <b data-live="stage" style="color:var(--txt)">${s.stage}</b>${b.def.infinite ? '<span class="inf-badge">∞</span>' : ''}</span>
     </div>
     <div class="row gap8">
       <div class="grow">
@@ -1446,6 +1482,8 @@ function tplSettings(ui) {
   return `
   ${installCard(ui)}
 
+  ${rebirthCard(ui)}
+
   <div class="card">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">📖</span>도감 · 업적<small>수집 메타</small></div>
@@ -1464,7 +1502,8 @@ function tplSettings(ui) {
   <div class="card">
     <div class="card-head"><div class="card-title"><span class="t-ico">🏆</span>내 기록</div><span class="tiny dim">게스트</span></div>
     <div class="stat-grid">
-      <div class="stat atk"><div class="k">최고 스테이지</div><div class="v">S${s.maxStage}</div></div>
+      <div class="stat atk"><div class="k">최고 스테이지</div><div class="v">S${s.peakStage || s.maxStage}</div></div>
+      <div class="stat hp"><div class="k">이번 회차 도달</div><div class="v">S${s.maxStage}</div></div>
       <div class="stat hp"><div class="k">총 처치</div><div class="v">${fmt(s.totalKills)}</div></div>
       <div class="stat crit"><div class="k">보스 처치</div><div class="v">${fmt(s.bossKills)}</div></div>
       <div class="stat gold"><div class="k">누적 사냥 골드</div><div class="v">${formatGold(s.records.totalGold || 0)}</div></div>
@@ -1474,6 +1513,8 @@ function tplSettings(ui) {
       <div class="stat crit"><div class="k">최고 장비 등급</div><div class="v">${rarityName((s.gacha && s.gacha.best) || 'common')}</div></div>
       <div class="stat gold"><div class="k">미션 완료</div><div class="v">${qs.done}/${QUESTS.length}</div></div>
       <div class="stat"><div class="k">도감 수집</div><div class="v">${c.pct}%</div></div>
+      <div class="stat crit"><div class="k">환생</div><div class="v">${rebirthStatus(s).count}회</div></div>
+      <div class="stat gold"><div class="k">초월석</div><div class="v">${fmt(rebirthStatus(s).points)}P</div></div>
     </div>
   </div>
 
@@ -1502,6 +1543,7 @@ function tplSettings(ui) {
     <div class="card-head"><div class="card-title"><span class="t-ico">ℹ️</span>앱 정보</div></div>
     <div class="kv"><span class="k">버전</span><span class="v">${APP_VERSION} · 게스트 통합</span></div>
     <div class="kv"><span class="k">전직</span><span class="v">${jobOf(s).badge} ${esc(jobOf(s).name)}</span></div>
+    <div class="kv"><span class="k">환생 · 특성</span><span class="v">♾️ ${rebirthStatus(s).count}회 · ${esc(traitSummary(s))}</span></div>
     <div class="kv"><span class="k">동료 펫</span><span class="v">${petDef(s.pet && s.pet.equipped) ? `${petDef(s.pet.equipped).emoji} ${esc(petDef(s.pet.equipped).name)}` : '없음'}</span></div>
     <div class="kv"><span class="k">황금 던전</span><span class="v">${fmt((s.dungeon && s.dungeon.runs) || 0)}회 · 최고 피해 ${fmt((s.dungeon && s.dungeon.best) || 0)}</span></div>
     <div class="kv"><span class="k">장비</span><span class="v">5부위 강화 + 등급 뽑기</span></div>

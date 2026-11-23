@@ -5,7 +5,11 @@ import {
   ECON, EQUIP, EQUIP_MAX_LV, SKILLS, SKILL_UPGRADE_MAX,
   SAVE_KEY, SAVE_VERSION, enhanceCost, skillCost, skillPowerMul,
   RARITIES, RARITY_INDEX, RARITY_IDS, GACHA, gachaCost, rarityBonusLv,
+  stageGoldBase, stageExpBase, monsterBaseHp, monsterBaseAtk,
 } from './data.js';
+import {
+  normalizeRebirth, rebirthBonus,
+} from './rebirth.js';
 import { defaultLand } from './land.js';
 import { PET_IDS, PET_MAX_LV, JOB_MAX, jobOf, equippedPet, petLevel, petAtkPct } from './meta.js';
 import {
@@ -56,6 +60,9 @@ export function defaultState(now = nowMs()) {
     codex: { monsters: {}, cities: {}, gear: {} },
     // v3.4 부동산 전략: 호재 뉴스 기록(뉴스 자체는 시간 기반 결정론이라 저장하지 않는다)
     news: { seen: [], log: [], lastBlock: -1 },
+    // v3.5 ♾️ 환생(초월): 회차 · 초월석 · 영구 특성. peakStage 는 환생 후에도 남는 역대 최고 기록
+    rebirth: { count: 0, points: 0, totalPoints: 0, traits: {}, bestStage: 1, at: 0 },
+    peakStage: 1,
     land: defaultLand(now),
     records: { totalGold: 0, totalRent: 0, playMs: 0, firstPlay: now },
     lastOffline: null,
@@ -145,6 +152,15 @@ export function normalizeState(raw, now = nowMs()) {
   s.shards = Math.max(0, Math.floor(num(s.shards, 0)));
   s.stage = Math.max(1, Math.floor(num(s.stage, 1)));
   s.maxStage = Math.max(s.stage, Math.floor(num(s.maxStage, 1)));
+
+  // v3.5: 환생 기록 정규화 · 역대 최고 스테이지(환생 후에도 남는 기록)
+  s.rebirth = normalizeRebirth(raw.rebirth);
+  s.peakStage = Math.max(
+    1,
+    Math.floor(num(s.peakStage, 1)),
+    s.maxStage,
+    Math.floor(num(s.rebirth.bestStage, 1)),
+  );
   s.killsInStage = Math.max(0, Math.floor(num(s.killsInStage, 0)));
   s.totalKills = Math.max(0, Math.floor(num(s.totalKills, 0)));
   s.bossKills = Math.max(0, Math.floor(num(s.bossKills, 0)));
@@ -259,18 +275,22 @@ export function calcStats(s, buffs = NO_BUFF) {
   // v3.3: 도감 수집률 마일스톤 + 수령한 업적의 소폭 영구 보너스(기본 0 → 기존 밸런스 불변)
   const col = collectionBonus(s);
   const colAtkMul = 1 + (col.atkPct || 0) / 100;
+  // v3.5: 환생 영구 특성(초월석으로 올린 배율). 모두 0이면 기존 밸런스와 완전히 동일하다.
+  const rb = rebirthBonus(s);
+  const rbAtkMul = 1 + rb.atkPct / 100;
+  const rbHpMul = 1 + rb.hpPct / 100;
   const baseAtk = 12 + 2.6 * L + 0.035 * L * L;
   const equipAtk = EQUIP.weapon.per * eLv('weapon');
-  const atk = (baseAtk + equipAtk) * (1 + (b.atkPct + extraAtk) / 100) * jobAtkMul * petAtkMul * colAtkMul;
+  const atk = (baseAtk + equipAtk) * (1 + (b.atkPct + extraAtk) / 100) * jobAtkMul * petAtkMul * colAtkMul * rbAtkMul;
   const hpMax =
     (150 + 30 * L + EQUIP.armor.per * eLv('armor') + EQUIP.helmet.per * eLv('helmet'))
-    * (1 + (b.hpPct + extraHp) / 100) * jobHpMul;
+    * (1 + (b.hpPct + extraHp) / 100) * jobHpMul * rbHpMul;
   const crit = Math.min(0.5, 0.05 + (EQUIP.ring.per / 100) * eLv('ring') + (b.critPct + extraCrit) / 100);
-  const critDmg = 2.0;
+  const critDmg = 2.0 + rb.critDmgAdd;
   const goldMult =
-    1 + (EQUIP.amulet.per / 100) * eLv('amulet') + (b.goldPct + extraGold) / 100 + (pet ? pet.goldPct / 100 : 0)
+    1 + (EQUIP.amulet.per / 100) * eLv('amulet') + (b.goldPct + extraGold + rb.goldPct) / 100 + (pet ? pet.goldPct / 100 : 0)
     + (col.goldPct || 0) / 100;
-  const dropMult = 1 + (b.dropPct + extraDrop) / 100;
+  const dropMult = 1 + (b.dropPct + extraDrop + rb.shardPct) / 100;
   const attackMs = Math.max(300, ECON.playerAttackMs - L * 2);
   const dps = (atk / (attackMs / 1000)) * (1 + crit * (critDmg - 1));
   return {
@@ -289,6 +309,12 @@ export function calcStats(s, buffs = NO_BUFF) {
     setAtkPct: extraAtk,
     setGoldPct: extraGold,
     setDropPct: extraDrop,
+    // v3.5 환생 특성(UI 표시용)
+    rebirthAtkPct: rb.atkPct,
+    rebirthGoldPct: rb.goldPct,
+    rebirthHpPct: rb.hpPct,
+    rebirthShardPct: rb.shardPct,
+    rebirthCount: rb.count,
   };
 }
 
@@ -316,8 +342,7 @@ export function addExp(s, amount) {
 /** 강화석 시세: 현재 스테이지 사냥 기대값 기준 (골드/개) */
 export function shardPrice(state) {
   const stage = Math.max(1, Math.floor(state.stage || 1));
-  const goldPerKill = ECON.goldBase * Math.pow(ECON.goldGrowth, stage - 1);
-  const raw = goldPerKill * ECON.shardShopFactor;
+  const raw = stageGoldBase(stage) * ECON.shardShopFactor;
   const unit = raw >= 2000 ? 50 : raw >= 200 ? 10 : raw >= 50 ? 5 : 1;
   return Math.max(40, Math.round(raw / unit) * unit);
 }
@@ -481,23 +506,25 @@ export function skillEffect(key, lv) {
 
 export function monsterStats(stage, isBoss, variant = 1) {
   const s = Math.max(1, stage);
-  const late = 1 + Math.max(0, s - 10) * ECON.monsterHpLateBoost;
-  const hp = ECON.monsterHpBase * Math.pow(ECON.monsterHpGrowth, s - 1) * late * (isBoss ? ECON.bossHpMul : 1) * variant;
-  const atk = ECON.monsterAtkBase * Math.pow(ECON.monsterAtkGrowth, s - 1) * (isBoss ? ECON.bossAtkMul : 1);
+  // v3.5: S1~30 기존 곱셈 순서 그대로, S31+ 는 ∞ 확장 곡선(data.js INFINITE)
+  const hp = monsterBaseHp(s) * (isBoss ? ECON.bossHpMul : 1) * variant;
+  const atk = monsterBaseAtk(s) * (isBoss ? ECON.bossAtkMul : 1);
   return { hp: Math.max(1, Math.round(hp)), atk: Math.max(1, Math.round(atk)) };
 }
 
 export function killReward(s, stage, isBoss, buffs, rng = Math.random) {
+  const rb = rebirthBonus(s);
   const gold = Math.round(
-    ECON.goldBase * Math.pow(ECON.goldGrowth, stage - 1) * (isBoss ? ECON.bossGoldMul : 1)
-      * (1 + (buffs?.goldPct || 0) / 100) * (0.92 + rng() * 0.16)
+    stageGoldBase(stage) * (isBoss ? ECON.bossGoldMul : 1)
+      * (1 + (buffs?.goldPct || 0) / 100 + rb.goldPct / 100) * (0.92 + rng() * 0.16)
   );
   const exp = Math.round(
-    ECON.expBase * Math.pow(ECON.expGrowth, stage - 1) * (isBoss ? ECON.bossExpMul : 1) * (0.95 + rng() * 0.1)
+    stageExpBase(stage) * (isBoss ? ECON.bossExpMul : 1) * (0.95 + rng() * 0.1)
   );
   let shards = 0;
-  if (isBoss) shards = Math.round((ECON.bossShardBase + stage * ECON.bossShardPerStage) * (1 + (buffs?.dropPct || 0) / 100));
-  else if (rng() < ECON.shardDropChance * (1 + (buffs?.dropPct || 0) / 100)) shards = 1;
+  const dropPct = (buffs?.dropPct || 0) + rb.shardPct;
+  if (isBoss) shards = Math.round((ECON.bossShardBase + stage * ECON.bossShardPerStage) * (1 + dropPct / 100));
+  else if (rng() < ECON.shardDropChance * (1 + dropPct / 100)) shards = 1;
 
   s.gold += gold;
   s.shards += shards;
@@ -514,6 +541,7 @@ export function clearStage(s, stage) {
   s.killsInStage = 0;
   s.bossReady = false;
   s.maxStage = Math.max(s.maxStage, s.stage);
+  s.peakStage = Math.max(Math.max(1, Math.floor(num(s.peakStage, 1))), s.maxStage);
   const bonus = first ? 10 + Math.floor(stage * 2) : Math.floor((10 + stage * 2) / 3);
   s.shards += bonus;
   return { first, bonus, nextStage: s.stage };
@@ -538,11 +566,12 @@ export function offlineSummary(s, now = nowMs(), buffs = NO_BUFF) {
   const sec = Math.floor(ms / 1000);
   if (sec < 60) return { ms, sec, capped, gold: 0, exp: 0, shards: 0 };
   const kills = sec * ECON.offlineKillsPerSec;
-  const goldPerKill = ECON.goldBase * Math.pow(ECON.goldGrowth, s.stage - 1) * (1 + (buffs?.goldPct || 0) / 100);
-  const expPerKill = ECON.expBase * Math.pow(ECON.expGrowth, s.stage - 1);
+  const rb = rebirthBonus(s);
+  const goldPerKill = stageGoldBase(s.stage) * (1 + (buffs?.goldPct || 0) / 100 + rb.goldPct / 100);
+  const expPerKill = stageExpBase(s.stage);
   const gold = Math.floor(goldPerKill * kills * ECON.offlineRate);
   const exp = Math.floor(expPerKill * kills * ECON.offlineRate);
-  const shards = Math.floor((sec / 3600) * 3 * (1 + (buffs?.dropPct || 0) / 100));
+  const shards = Math.floor((sec / 3600) * 3 * (1 + (buffs?.dropPct || 0) / 100 + rb.shardPct / 100));
   return { ms, sec, capped, gold, exp, shards };
 }
 

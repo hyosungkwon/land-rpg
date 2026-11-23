@@ -4,8 +4,9 @@
 //   - 펫: 부동산(지역 수·평수·총자산) 조건을 만족하면 자동 해금. 장착한 펫이 전투에 동행한다.
 //   - 전직: 레벨 + 최고 스테이지 조건으로 4단계. 전직 시 영구 공격력·체력 배율.
 //   - 던전: 10분 쿨타임마다 무료 1회 또는 강화석으로 즉시 입장. 30초 동안 입힌 피해·처치로 보상.
-import { ECON } from './data.js';
+import { ECON, stageGoldBase, monsterBaseHp } from './data.js';
 import { portfolioOf, formatGold } from './land.js';
+import { rebirthBonus } from './rebirth.js';
 
 /* ────────────────────────────── 🐾 펫 ──────────────────────────────
  * dmgPct: 매 1.5초 함께 공격할 때 주인공 공격력 대비 피해 비율
@@ -345,17 +346,15 @@ export function startDungeonCooldown(state, now = Date.now()) {
  */
 export function dungeonReward(state, run, buffs = {}, rng = Math.random) {
   const stage = Math.max(1, Math.floor(Number(state.stage) || 1));
-  const base = ECON.goldBase * Math.pow(ECON.goldGrowth, stage - 1);
-  const unitHp = Math.max(
-    1,
-    ECON.monsterHpBase * Math.pow(ECON.monsterHpGrowth, stage - 1) * (1 + Math.max(0, stage - 10) * ECON.monsterHpLateBoost),
-  );
+  const base = stageGoldBase(stage);
+  const unitHp = Math.max(1, monsterBaseHp(stage));
+  const rb = rebirthBonus(state);
   const kills = Math.max(0, Number(run && run.kills) || 0);
   const bosses = Math.max(0, Number(run && run.bossKills) || 0);
   const dmg = Math.max(0, Number(run && run.dmg) || 0);
   const units = kills * DUNGEON.goldMul + bosses * DUNGEON.goldMul * DUNGEON.bossGoldMul + (dmg / unitHp) * DUNGEON.damageGoldPerHp;
   const swing = typeof rng === 'function' ? 0.92 + rng() * 0.16 : 1;
-  const gold = Math.max(0, Math.round(base * units * (1 + (buffs.goldPct || 0) / 100) * swing));
-  const shards = Math.max(0, Math.round(3 + kills * DUNGEON.shardPerKill + bosses * DUNGEON.bossShards + (dmg / unitHp) * 0.4));
+  const gold = Math.max(0, Math.round(base * units * (1 + (buffs.goldPct || 0) / 100 + rb.goldPct / 100) * swing));
+  const shards = Math.max(0, Math.round((3 + kills * DUNGEON.shardPerKill + bosses * DUNGEON.bossShards + (dmg / unitHp) * 0.4) * (1 + rb.shardPct / 100)));
   return { gold, shards, units: Math.round(units * 100) / 100 };
 }

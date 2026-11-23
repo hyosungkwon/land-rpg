@@ -23,6 +23,11 @@ import {
   claimQuest as claimQuestState, claimAchievement as claimAchievementState,
   achievementStatus, claimedAchievementCount, codexStats, codexDetail, codexCity, codexGear,
 } from './src/quests.js';
+import {
+  REBIRTH, REBIRTH_TRAITS, rebirthStatus, rebirthBonus, rebirthStartGold, rebirthPointsFor,
+  doRebirth as doRebirthState, upgradeTrait as upgradeRebirthTraitState,
+  traitLevel, traitCost, traitSummary,
+} from './src/rebirth.js';
 
 // 구형 Safari / 삼성 인터넷 대비 CanvasRenderingContext2D.roundRect 폴리필
 (() => {
@@ -295,6 +300,19 @@ class App {
         this.ui.renderIfNeeded();
         this.save(true);
         this.renderer.preload(this.stageMonsterNames(this.s.stage)).catch(() => {});
+        // v3.5: 환생 해금 · ∞ 무한 구간 돌파 안내
+        if (ev.next === REBIRTH.stageReq) {
+          this.ui.toast(`♾️ 환생(초월) 해금! 사냥 탭에서 초월할 수 있습니다`, 'gold');
+          this.ui.addLog('♾️ <b>환생 해금</b> · 이제 사냥 회차를 새로 시작해 영구 특성을 모을 수 있습니다');
+          this.sound.fanfare();
+          this.ui.renderIfNeeded();
+        } else if (ev.next === 31) {
+          this.ui.toast('♾️ S31 — 무한 구간 돌입! 이후 스테이지는 끝없이 이어집니다', 'gold');
+          this.ui.addLog('♾️ <b>S31 무한 구간</b> — 스테이지 상한 없이 계속 오릅니다');
+          this.sound.fanfare();
+        } else if (ev.next > 31 && ev.next % 10 === 0) {
+          this.ui.toast(`♾️ S${ev.next} 돌파!`, 'gold');
+        }
       } else if (ev.t === 'bossStart') {
         this.ui.addLog(`⚔️ <b>${ev.ko}</b> 등장 — ${ECON.bossTimeLimitMs / 1000}초 제한`);
         this.sound.boss();
@@ -752,6 +770,11 @@ class App {
         this.ui.render();
       },
 
+      /* ── v3.5: ♾️ 환생(초월) · 영구 특성 ── */
+      rebirth: () => this.openRebirthConfirm(),
+      openRebirthTraits: () => this.showRebirthTraits(),
+      upgradeRebirthTrait: (id) => this.doUpgradeRebirthTrait(id),
+
       /* ── v3.3: 🎯 미션 · 🏆 업적 · 📖 도감 ── */
       claimQuest: (id) => {
         this.sound.unlock();
@@ -1012,6 +1035,152 @@ class App {
         },
       ],
     });
+  }
+
+  /* ───────────── ♾️ 환생(초월) 모달 ───────────── */
+  openRebirthConfirm() {
+    this.sound.unlock();
+    if (this.battle && this.battle.dungeon) {
+      this.ui.toast('🔥 황금 던전이 끝난 뒤에 환생할 수 있습니다');
+      return;
+    }
+    const st = rebirthStatus(this.s);
+    const startGold = rebirthStartGold(this.s);
+    const reset = [
+      `캐릭터 레벨 → <b>Lv.1</b> (현재 Lv.${this.s.level})`,
+      `현재·최고 스테이지 → <b>S1</b> (이번 회차 최고 S${st.stage})`,
+      `보유 골드 → <b>💰${startGold.toLocaleString()}</b> (현재 💰${this.s.gold.toLocaleString()})`,
+      `장비 강화 레벨 → <b>0강</b> (무기 +${this.s.equip.weapon}강 등)`,
+      `전직 단계 → <b>🗡️ 견습 기사</b>`,
+    ];
+    const keep = [
+      '부동산 · 랜드마크 · 임대수익',
+      '동료 펫 (해금·레벨)',
+      '장비 등급 (뽑기 결과)',
+      '업적 · 도감 · 미션 진행',
+      `초월석 ${st.points.toLocaleString()}P · 영구 특성`,
+      '강화석 · 스킬 레벨',
+    ];
+    const list = (cls, title, items) =>
+      `<div class="rb-list ${cls}"><h4>${title}</h4><ul>${items.map((i) => `<li>${i}</li>`).join('')}</ul></div>`;
+    const body = `
+      <div class="rebirth-sum">
+        <div><span>이번 회차 최고</span><b>S${st.stage}</b></div>
+        <div><span>획득 초월석</span><b style="color:var(--gold)">+${st.gain}P</b></div>
+        <div><span>환생 후 시작 골드</span><b>💰${startGold.toLocaleString()}</b></div>
+        <div><span>환생 횟수</span><b>${st.count} → ${st.count + 1}회</b></div>
+      </div>
+      <div class="rb-lists">
+        ${list('reset', '↺ 초기화', reset)}
+        ${list('keep', '🔒 유지', keep)}
+      </div>
+      <div class="note" style="margin-top:9px">${st.can
+        ? '환생하면 이번 회차의 <b>사냥 성장만</b> 초기화되고, 부동산·펫·장비 등급은 그대로 남습니다. 되돌릴 수 없습니다.'
+        : `<b>${esc(st.reason)}</b> — 조건을 채우면 초월석을 받고 환생할 수 있습니다.`}</div>`;
+    this.ui.modal({
+      title: '♾️ 환생 (초월)',
+      sub: st.can ? `S${st.stage} 도달 · 초월석 +${st.gain}P` : st.reason,
+      body,
+      actions: st.can
+        ? [
+            { label: '취소', onClick: () => {} },
+            { label: `♾️ 환생 · +${st.gain}P`, style: 'primary', onClick: () => this.doRebirth() },
+          ]
+        : [
+            { label: '닫기', onClick: () => {} },
+            { label: '✨ 영구 특성', style: 'primary', onClick: () => this.showRebirthTraits() },
+          ],
+    });
+  }
+
+  doRebirth() {
+    this.sound.unlock();
+    const r = doRebirthState(this.s, Date.now());
+    if (!r.ok) {
+      this.ui.toast(r.reason || '환생할 수 없습니다', 'red');
+      return;
+    }
+    // 사냥 회차가 초기화되므로 전투 인스턴스를 새로 만든다(부동산 버프·펫은 유지).
+    this.buffs = computeBuffs(this.s);
+    this.battle = new Battle(this.s, () => this.buffs);
+    this.renderer.setBattle(this.battle);
+    this.renderer.preload(this.stageMonsterNames(this.s.stage)).catch(() => {});
+    this.save(true);
+    this.sound.fanfare();
+    this.renderer.onEvents(
+      [{ t: 'promote', job: '환생 · 초월', tier: 0, badge: '♾️', color: '#b98bff' }],
+      Date.now(),
+    );
+    this.ui.addLog(`♾️ <b>환생 ${r.count}회차</b> · 초월석 +${r.points}P · Lv.1 · S1 새 회차 시작`);
+    const kept = `부동산 ${Object.keys(this.s.land.owned || {}).length}곳 · 펫 ${(this.s.pet.unlocked || []).length}종 · 장비 등급 유지`;
+    this.ui.modal({
+      title: '♾️ 환생 완료',
+      sub: `${r.count}회차 · 초월석 +${r.points}P`,
+      body: `<div class="modal-rewards">
+               <div class="rw"><div class="e">♾️</div><div class="v">${r.count}</div><div class="k">환생 횟수</div></div>
+               <div class="rw"><div class="e">✨</div><div class="v">+${r.points}P</div><div class="k">초월석</div></div>
+               <div class="rw"><div class="e">💰</div><div class="v">${r.startGold.toLocaleString()}</div><div class="k">시작 골드</div></div>
+             </div>
+             <div class="note" style="margin-top:9px">Lv.1 · S1 에서 새 회차를 시작합니다. ${kept}.<br>
+             ✨ <b>영구 특성</b>을 올리면 다음 회차가 훨씬 빨라집니다.</div>`,
+      actions: [
+        { label: '닫기', onClick: () => {} },
+        { label: '✨ 영구 특성 보기', style: 'primary', onClick: () => this.showRebirthTraits() },
+      ],
+    });
+    this.checkPets();
+    this.ui.render();
+  }
+
+  showRebirthTraits() {
+    const s = this.s;
+    const st = rebirthStatus(s);
+    const b = rebirthBonus(s);
+    const rows = REBIRTH_TRAITS.map((def) => {
+      const lv = traitLevel(s, def.id);
+      const maxed = lv >= def.maxLv;
+      const cost = traitCost(lv);
+      const can = !maxed && st.points >= cost;
+      return `<div class="trait-row ${maxed ? 'max' : ''}">
+        <div class="tr-ico">${def.icon}</div>
+        <div class="tr-mid">
+          <div class="tr-name">${esc(def.name)}<span class="lv">Lv.${lv}/${def.maxLv}</span></div>
+          <div class="tr-desc">${esc(def.desc)}</div>
+          <div class="prog tiny-prog"><i style="width:${(lv / def.maxLv) * 100}%"></i></div>
+          <div class="tr-now">${lv > 0 ? esc(def.effect(lv)) : '효과 없음'}${maxed ? '' : ` → ${esc(def.effect(lv + 1))}`}</div>
+        </div>
+        <div class="tr-act">${
+          maxed
+            ? '<span class="tiny" style="color:var(--gold)">MAX</span>'
+            : `<button class="btn small ${can ? 'primary' : 'ghost'}" type="button" data-action="rebirth-trait" data-value="${def.id}" ${can ? '' : 'disabled'}>✨${cost}P</button>`
+        }</div>
+      </div>`;
+    }).join('');
+    this.ui.modal({
+      title: '✨ 초월 특성',
+      sub: `초월석 ${st.points.toLocaleString()}P · 환생 ${st.count}회 · 특성 ${b.totalLv}레벨`,
+      body: `<div class="trait-list">${rows}</div>
+        <div class="note gold-note" style="margin-top:10px">특성은 <b>환생해도 유지</b>되는 영구 배율입니다.
+        초월석은 환생할 때 도달 스테이지에 따라 <b>S20 +${rebirthPointsFor(20)}P · S30 +${rebirthPointsFor(30)}P · S50 +${rebirthPointsFor(50)}P</b>처럼 계단식으로 늘어납니다.
+        ${st.can ? '' : `<br><b>${esc(st.reason)}</b>`}</div>`,
+      actions: [{ label: '닫기', style: 'primary', onClick: () => {} }],
+    });
+  }
+
+  doUpgradeRebirthTrait(id) {
+    this.sound.unlock();
+    const r = upgradeRebirthTraitState(this.s, id);
+    if (!r.ok) {
+      this.ui.toast(r.reason || '특성을 올릴 수 없습니다', 'red');
+      return;
+    }
+    this.battle.refreshStats();
+    this.save(true);
+    this.sound.levelUp();
+    this.ui.toast(`✨ ${r.name} Lv.${r.level} (초월석 -${r.cost}P)`, 'gold');
+    this.ui.addLog(`✨ <b>${esc(r.name)}</b> Lv.${r.level} 강화 · 초월석 -${r.cost}P`);
+    this.ui.render();
+    if (!this.ui.el.modalRoot.classList.contains('hidden')) this.showRebirthTraits();
   }
 
   /* ───────────── 📖 도감 모달 ───────────── */
