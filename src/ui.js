@@ -254,8 +254,10 @@ export class UI {
       const label = on ? rentBtn.dataset.label || '수령' : rentBtn.dataset.empty || '쌓이는 중…';
       if (rentBtn.textContent.trim() !== label) rentBtn.textContent = label;
       if (rentBtn.disabled === on) rentBtn.disabled = !on;
-      rentBtn.classList.toggle('green', on && !!rentBtn.dataset.label);
-      rentBtn.classList.toggle('ghost', !on);
+      if (rentBtn.dataset.label) { // 부동산 탭 버튼만 색을 바꾼다(사냥 탭 버튼은 ghost 유지)
+        rentBtn.classList.toggle('green', on);
+        rentBtn.classList.toggle('ghost', !on);
+      }
     }
   }
 

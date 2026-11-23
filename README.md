@@ -1,4 +1,4 @@
-# ⚔️ 영지 RPG — 게스트 전용 통합 부동산 RPG (v3.0.3)
+# ⚔️ 영지 RPG — 게스트 전용 통합 부동산 RPG (v3.0.4)
 
 로그인 없이 **바로 시작**하는 모바일 세로형 방치형 RPG + 전국 부동산 게임입니다.
 사냥과 부동산이 **골드 하나**로 이어지는 단일 경제로, 별도 환전·이중 연동 없이 한 화면에서 돌아갑니다.
@@ -26,11 +26,11 @@ python3 -m http.server 8080      # 이 폴더에서
 # 브라우저: http://localhost:8080
 
 # 검증 (node 불필요, Python + quickjs)
-python3 tools/verify_v3.py        # 문법/정적/단위/밸런스 42개 검사
+python3 tools/verify_v3.py        # 문법/정적/단위/밸런스 47개 검사
 python3 tools/balance_sim.py --hours 2   # 플레이 스타일별 밸런스 리포트
 ```
 
-`tools/` 는 `.gitignore` 대상(로컬 검증용)입니다. 배포물은 `index.html`, `app.js`, `src/`, `style.css`, `sw.js`, `assets/`, `icons/`, `manifest.json` 뿐입니다.
+`tools/` 는 대부분 `.gitignore` 대상이지만, `verify_v3.py`·`balance_sim.py` 는 재현을 위해 저장소에 포함했습니다. 배포물은 `index.html`, `app.js`, `src/`, `style.css`, `sw.js`, `assets/`, `icons/`, `manifest.json` 뿐입니다.
 
 ## 3. 파일 구조
 
@@ -38,7 +38,7 @@ python3 tools/balance_sim.py --hours 2   # 플레이 스타일별 밸런스 리�
 index.html          화면 골격 (HUD · 전투 캔버스 · 탭 · 모달)
 app.js              부트스트랩/메인 루프/사용자 액션 (로그인·클라우드 없음)
 style.css           모바일 UI (390px 세로 기준)
-sw.js               오프라인 캐시 land-rpg-v3.0.3
+sw.js               오프라인 캐시 land-rpg-v3.0.4
 src/data.js         밸런스 상수 · 몬스터/스테이지 · 장비 · 스킬 · 건물주 버프 정의
 src/land-data.js    전국 229개 시군구 원본 데이터 (자동 생성)
 src/land.js         부동산 엔진 — 골드 시세 · 매수/매도 · 임대수익 · 건물주 버프
@@ -116,7 +116,7 @@ assets/sprites/     히어로 3프레임 · 몬스터 12종 · 보스 7종
 ## 6. 배포
 
 - GitHub Pages: `hyosungkwon/land-rpg` `main` → https://hyosungkwon.github.io/land-rpg/
-- `sw.js` 캐시 버전을 올리면(현재 `land-rpg-v3.0.3`) 구버전 캐시가 지워지고 열린 탭이 새 버전으로 넘어갑니다.
+- `sw.js` 캐시 버전을 올리면(현재 `land-rpg-v3.0.4`) 구버전 캐시가 지워지고 열린 탭이 새 버전으로 넘어갑니다.
 - `localStorage` 키가 `land_rpg_unified_v3`라서 이전 버전(v1/v2) 진행도는 자동으로 초기화됩니다.
   (설정 탭 → 게임 초기화 버튼도 유지)
 
