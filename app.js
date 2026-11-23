@@ -299,7 +299,30 @@ class App {
   registerSW() {
     if (!('serviceWorker' in navigator)) return;
     if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker
+      .register('sw.js', { updateViaCache: 'none' })
+      .then((reg) => {
+        // 새 버전이 대기 중이면 바로 활성화 요청(삼성 인터넷은 skipWaiting 만으로도 교체됨)
+        if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        reg.update && reg.update().catch(() => {});
+      })
+      .catch(() => {});
+
+    // 새 서비스 워커가 제어권을 가져가면(새 캐시 준비 완료) 한 번만 자동 새로고짐
+    try {
+      if (!navigator.serviceWorker.controller) return;
+      let done = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (done) return;
+        try {
+          if (sessionStorage.getItem('land_rpg_sw_reloaded') === '1') return;
+          sessionStorage.setItem('land_rpg_sw_reloaded', '1');
+        } catch (e) { /* ignore */ }
+        done = true;
+        this.save(true);
+        setTimeout(() => location.reload(), 350);
+      });
+    } catch (e) { /* ignore */ }
   }
 
   /* ───────────── Firebase ───────────── */

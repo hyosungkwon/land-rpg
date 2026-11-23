@@ -596,21 +596,21 @@ export class Renderer {
     // 바깥 글로우
     ctx.globalAlpha = alpha * 0.35;
     ctx.strokeStyle = kind === 'strike' ? '#ffb347' : '#ffd76a';
-    ctx.lineWidth = 16 * sc * fade;
+    ctx.lineWidth = 20 * sc * fade;
     ctx.beginPath();
     ctx.arc(cx, cy, r, start, start + sweep);
     ctx.stroke();
     // 본체
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = '#ffc94d';
-    ctx.lineWidth = 7 * sc * fade;
+    ctx.lineWidth = 9 * sc * fade;
     ctx.beginPath();
     ctx.arc(cx, cy, r, start, start + sweep);
     ctx.stroke();
     // 코어
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = gold;
-    ctx.lineWidth = 2.5 * sc;
+    ctx.lineWidth = 3.5 * sc;
     ctx.beginPath();
     ctx.arc(cx, cy, r, start, start + sweep);
     ctx.stroke();
@@ -791,7 +791,7 @@ export class Renderer {
         // 치유: 발치에서 올라오는 초록 빛 입자 + 부드러운 고리
         ctx.globalAlpha = fade * 0.75;
         ctx.strokeStyle = '#8ff0a4';
-        ctx.lineWidth = 2.5 * sc;
+        ctx.lineWidth = 3.5 * sc;
         ctx.beginPath();
         ctx.ellipse(this.worldX(ECON.playerX), gy - 6 * sc, (26 + k * 30) * sc, (9 + k * 12) * sc, 0, 0, Math.PI * 2);
         ctx.stroke();

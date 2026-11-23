@@ -6,7 +6,7 @@ import {
   calcStats, currentHp, skillEffect, killReward, registerKill, clearStage,
 } from './state.js';
 
-const ATTACK_STOP_GAP = 210; // 이 거리에서 멈추고 때린다(캐릭터 스프라이트가 겹치지 않는 간격)
+const ATTACK_STOP_GAP = 240; // 이 거리에서 멈추고 때린다(캐릭터 스프라이트가 겹치지 않는 간격)
 const QUEUE_GAP = 80; // 뒤에 줄 서는 몬스터가 벌어지는 간격
 
 export class Battle {
@@ -165,7 +165,7 @@ export class Battle {
     for (const m of alive) {
       if (!Number.isFinite(m.x)) m.x = ECON.spawnX;
       if (!Number.isFinite(m.hp)) m.hp = m.maxHp;
-      const standX = ahead + (m.isBoss ? 70 : 0);
+      const standX = ahead + (m.isBoss ? 100 : 0);
       ahead = standX + QUEUE_GAP * (m.isBoss ? 1.5 : 1);
       const dist = m.x - p.x;
       if (m.x > standX + 2) {
