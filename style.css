@@ -1419,7 +1419,7 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   color: var(--dim);
 }
 .rebirth-sum b { font-size: 12px; color: var(--txt); font-variant-numeric: tabular-nums; }
-.rb-lists { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.rb-lists { display: grid; grid-template-columns: 1fr; gap: 7px; }
 .rb-list {
   border-radius: 10px;
   padding: 8px 9px;
@@ -1430,7 +1430,8 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .rb-list.reset h4 { color: #ff9b9b; }
 .rb-list.keep h4 { color: var(--green); }
 .rb-list ul { margin: 0; padding-left: 13px; }
-.rb-list li { font-size: 9.5px; line-height: 1.55; color: var(--sub); }
+.rb-list li { font-size: 10px; line-height: 1.5; color: var(--sub); }
+.rb-list li + li { margin-top: 2px; }
 .rb-list li b { color: var(--txt); }
 .trait-list { display: flex; flex-direction: column; gap: 6px; }
 .trait-row {
