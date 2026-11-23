@@ -553,6 +553,7 @@ class App {
         this.ui.toast('부동산 정보를 새로고침했습니다', 'green');
       },
       claimRent: () => this.openClaimRent(),
+      createAccount: () => this.openCreateAccount(),
       signIn: async () => {
         this.ui.toast('구글 로그인 창을 여는 중…');
         const r = await this.cloud.signIn();
@@ -830,6 +831,44 @@ class App {
       this.ui.toast(`💤 임대수익 ₩${won(amt)} 수령 완료`, 'gold');
     } finally {
       this._claiming = false;
+    }
+  }
+
+  openCreateAccount() {
+    if (!this.cloud.signedIn) {
+      this.ui.toast('상단의 Google 로그인 후 이용할 수 있습니다', 'red');
+      return;
+    }
+    this.ui.modal({
+      title: '🏢 부동산 게임 시작',
+      sub: '새 계정 · 초기 자금 ₩500,000',
+      body: `<div class="note">
+        원작 korea-land 와 같은 초기 상태(<b>version 3</b>, 현금 <b>₩500,000</b>)로
+        <b>users/{uid}/state</b> 를 만듭니다.<br>
+        이미 기록이 있는 계정이면 아무것도 덮어쓰지 않고 기존 기록을 불러옵니다.
+      </div>`,
+      actions: [
+        { label: '취소', onClick: () => {} },
+        { label: '시작', style: 'primary', onClick: () => this.doCreateAccount() },
+      ],
+    });
+  }
+
+  async doCreateAccount() {
+    if (this._creating) return;
+    this._creating = true;
+    try {
+      const r = await this.cloud.createPropertyAccount();
+      if (!r.ok) {
+        this.ui.toast(r.reason === 'login' ? '로그인이 필요합니다' : String(r.reason || '생성에 실패했습니다'), 'red');
+        if (r.reason === '이미 부동산 기록이 있습니다.') this.syncProperty();
+        return;
+      }
+      this.syncProperty();
+      this.save(true);
+      this.ui.toast('🏢 부동산 게임을 시작했습니다 · 현금 ₩500,000', 'gold');
+    } finally {
+      this._creating = false;
     }
   }
 

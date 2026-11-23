@@ -325,6 +325,77 @@ export class Cloud {
     return { ok: true, cash: Number((r.state || {}).cash) || 0 };
   }
 
+  /** 새 Google 계정용 부동산 초기 상태 생성 (원작 game.js 의 초기 state 와 같은 스키마) */
+  async createPropertyAccount() {
+    if (!this.user) return { ok: false, reason: 'login' };
+    const f = this.f || (await this.loadSdk());
+    const ref = f.ref(this.db, `users/${this.uid}/state`);
+    // 이미 기록이 있으면 절대 만들지 않는다(다른 기기의 진행 보호)
+    try {
+      const snap = await f.get(ref);
+      if (snap && snap.exists()) {
+        await this.refreshProperty();
+        return { ok: false, reason: '이미 부동산 기록이 있습니다.' };
+      }
+    } catch (e) {
+      return { ok: false, reason: 'rules', error: String(e && (e.code || e.message)) };
+    }
+    const now = Date.now();
+    const nickname = this.nickname || '플레이어';
+    const initial = {
+      nickname,
+      cash: 500000,
+      version: 3,
+      owned: {},
+      totalCost: {},
+      buildings: {},
+      jobs: {},
+      upgrades: {},
+      bank: { deposits: [], loans: [] },
+      bestAsset: 500000,
+      tutorialFinished: false,
+      globalOwned: {},
+      globalTotalCost: {},
+      achievements: {},
+      tradeCount: 0,
+      depCount: 0,
+      loanCount: 0,
+      listingCount: 0,
+      bidCount: 0,
+      bestRank: 999,
+      assetHistory: [{ t: now, v: 500000 }],
+      activeTitle: null,
+      krTax: 0,
+      globalTax: {},
+      landmarks: {},
+      lotteryTickets: 0,
+      myCompanyId: null,
+      stockHoldings: {},
+      stockHoldingCost: {},
+      totalPlayMinutes: 0,
+      stockOrderCount: 0,
+      createdAt: now,
+    };
+    let created = false;
+    try {
+      const r = await withTimeout(
+        f.runTransaction(ref, (cur) => {
+          if (cur && typeof cur === 'object' && Object.keys(cur).length) return undefined; // 경쟁 시 중단
+          created = true;
+          return initial;
+        }),
+        12000,
+        'create state',
+      );
+      if (!created) return { ok: false, reason: '이미 부동산 기록이 있습니다.' };
+      const val = r && r.snapshot ? r.snapshot.val() : initial;
+      this.setPropertyState(val);
+      return { ok: true, state: val };
+    } catch (e) {
+      return { ok: false, reason: 'rules', error: String(e && (e.code || e.message)) };
+    }
+  }
+
   /** 골드 → 부동산 현금. users/{uid}/state/cash 원자적 증가 */
   async addCash(cash) {
     if (!this.user) return { ok: false, reason: 'login' };

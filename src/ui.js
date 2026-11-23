@@ -129,6 +129,7 @@ export class UI {
       case 'land-tier': actions.landTier(v); break;
       case 'land-refresh': actions.refreshLand(); break;
       case 'claim-rent': actions.claimRent(); break;
+      case 'create-account': actions.createAccount(); break;
       case 'claim-dividend': actions.claimDividend(); break;
       case 'exchange-max': {
         const inp = document.getElementById('exchangeGold');
@@ -598,12 +599,19 @@ function tplLandHome(ui) {
   const raw = cloud.prop;
   if (!raw) {
     return `<div class="card">
-        <div class="card-head"><div class="card-title"><span class="t-ico">🏢</span>${esc(status.nickname || '내 부동산')}</div><span class="tiny dim">데이터 없음</span></div>
-        <div class="note warn">계정은 로그인됐지만 부동산 상태를 읽지 못했습니다. 새로고침을 눌러 다시 확인해 주세요.</div>
-        <div class="row gap6" style="margin-top:10px">
+        <div class="card-head"><div class="card-title"><span class="t-ico">🏢</span>${esc(status.nickname || '내 부동산')}</div><span class="tiny dim">새 계정</span></div>
+        <div class="tiny muted" style="line-height:1.7">
+          이 Google 계정에는 아직 부동산 게임 기록이 없습니다.<br>
+          시작하면 <b>원작과 같은 초기 상태</b>(현금 <b>₩500,000</b>, version 3)로
+          <b>users/{uid}/state</b> 가 만들어집니다. 이후 매물을 사고팔거나 임대수익을 받으면
+          기존 korea-land 앱과 같은 데이터로 이어집니다.
+        </div>
+        <button class="btn green block" style="margin-top:11px" data-action="create-account">부동산 게임 시작 (₩500,000)</button>
+        <div class="row gap6" style="margin-top:8px">
           <button class="btn small ghost wide" data-action="land-refresh">새로고침</button>
           <button class="btn small ghost wide" data-action="logout">로그아웃</button>
         </div>
+        <div class="note" style="margin-top:9px">이미 다른 기기에서 플레이한 기록이 있다면 그 기록이 그대로 표시되므로(자동 생성 안 됨) 안심하셔도 됩니다.</div>
       </div>`;
   }
 
@@ -688,9 +696,13 @@ function tplLandMarket(ui) {
   const s = ui.s;
   const status = ui.cloud.statusInfo();
   if (!status.signedIn || !ui.cloud.prop) {
+    const signIn = !status.signedIn;
     return `<div class="card">
-      <div class="card-head"><div class="card-title"><span class="t-ico">🛒</span>매물 투자</div><span class="tiny dim">로그인 필요</span></div>
-      <div class="tiny muted" style="line-height:1.7">상단 <b>Google 로그인</b> 한 번이면 전국 229개 시군구 매물을 이 화면에서 바로 사고팔 수 있습니다.</div>
+      <div class="card-head"><div class="card-title"><span class="t-ico">🛒</span>매물 투자</div><span class="tiny dim">${signIn ? '로그인 필요' : '새 계정'}</span></div>
+      <div class="tiny muted" style="line-height:1.7">${signIn
+        ? '상단 <b>Google 로그인</b> 한 번이면 전국 229개 시군구 매물을 이 화면에서 바로 사고팔 수 있습니다.'
+        : '이 계정에는 아직 부동산 기록이 없습니다. 초기 자금 <b>₩500,000</b> 으로 시작하면 매물을 바로 살 수 있습니다.'}</div>
+      ${signIn ? '' : '<button class="btn green block" style="margin-top:11px" data-action="create-account">부동산 게임 시작 (₩500,000)</button>'}
       <div class="note" style="margin-top:10px">가격·수익률은 korea-land 원본 데이터(초기가·분당 임대수익·최대 공급·지역 특성)를 그대로 씁니다.</div>
     </div>`;
   }
@@ -825,7 +837,7 @@ function tplLandRpg(ui) {
              <div class="kv"><span class="k">총 보유 면적</span><span class="v">${fmt(prop.totalPyeong)}평</span></div>
              <div class="kv"><span class="k">시간당 임대</span><span class="v gold">+₩${formatMan(prop.incomePerHour || 0)}</span></div>
              <div class="kv"><span class="k">거래소 판매 대기</span><span class="v">₩${fmt(prop.pendingIncome)}</span></div>`
-          : `<div class="note warn">계정은 로그인됐지만 부동산 상태를 읽지 못했습니다. 땅을 한 번이라도 보유한 계정인지 확인해 주세요.</div>`}
+          : `<div class="note warn">이 계정에는 부동산 기록이 없습니다. <b>🏠 내 부동산</b> 탭에서 ‘부동산 게임 시작’을 눌러 주세요.</div>`}
         <div class="row gap6" style="margin-top:10px">
           <button class="btn small ghost wide" data-action="land-refresh">새로고침</button>
           <button class="btn small ghost wide" data-action="logout">로그아웃</button>
