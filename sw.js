@@ -1,6 +1,5 @@
-// land-rpg / sw.js — 오프라인 캐시 (방치형 RPG 는 네트워크 없이도 플레이 가능해야 함)
-// Firebase/CDN/Google Auth 요청은 절대 가로채지 않고 네트워크로 그대로 보낸다.
-const VERSION = 'land-rpg-v2.1.5';
+// land-rpg / sw.js — 오프라인 캐시 (게스트 전용: 네트워크가 없어도 처음부터 끝까지 플레이)
+const VERSION = 'land-rpg-v3.0.0';
 const CORE = [
   './',
   './index.html',
@@ -12,8 +11,6 @@ const CORE = [
   './src/combat.js',
   './src/render.js',
   './src/ui.js',
-  './src/firebase.js',
-  './src/property.js',
   './src/land.js',
   './src/land-data.js',
   './icons/icon-192.png',
@@ -51,7 +48,6 @@ self.addEventListener('install', (event) => {
     (async () => {
       const cache = await caches.open(VERSION);
       // cache:'reload' 로 브라우저 HTTP 캐시를 건너뛰고 항상 최신 파일을 담는다.
-      // (GitHub Pages 는 max-age=600 이라 그냥 add 하면 최대 10분 묵은 파일이 들어올 수 있음)
       await Promise.all(
         CORE.map((url) =>
           fetch(new Request(url, { cache: 'reload' }))
@@ -70,8 +66,7 @@ self.addEventListener('activate', (event) => {
       const keys = await caches.keys();
       await Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k)));
       await self.clients.claim();
-      // 구버전 앱이 열려 있으면(예: v1 처럼 자동 새로고침 코드가 없는 버전) 새 버전으로 한 번 넘긴다.
-      // 그렇지 않으면 캐시만 새로 바뀌고 화면은 옛 코드로 계속 돌아간다.
+      // 구버전 앱이 열려 있으면 새 버전으로 한 번 넘긴다(구버전 자동 새로고침 코드가 없는 경우 대비).
       try {
         const list = await self.clients.matchAll({ type: 'window' });
         for (const c of list) {
@@ -84,36 +79,19 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// 새 버전이 설치되면 대기 중인 SW 를 즉시 활성화하고 열려 있는 모든 탭을 새 버전으로 넘긴다.
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
-
-// Firebase Auth(로그인 팝업/리다이렉트)에 직접 쓰는 도메인 — 캐시·가로채기 금지.
-// 하나라도 SW 가 응답하면 signInWithPopup 의 relay(iframe/postMessage) 가 끊겨
-// '로그인이 계속 연결 중' 으로 멈춘다.
-const AUTH_HOSTS = [
-  'firebaseapp.com', 'firebaseio.com', 'firebasedatabase.app', 'firebase.com',
-  'googleapis.com', 'gstatic.com', 'google.com', 'googleusercontent.com',
-  'google-analytics.com', 'googletagmanager.com',
-];
-const AUTH_PATHS = ['/__/auth', '/__/firebase'];
-
-function isAuthRequest(url) {
-  if (AUTH_PATHS.some((p) => url.pathname.indexOf(p) === 0)) return true;
-  return AUTH_HOSTS.some((h) => url.hostname === h || url.hostname.endsWith('.' + h));
-}
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   let url;
   try { url = new URL(req.url); } catch (e) { return; }
-  // Firebase Auth / Google 계정 / SDK CDN 은 SW 가 관여하지 않는다(네트워크 직통).
-  if (isAuthRequest(url)) return;
+  // 외부(CDN 등) 요청은 그대로 네트워크로 보낸다.
   if (url.origin !== self.location.origin) return;
 
-  // 페이지 이동: 네트워크 우선, 실패 시 캐시된 index.html
+  // 페이지 이동: 네트워크 우선, 실패 시 캐시된 index.html (오프라인 실행)
   if (req.mode === 'navigate') {
     event.respondWith(
       (async () => {

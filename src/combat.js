@@ -3,7 +3,7 @@
 // 렌더러는 이 객체의 엔티티를 읽고, UI는 events 큐를 소비한다.
 import { ECON, SKILLS, stageDef, monsterKo } from './data.js';
 import {
-  calcStats, currentHp, skillEffect, killReward, registerKill, clearStage,
+  calcStats, currentHp, skillEffect, killReward, registerKill, clearStage, monsterStats,
 } from './state.js';
 
 const ATTACK_STOP_GAP = 260; // 이 거리에서 멈추고 때린다(캐릭터 스프라이트가 겹치지 않는 간격)
@@ -79,11 +79,7 @@ export class Battle {
   makeMonster(name, isBoss, now) {
     const def = stageDef(this.s.stage);
     const variant = 0.9 + this.rng() * 0.2;
-    const base = isBoss
-      ? { hp: ECON.monsterHpBase * Math.pow(ECON.monsterHpGrowth, this.s.stage - 1) * ECON.bossHpMul,
-          atk: ECON.monsterAtkBase * Math.pow(ECON.monsterAtkGrowth, this.s.stage - 1) * ECON.bossAtkMul }
-      : { hp: ECON.monsterHpBase * Math.pow(ECON.monsterHpGrowth, this.s.stage - 1) * variant,
-          atk: ECON.monsterAtkBase * Math.pow(ECON.monsterAtkGrowth, this.s.stage - 1) };
+    const base = monsterStats(this.s.stage, isBoss, variant);
     const scale = isBoss ? 1.5 : 0.92 + this.rng() * 0.22;
     return {
       id: this.nextId++,

@@ -1,14 +1,16 @@
 // land-rpg / app.js
-// 앱 부트스트랩: 상태 로드 → 전투/렌더/UI 연결 → 루프 → Firebase 연동.
-import { APP_VERSION, ECON, EQUIP, SKILLS, stageDef } from './src/data.js';
+// 앱 부트스트랩: 로컬 상태 로드(=게스트) → 전투/렌더/UI 연결 → 루프 → 자동 저장.
+// v3: 로그인·클라우드·Firebase 없음. 네트워크 대기 없이 즉시 시작하고 오프라인에서도 완전 동작.
+import { APP_VERSION, ECON, EQUIP, SKILLS, SAVE_KEY, stageDef } from './src/data.js';
 import {
-  loadState, saveState, defaultState, offlineSummary, applyOffline, tryEnhance,
-  tryUpgradeSkill, validateExchange, commitExchange, exchangeStatus,
+  loadState, saveState, offlineSummary, applyOffline, tryEnhance, tryUpgradeSkill,
+  shardPrice, buyShards,
 } from './src/state.js';
 import { Battle } from './src/combat.js';
-import { CLOUD } from './src/firebase.js';
-import { normalizeProperty, computeBuffs, dividendReward, EMPTY_PROP } from './src/property.js';
-import { CITY_BY_KEY, quoteTrade, maxBuyQty, rentAccrual, formatWon, LAND } from './src/land.js';
+import {
+  computeBuffs, portfolioOf, accrueRent, claimRent, applyTrade, quoteTrade, maxBuyQty,
+  CITY_BY_KEY, formatGold, LAND,
+} from './src/land.js';
 import { Renderer } from './src/render.js';
 import { UI } from './src/ui.js';
 
@@ -38,16 +40,13 @@ const STORAGE = (() => {
   }
 })();
 
-const won = (n) => Math.floor(Number(n) || 0).toLocaleString('ko-KR');
 const esc = (v) =>
   String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 class App {
   constructor() {
     this.s = loadState(STORAGE);
-    this.prop = { ...EMPTY_PROP };
-    this.buffs = computeBuffs(this.prop);
-    this.cloud = CLOUD;
+    this.buffs = computeBuffs(this.s);
     this.battle = new Battle(this.s, () => this.buffs);
     this.renderer = new Renderer(document.getElementById('battle'));
     this.renderer.setBattle(this.battle);
@@ -56,13 +55,13 @@ class App {
     this.actions = this.makeActions();
     this.lastTs = 0;
     this.lastSave = 0;
-    this.lastCloud = 0;
-    this.lastRank = 0;
     this.lastRentTick = 0;
-    this._rentSettled = false;
     this.startedAt = Date.now();
-    this.offlineChecked = new Date(this.s.lastActiveAt).toDateString();
     this.hiddenAt = 0;
+  }
+
+  get prop() {
+    return portfolioOf(this.s);
   }
 
   async boot() {
@@ -72,19 +71,13 @@ class App {
       .then(() => this.renderer.resize())
       .catch(() => {});
 
-    this.ui.setSync({ kind: 'guest', label: '로컬 저장', detail: '부동산 연동 전' });
-    this.cloud.onStatus((info) => {
-      this.ui.setSync(info);
-      // 세션 복원/늦은 로그인으로 부동산 데이터가 나중에 도착한 경우에도 한 번 연결한다.
-      // (init() 은 'loading' 에 갇히지 않도록 데이터를 기다리지 않으므로,
-      //  데이터 도착 시점에 애프터 처리·클라우드 저장 제안을 다시 한 번 실행한다)
-      if (info.signedIn && this.cloud.prop && (!this.prop || !this.prop.connected)) {
-        try { this.afterCloudChange(); } catch (e) { this.reportError('property', e); }
-      }
-    });
+    const now = Date.now();
 
-    // 오프라인 정산 (최대 12시간)
-    const summary = offlineSummary(this.s, Date.now(), this.buffs);
+    // 오프라인 임대수익 (원작과 같이 5%만 적립)
+    this.accrueRent(now, LAND.rentOfflineRate);
+
+    // 오프라인 사냥 보상 (최대 12시간)
+    const summary = offlineSummary(this.s, now, this.buffs);
     if (summary.sec >= 60 && (summary.gold || summary.exp || summary.shards)) {
       const ups = applyOffline(this.s, summary);
       this.save(true);
@@ -95,17 +88,14 @@ class App {
     // PWA 바로가기(?tab=land) 지원
     try {
       const tabParam = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('tab');
-      if (tabParam && ['hunt', 'gear', 'land', 'more'].includes(tabParam)) this.ui.setTab(tabParam);
+      if (tabParam && ['hunt', 'gear', 'land', 'settings'].includes(tabParam)) this.ui.setTab(tabParam);
     } catch (e) { /* ignore */ }
     this.ui.refreshLive(Date.now());
     requestAnimationFrame((ts) => this.loop(ts));
-    setTimeout(() => this.ui.hideBoot(), 220);
+    setTimeout(() => this.ui.hideBoot(), 160);
 
     this.bindLifecycle();
     this.registerSW();
-
-    // Firebase 는 첫 프레임 뒤에 지연 초기화 (초기 로딩 속도 보호)
-    setTimeout(() => this.initCloud(), 1400);
   }
 
   stageMonsterNames(stage) {
@@ -114,8 +104,7 @@ class App {
   }
 
   /* ───────────── 메인 루프 ─────────────
-   * 중요: 다음 프레임을 먼저 예약한 뒤 작업한다. 어느 한 단계에서 예외가 나도
-   * 루프가 영구히 멈추지 않고(모바일 '몹 오면 멈춤' 증상), 전투 시뮬레이션은 계속된다.
+   * 다음 프레임을 먼저 예약한 뒤 작업한다. 어느 한 단계에서 예외가 나도 루프가 멈추지 않는다.
    */
   loop(ts) {
     this._raf = requestAnimationFrame((t) => this.loop(t));
@@ -126,7 +115,6 @@ class App {
     dt = Math.min(200, dt);
     this.lastTs = tsNum;
 
-    // 1) 전투 시뮬레이션
     let events = [];
     try {
       this.battle.tick(dt, now);
@@ -136,7 +124,6 @@ class App {
       this.recoverBattle();
     }
 
-    // 2) 연출 · 렌더 · UI (실패해도 전투는 계속)
     try {
       if (events.length) this.renderer.onEvents(events, now);
     } catch (e) {
@@ -156,7 +143,6 @@ class App {
       this.reportError('ui', e);
     }
 
-    // 3) 자동 저장 / 임대수익 적립 / 클라우드 동기화
     try {
       this.s.records.playMs = (this.s.records.playMs || 0) + dt;
       if (now - this.lastRentTick >= 1000) {
@@ -167,27 +153,18 @@ class App {
         this.lastSave = now;
         this.save();
       }
-      if (now - this.lastCloud > 45000 && this.cloud.signedIn) {
-        this.lastCloud = now;
-        this.pushCloud(true);
-      }
-      if (now - this.lastRank > 120000 && this.cloud.signedIn && this.s.maxStage > 1) {
-        this.lastRank = now;
-        this.cloud.publishRanking(this.s).catch(() => {});
-      }
     } catch (e) {
       this.reportError('save', e);
     }
   }
 
-  /* ───────────── 오류 보고 ·자동복구 ───────────── */
+  /* ───────────── 오류 보고 · 자동복구 ───────────── */
   reportError(where, err) {
     const msg = (err && (err.message || err.name)) || String(err);
     this._errCounts = this._errCounts || {};
     const n = (this._errCounts[where] = (this._errCounts[where] || 0) + 1);
     if (this._lastErr !== msg) {
       this._lastErr = msg;
-      // 사용자에게는 짧게만, 자세한 내용은 개발자 도구로
       try { console.warn(`[land-rpg] ${where} error:`, err); } catch (e) { /* ignore */ }
     }
     if (n === 3) this.showErrorBadge(`${where}: ${msg}`);
@@ -211,7 +188,6 @@ class App {
   }
 
   recoverBattle() {
-    // 전투 상태가 깨졌으면 엔티티를 정리해 다시 돌아가게 한다(진행도는 유지).
     try {
       this.battle.monsters = [];
       this.battle.boss = null;
@@ -223,7 +199,6 @@ class App {
   }
 
   recoverRender(now) {
-    // 캔버스 상태(save/restore 불균형·깨진 변환)를 되돌리고 다음 프레임을 다시 그린다.
     const since = now - (this._lastFrameOk || 0);
     try {
       const ctx = this.renderer.ctx;
@@ -254,7 +229,6 @@ class App {
         this.ui.renderIfNeeded();
         this.save(true);
         this.renderer.preload(this.stageMonsterNames(this.s.stage)).catch(() => {});
-        if (this.cloud.signedIn) this.cloud.publishRanking(this.s).catch(() => {});
       } else if (ev.t === 'bossStart') {
         this.ui.addLog(`⚔️ <b>${ev.ko}</b> 등장 — ${ECON.bossTimeLimitMs / 1000}초 제한`);
       } else if (ev.t === 'bossFail') {
@@ -270,24 +244,9 @@ class App {
     }
   }
 
-  /* ───────────── 부동산 임대수익 적립 ─────────────
-   * 원작과 동일: 접속 중에는 100%, 앱을 닫아둔 동안은 5%만 적립한다.
-   * 적립값은 RPG 저장소(rpg/{uid})에 함께 저장되고, 수령할 때 DB cash 에 반영된다.
-   */
+  /* ───────────── 임대수익 적립 ───────────── */
   accrueRent(now, rate = 1) {
-    const l = this.s.land;
-    if (!l) return 0;
-    const from = Number(l.rentAt) || 0;
-    if (!from) {
-      l.rentAt = now;
-      return 0;
-    }
-    const elapsed = Math.max(0, now - from);
-    const income = this.prop && this.prop.connected ? this.prop.incomePerMin : 0;
-    const gain = rate >= 1 ? rentAccrual(income, elapsed, 1) : rentAccrual(income, elapsed, rate);
-    if (gain > 0) l.accruedRent = (Number(l.accruedRent) || 0) + gain;
-    l.rentAt = now;
-    return gain;
+    return accrueRent(this.s, now, rate);
   }
 
   save(immediate = false) {
@@ -304,14 +263,12 @@ class App {
         this.hiddenAt = Date.now();
         this.accrueRent(Date.now(), 1);
         this.save(true);
-        if (this.cloud.signedIn) this.pushCloud(true).catch(() => {});
       } else {
         const away = Date.now() - (this.hiddenAt || Date.now());
-        // 자리를 비운 동안의 임대수익은 5%만 적립 (원작 오프라인 수익률)
+        // 자리를 비운 동안의 임대수익은 5%만 적립
         const rent = this.accrueRent(Date.now(), LAND.rentOfflineRate);
-        if (rent >= 1) this.ui.toast(`💤 방치 임대수익 +₩${formatWon(rent)} (5%)`, 'gold');
+        if (rent >= 1) this.ui.toast(`💤 방치 임대수익 +${formatGold(rent)} (5%)`, 'gold');
         if (away > 120000) {
-          // 백그라운드에 있던 시간도 방치 보상으로 정산
           const summary = offlineSummary({ ...this.s, lastActiveAt: this.hiddenAt }, Date.now(), this.buffs);
           if (summary.gold > 0) {
             const ups = applyOffline(this.s, summary);
@@ -325,13 +282,7 @@ class App {
         this.battle.refreshStats();
       }
     });
-    window.addEventListener('beforeunload', () => {
-      this.save(true);
-      if (this.cloud.signedIn && this.cloud.writable) this.cloud.saveRpg(this.cloudPayload());
-    });
-    window.addEventListener('online', () => {
-      if (this.cloud.status === 'offline') this.initCloud();
-    });
+    window.addEventListener('beforeunload', () => this.save(true));
     let rt = 0;
     window.addEventListener('resize', () => {
       clearTimeout(rt);
@@ -345,9 +296,7 @@ class App {
     navigator.serviceWorker
       .register('sw.js', { updateViaCache: 'none' })
       .then((reg) => {
-        // 새 버전이 대기 중이면 바로 활성화 요청(삼성 인터넷은 skipWaiting 만으로도 교체됨)
         if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-        // 설치가 끝나는 즉시(대기 상태 진입) 활성화 요청
         reg.addEventListener('updatefound', () => {
           const sw = reg.installing;
           if (!sw) return;
@@ -361,120 +310,16 @@ class App {
       })
       .catch(() => {});
 
-    // 새 서비스 워커가 제어권을 가져가면(새 캐시 준비 완료) 한 번만 자동 새로고짐
     try {
       if (!navigator.serviceWorker.controller) return;
       let done = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (done) return;
-        done = true; // 페이지당 한 번만 (새로고침 뒤에는 컨트롤러가 최신이라 다시 발생하지 않음)
+        done = true; // 페이지당 한 번만
         this.save(true);
         setTimeout(() => location.reload(), 350);
       });
     } catch (e) { /* ignore */ }
-  }
-
-  /* ───────────── Firebase ───────────── */
-  async initCloud() {
-    try {
-      await this.cloud.init();
-      await this.afterCloudChange();
-    } catch (e) {
-      this.ui.setSync({ kind: 'error', label: '연동 오류', detail: String(e && e.message) });
-    }
-  }
-
-  async afterCloudChange() {
-    this.syncProperty();
-    this.ui.render();
-    if (this.cloud.signedIn) {
-      this.s.uid = this.cloud.uid;
-      if (!this.s.nickname) this.s.nickname = this.prop.nickname || this.cloud.nickname || '';
-      const cloudSave = this.cloud.lastRpg;
-      if (cloudSave && cloudSave.savedAt && cloudSave.savedAt > (this.s.lastActiveAt || 0) - 500 && (cloudSave.stage || cloudSave.level)) {
-        this.offerCloudLoad(cloudSave);
-      }
-      this.save(true);
-    }
-  }
-
-  syncProperty() {
-    const raw = this.cloud.prop;
-    const pending = raw ? raw._pendingIncome || 0 : 0;
-    this.prop = raw ? normalizeProperty(raw, pending) : { ...EMPTY_PROP };
-    this.buffs = computeBuffs(this.prop);
-    this.battle.refreshStats();
-    // 로그인/새로고침 직후 한 번만: 앱을 닫아둔 동안의 임대수익을 5%로 정산
-    if (this.prop.connected && !this._rentSettled) {
-      this._rentSettled = true;
-      const gain = this.accrueRent(Date.now(), LAND.rentOfflineRate);
-      if (gain >= 100) this.ui.toast(`🏢 방치 중 임대수익 +₩${formatWon(gain)} 적립 (5%)`, 'gold');
-    }
-    this.ui.render();
-  }
-
-  offerCloudLoad(cloudSave) {
-    if (this._offeredCloud) return;
-    this._offeredCloud = true;
-    const diff = (cloudSave.stage || 1) - this.s.stage;
-    if (Math.abs(diff) < 1 && (cloudSave.level || 1) <= this.s.level) return; // 비슷하면 굳이 묻지 않음
-    this.ui.modal({
-      title: '☁️ 클라우드 저장 발견',
-      sub: `rpg/${this.cloud.uid} 에 저장된 기록이 있습니다.`,
-      body: `<div class="kv"><span class="k">클라우드</span><span class="v">S${cloudSave.stage} · Lv.${cloudSave.level}</span></div>
-             <div class="kv"><span class="k">이 기기</span><span class="v">S${this.s.stage} · Lv.${this.s.level}</span></div>
-             <div class="note" style="margin-top:10px">불러오면 이 기기의 진행도가 클라우드 기록으로 바뀝니다.</div>`,
-      actions: [
-        { label: '나중에', onClick: () => {} },
-        { label: '불러오기', style: 'primary', onClick: () => this.applyCloudSave(cloudSave) },
-      ],
-    });
-  }
-
-  applyCloudSave(cloud) {
-    const keepUid = this.cloud.uid;
-    const fresh = loadState({
-      getItem: () => JSON.stringify(cloud),
-      setItem: () => {},
-    });
-    fresh.uid = keepUid;
-    fresh.lastActiveAt = Date.now();
-    this.s = fresh;
-    this.battle = new Battle(this.s, () => this.buffs || {});
-    this.renderer.setBattle(this.battle);
-    this.ui.app.s = this.s;
-    this.ui.app.battle = this.battle;
-    this.save(true);
-    this.ui.toast('☁️ 클라우드 기록을 불러왔습니다', 'green');
-    this.ui.render();
-  }
-
-  cloudPayload() {
-    const s = this.s;
-    return {
-      version: APP_VERSION,
-      savedAt: Date.now(),
-      nickname: this.prop.nickname || this.cloud.nickname || s.nickname || '',
-      level: s.level, exp: s.exp, gold: s.gold, shards: s.shards,
-      equip: s.equip, skills: s.skills, stage: s.stage, killsInStage: s.killsInStage,
-      totalKills: s.totalKills, bossKills: s.bossKills, maxStage: s.maxStage,
-      autoBoss: s.autoBoss, exchange: s.exchange, claim: s.claim, records: s.records,
-      land: { accruedRent: s.land.accruedRent, rentAt: s.land.rentAt },
-      createdAt: s.createdAt,
-    };
-  }
-
-  async pushCloud(silent = false) {
-    if (!this.cloud.signedIn) {
-      if (!silent) this.ui.toast('로그인하면 클라우드에 저장할 수 있습니다', 'red');
-      return false;
-    }
-    const r = await this.cloud.saveRpg(this.cloudPayload());
-    if (!silent) {
-      if (r.ok) this.ui.toast('☁️ 클라우드 저장 완료', 'green');
-      else this.ui.toast('rpg 쓰기 규칙이 없어 로컬에 저장했습니다 (database.rules.json 참고)', 'red');
-    }
-    return r.ok;
   }
 
   /* ───────────── 사용자 액션 ───────────── */
@@ -533,7 +378,25 @@ class App {
           this.ui.toast(r.reason || '강화할 수 없습니다', 'red');
         }
       },
-      /* ── 부동산 게임 (내 자산 · 매물 투자) ── */
+
+      buyShards: (n) => {
+        const price = shardPrice(this.s);
+        const count = n === 'max' ? Math.floor(this.s.gold / price) : Math.floor(Number(n) || 0);
+        if (count <= 0) {
+          this.ui.toast('골드가 부족합니다', 'red');
+          return;
+        }
+        const r = buyShards(this.s, count);
+        if (!r.ok) {
+          this.ui.toast(r.reason, 'red');
+          return;
+        }
+        this.save(true);
+        this.ui.toast(`💎 강화석 ${r.n}개 구매 (💰${r.cost.toLocaleString()})`, 'green');
+        this.ui.render();
+      },
+
+      /* ── 부동산 ── */
       landTrade: (key, side) => this.openLandTrade(key, side),
       landMore: () => {
         this.s.land.page = Math.max(1, Math.floor(Number(this.s.land.page) || 1)) + 1;
@@ -551,155 +414,26 @@ class App {
         this.save();
         this.ui.render();
       },
-      refreshLand: async () => {
-        if (!this.cloud.signedIn) {
-          this.ui.toast('상단의 Google 로그인 후 이용할 수 있습니다', 'red');
-          return;
-        }
-        await this.cloud.refreshProperty();
-        this.syncProperty();
-        this.ui.toast('부동산 정보를 새로고침했습니다', 'green');
+      landSearch: (q) => {
+        this.s.land.q = String(q || '').slice(0, 30);
+        this.s.land.page = 1;
+        this.ui.updateLandList();
       },
       claimRent: () => this.openClaimRent(),
-      createAccount: () => this.openCreateAccount(),
-      signIn: async () => {
-        if (this.cloud.signedIn) { this.ui.setTab('land'); return; }
-        this.ui.toast('구글 로그인 창을 여는 중…');
-        const r = await this.cloud.signIn();
-        if (r.ok) {
-          await this.afterCloudChange();
-          this.ui.toast(`🏢 ${this.prop.nickname || '부동산'} 계정 연동 완료`, 'gold');
-          return;
-        }
-        if (r.reason === 'cancelled') {
-          this.ui.toast('로그인 창을 닫았습니다. 다시 눌러 주세요.');
-          return;
-        }
-        if (r.reason === 'busy') {
-          this.ui.toast(r.message || '이미 로그인 창을 여는 중입니다.');
-          return;
-        }
-        if (['popup-blocked', 'unsupported', 'timeout', 'sdk', 'config', 'no-user'].includes(r.reason)) {
-          this.openLoginHelp(r);
-          return;
-        }
-        this.ui.toast(r.message || '로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.', 'red');
-      },
-      signInRedirect: async () => {
-        const r = await this.cloud.signInRedirect();
-        if (!r.ok) this.ui.toast('같은 창 로그인을 시작하지 못했습니다. 크롬에서 열어 주세요.', 'red');
-      },
-      signOut: async () => {
-        await this.cloud.signOut();
-        this.prop = { ...EMPTY_PROP };
-        this.buffs = computeBuffs(this.prop);
-        this.battle.refreshStats();
-        this.ui.render();
-        this.ui.toast('로그아웃했습니다 (로컬 저장으로 계속)');
-      },
-      refreshCloud: async () => {
-        if (!this.cloud.signedIn) {
-          this.ui.toast('먼저 구글 로그인이 필요합니다');
-          return;
-        }
-        await this.cloud.refreshProperty();
-        await this.cloud.loadRankings().catch(() => {});
-        this.syncProperty();
-        this.ui.toast('부동산 정보를 새로고침했습니다', 'green');
-      },
-      claimDividend: () => {
-        if (!this.prop.connected) {
-          this.ui.toast('부동산 데이터가 없습니다', 'red');
-          return;
-        }
-        if (this.prop.pendingIncome < this.s.claim.dividendWatermark) {
-          this.s.claim.dividendWatermark = this.prop.pendingIncome;
-          this.save();
-        }
-        const div = dividendReward(this.prop.pendingIncome, this.s.claim.dividendWatermark);
-        if (div.shards <= 0) {
-          this.ui.toast('새로 늘어난 배당이 없습니다');
-          return;
-        }
-        this.ui.modal({
-          title: '🎁 배당 → 강화석',
-          sub: `미수령 배당 ₩${div.pending.toLocaleString()} 중 늘어난 ₩${div.delta.toLocaleString()}을(를) 강화석으로 환산합니다.`,
-          body: `<div class="modal-rewards">
-                   <div class="rw"><div class="e">💎</div><div class="v">${div.shards}</div><div class="k">강화석</div></div>
-                   <div class="rw"><div class="e">🏢</div><div class="v">${this.prop.buildings}</div><div class="k">보유 지역</div></div>
-                   <div class="rw"><div class="e">📐</div><div class="v">${this.prop.totalPyeong.toLocaleString()}</div><div class="k">보유 평수</div></div>
-                 </div>
-                 <div class="note">원본 배당은 부동산 앱에서 그대로 수령할 수 있습니다. 여기서는 읽기만 합니다.</div>`,
-          actions: [
-            { label: '취소', onClick: () => {} },
-            {
-              label: '수령',
-              style: 'primary',
-              onClick: () => {
-                this.s.shards += div.shards;
-                this.s.claim.dividendWatermark = div.pending;
-                this.save(true);
-                this.ui.toast(`💎 강화석 ${div.shards}개 수령`, 'gold');
-                this.ui.render();
-              },
-            },
-          ],
-        });
-      },
-      maxExchangeGold: () => {
-        const st = exchangeStatus(this.s);
-        return Math.max(0, Math.min(this.s.gold, Math.floor(st.remain / st.rate)));
-      },
-      exchange: (gold) => {
-        if (!this.cloud.signedIn) {
-          this.ui.toast('부동산 환전은 구글 로그인 후 사용할 수 있습니다', 'red');
-          return;
-        }
-        const v = validateExchange(this.s, gold);
-        if (!v.ok) {
-          this.ui.toast(v.reason, 'red');
-          return;
-        }
-        this.ui.modal({
-          title: '💱 골드 환전',
-          sub: '부동산 계정의 현금으로 실제 반영됩니다.',
-          body: `<div class="kv"><span class="k">소모 골드</span><span class="v">💰 ${v.gold.toLocaleString()}</span></div>
-                 <div class="kv"><span class="k">받을 현금</span><span class="v gold">₩${v.cash.toLocaleString()}</span></div>
-                 <div class="kv"><span class="k">오늘 사용/한도</span><span class="v">₩${v.status.used.toLocaleString()} / ₩${v.status.cap.toLocaleString()}</span></div>`,
-          actions: [
-            { label: '취소', onClick: () => {} },
-            { label: '환전', style: 'primary', onClick: () => this.doExchange(v.gold, v.cash) },
-          ],
-        });
-      },
-      pushCloud: () => this.pushCloud(false),
-      pullCloud: async () => {
-        if (!this.cloud.signedIn) return;
-        const cloud = await this.cloud.loadRpg();
-        if (!cloud) {
-          this.ui.toast('클라우드에 저장된 기록이 없습니다');
-          return;
-        }
-        this.ui.modal({
-          title: '☁️ 클라우드 불러오기',
-          sub: `S${cloud.stage || 1} · Lv.${cloud.level || 1} 기록으로 덮어씁니다.`,
-          actions: [
-            { label: '취소', onClick: () => {} },
-            { label: '불러오기', style: 'primary', onClick: () => this.applyCloudSave(cloud) },
-          ],
-        });
-      },
       resetGame: () => {
         this.ui.modal({
           title: '⚠️ 게임 초기화',
-          sub: '이 기기의 진행도가 모두 사라집니다. 되돌릴 수 없습니다.',
+          sub: '이 기기의 진행도(레벨·골드·부동산)가 모두 사라집니다. 되돌릴 수 없습니다.',
           actions: [
             { label: '취소', onClick: () => {} },
             {
               label: '초기화',
               style: 'primary',
               onClick: () => {
-                try { STORAGE && STORAGE.removeItem('land_rpg_state_v1'); } catch (e) { /* ignore */ }
+                try {
+                  STORAGE && STORAGE.removeItem(SAVE_KEY);
+                  STORAGE && STORAGE.removeItem('land_rpg_state_v1'); // 구버전 키도 정리
+                } catch (e) { /* ignore */ }
                 location.reload();
               },
             },
@@ -713,44 +447,42 @@ class App {
   openLandTrade(key, side) {
     const city = CITY_BY_KEY[key];
     if (!city) return;
-    if (!this.cloud.signedIn || !this.cloud.prop) {
-      this.ui.toast('상단의 Google 로그인 후 이용할 수 있습니다', 'red');
-      return;
-    }
-    const raw = this.cloud.prop;
     const now = Date.now();
-    const held = Math.floor(Number((raw.owned || {})[key]) || 0);
-    const max = side === 'buy' ? maxBuyQty(key, raw, now) : held;
+    const land = this.s.land;
+    const held = Math.floor(Number(land.owned[key]) || 0);
+    const max = side === 'buy' ? maxBuyQty(key, this.s, now) : held;
     if (max <= 0) {
-      this.ui.toast(side === 'buy' ? '현금이 부족하거나 잔여 공급이 없습니다' : '보유한 매물이 없습니다', 'red');
+      this.ui.toast(
+        side === 'buy' ? '골드가 부족하거나 잔여 공급이 없습니다' : '보유한 매물이 없습니다',
+        'red',
+      );
       return;
     }
-    const price = quoteTrade(key, side, 1, raw, now).price;
-    const cash = Number(raw.cash) || 0;
+    const price = quoteTrade(key, side, 1, this.s, now).price;
     let qty = side === 'buy' ? Math.min(max, 10) : 1;
     const chips = side === 'buy'
-      ? [10, 100, 1000].filter((n) => n < max).concat([max])
+      ? [1, 10, 100, 1000].filter((n) => n < max).concat([max])
       : [Math.floor(held / 2), held].filter((n, i, arr) => n > 0 && arr.indexOf(n) === i);
 
     const body = `
       <div class="tsum">
         <div><span>지역</span><b>${city.emoji} ${esc(city.name)} <i>${esc(city.region)}</i></b></div>
-        <div><span>현재가</span><b>₩${won(price)}/평</b></div>
-        <div><span>${side === 'buy' ? '보유 / 잔여' : '보유'}</span><b>${won(held)}평${side === 'buy' ? ` / ${won(Math.max(0, city.supply - held))}평` : ''}</b></div>
-        <div><span>부동산 현금</span><b>₩${won(cash)}</b></div>
+        <div><span>현재가</span><b>💰${price.toLocaleString()}/평</b></div>
+        <div><span>${side === 'buy' ? '보유 / 잔여' : '보유'}</span><b>${held.toLocaleString()}평${side === 'buy' ? ` / ${Math.max(0, city.supply - held).toLocaleString()}평` : ''}</b></div>
+        <div><span>보유 골드</span><b>💰${this.s.gold.toLocaleString()}</b></div>
       </div>
       <div class="input-row" style="margin-top:10px">
         <input id="landQty" type="number" inputmode="numeric" min="1" max="${max}" step="1" value="${qty}">
         <button class="btn small ghost" id="landQtyMax" type="button">최대</button>
       </div>
       <div class="chips" style="margin-top:7px" id="landQtyChips">
-        ${chips.map((n) => `<button class="chip" type="button" data-q="${n}">${n === max && side === 'buy' ? `최대 ${won(n)}평` : `${won(n)}평`}</button>`).join('')}
+        ${chips.map((n) => `<button class="chip" type="button" data-q="${n}">${n === max && side === 'buy' ? `최대 ${n.toLocaleString()}평` : `${n.toLocaleString()}평`}</button>`).join('')}
       </div>
       <div class="note" id="landPrev" style="margin-top:9px"></div>`;
 
     this.ui.modal({
       title: side === 'buy' ? '🏠 매수' : '💰 매도',
-      sub: `${city.name} · ${city.region} · 거래세 0.01%`,
+      sub: `${city.name} · ${city.region} · 거래세 ${(LAND.feeRate * 100).toFixed(1)}%`,
       body,
       actions: [
         { label: '취소', onClick: () => {} },
@@ -763,15 +495,15 @@ class App {
     const refresh = () => {
       const q = Math.max(1, Math.min(max, Math.floor(Number(inp.value) || 1)));
       qty = q;
-      const quote = quoteTrade(key, side, q, raw, now);
+      const quote = quoteTrade(key, side, q, this.s, Date.now());
       if (!quote.ok) {
         prev.innerHTML = `<span style="color:var(--red)">${esc(quote.reason)}</span>`;
         return;
       }
       prev.innerHTML =
         side === 'buy'
-          ? `총 <b>₩${won(quote.total)}</b> + 거래세 ₩${won(quote.fee)}<br>거래 후 현금 <b>₩${won(quote.after)}</b>`
-          : `총 <b>₩${won(quote.total)}</b> − 거래세 ₩${won(quote.fee)}<br>받는 금액 <b class="gold">₩${won(quote.total - quote.fee)}</b> · 거래 후 현금 ₩${won(quote.after)}`;
+          ? `총 <b>💰${quote.total.toLocaleString()}</b> + 거래세 ${quote.fee.toLocaleString()}<br>거래 후 골드 <b>💰${quote.after.toLocaleString()}</b>`
+          : `총 <b>💰${quote.total.toLocaleString()}</b> − 거래세 ${quote.fee.toLocaleString()}<br>받는 골드 <b class="gold">💰${(quote.total - quote.fee).toLocaleString()}</b> · 거래 후 💰${quote.after.toLocaleString()}`;
     };
     inp.addEventListener('input', refresh);
     inp.addEventListener('change', () => {
@@ -791,165 +523,57 @@ class App {
     refresh();
   }
 
-  async doLandTrade(key, side, qty) {
+  doLandTrade(key, side, qty) {
     const city = CITY_BY_KEY[key];
     const q = Math.floor(Number(qty) || 0);
     if (!city || q <= 0) return;
-    if (this._trading) return;
-    this._trading = true;
-    this.ui.toast('거래 처리 중…');
-    try {
-      const r = await this.cloud.tradeLand(key, side, q);
-      if (!r.ok) {
-        this.ui.toast(r.reason === 'login' ? '로그인이 필요합니다' : `거래 실패: ${r.reason}`, 'red');
-        return;
-      }
-      this.syncProperty();
-      this.save(true);
-      const total = r.quote ? r.quote.total : 0;
-      this.ui.toast(
-        `${side === 'buy' ? '🏠 매수' : '💰 매도'} ${city.emoji}${city.name} ${won(q)}평 · ₩${won(total)}`,
-        side === 'buy' ? 'green' : 'gold',
-      );
-    } catch (e) {
-      this.ui.toast('거래 중 오류가 발생했습니다', 'red');
-    } finally {
-      this._trading = false;
+    const r = applyTrade(this.s, key, side, q, Date.now());
+    if (!r.ok) {
+      this.ui.toast(`거래 실패: ${r.reason}`, 'red');
+      return;
     }
-  }
-
-  /* 로그인이 막혔을 때: 팝업 차단·인앱 브라우저·응답 없음 → 원인과 다음 행동을 한 화면에서 안내 */
-  openLoginHelp(r) {
-    const reason = (r && r.reason) || '';
-    const head =
-      reason === 'popup-blocked' ? '로그인 창이 차단되었습니다'
-        : reason === 'timeout' ? '로그인 응답이 없습니다'
-        : reason === 'sdk' ? 'Firebase 연결에 실패했습니다'
-        : reason === 'config' ? '로그인 설정을 확인해야 합니다'
-        : '팝업 로그인이 어려운 환경입니다';
-    const detail = (r && r.message) || '';
-    this.ui.modal({
-      title: `🔐 ${head}`,
-      sub: '팝업을 허용하면 다음부터는 버튼 한 번으로 로그인됩니다.',
-      body: `<div class="note" style="line-height:1.9">
-        · 주소창 오른쪽의 <b>팝업 차단</b> 아이콘을 누르고 이 사이트를 <b>허용</b>한 뒤 <b>다시 시도</b>를 누르세요.<br>
-        · 삼성 인터넷: 메뉴 ☰ → 설정 → 사이트 및 다운로드 → <b>팝업 차단</b> 끄기(또는 이 사이트 허용).<br>
-        · 계속 되지 않으면 <b>Chrome</b>에서 <b>hyosungkwon.github.io/land-rpg</b> 를 열어 주세요.<br>
-        · 로그인 없이도 게임은 <b>로컬 저장</b>으로 그대로 플레이됩니다.
-      </div>${detail ? `<div class="tiny muted" style="margin-top:8px">${esc(detail)}</div>` : ''}`,
-      actions: [
-        { label: '닫기' },
-        { label: '같은 창에서 계속', onClick: () => this.actions.signInRedirect() },
-        { label: '다시 시도', style: 'primary', onClick: () => this.actions.signIn() },
-      ],
-    });
+    // 건물주 버프 즉시 반영
+    this.buffs = computeBuffs(this.s);
+    this.battle.refreshStats();
+    this.save(true);
+    this.ui.toast(
+      `${side === 'buy' ? '🏠 매수' : '💰 매도'} ${city.emoji}${city.name} ${q.toLocaleString()}평 · 💰${r.quote.total.toLocaleString()}`,
+      side === 'buy' ? 'green' : 'gold',
+    );
+    const b = this.buffs;
+    if (side === 'buy' && b.active) {
+      this.ui.toast(`🏢 건물주 버프 · 공격 +${b.atkPct}% · 골드 +${b.goldPct}% · 체력 +${b.hpPct}%`, 'gold');
+    }
+    this.ui.render();
   }
 
   openClaimRent() {
     const amt = Math.floor(Number(this.s.land.accruedRent) || 0);
-    if (!this.cloud.signedIn) {
-      this.ui.toast('상단의 Google 로그인 후 이용할 수 있습니다', 'red');
-      return;
-    }
     if (amt < 1) {
       this.ui.toast('아직 쌓인 임대수익이 없습니다');
       return;
     }
+    const p = portfolioOf(this.s);
     this.ui.modal({
       title: '💤 임대수익 수령',
-      sub: `₩${won(amt)}`,
-      body: `<div class="note">수령하면 부동산 계정의 <b>users/{uid}/state/cash</b> 에 더해집니다.<br>RPG 골드와는 별개이며, 다른 부동산 필드는 그대로 보존됩니다.</div>`,
+      sub: `💰 ${amt.toLocaleString()}`,
+      body: `<div class="note">보유 매물 ${p.cities}곳 · ${p.pyeong.toLocaleString()}평에서 쌓인 임대수익을 골드로 받습니다.<br>
+        받은 골드는 바로 장비 강화 재료(강화석)나 추가 매물에 쓸 수 있습니다.</div>`,
       actions: [
         { label: '취소', onClick: () => {} },
-        { label: '수령', style: 'primary', onClick: () => this.doClaimRent(amt) },
+        {
+          label: '수령',
+          style: 'primary',
+          onClick: () => {
+            const got = claimRent(this.s);
+            this.s.records.totalRent = (this.s.records.totalRent || 0) + got;
+            this.save(true);
+            this.ui.toast(`💤 임대수익 💰${got.toLocaleString()} 수령`, 'gold');
+            this.ui.render();
+          },
+        },
       ],
     });
-  }
-
-  async doClaimRent(amt) {
-    if (this._claiming) return;
-    this._claiming = true;
-    try {
-      const r = await this.cloud.claimRent(amt);
-      if (!r.ok) {
-        this.ui.toast(r.reason === 'login' ? '로그인이 필요합니다' : String(r.reason || '수령에 실패했습니다'), 'red');
-        return;
-      }
-      this.s.land.accruedRent = Math.max(0, (Number(this.s.land.accruedRent) || 0) - amt);
-      this.s.land.rentAt = Date.now();
-      this.syncProperty();
-      this.save(true);
-      this.ui.toast(`💤 임대수익 ₩${won(amt)} 수령 완료`, 'gold');
-    } finally {
-      this._claiming = false;
-    }
-  }
-
-  openCreateAccount() {
-    if (!this.cloud.signedIn) {
-      this.ui.toast('상단의 Google 로그인 후 이용할 수 있습니다', 'red');
-      return;
-    }
-    this.ui.modal({
-      title: '🏢 부동산 게임 시작',
-      sub: '새 계정 · 초기 자금 ₩500,000',
-      body: `<div class="note">
-        원작 korea-land 와 같은 초기 상태(<b>version 3</b>, 현금 <b>₩500,000</b>)로
-        <b>users/{uid}/state</b> 를 만듭니다.<br>
-        이미 기록이 있는 계정이면 아무것도 덮어쓰지 않고 기존 기록을 불러옵니다.
-      </div>`,
-      actions: [
-        { label: '취소', onClick: () => {} },
-        { label: '시작', style: 'primary', onClick: () => this.doCreateAccount() },
-      ],
-    });
-  }
-
-  async doCreateAccount() {
-    if (this._creating) return;
-    this._creating = true;
-    try {
-      const r = await this.cloud.createPropertyAccount();
-      if (!r.ok) {
-        this.ui.toast(r.reason === 'login' ? '로그인이 필요합니다' : String(r.reason || '생성에 실패했습니다'), 'red');
-        if (r.reason === '이미 부동산 기록이 있습니다.') this.syncProperty();
-        return;
-      }
-      this.syncProperty();
-      this.save(true);
-      this.ui.toast('🏢 부동산 게임을 시작했습니다 · 현금 ₩500,000', 'gold');
-    } finally {
-      this._creating = false;
-    }
-  }
-
-  async doExchange(gold, cash) {
-    if (this._exchanging) return;
-    this._exchanging = true;
-    const beforeCash = Number(this.prop.cash) || 0;
-    let ok = false;
-    try {
-      const r = await this.cloud.addCash(cash);
-      ok = r.ok;
-      if (!ok) {
-        // 응답이 유실됐을 수 있으니 실제 현금을 다시 읽어 확인한다(중복 환전 방지)
-        await this.cloud.refreshProperty();
-        const after = Number(this.cloud.prop && this.cloud.prop.cash) || 0;
-        ok = after >= beforeCash + cash;
-      }
-    } finally {
-      this._exchanging = false;
-    }
-    if (!ok) {
-      this.ui.toast('보안 규칙으로 현금 반영에 실패했습니다. database.rules.json 반영 후 다시 시도해 주세요.', 'red');
-      this.ui.render();
-      return;
-    }
-    commitExchange(this.s, gold);
-    this.save(true);
-    if (this.cloud.prop) this.cloud.prop.cash = r.cash == null ? (this.cloud.prop.cash || 0) : r.cash;
-    this.syncProperty();
-    this.ui.toast(`💱 ₩${cash.toLocaleString()} 환전 완료 (골드 -${gold.toLocaleString()})`, 'gold');
   }
 
   showOfflinePopup(summary, levelUps) {

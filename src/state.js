@@ -1,17 +1,18 @@
 // land-rpg / src/state.js
 // 게임 상태 · 저장 · 성장 계산. DOM 의존 없음.
+// v3: 로그인/클라우드 없음. 골드 하나로 사냥 + 부동산을 함께 굴리는 통합 상태.
 import {
   ECON, EQUIP, EQUIP_MAX_LV, SKILLS, SKILL_UPGRADE_MAX,
   SAVE_KEY, SAVE_VERSION, enhanceCost, skillCost, skillPowerMul,
 } from './data.js';
+import { defaultLand } from './land.js';
 
 const nowMs = () => Date.now();
 
 export function defaultState(now = nowMs()) {
   return {
     ver: SAVE_VERSION,
-    uid: null,
-    nickname: '',
+    guest: true,
     createdAt: now,
     lastActiveAt: now,
     level: 1,
@@ -34,11 +35,8 @@ export function defaultState(now = nowMs()) {
     maxStage: 1,
     autoBoss: true,
     effects: true,
-    exchange: { day: '', used: 0 },
-    claim: { dividendWatermark: 0 },
-    // 부동산 게임 UI/임대수익 적립 상태 (사냥 진행도와 별개)
-    land: { sub: 'home', q: '', tier: 'all', sort: 'roi', page: 1, accruedRent: 0, rentAt: now },
-    records: { totalGold: 0, playMs: 0, firstPlay: now },
+    land: defaultLand(now),
+    records: { totalGold: 0, totalRent: 0, playMs: 0, firstPlay: now },
     lastOffline: null,
   };
 }
@@ -54,13 +52,20 @@ export function normalizeState(raw, now = nowMs()) {
     const v = (raw.skills || {})[k];
     s.skills[k] = typeof v === 'object' && v ? { lv: num(v.lv, 0), last: num(v.last, 0) } : { lv: num(v, 0), last: 0 };
   }
-  s.exchange = { ...d.exchange, ...(raw.exchange || {}) };
-  s.claim = { ...d.claim, ...(raw.claim || {}) };
   s.land = { ...d.land, ...(raw.land || {}) };
+  s.land.owned = sanitizeOwned(s.land.owned);
+  s.land.totalCost = sanitizeOwned(s.land.totalCost);
   s.land.accruedRent = Math.max(0, num(s.land.accruedRent, 0));
   s.land.rentAt = num(s.land.rentAt, now);
+  s.land.bestAsset = Math.max(0, num(s.land.bestAsset, 0));
+  s.land.tradeCount = Math.max(0, Math.floor(num(s.land.tradeCount, 0)));
+  s.land.taxPaid = Math.max(0, num(s.land.taxPaid, 0));
+  s.land.totalRentClaimed = Math.max(0, num(s.land.totalRentClaimed, 0));
+  s.land.assetHistory = Array.isArray(s.land.assetHistory)
+    ? s.land.assetHistory.filter((h) => h && isFinite(h.t) && isFinite(h.v)).slice(-288)
+    : [];
   s.land.page = Math.max(1, Math.floor(num(s.land.page, 1)));
-  if (!['home', 'market', 'rpg'].includes(s.land.sub)) s.land.sub = 'home';
+  if (!['home', 'market', 'buff'].includes(s.land.sub)) s.land.sub = 'home';
   if (!['all', '0', '1', '2', 'owned'].includes(String(s.land.tier))) s.land.tier = 'all';
   if (!['roi', 'price', 'trend', 'name'].includes(s.land.sort)) s.land.sort = 'roi';
   s.land.q = typeof s.land.q === 'string' ? s.land.q.slice(0, 30) : '';
@@ -84,7 +89,17 @@ export function normalizeState(raw, now = nowMs()) {
   return s;
 }
 
-const num = (v, d) => (typeof v === 'number' && isFinite(v) ? v : d);
+function sanitizeOwned(v) {
+  const out = {};
+  if (!v || typeof v !== 'object') return out;
+  for (const [k, raw] of Object.entries(v)) {
+    const n = Math.floor(num(raw, 0));
+    if (n > 0) out[k] = n;
+  }
+  return out;
+}
+
+const num = (v, d) => (typeof v === 'number' && isFinite(v) ? v : typeof v === 'string' && v !== '' && isFinite(Number(v)) ? Number(v) : d);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
 export function loadState(storage, now = nowMs()) {
@@ -113,18 +128,18 @@ export function expNeed(level) {
   return Math.floor(ECON.expNeedBase * Math.pow(ECON.expNeedGrowth, Math.max(0, level - 1)));
 }
 
-const NO_BUFF = { atkPct: 0, goldPct: 0, hpPct: 0, dropPct: 0 };
+export const NO_BUFF = { atkPct: 0, goldPct: 0, hpPct: 0, dropPct: 0, critPct: 0 };
 
-/** 파생 스탯. buffs 는 property.js 의 부동산 버프 결과. */
+/** 파생 스탯. buffs 는 land.js 의 computeBuffs 결과(건물주 버프). */
 export function calcStats(s, buffs = NO_BUFF) {
   const b = { ...NO_BUFF, ...(buffs || {}) };
   const L = s.level;
   const e = s.equip;
-  const baseAtk = 12 + 3.2 * L + 0.06 * L * L;
+  const baseAtk = 12 + 2.6 * L + 0.035 * L * L;
   const equipAtk = EQUIP.weapon.per * e.weapon;
   const atk = (baseAtk + equipAtk) * (1 + b.atkPct / 100);
-  const hpMax = (120 + 22 * L + EQUIP.armor.per * e.armor + EQUIP.helmet.per * e.helmet) * (1 + b.hpPct / 100);
-  const crit = Math.min(0.35, 0.05 + (EQUIP.ring.per / 100) * e.ring);
+  const hpMax = (150 + 30 * L + EQUIP.armor.per * e.armor + EQUIP.helmet.per * e.helmet) * (1 + b.hpPct / 100);
+  const crit = Math.min(0.5, 0.05 + (EQUIP.ring.per / 100) * e.ring + (b.critPct || 0) / 100);
   const critDmg = 2.0;
   const goldMult = 1 + (EQUIP.amulet.per / 100) * e.amulet + b.goldPct / 100;
   const dropMult = 1 + b.dropPct / 100;
@@ -162,6 +177,27 @@ export function addExp(s, amount) {
 }
 
 /* ────────────────────────────── 강화 ────────────────────────────── */
+
+/** 강화석 시세: 현재 스테이지 사냥 기대값 기준 (골드/개) */
+export function shardPrice(state) {
+  const stage = Math.max(1, Math.floor(state.stage || 1));
+  const goldPerKill = ECON.goldBase * Math.pow(ECON.goldGrowth, stage - 1);
+  const raw = goldPerKill * ECON.shardShopFactor;
+  const unit = raw >= 2000 ? 50 : raw >= 200 ? 10 : raw >= 50 ? 5 : 1;
+  return Math.max(40, Math.round(raw / unit) * unit);
+}
+
+/** 골드 → 강화석 구매 */
+export function buyShards(s, count) {
+  const n = Math.floor(Number(count) || 0);
+  if (!(n > 0)) return { ok: false, reason: '수량을 입력해 주세요.' };
+  const price = shardPrice(s);
+  const cost = price * n;
+  if (s.gold < cost) return { ok: false, reason: `골드가 부족합니다. (필요 💰${cost.toLocaleString()})`, cost };
+  s.gold -= cost;
+  s.shards += n;
+  return { ok: true, n, cost, price };
+}
 
 export function tryEnhance(s, slot, times = 1) {
   if (!(slot in EQUIP)) return { ok: false, reason: '알 수 없는 부위입니다.' };
@@ -205,7 +241,8 @@ export function skillEffect(key, lv) {
 
 export function monsterStats(stage, isBoss, variant = 1) {
   const s = Math.max(1, stage);
-  const hp = ECON.monsterHpBase * Math.pow(ECON.monsterHpGrowth, s - 1) * (isBoss ? ECON.bossHpMul : 1) * variant;
+  const late = 1 + Math.max(0, s - 10) * ECON.monsterHpLateBoost;
+  const hp = ECON.monsterHpBase * Math.pow(ECON.monsterHpGrowth, s - 1) * late * (isBoss ? ECON.bossHpMul : 1) * variant;
   const atk = ECON.monsterAtkBase * Math.pow(ECON.monsterAtkGrowth, s - 1) * (isBoss ? ECON.bossAtkMul : 1);
   return { hp: Math.max(1, Math.round(hp)), atk: Math.max(1, Math.round(atk)) };
 }
@@ -276,47 +313,4 @@ export function applyOffline(s, summary) {
   const levelUps = addExp(s, summary.exp);
   s.lastOffline = { at: nowMs(), ...summary, levelUps };
   return levelUps;
-}
-
-/* ────────────────────────────── 환전 ────────────────────────────── */
-
-export function dayKey(now = nowMs()) {
-  const d = new Date(now);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-export function exchangeStatus(s, now = nowMs()) {
-  if (s.exchange.day !== dayKey(now)) {
-    s.exchange.day = dayKey(now);
-    s.exchange.used = 0;
-  }
-  const remain = Math.max(0, ECON.exchangeDailyCap - s.exchange.used);
-  const maxGold = Math.floor(remain / ECON.exchangeRate);
-  return {
-    rate: ECON.exchangeRate,
-    cap: ECON.exchangeDailyCap,
-    used: s.exchange.used,
-    remain,
-    maxGold,
-    minGold: ECON.exchangeMinGold,
-  };
-}
-
-/** 환전 요청 검증 (실제 반영은 UI/파이어베이스 성공 후 commitExchange) */
-export function validateExchange(s, gold, now = nowMs()) {
-  const st = exchangeStatus(s, now);
-  const g = Math.floor(num(gold, 0));
-  if (!(g > 0)) return { ok: false, reason: '환전할 골드를 입력해 주세요.' };
-  if (g < st.minGold) return { ok: false, reason: `최소 ${st.minGold.toLocaleString()} 골드부터 환전할 수 있습니다.` };
-  if (g > s.gold) return { ok: false, reason: '보유 골드가 부족합니다.' };
-  const cash = g * st.rate;
-  if (cash > st.remain) return { ok: false, reason: `오늘 환전 한도가 부족합니다. (남은 한도 ₩${st.remain.toLocaleString()})` };
-  return { ok: true, gold: g, cash, status: st };
-}
-
-export function commitExchange(s, gold) {
-  const cash = gold * ECON.exchangeRate;
-  s.gold -= gold;
-  s.exchange.used += cash;
-  return cash;
 }

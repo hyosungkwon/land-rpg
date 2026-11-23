@@ -1,16 +1,19 @@
 // land-rpg / src/data.js
 // 밸런스·몬스터·장비·스킬 정의. DOM 의존 없음(헤드리스 테스트 가능).
+// v3: 게스트 전용 통합 경제 — 골드 하나로 사냥과 부동산을 함께 굴린다.
 
-export const APP_VERSION = '2.1.5';
-export const SAVE_KEY = 'land_rpg_state_v1';
-export const SAVE_VERSION = 1;
+export const APP_VERSION = '3.0.0';
+export const SAVE_KEY = 'land_rpg_unified_v3';
+export const SAVE_VERSION = 3;
 
 /* ────────────────────────────── 경제 상수 ──────────────────────────────
  * 밸런스 조정은 이 블록만 고치면 된다.
+ *  - 골드(💰): 유일한 화폐. 사냥 보상 · 부동산 매수/매도 · 임대수익 모두 골드.
+ *  - 강화석(💎): 장비/스킬 강화 재료. 사냥·보스·스테이지 보너스로만 얻는다.
  */
 export const ECON = {
-  startGold: 300,
-  startShards: 6,
+  startGold: 500, // 첫 매물(1평 120골드~)을 바로 살 수 있는 시작 자금
+  startShards: 8,
 
   // 전투
   playerAttackMs: 620, // 기본 공격 간격
@@ -26,43 +29,36 @@ export const ECON = {
   bossRetryKills: 4, // 보스 실패 후 재도전까지 필요한 처치 수
   autoBossDelayMs: 1400,
 
-  // 몬스터 성장
-  monsterHpBase: 55,
-  monsterHpGrowth: 1.27,
+  // 몬스터 성장 (v3 리밸런싱: 초반 완만, 10스테이지부터 가팔라짐)
+  monsterHpBase: 52,
+  monsterHpGrowth: 1.245,
+  monsterHpLateBoost: 0.05, // 10스테이지 이후 추가 성장(장비·건물주 버프 요구)
   monsterAtkBase: 4,
-  monsterAtkGrowth: 1.19,
+  monsterAtkGrowth: 1.135,
   monsterAttackMs: 1500,
 
   // 보상
   goldBase: 7,
   goldGrowth: 1.2,
   expBase: 11,
-  expGrowth: 1.17,
-  bossHpMul: 9,
-  bossAtkMul: 1.45,
+  expGrowth: 1.15,
+  bossHpMul: 3.6,
+  bossAtkMul: 1.15,
   bossGoldMul: 6,
   bossExpMul: 5,
   bossShardBase: 3,
   bossShardPerStage: 0.5,
   shardDropChance: 0.18,
+  shardShopFactor: 3, // 골드로 강화석을 살 때: 몬스터 3마리분 골드 = 강화석 1개
 
   // 레벨
   expNeedBase: 60,
-  expNeedGrowth: 1.16,
+  expNeedGrowth: 1.18,
 
   // 오프라인 정산
   offlineCapHours: 12,
   offlineRate: 0.5, // 방치 시 실제 획득의 50%
   offlineKillsPerSec: 0.22,
-
-  // RPG → 부동산 환전 (인플레 방지)
-  exchangeRate: 2, // 1 골드 = 2원
-  exchangeDailyCap: 200000, // 하루 최대 ₩200,000
-  exchangeMinGold: 500,
-
-  // 부동산 → RPG 배당 보너스
-  dividendShardPer: 30000, // 미수령 배당 ₩30,000 당 강화석 1개
-  dividendShardMax: 500,
 };
 
 /* ────────────────────────────── 테마 ────────────────────────────── */
@@ -137,7 +133,7 @@ export const STAGES = [
   { normals: ['Cyclops', 'Golem', 'Kobold'], boss: 'Seraphim' },
 ];
 
-/** 스테이지 번호(1부터) → 스테이지 정의. 23스테이지 이후는 순환하며 난이도만 계속 오른다. */
+/** 스테이지 번호(1부터) → 스테이지 정의. 21스테이지 이후는 순환하며 난이도만 계속 오른다. */
 export function stageDef(stage) {
   const s = Math.max(1, Math.floor(stage));
   const base = STAGES[(s - 1) % STAGES.length];
@@ -170,18 +166,18 @@ export function monsterKo(name) {
 
 /* ────────────────────────────── 장비 5부위 ────────────────────────────── */
 export const EQUIP_SLOTS = ['weapon', 'armor', 'helmet', 'ring', 'amulet'];
-export const EQUIP_MAX_LV = 50;
+export const EQUIP_MAX_LV = 100;
 
 export const EQUIP = {
-  weapon: { name: '무기', icon: '⚔️', stat: '공격력', per: 2.6, unit: '', desc: '강화 1당 공격력 +2.6' },
-  armor: { name: '갑옷', icon: '🛡️', stat: '체력', per: 38, unit: '', desc: '강화 1당 최대 체력 +38' },
-  helmet: { name: '투구', icon: '🪖', stat: '체력', per: 24, unit: '', desc: '강화 1당 최대 체력 +24' },
+  weapon: { name: '무기', icon: '⚔️', stat: '공격력', per: 3.2, unit: '', desc: '강화 1당 공격력 +3.2' },
+  armor: { name: '갑옷', icon: '🛡️', stat: '체력', per: 55, unit: '', desc: '강화 1당 최대 체력 +55' },
+  helmet: { name: '투구', icon: '🪖', stat: '체력', per: 36, unit: '', desc: '강화 1당 최대 체력 +36' },
   ring: { name: '반지', icon: '💍', stat: '치명타', per: 0.5, unit: '%', desc: '강화 1당 치명타 확률 +0.5%' },
   amulet: { name: '부적', icon: '🧿', stat: '골드 획득', per: 2, unit: '%', desc: '강화 1당 골드 획득 +2%' },
 };
 
 export const ENHANCE_COST_BASE = 2;
-export const ENHANCE_COST_GROWTH = 1.105;
+export const ENHANCE_COST_GROWTH = 1.06;
 
 export function enhanceCost(lv) {
   return Math.ceil(ENHANCE_COST_BASE * Math.pow(ENHANCE_COST_GROWTH, lv));
@@ -207,16 +203,27 @@ export function skillPowerMul(lv) {
 }
 
 /* ────────────────────────────── 부동산 버프 ──────────────────────────────
- * 부동산 데이터(users/{uid}/state)에서 계산하는 영구 패시브.
+ * 보유 매물(통합 상태의 land.owned)에서 계산하는 영구 패시브.
+ *  - 공격력: 보유 시군구 1곳당 +1.5% (최대 45%)
+ *  - 체력:   보유 200평당 +1% (최대 50%)
+ *  - 골드:   보유 매물 평가액 4,000골드당 +1% (최대 60%)
+ *  - 치명타: 보유 시군구 2곳당 +0.2% (최대 8%)
+ *  - 드롭:   보유 1,000평당 +1% (최대 40%)
  */
 export const PROP_BUFFS = {
-  atkPerBuilding: 2, // 서로 다른 지역 1곳당 공격력 +2%
-  atkCap: 40,
-  goldPerEok: 10, // 최고자산 1억당 골드 +10%
-  goldCap: 100,
-  hpPerPyeong: 0.05, // 보유 100평당 체력 +5% … (총평/2000)
-  hpCap: 40,
-  dropPerPyeong: 1, // 보유 500평당 드롭률 +1%
-  dropPer500: 500,
-  dropCap: 50,
+  cityMinPyeong: 3, // 한 지역에서 3평 이상 보유해야 '건물(보유 지역)'로 인정
+  atkPerCity: 1.5,
+  atkCap: 60,
+  hpPerPyeong: 50,
+  hpPer: 1,
+  hpCap: 50,
+  goldPerAsset: 3000,
+  goldPer: 1,
+  goldCap: 60,
+  critPerCities: 2,
+  critPer: 0.2,
+  critCap: 10,
+  dropPerPyeong: 500,
+  dropPer: 1,
+  dropCap: 40,
 };
