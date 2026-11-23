@@ -125,4 +125,4 @@ assets/sprites/     히어로 3프레임 · 몬스터 12종 · 보스 7종
 - 계정/클라우드 저장이 없으므로 브라우저 데이터를 지우면 진행도가 사라집니다(게스트 전용 설계).
 - 28스테이지 부근이 성장 한계(장비 100강·버프 상한)이며, 그 이후는 자산/기록 경쟁 구간입니다.
 - 랭킹은 서버가 없어 제거했습니다(내 기록만 표시).
-- `tools/mobile-frame.html` 은 390×844 미리보기용 로컬 도구입니다(배포물 아님).
+- `tools/mobile-frame.html` 은 390×844 뷰포트로 앱을 띄우는 미리보기 페이지입니다 (https://hyosungkwon.github.io/land-rpg/tools/mobile-frame.html?tab=land).
