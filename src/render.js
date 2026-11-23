@@ -454,7 +454,7 @@ export class Renderer {
     const w = Math.min(W * 0.84, 330);
     const hgt = 52;
     const x = (W - w) / 2;
-    const y = lerp(-hgt - 10, this.H * 0.34 - hgt / 2, inK);
+    const y = lerp(-hgt - 10, this.H * 0.46 - hgt / 2, inK);
     const pulse = 0.65 + 0.35 * Math.sin(age / 90);
     ctx.save();
     ctx.globalAlpha = alpha;

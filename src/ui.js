@@ -994,7 +994,7 @@ function tplSettings(ui) {
     </div>
     <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
       <span class="tiny">효과음 <span class="dim">타격·코인·보스·뽑기</span></span>
-      <button class="switch ${s.soundOn !== false ? 'on' : ''}" data-action="toggle-sound"></button>
+      <button class="switch ${s.soundOn !== false ? 'on' : ''}" data-action="toggle-sound" aria-label="효과음 전환"></button>
     </div>
     <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
       <span class="tiny">저장 방식</span>
