@@ -686,7 +686,7 @@ function tplLandHome(ui) {
       ${p.accruedRent >= 1 ? '임대수익 수령' : '쌓이는 중…'}
     </button>
     <div class="note" style="margin-top:9px">
-      접속 중에는 <b>100%</b>, 앱을 닫아둔 동안은 <b>5%</b>(최대 ${LAND.rentCapHours}시간)만 적립됩니다.
+      접속 중에는 <b>100%</b>, 앱을 닫아둔 동안은 <b>${Math.round(LAND.rentOfflineRate * 100)}%</b>(최대 ${LAND.rentCapHours}시간)만 적립됩니다.
       수령한 골드는 바로 추가 매수·장비 강화에 쓸 수 있습니다.
     </div>
   </div>

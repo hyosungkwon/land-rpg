@@ -77,7 +77,7 @@ class App {
 
     const now = Date.now();
 
-    // 오프라인 임대수익 (원작과 같이 5%만 적립)
+    // 오프라인 임대수익 (접속 중의 25%만 적립)
     this.accrueRent(now, LAND.rentOfflineRate);
 
     // 오프라인 사냥 보상 (최대 12시간)
@@ -270,9 +270,9 @@ class App {
         this.save(true);
       } else {
         const away = Date.now() - (this.hiddenAt || Date.now());
-        // 자리를 비운 동안의 임대수익은 5%만 적립
+        // 자리를 비운 동안의 임대수익은 접속 중의 25%만 적립
         const rent = this.accrueRent(Date.now(), LAND.rentOfflineRate);
-        if (rent >= 1) this.ui.toast(`💤 방치 임대수익 +${formatGold(rent)} (5%)`, 'gold');
+        if (rent >= 1) this.ui.toast(`💤 방치 임대수익 +${formatGold(rent)} (${Math.round(LAND.rentOfflineRate * 100)}%)`, 'gold');
         if (away > 120000) {
           const summary = offlineSummary({ ...this.s, lastActiveAt: this.hiddenAt }, Date.now(), this.buffs);
           if (summary.gold > 0) {

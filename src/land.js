@@ -7,21 +7,22 @@
 //       (군 120~2,000골드/평 … 시 1,700~42,800 … 구 7,200~200,000골드/평)
 //   - 임대수익 = 매물 가치의 분당 일정 비율(군이 회수 빠르고, 구가 느린 원작 성격 유지)
 //   - 시세는 모든 기기가 같은 순간 같은 가격을 보도록 시간 기반 결정론 모델을 쓴다.
-//   - 수익/거래 규칙(지분 구간별 한계 수익 배율, 오프라인 5%)은 원작과 동일.
+//   - 수익/거래 규칙(지분 구간별 한계 수익 배율)은 원작과 동일.
+//   - v3.0.6: 장기 방치 복리 스노우볼 완화 — 접속 중 회수 5.5~11.9시간, 오프라인은 온라인의 25%.
 import { LAND_TIERS, LAND_TRAITS, TIER_INCOME_MULTS } from './land-data.js';
 import { PROP_BUFFS } from './data.js';
 
 export const LAND = {
   priceScale: 0.1, // 원본 시세(원/평) → 골드/평 (10분의 1)
   tierPriceMults: [1, 2, 4], // 군·시·구 프리미엄
-  rentRatePerMin: 0.01, // 매물 가치의 분당 임대수익(1% → 회수 약 100분)
-  tierRentMults: [1.5, 1.0, 0.7], // 회수 속도: 군 67분 · 시 100분 · 구 143분
+  rentRatePerMin: 0.002, // 매물 가치의 분당 임대수익(0.2% → 시간당 12%, 회수 약 8.3시간)
+  tierRentMults: [1.5, 1.0, 0.7], // 회수 속도: 군 5.6시간(18%/h) · 시 8.3시간(12%/h) · 구 11.9시간(8.4%/h)
   feeRate: 0.003, // 거래세 0.3%
   dailySwing: 0.08, // 일일 기준가 흔들림 ±8%
   swing: 0.12, // 장중 파동 ±12% (지역 특성에 따라 확대)
   band: 0.3, // 일일 기준가 대비 상·하한 ±30%
   floorOfBase: 0.3, // 초기가의 30% 절대 하한
-  rentOfflineRate: 0.05, // 오프라인 임대 수익 5%
+  rentOfflineRate: 0.25, // 오프라인 임대 수익 = 접속 중의 25%(실제 시간당 2.1~4.5%)
   rentCapHours: 12,
   seasonMs: 6 * 3600 * 1000, // 계절 특성 6시간 로테이션
   seasonChance: 0.2,
@@ -411,7 +412,7 @@ export function applyTrade(state, key, side, qty, now = Date.now()) {
 }
 
 /* ─────────────── 임대 수익 적립 ─────────────── */
-/** elapsed(ms) 동안의 임대 수익(골드). rate 1=접속 중, 0.05=오프라인 */
+/** elapsed(ms) 동안의 임대 수익(골드). rate 1=접속 중, 0.25=오프라인 */
 export function rentAccrual(incomePerMin, elapsedMs, rate = 1) {
   const ms = Math.max(0, Math.min(elapsedMs, LAND.rentCapHours * HOUR));
   return Math.max(0, (num(incomePerMin) / 60000) * ms * Math.max(0, rate));

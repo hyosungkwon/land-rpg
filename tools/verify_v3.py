@@ -86,7 +86,7 @@ def main():
     for bad in ["firebase", "signInWithPopup", "Google 로그인", "gstatic", "firebaseio", "googleapis"]:
         ok(bad.lower() not in text_all.lower(), f"Firebase/로그인 흔적 없음: {bad}")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v3.0.5" in read("sw.js"), "SW 캐시 버전 v3.0.1")
+    ok("land-rpg-v3.0.6" in read("sw.js"), "SW 캐시 버전 v3.0.6")
     ok(not os.path.exists(os.path.join(ROOT, "src/firebase.js")), "firebase.js 제거")
     ok(not os.path.exists(os.path.join(ROOT, "src/property.js")), "구 property.js 제거")
     sw = read("sw.js")
@@ -168,13 +168,20 @@ def main():
       const p = portfolioOf(s, 0);
       const g1 = accrueRent(s, 61000, 1);
       const num1 = s.land.accruedRent;
-      const off = accrueRent(s, 121000, 0.05);
+      const off = accrueRent(s, 121000, LAND.rentOfflineRate);
       const goldBefore = s.gold;
       const got = claimRent(s);
       return { income: Math.round(p.incomePerMin), g1: Math.round(g1), accrued: Math.round(num1), off: Math.round(off), goldGain: Math.round(s.gold - goldBefore), claimGot: Math.round(got), left: s.land.accruedRent };
     """)
     ok(abs(rent["g1"] - rent["income"]) <= 2, "1분 적립 = 분당 임대수익", json.dumps(rent))
-    ok(rent["off"] > 0 and rent["off"] < rent["g1"] * 0.2, "오프라인 5% 적립", str(rent["off"]))
+    ok(rent["off"] > 0 and abs(rent["off"] - rent["g1"] * 0.25) <= 2, "오프라인 25% 적립", json.dumps(rent))
+    tier = js(ctx, """
+      return [0,1,2].map(ti => {
+        const c = CITIES.find(c => c.tier === ti);
+        return Math.round(c.rentPerMin * 60 / c.base * 1000) / 10;
+      });
+    """)
+    ok(tier[0] == 18 and tier[1] == 12 and tier[2] == 8.4, "시간당 임대수익률 군 18%·시 12%·구 8.4%", json.dumps(tier))
     ok(rent["claimGot"] > 0 and rent["goldGain"] == rent["claimGot"] and rent["left"] < 1, "임대수익 수령 → 골드", json.dumps(rent))
 
     shop = js(ctx, """
