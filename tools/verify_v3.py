@@ -2796,7 +2796,8 @@ def main():
     ok('assets/sprites/pet/${info.sprite}.png' in asrc42, "진화 결과 모달 — 진화 스프라이트 경로(.png)", "")
     ok(all(x in css42 for x in [".tower-card", ".tower-tiles", ".tower-floor", ".pet-evo", ".mini.evo"]), "style.css — v4.2 스타일", "")
     ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.2.0" in read("sw.js") and "APP_VERSION = '4.2.0'" in read("src/data.js"), "버전·서비스워커(4.2.0 · tower.js 프리캐시)", "")
-    ok('"version": "4.2.0"' in read("package.json"), "package.json 버전 4.2.0", "")
+    pkg_ok = os.path.exists(os.path.join(ROOT, "package.json")) and '"version": "4.2.0"' in read("package.json")
+    ok(pkg_ok, "package.json 버전 4.2.0(로컬 검증용)", "")
     evo_files = [f"assets/sprites/pet/pet_{n}_{s}.png" for n in ("wolf", "fox", "owl", "dragon") for s in ("awaken", "divine")]
     ok(all(os.path.exists(os.path.join(ROOT, f)) for f in evo_files), "펫 진화 스프라이트 8종 파일", ", ".join(f for f in evo_files if not os.path.exists(os.path.join(ROOT, f))))
     ok(all(f"'./{f}'" in read("sw.js") for f in evo_files), "sw.js 프리캐시에 진화 스프라이트 포함", "")
