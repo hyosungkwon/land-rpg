@@ -43,12 +43,16 @@
     s.bossKills = stage;
     s.soundOn = false;
     s.jobTier = opts.job ?? Math.min(3, Math.floor(stage / 10));
-    s.equip = { weapon: opts.equip ?? 0, armor: opts.equip ?? 0, helmet: opts.equip ?? 0, ring: opts.equip ?? 0, amulet: opts.equip ?? 0 };
+    // 배경 확인용 시드는 죽지 않도록 장비 등급·강화를 적당히 준다(v4는 등급이 장비 종류로 마이그레이션된다)
+    const eq = opts.equip ?? Math.min(80, 20 + stage * 2);
+    s.equip = { weapon: eq, armor: eq, helmet: eq, ring: eq, amulet: eq };
+    const rar = opts.rarity ?? 'legend';
+    s.gearRarity = { weapon: rar, armor: rar, helmet: rar, ring: rar, amulet: rar };
     s.rebirth = {
       count: opts.rebirthCount || 0,
       points: opts.points ?? 0,
       totalPoints: opts.points ?? 0,
-      traits: opts.traits || {},
+      traits: opts.traits || { atk: 6, hp: 6, guard: 5 },
       bestStage: opts.bestStage || 1,
       at: 0,
     };
