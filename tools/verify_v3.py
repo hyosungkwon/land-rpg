@@ -2942,6 +2942,12 @@ def main():
     ok("toggleShake" in asrc43 and "renderer.shakeOn" in asrc43 and "case 'toggle-shake'" in usrc43, "설정 토글 — 화면 흔들림만 끄기(app.js·ui.js)")
     ok("화면 흔들림" in usrc43 and 'data-action="toggle-shake"' in usrc43, "설정 탭에 화면 흔들림 스위치", "")
 
+    # ── 5) 접근성 — 캔버스 연출을 스크린리더에도 ──
+    ok('id="srLive"' in idxsrc43 and "aria-live=\"assertive\"" in idxsrc43, "스크린리더 라이브 영역(index.html)")
+    ok("announce(text)" in usrc43 and "srLive" in usrc43, "ui.js — announce() 구현")
+    ok(all(x in asrc43 for x in ["ui.announce(`보스 등장", "ui.announce('전투 불능", "ui.announce(`부활"]) and "ev.reducePct" in asrc43, "app.js — 보스 등장·전투 불능·부활 가호를 음성/스크린리더로도 알림")
+    ok(".sr-only" in read("style.css"), "style.css — .sr-only(화면 밖 전용)")
+
     css43 = read("style.css")
     ok(all(x in css43 for x in [".land-sum", ".ls-v", ".ls-claim", ".news-slim", ".ns-title", ".land-subbar", ".land-rec", ".buff-now"]), "style.css — v4.3 부동산 요약 바·압축 뉴스·서브 탭", "")
     ok("land-rpg-v4.3.0" in read("sw.js") and "'4.3.0'" in read("src/data.js"), "버전·캐시 v4.3.0", "")

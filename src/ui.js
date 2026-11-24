@@ -75,6 +75,7 @@ export class UI {
       panelInner: document.getElementById('panelInner'),
       tabbar: document.getElementById('tabbar'),
       toastRoot: document.getElementById('toastRoot'),
+      srLive: document.getElementById('srLive'),
       modalRoot: document.getElementById('modalRoot'),
       modalCard: document.getElementById('modalCard'),
       boot: document.getElementById('boot'),
@@ -508,6 +509,15 @@ export class UI {
   }
 
   /* ───────────── 토스트 / 모달 ───────────── */
+  /** 스크린리더 알림 — 캔버스로만 그리는 연출(보스 등장·부활)을 함께 전한다 */
+  announce(text) {
+    const el = this.el.srLive;
+    if (!el || !text) return;
+    el.textContent = '';
+    clearTimeout(this._srTimer);
+    this._srTimer = setTimeout(() => { el.textContent = text; }, 40);
+  }
+
   toast(msg, kind = '') {
     const div = document.createElement('div');
     div.className = `toast ${kind}`;

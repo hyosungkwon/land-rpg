@@ -364,6 +364,7 @@ class App {
         }
       } else if (ev.t === 'bossStart') {
         this.ui.addLog(`⚔️ <b>${ev.ko}</b> 등장 — ${ECON.bossTimeLimitMs / 1000}초 제한`);
+        this.ui.announce(`보스 등장 — ${ev.ko} · ${ECON.bossTimeLimitMs / 1000}초 제한`);
         this.sound.boss();
       } else if (ev.t === 'bossFail') {
         const why = ev.why === 'timeout' ? '시간 초과' : '전투 불능';
@@ -372,8 +373,10 @@ class App {
         this.ui.renderIfNeeded();
       } else if (ev.t === 'playerDeath') {
         this.ui.addLog('💀 전투 불능 — 3초 후 부활');
+        this.ui.announce('전투 불능 — 3초 뒤 부활합니다');
       } else if (ev.t === 'revive') {
         this.ui.addLog('✨ 부활했습니다');
+        this.ui.announce(`부활 — ${Math.round((ev.graceMs || 0) / 100) / 10}초 동안 받는 피해 ${ev.reducePct || 0}% 경감`);
       } else if (ev.t === 'dungeonStart') {
         this.ui.addLog(`🔥 <b>황금 던전</b> 시작 — ${DUNGEON.durationMs / 1000}초 보스 러시`);
         this.ui.toast('🔥 황금 던전 시작! 30초간 몰아칩니다', 'gold');
