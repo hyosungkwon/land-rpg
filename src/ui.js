@@ -5,7 +5,7 @@ import {
   APP_VERSION, ECON, EQUIP, EQUIP_SLOTS, EQUIP_MAX_LV, SKILLS, SKILL_UPGRADE_MAX, skillCost, enhanceCost,
   RARITIES, RARITY_INDEX, GACHA, gachaCost, rarityBonusLv,
 } from './data.js';
-import { expNeed, skillEffect, shardPrice, enhanceMaxCount } from './state.js';
+import { expNeed, skillEffect, shardPrice, enhanceMaxCount, maxShardsBuy, SHARD_BULK } from './state.js';
 import {
   CITIES, LAND, portfolioOf, computeBuffs, buffProgress, formatGold, priceInfo,
   CITY_BY_KEY, LANDMARK, landmarkLevel, landmarkQuote, landmarkSummary, landmarkRentMul,
@@ -15,7 +15,7 @@ import {
 } from './region.js';
 import {
   PETS, DUNGEON, PET_MAX_LV, petDef, petProgress, petLevel, petAtkPct, petDmgPct,
-  petUpgradeCost, jobOf, jobProgress, dungeonState,
+  petUpgradeCost, jobOf, jobProgress, dungeonState, JOB_COUNT, isUpperJob,
   PET_EVO_MAX, petEvo, petStageInfo, petEvolveInfo, petSkillOf, petSkillText, petGoldPct, evoStageDef,
 } from './meta.js';
 import {
@@ -649,32 +649,36 @@ function jobCard(ui) {
   const pr = jobProgress(s);
   const cur = pr.cur;
   const n = pr.next;
+  // v4.4: 5·6단계 상위 전직 — 카드 테두리·배지를 칭호 색으로 강조
+  const curTop = isUpperJob(cur.tier);
+  const step = `${cur.tier + 1}/${JOB_COUNT}`;
 
   if (!n) {
     return `
-  <div class="card job-card done">
+  <div class="card job-card done${curTop ? ' top' : ''}" style="--jc:${cur.color}">
     <div class="card-head">
-      <div class="card-title"><span class="t-ico">${cur.badge}</span>${esc(cur.name)}<small>최종 전직 · ${cur.tier + 1}/4</small></div>
-      <span class="job-badge" style="--jc:${cur.color}">${jobBonusText(cur)}</span>
+      <div class="card-title"><span class="t-ico">${cur.badge}</span>${esc(cur.name)}<small>최종 전직 · ${step}</small></div>
+      <span class="job-badge${curTop ? ' hi' : ''}" style="--jc:${cur.color}">${jobBonusText(cur)}</span>
     </div>
     <div class="tiny muted" style="margin-top:2px">전직 완료 — 영구 <b>공격 +${cur.atkPct}% · 체력 +${cur.hpPct}%</b> 적용 중</div>
   </div>`;
   }
 
+  const nextTop = isUpperJob(n.tier);
   return `
-  <div class="card job-card ${pr.canPromote ? 'ready' : ''}">
+  <div class="card job-card ${pr.canPromote ? 'ready' : ''}${curTop ? ' top' : ''}" style="--jc:${cur.color}">
     <div class="card-head">
-      <div class="card-title"><span class="t-ico">${cur.badge}</span>${esc(cur.name)}<small>전직 ${cur.tier + 1}/4</small></div>
-      <span class="job-badge" style="--jc:${cur.color}">${jobBonusText(cur)}</span>
+      <div class="card-title"><span class="t-ico">${cur.badge}</span>${esc(cur.name)}<small>전직 ${step}${nextTop ? ' · 상위 전직' : ''}</small></div>
+      <span class="job-badge${curTop ? ' hi' : ''}" style="--jc:${cur.color}">${jobBonusText(cur)}</span>
     </div>
     <div class="row tiny" style="margin-top:3px;gap:6px">
       <span class="ellip muted">다음 <b style="color:${n.color}">${n.badge} ${esc(n.name)}</b> <span class="dim">${jobBonusText(n)}</span></span>
-      <span style="flex:0 0 auto;color:var(--sub)"><span style="color:${pr.levelOk ? 'var(--green)' : 'var(--sub)'}">Lv.${s.level}/${n.lv}</span> · <span style="color:${pr.stageOk ? 'var(--green)' : 'var(--sub)'}">S${s.maxStage}/${n.stage}</span></span>
+      <span style="flex:0 0 auto;color:var(--sub)"><span style="color:${pr.levelOk ? 'var(--green)' : 'var(--sub)'}">Lv.${s.level}${pr.levelOk ? '' : `/${n.lv}`}</span> · <span style="color:${pr.stageOk ? 'var(--green)' : 'var(--sub)'}">S${s.maxStage}${pr.stageOk ? '' : `/${n.stage}`}</span></span>
     </div>
     <div class="prog" style="margin-top:4px"><i style="width:${Math.min(pr.pctLv, pr.pctStage) * 100}%"></i></div>
     ${pr.canPromote
-      ? `<button class="btn primary block promote-btn" data-action="promote" style="margin-top:7px;min-height:34px" data-live="promote">✨ 전직 가능! ${n.badge} ${esc(n.name)}</button>`
-      : `<div class="tiny dim ellip" style="margin-top:5px">${esc(pr.reason)}</div>`}
+      ? `<button class="btn primary block promote-btn${nextTop ? ' upper' : ''}" data-action="promote" style="margin-top:7px;min-height:34px" data-live="promote">✨ 전직 가능! ${n.badge} ${esc(n.name)}</button>`
+      : `<div class="tiny dim ellip" style="margin-top:5px">${esc(pr.reason)}${nextTop && (pr.lvLeft > 0 || pr.stageLeft > 0) ? ` · 남은 ${pr.lvLeft > 0 ? pr.lvLeft + '레벨' : ''}${pr.lvLeft > 0 && pr.stageLeft > 0 ? ' · ' : ''}${pr.stageLeft > 0 ? pr.stageLeft + '스테이지' : ''}` : ''}</div>`}
   </div>`;
 }
 
@@ -1294,7 +1298,13 @@ function tplGear(ui) {
   const st = ui.battle.stats;
   const total = Object.values(s.equip).reduce((a, b) => a + b, 0);
   const price = shardPrice(s);
-  const maxShards = Math.floor(s.gold / price);
+  const maxShards = maxShardsBuy(s);
+  // v4.4: ×1 · ×10 · ×100 + 최대 — 못 사는 단위도 자리를 지켜(비활성) 가격을 비교할 수 있게
+  const bulkBtns = SHARD_BULK.map((n) => {
+    const cost = price * n;
+    const can = cost <= s.gold;
+    return `<button class="chip xchg${can ? '' : ' off'}" data-action="buy-shards" data-value="${n}" ${can ? '' : 'disabled'} title="${can ? `💎${n}개 · 💰${fmt(cost)}` : `골드 ${fmt(cost - s.gold)} 부족`}">×${n}<small>💰${fmt(cost)}</small></button>`;
+  }).join('');
 
   const rows = Object.entries(EQUIP)
     .map(([slot, def]) => {
@@ -1378,14 +1388,18 @@ function tplGear(ui) {
     </div>
     <div class="row tiny" style="margin-bottom:8px">
       <span class="muted">보유 골드 <b data-live="gold" style="color:var(--gold)">${fmt(s.gold)}</b></span>
-      <span class="dim">최대 ${fmt(maxShards)}개</span>
+      <span class="dim">최대 <b>${fmt(maxShards)}</b>개 교환 가능</span>
     </div>
-    <div class="chips">
-      ${[1, 10, 50].filter((n) => price * n <= s.gold).map((n) => `<button class="chip" data-action="buy-shards" data-value="${n}">${n}개 · 💰${fmt(price * n)}</button>`).join('')}
-      <button class="chip" data-action="buy-shards" data-value="max" ${maxShards > 0 ? '' : 'disabled'}>최대 ${fmt(maxShards)}개</button>
+    <div class="chips xchg-row">
+      ${bulkBtns}
+      <button class="chip xchg max" data-action="buy-shards" data-value="max" ${maxShards > 0 ? '' : 'disabled'}>
+        최대 <b>${fmt(maxShards)}</b>개<small>${maxShards > 0 ? `💰${fmt(price * maxShards)}` : '골드 부족'}</small>
+      </button>
     </div>
     <div class="note" style="margin-top:9px">
-      임대수익으로 모은 골드를 강화석으로 바꿔 장비를 올릴 수 있습니다. 시세는 <b>현재 스테이지 사냥 기대값</b>을 따라 오르내립니다.
+      임대수익으로 모은 골드를 강화석으로 바꿔 장비·펫 진화·스킬을 올릴 수 있습니다.
+      <b>×100 · 최대</b>로 펫 ★★진화(한 마리 400~800개)에 필요한 강화석을 한 번에 마련하세요.
+      시세는 <b>현재 스테이지 사냥 기대값</b>을 따라 오르내립니다.
     </div>
   </div>
 

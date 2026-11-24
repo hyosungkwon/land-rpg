@@ -51,7 +51,7 @@ export const ACHIEVEMENTS = [
   { id: 'a_pyeong100', icon: '📐', title: '100평', desc: '보유 100평 달성', type: 'pyeong', goal: 100, shards: 10 },
   { id: 'a_pyeong1000', icon: '🗺️', title: '1,000평', desc: '보유 1,000평 달성', type: 'pyeong', goal: 1000, shards: 20, atkPct: 1 },
   { id: 'a_job1', icon: '⚔️', title: '왕국 기사', desc: '전직 1단계 달성', type: 'job', goal: 1, shards: 10 },
-  { id: 'a_job3', icon: '🐲', title: '드래곤 나이트', desc: '최종 전직 달성', type: 'job', goal: 3, shards: 30, atkPct: 2 },
+  { id: 'a_job3', icon: '🐲', title: '드래곤 나이트', desc: '전직 4단계 달성', type: 'job', goal: 3, shards: 30, atkPct: 2 },
   { id: 'a_rare', icon: '💎', title: '레어 장비', desc: '레어 이상 등급 획득', type: 'rarity', goal: 2, shards: 8 },
   { id: 'a_legend', icon: '🔥', title: '전설 장비', desc: '전설 등급 획득', type: 'rarity', goal: 4, shards: 25, atkPct: 1 },
   { id: 'a_gear20', icon: '🛡️', title: '단련', desc: '장비 총 강화 20', type: 'equipLv', goal: 20, shards: 10 },

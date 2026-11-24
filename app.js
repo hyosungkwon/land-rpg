@@ -4,7 +4,7 @@
 import { APP_VERSION, ECON, EQUIP, EQUIP_MAX_LV, SKILLS, SAVE_KEY, stageDef, RARITIES, RARITY_INDEX, spriteSrc, enhanceCost } from './src/data.js';
 import {
   loadState, saveState, offlineSummary, applyOffline, tryEnhance, tryUpgradeSkill,
-  shardPrice, buyShards, pullGear, recordNews, enhanceMaxCount, normalizeState, compareGear,
+  exchangeShards, pullGear, recordNews, enhanceMaxCount, normalizeState, compareGear,
 } from './src/state.js';
 import {
   gearItem, gearIcon, gearOptionList, equippedItem, equippedRarity, gearOwned, gearOptionSummary,
@@ -25,7 +25,7 @@ import { GameSound } from './src/sound.js';
 import {
   PET_SPRITES, PET_EVO_SPRITES, DUNGEON, petDef, syncPets as syncPetUnlocks, equipPet, upgradePet,
   promoteJob as promoteJobState, dungeonState, startDungeonCooldown,
-  PETS, evolvePet as evolvePetState, petEvolveInfo, petStageInfo, petSkillOf,
+  PETS, evolvePet as evolvePetState, petEvolveInfo, petStageInfo, petSkillOf, JOB_COUNT, isUpperJob,
 } from './src/meta.js';
 import {
   TOWER_FLOORS, TOWER_MAX_FLOOR, TOWER_GIMMICKS, towerFloor, towerProgress, towerGimmickText,
@@ -741,19 +741,16 @@ class App {
       },
 
       buyShards: (n) => {
-        const price = shardPrice(this.s);
-        const count = n === 'max' ? Math.floor(this.s.gold / price) : Math.floor(Number(n) || 0);
-        if (count <= 0) {
-          this.ui.toast('골드가 부족합니다', 'red');
-          return;
-        }
-        const r = buyShards(this.s, count);
+        const mode = n === 'max' || n === 'all' ? 'max' : Math.floor(Number(n) || 0);
+        const r = exchangeShards(this.s, mode);
         if (!r.ok) {
-          this.ui.toast(r.reason, 'red');
+          this.ui.toast(r.reason || '골드가 부족합니다', 'red');
           return;
         }
         this.save(true);
-        this.ui.toast(`💎 강화석 ${r.n}개 구매 (💰${r.cost.toLocaleString()})`, 'green');
+        this.sound.ui();
+        const tail = r.short ? ` · 보유 골드로 가능한 만큼 (최대 ${r.max.toLocaleString()}개)` : '';
+        this.ui.toast(`💎 강화석 ${r.n.toLocaleString()}개 교환 (💰${r.cost.toLocaleString()})${tail}`, 'green');
         this.ui.render();
       },
 
@@ -837,9 +834,9 @@ class App {
           body: `<div class="modal-rewards">
                    <div class="rw"><div class="e">⚔️</div><div class="v">+${r.to.atkPct}%</div><div class="k">공격력</div></div>
                    <div class="rw"><div class="e">❤️</div><div class="v">+${r.to.hpPct}%</div><div class="k">최대 체력</div></div>
-                   <div class="rw"><div class="e">🏅</div><div class="v">${r.to.tier + 1}/4</div><div class="k">전직 단계</div></div>
+                   <div class="rw"><div class="e">🏅</div><div class="v">${r.to.tier + 1}/${JOB_COUNT}</div><div class="k">전직 단계</div></div>
                  </div>
-                 <div class="note">${esc(r.to.line)}<br>영구 보너스는 즉시 적용되었습니다.</div>`,
+                 <div class="note">${esc(r.to.line)}<br>영구 보너스는 즉시 적용되었습니다.${isUpperJob(r.to.tier) ? '<br><b>상위 전직</b> — 캐릭터 오라와 카드 배지가 새 칭호 색으로 바뀝니다.' : ''}</div>`,
           actions: [{ label: '확인', style: 'primary', onClick: () => {} }],
         });
         this.ui.render();

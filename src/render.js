@@ -4,7 +4,7 @@
 //     배경은 오프스크린 캔버스에 한 번만 그려 매 프레임 비용을 줄인다(모바일 발열/멈춤 방지).
 import { ECON, THEMES, spriteSrc, bgSrc, RARITIES, RARITY_INDEX, monsterMotion, monsterAttack } from './data.js';
 import { equippedItem } from './gear.js';
-import { petStageInfo } from './meta.js';
+import { petStageInfo, jobOf, isUpperJob } from './meta.js';
 import { TOWER_GIMMICKS, towerGimmicks } from './tower.js';
 
 const rnd = (seed) => {
@@ -77,6 +77,9 @@ export class Renderer {
     this.towerBanner = 0; // v4.2 도전의 탑 입장 배너
     this.onLoot = null; // (kind) => void  · 코인/보석이 캐릭터에 빨려 들어올 때
     this._rar = { weapon: 0, avg: 0, hasLegend: false };
+    // v4.4 전직(칭호) 오라 — 장비 등급 오라와 별개로 단계별 문양·빛기둥·후광을 그린다
+    this._job = { tier: 0, color: '#8ea2bb', badge: '', name: '', upper: false };
+    this._jobTier = -1;
     this.shake = 0;
     this.shakeOn = true; // v4.3 설정 '화면 흔들림' — 끄면 흔들림만 멈춘다
     this.impacts = []; // v4.3 타격 임팩트 플래시(별 모양)·보스/치명타 강조
@@ -1025,6 +1028,94 @@ export class Renderer {
     }
   }
 
+  /* ─────────── v4.4 전직(칭호) 오라 ───────────
+   * 장비 등급 오라(drawAura)는 '장비 색'을 보여 준다. 전직 단계는 별도 층으로 그려
+   * 한 화면에서 둘을 구분해 읽을 수 있게 한다.
+   *  · 1~2단계 : 바닥 점선 고리(회전)
+   *  · 3단계    : 고리 2겹
+   *  · 4·5단계  : 고리 2겹 + 떠도는 불티 4~6개 + 세로 빛기둥 + 머리 위 후광
+   */
+  syncJob() {
+    const s = this.battle && this.battle.s;
+    const t = s ? Math.max(0, Math.floor(Number(s.jobTier) || 0)) : 0;
+    if (this._jobTier === t) return this._job;
+    this._jobTier = t;
+    const j = jobOf(s || { jobTier: 0 });
+    this._job = { tier: j.tier, color: j.color, badge: j.badge, name: j.name, upper: isUpperJob(j.tier) };
+    return this._job;
+  }
+
+  drawJobAura(ctx, px, gy, h, sc, now) {
+    const j = this.syncJob();
+    if (!j || !j.tier) return; // 견습 기사는 오라 없음(장비 오라만)
+    const col = j.color;
+    const pulse = 0.5 + 0.5 * Math.sin(now / (j.upper ? 300 : 460));
+    const k = Math.min(1, 0.34 + j.tier * 0.13);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    // 1) 바닥 문양 — 회전하는 점선 고리
+    const rings = j.tier >= 3 ? 2 : 1;
+    for (let i = 0; i < rings; i++) {
+      const rr = h * (0.5 + j.tier * 0.012) * (1 + i * 0.26);
+      ctx.strokeStyle = hexA(col, (0.14 + 0.12 * pulse) * k);
+      ctx.lineWidth = (1.1 + j.tier * 0.22) * sc;
+      ctx.setLineDash([6 * sc, 7 * sc]);
+      ctx.lineDashOffset = ((i % 2 ? -1 : 1) * (now / 26)) % 60;
+      ctx.beginPath();
+      ctx.ellipse(px, gy + 1, rr, rr * 0.32, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    // 2) 상위 전직(5단계~): 세로 빛기둥
+    if (j.upper) {
+      const g = ctx.createLinearGradient(px, gy - h * 1.35, px, gy);
+      g.addColorStop(0, hexA(col, 0));
+      g.addColorStop(0.55, hexA(col, 0.06 + 0.05 * pulse));
+      g.addColorStop(1, hexA(col, 0.15 + 0.06 * pulse));
+      ctx.fillStyle = g;
+      ctx.fillRect(px - h * 0.22, gy - h * 1.35, h * 0.44, h * 1.35);
+    }
+    // 3) 떠도는 불티 — 단계가 높을수록 많다
+    const sparks = j.tier >= 5 ? 6 : j.tier >= 4 ? 4 : j.tier >= 2 ? 2 : 0;
+    for (let i = 0; i < sparks; i++) {
+      const a = now / (900 + i * 130) + (i * Math.PI * 2) / Math.max(1, sparks);
+      const rr = h * (0.56 + 0.05 * Math.sin(a * 1.7));
+      const x = px + Math.cos(a) * rr;
+      const y = gy - h * 0.46 + Math.sin(a) * h * 0.24;
+      const sr = Math.max(0.6, (1.3 + 1.1 * Math.sin(now / 260 + i)) * sc);
+      ctx.fillStyle = hexA(col, 0.5 + 0.35 * pulse);
+      ctx.beginPath();
+      ctx.arc(x, y, sr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // 4) 머리 위 후광 — 4단계는 금고리, 5단계는 2겹 + 회전 광선
+    if (j.upper) {
+      const hy = gy - h * 1.02;
+      ctx.strokeStyle = hexA(col, 0.45 + 0.3 * pulse);
+      ctx.lineWidth = (1.6 + (j.tier - 4) * 0.8) * sc;
+      ctx.beginPath();
+      ctx.ellipse(px, hy, h * 0.24, h * 0.07, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      if (j.tier >= 5) {
+        ctx.strokeStyle = hexA('#ffffff', 0.3 + 0.22 * pulse);
+        ctx.lineWidth = 1 * sc;
+        ctx.beginPath();
+        ctx.ellipse(px, hy - 3 * sc, h * 0.32, h * 0.1, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        const rot = now / 1400;
+        for (let i = 0; i < 4; i++) {
+          const a2 = rot + (i * Math.PI) / 2;
+          ctx.strokeStyle = hexA(col, 0.26 + 0.16 * pulse);
+          ctx.beginPath();
+          ctx.moveTo(px + Math.cos(a2) * h * 0.26, hy + Math.sin(a2) * h * 0.075);
+          ctx.lineTo(px + Math.cos(a2) * h * 0.38, hy + Math.sin(a2) * h * 0.12);
+          ctx.stroke();
+        }
+      }
+    }
+    ctx.restore();
+  }
+
   groundY() {
     return this.H * 0.8;
   }
@@ -1438,9 +1529,10 @@ export class Renderer {
     ctx.ellipse(px, gy + 2, w * 0.3, w * 0.085, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    // v4.4 전직 오라 (칭호 색) → 그 위에 장비 등급 오라
+    if (this.effects && !dead) this.drawJobAura(ctx, px, gy, h, sc, now);
     // 장비 등급 오라 (발밑·주변 색)
     if (this.effects && !dead) this.drawAura(ctx, px, gy, h, sc, now);
-
     // v4.3 부활 가호 — 빛 고리·보호막 + 머리 위 남은 초 (남은 시간은 상단 배너 drawGraceBanner)
     if (!dead && p.graceUntil && now < p.graceUntil) this.drawGrace(ctx, px, gy, h, sc, now, p.graceUntil);
 

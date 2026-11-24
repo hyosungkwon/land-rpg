@@ -429,6 +429,41 @@ export function buyShards(s, count) {
   return { ok: true, n, cost, price };
 }
 
+/* ────────────────────────────── 강화석 대량 교환 (v4.4) ──────────────────────────────
+ * 펫 ★★진화(한 마리 400~800개)·장비 강화·스킬 레벨업은 강화석이 크게 드는데,
+ * 기존 UI는 1·10·50개뿐이라 고스테이지에서 골드가 남아도 손으로 여러 번 눌러야 했다.
+ *  - 모드: 1 / 10 / 100 / 'max'(보유 골드로 살 수 있는 만큼)
+ *  - 실제로 살 수 있는 개수를 돌려줘 UI 가 버튼 비활성·안내에 그대로 쓴다.
+ */
+export const SHARD_BULK = [1, 10, 100];
+
+/** 지금 골드로 살 수 있는 최대 강화석 수 */
+export function maxShardsBuy(s) {
+  const price = shardPrice(s);
+  const gold = Math.max(0, Math.floor(Number(s && s.gold) || 0));
+  return price > 0 ? Math.floor(gold / price) : 0;
+}
+
+/** 교환 모드 → 실제 구매 개수(0이면 불가) */
+export function shardBuyCount(s, mode) {
+  const max = maxShardsBuy(s);
+  if (mode === 'max' || mode === 'all') return max;
+  const want = Math.floor(Number(mode) || 0);
+  if (!(want > 0)) return 0;
+  return Math.min(want, max);
+}
+
+/** 모드('1'·'10'·'100'·'max')로 한 번에 교환 — app.js 액션·검증 공용 */
+export function exchangeShards(s, mode) {
+  const price = shardPrice(s);
+  const max = maxShardsBuy(s);
+  const want = mode === 'max' || mode === 'all' ? max : Math.floor(Number(mode) || 0);
+  if (!(want > 0)) return { ok: false, reason: '골드가 부족합니다', price, max, n: 0 };
+  const n = Math.min(want, max);
+  const r = buyShards(s, n);
+  return { ...r, price, max, want, n, short: n < want };
+}
+
 /* ────────────────────────────── 장비 뽑기 (v3.1) ────────────────────────────── */
 
 /** 현재 장착 등급의 평균 인덱스(오라 색) · 무기 등급 인덱스(검기 색) */

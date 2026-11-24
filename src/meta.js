@@ -3,7 +3,7 @@
 // DOM/Canvas 의존 없음 → 헤드리스 검증 가능.
 //   - 펫: 부동산(지역 수·평수·총자산) 조건을 만족하면 자동 해금. 장착한 펫이 전투에 동행한다.
 //     v4.2: 진화 3단계(기본 → 각성 → 신수)와 펫별 고유 스킬(패시브 + 액티브)을 함께 정의한다.
-//   - 전직: 레벨 + 최고 스테이지 조건으로 4단계. 전직 시 영구 공격력·체력 배율.
+//   - 전직: 레벨 + 최고 스테이지 조건으로 6단계(v4.4에서 5·6단계 추가). 전직 시 영구 공격력·체력 배율.
 //   - 던전: 10분 쿨타임마다 무료 1회 또는 강화석으로 즉시 입장. 30초 동안 입힌 피해·처치로 보상.
 import { ECON, stageGoldBase, monsterBaseHp } from './data.js';
 import { portfolioOf, formatGold } from './land.js';
@@ -438,7 +438,13 @@ export function equipPet(state, id) {
   return { ok: true, pet: def };
 }
 
-/* ────────────────────────────── 🔥 전직/각성 ────────────────────────────── */
+/* ────────────────────────────── 🔥 전직/각성 ──────────────────────────────
+ * v4.4: 4단계(드래곤 나이트) 위에 상위 전직 2단계를 더했다.
+ *  - 5단계 드래곤 로드(Lv.65 · S32) · 6단계 용신(Lv.85 · S40) — ∞ 구간(S31+)의 장기 목표.
+ *  - atkPct/hpPct 는 **이전 단계를 포함한 누적 배율**(calcStats 는 현재 단계만 곱합)이라
+ *    단계가 올라갈수록 배율 차이가 곧 성장폭이 된다(4→5 +45%p/+32%p, 5→6 +70%p/+48%p).
+ *  - badge·color 는 전직 카드와 전투 오라(render.js drawJobAura)가 함께 쓴다.
+ */
 export const JOBS = [
   {
     tier: 0,
@@ -482,11 +488,39 @@ export const JOBS = [
     stage: 24,
     atkPct: 70,
     hpPct: 50,
-    line: '용의 기운을 받아들인 최종 각성. 전장을 지배합니다.',
+    line: '용의 기운을 받아들인 각성. 전장을 지배합니다.',
+  },
+  {
+    tier: 4,
+    name: '드래곤 로드',
+    badge: '🐉',
+    color: '#ff4d8d',
+    lv: 65,
+    stage: 32,
+    atkPct: 115,
+    hpPct: 82,
+    line: '용의 심장을 나눠 가진 군주. ∞ 구간의 짐승도 고개를 숙입니다.',
+  },
+  {
+    tier: 5,
+    name: '용신',
+    badge: '👑',
+    color: '#ffe9a8',
+    lv: 85,
+    stage: 40,
+    atkPct: 185,
+    hpPct: 130,
+    line: '용의 계보 끝에 선 신. 전장 자체가 그의 영역이 됩니다.',
   },
 ];
 
 export const JOB_MAX = JOBS.length - 1;
+export const JOB_COUNT = JOBS.length;
+
+/** 상위 전직(5단계부터)인가 — 카드·오라 강조에 쓴다 */
+export function isUpperJob(tier) {
+  return Math.floor(Number(tier) || 0) >= 4;
+}
 
 /** 현재 전직 단계 정의 */
 export function jobOf(state) {
@@ -505,7 +539,7 @@ export function jobProgress(state) {
   const cur = jobOf(state);
   const next = nextJob(state);
   if (!next) {
-    return { cur, next: null, canPromote: false, levelOk: true, stageOk: true, pctLv: 1, pctStage: 1, reason: '최종 전직 완료' };
+    return { cur, next: null, canPromote: false, levelOk: true, stageOk: true, pctLv: 1, pctStage: 1, lvLeft: 0, stageLeft: 0, reason: '최종 전직 완료' };
   }
   const lv = Math.max(1, Math.floor(Number(state.level) || 1));
   const stage = Math.max(1, Math.floor(Number(state.maxStage) || 1));
@@ -519,7 +553,11 @@ export function jobProgress(state) {
     stageOk,
     pctLv: Math.max(0, Math.min(1, lv / next.lv)),
     pctStage: Math.max(0, Math.min(1, stage / next.stage)),
-    reason: !levelOk ? `Lv.${next.lv} 필요` : !stageOk ? `스테이지 ${next.stage} 필요` : '전직 가능',
+    lvLeft: Math.max(0, next.lv - lv),
+    stageLeft: Math.max(0, next.stage - stage),
+    reason: !levelOk && !stageOk
+      ? `Lv.${next.lv} · S${next.stage} 필요`
+      : !levelOk ? `Lv.${next.lv} 필요` : !stageOk ? `스테이지 ${next.stage} 필요` : '전직 가능',
   };
 }
 

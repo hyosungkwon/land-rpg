@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""land-rpg v4.3.0 검증 (QuickJS + 정적 검사)
+"""land-rpg v4.4.0 검증 (QuickJS + 정적 검사)
 
 1) 모든 JS 파일 문법(파싱) 검사
 2) 정적 검사 (Firebase/로그인 흔적 0, 저장 키 v3, sw 캐시 v3.5)
@@ -17,6 +17,7 @@
 사용: python3 tools/verify_v3.py
 """
 import json
+import math
 import os
 import re
 import sys
@@ -94,8 +95,8 @@ def main():
     for bad in ["firebase", "signInWithPopup", "Google 로그인", "gstatic", "firebaseio", "googleapis"]:
         ok(bad.lower() not in text_all.lower(), f"Firebase/로그인 흔적 없음: {bad}")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v4.3.0" in read("sw.js"), "SW 캐시 버전 v4.3.0")
-    ok("APP_VERSION = '4.3.0'" in read("src/data.js"), "앱 버전 v4.3.0")
+    ok("land-rpg-v4.4.0" in read("sw.js"), "SW 캐시 버전 v4.4.0")
+    ok("APP_VERSION = '4.4.0'" in read("src/data.js"), "앱 버전 v4.4.0")
     ok(os.path.exists(os.path.join(ROOT, "src/savecode.js")), "src/savecode.js 존재")
     ok("'./src/savecode.js'" in read("sw.js"), "sw.js 프리캐시에 savecode.js 포함")
     ok("'./src/gear.js'" in read("sw.js"), "sw.js 프리캐시에 gear.js 포함")
@@ -510,19 +511,53 @@ def main():
       s.level = 60; s.maxStage = 40;
       const r2 = promoteJob(s, 3000);
       const r3 = promoteJob(s, 4000);
-      const r4 = promoteJob(s, 5000);
+      const r4 = promoteJob(s, 5000);          // 4단계(드래곤 나이트): Lv.65 필요 → 거부
+      const p4 = jobProgress(s);
+      s.level = 70;
+      const atk3 = calcStats(s, {}).atk;       // 같은 레벨(70)에서 비교
+      const r5 = promoteJob(s, 6000);          // 5단계(드래곤 로드)
+      const tier5 = s.jobTier;
+      const atk4 = calcStats(s, {}).atk;
+      const hp4 = calcStats(s, {}).hpMax;
+      const p6 = jobProgress(s);               // 6단계: S40 충족 · Lv.85 부족
+      // S40 은 충족하고 레벨도 90인 5단계 상태 → 6단계 전직 가능
+      const s40 = defaultState(0); s40.jobTier = 4; s40.level = 90; s40.maxStage = 40;
+      const s40ok = jobProgress(s40).canPromote;
+      // 레벨은 90인데 S31 → 5단계의 S32 조건에서 막힌다
+      const noStage = defaultState(0); noStage.jobTier = 3; noStage.level = 90; noStage.maxStage = 31;
+      const noStageProg = jobProgress(noStage);
+      s.level = 90;
+      const hpBefore6 = calcStats(s, {}).hpMax;
+      const r6 = promoteJob(s, 7000);          // 6단계(용신)
+      const atk5 = calcStats(s, {}).atk;
+      const hp5 = calcStats(s, {}).hpMax;
+      const r7 = promoteJob(s, 8000);
+      const pe = jobProgress(s);
       return {
-        names: JOBS.map(j => j.name), tiers: JOBS.map(j => j.tier),
+        names: JOBS.map(j => j.name), tiers: JOBS.map(j => j.tier), badges: JOBS.map(j => j.badge),
+        req: JOBS.map(j => [j.lv, j.stage]), pct: JOBS.map(j => [j.atkPct, j.hpPct]),
         p1: p1.canPromote, p2: p2.canPromote, reason: p1.reason,
         ok1: r1.ok, tier1: r1.ok ? r1.to.tier : -1, atk0, atk1, hp0, hp1,
-        early: early.ok, ok2: r2.ok, ok3: r3.ok, final: r4.ok, maxTier: s.jobTier,
-        atkPct: JOBS[3].atkPct, hpPct: JOBS[3].hpPct,
+        early: early.ok, ok2: r2.ok, ok3: r3.ok, atk3,
+        r4: r4.ok, r4reason: r4.reason, p4reason: p4.reason, p4lvLeft: p4.lvLeft,
+        r5: r5.ok, tierAfter5: tier5, atk4, hp4, p6reason: p6.reason, p6lvLeft: p6.lvLeft,
+        s40ok, noStageOk: noStageProg.canPromote, noStageReason: noStageProg.reason,
+        r6: r6.ok, atk5, hp5, hpBefore6, r7: r7.ok, maxTier: s.jobTier, jobMax: JOB_MAX, jobCount: JOB_COUNT,
+        doneReason: pe.reason, doneNext: pe.next, upper: [isUpperJob(0), isUpperJob(3), isUpperJob(4), isUpperJob(5)],
       };
     """)
-    ok(job["names"] == ["견습 기사", "왕국 기사", "성기사", "드래곤 나이트"] and job["tiers"] == [0, 1, 2, 3], "전직 4단계 정의", json.dumps(job["names"], ensure_ascii=False))
+    ok(job["names"] == ["견습 기사", "왕국 기사", "성기사", "드래곤 나이트", "드래곤 로드", "용신"] and job["tiers"] == [0, 1, 2, 3, 4, 5], "전직 6단계 정의(4단계 + 상위 전직 2단계)", json.dumps(job["names"], ensure_ascii=False))
+    ok(job["req"] == [[1, 1], [12, 8], [24, 16], [36, 24], [65, 32], [85, 40]] and job["pct"][4] == [115, 82] and job["pct"][5] == [185, 130], "상위 전직 조건(Lv.65·S32 / Lv.85·S40)과 누적 배율", json.dumps({"req": job["req"], "pct": job["pct"]}))
+    ok(job["badges"][4:] == ["🐉", "👑"] and job["upper"] == [False, False, True, True] and job["jobMax"] == 5 and job["jobCount"] == 6, "상위 전직 배지·isUpperJob·단계 상한", json.dumps({"b": job["badges"][4:], "u": job["upper"], "max": job["jobMax"]}, ensure_ascii=False))
     ok(job["p1"] is False and job["p2"] is True, "전직 조건(레벨·스테이지) 판정", json.dumps({"p1": job["p1"], "p2": job["p2"]}))
     ok(job["ok1"] is True and job["tier1"] == 1 and job["atk1"] > job["atk0"] and job["hp1"] > job["hp0"], "전직 시 영구 공격력·체력 배율", f"{job['atk0']}→{job['atk1']} / {job['hp0']}→{job['hp1']}")
-    ok(job["early"] is False and job["ok2"] is True and job["ok3"] is True and job["final"] is False and job["maxTier"] == 3, "전직은 단계별로만·최종 4단계", json.dumps({k: job[k] for k in ["early", "ok2", "ok3", "final", "maxTier"]}))
+    ok(job["early"] is False and job["ok2"] is True and job["ok3"] is True, "전직은 단계별로만", json.dumps({k: job[k] for k in ["early", "ok2", "ok3"]}))
+    ok(job["r4"] is False and "Lv.65" in job["r4reason"] and job["p4lvLeft"] == 5, "5단계 전직은 Lv.65 전까지 거부(남은 5레벨 안내)", json.dumps({"ok": job["r4"], "why": job["r4reason"], "left": job["p4lvLeft"]}, ensure_ascii=False))
+    ok(job["r5"] is True and job["tierAfter5"] == 4 and job["atk4"] > job["atk3"] * 1.25 and job["hp4"] > job["hp1"] * 1.2, "5단계 전직 — 같은 레벨에서도 영구 배율 상승", f"{job['atk3']}→{job['atk4']} / {job['hp4']}")
+    ok("Lv.85" in job["p6reason"] and job["p6lvLeft"] == 15 and job["s40ok"] is True, "6단계 진행도 — S40 충족 · Lv.85까지 15레벨", json.dumps({"why": job["p6reason"], "left": job["p6lvLeft"], "s40": job["s40ok"]}, ensure_ascii=False))
+    ok(job["noStageOk"] is False and "32" in job["noStageReason"], "5단계는 Lv.90이라도 S32가 없으면 거부", json.dumps({"why": job["noStageReason"]}, ensure_ascii=False))
+    ok(job["r6"] is True and job["maxTier"] == 5 and job["atk5"] > job["atk4"] * 1.25 and job["hp5"] > job["hpBefore6"] * 1.15, "6단계(용신) 전직 — 최종 단계·배율 상승", f"{job['atk4']}→{job['atk5']} / {job['hpBefore6']}→{job['hp5']}")
+    ok(job["r7"] is False and job["doneNext"] is None and job["doneReason"] == "최종 전직 완료", "최종(6단계) 이후 전직 없음")
 
     dun = js(ctx, """
       const s = defaultState(0);
@@ -626,7 +661,7 @@ def main():
       };
     """)
     ok(compat["level"] == 40 and compat["gold"] == 7777 and compat["pet"] == {"equipped": None, "unlocked": [], "chosen": False, "levels": {}, "evo": {}} and compat["job"] == 0 and compat["cd"] == 0, "v3.1 저장 호환(펫·전직·던전 기본값 병합 · v4.2 evo 포함)", json.dumps(compat, ensure_ascii=False))
-    ok(compat["badPet"] == {"equipped": None, "unlocked": ["fox"], "chosen": False, "levels": {"fox": 1}, "evo": {}} and compat["badJob"] == 3 and compat["badCd"] == 0 and compat["badBest"] == 0 and compat["badRuns"] == 0, "손상된 펫/전직/던전 값 방어", json.dumps({k: compat[k] for k in ["badPet", "badJob", "badCd", "badBest", "badRuns"]}, ensure_ascii=False))
+    ok(compat["badPet"] == {"equipped": None, "unlocked": ["fox"], "chosen": False, "levels": {"fox": 1}, "evo": {}} and compat["badJob"] == 5 and compat["badCd"] == 0 and compat["badBest"] == 0 and compat["badRuns"] == 0, "손상된 펫/전직/던전 값 방어", json.dumps({k: compat[k] for k in ["badPet", "badJob", "badCd", "badBest", "badRuns"]}, ensure_ascii=False))
 
     tpl2 = js(ctx2, """
       const s = defaultState(0);
@@ -1325,12 +1360,13 @@ def main():
       const exp = [30, 50, 100].map(s => Math.round(stageExpBase(s)));
       return { diff, bad, inf: defs.map(d => !!d.infinite), theme: defs[3].themeName, tier: defs.map(d => d.tier),
         hp, atk, gold, exp, boss: monsterStats(50, true, 1), normal: monsterStats(50, false, 1),
-        ratio31: monsterBaseHp(31) / monsterBaseHp(30), ratio30: monsterBaseHp(30) / monsterBaseHp(29) };
+        ratio31: monsterBaseHp(31) / monsterBaseHp(30), ratio30: monsterBaseHp(30) / monsterBaseHp(29),
+        growth: [INFINITE.hpGrowth, INFINITE.atkGrowth, INFINITE.goldGrowth, INFINITE.expGrowth] };
     """)
     ok(inf["diff"] == [], "S1~30 몬스터 수치가 기존과 완전히 동일(회귀 없음)", json.dumps(inf["diff"]))
     ok(inf["bad"] == 0 and inf["inf"] == [False, True, True, True, True, True], "S31·S50·S100·S250·S1000 스테이지 정의(몬스터·보스·테마)", json.dumps(inf["inf"]))
     ok("∞" in inf["theme"] and inf["tier"][3] == "infinity", "무한 구간 표기(∞ · tier)", inf["theme"])
-    ok(all(inf["hp"][i] < inf["hp"][i + 1] for i in range(len(inf["hp"]) - 1)) and inf["ratio31"] < inf["ratio30"] and abs(inf["ratio31"] - 1.035) < 0.0001, "S31 이후 완만한 무한 곡선(체력 단조 증가)", json.dumps({"hp": inf["hp"], "r31": round(inf["ratio31"], 4), "r30": round(inf["ratio30"], 4)}))
+    ok(all(inf["hp"][i] < inf["hp"][i + 1] for i in range(len(inf["hp"]) - 1)) and inf["ratio31"] < inf["ratio30"] and abs(inf["ratio31"] - 1.08) < 0.0001, "S31 이후 무한 곡선(체력 ×1.08 · 단조 증가)", json.dumps({"hp": inf["hp"], "r31": round(inf["ratio31"], 4), "r30": round(inf["ratio30"], 4)}))
     ok(all(inf["atk"][i] < inf["atk"][i + 1] for i in range(2)) and all(inf["gold"][i] < inf["gold"][i + 1] for i in range(2)) and all(inf["exp"][i] < inf["exp"][i + 1] for i in range(2)), "공격·골드·경험치도 무한 구간에서 계속 성장", json.dumps({"a": inf["atk"], "g": inf["gold"], "e": inf["exp"]}))
     ok(abs(inf["boss"]["hp"] - inf["normal"]["hp"] * 4.2) <= 2 and inf["gold"][2] < 1000000, "보스 배율 유지 · 골드 인플레 억제", json.dumps({"b": inf["boss"]["hp"], "n": inf["normal"]["hp"], "g100": inf["gold"][2]}))
     ok(inf["hp"][4] > inf["hp"][3] * 5, "S100 은 S50 보다 한 단계 더 깊은 구간", json.dumps({"s50": inf["hp"][3], "s100": inf["hp"][4]}))
@@ -2310,7 +2346,7 @@ def main():
     ok(all(x in read("src/state.js") for x in ["gearMods", "normalizeGear", "syncGearRarity", "compareGear"]), "상태에 장비 옵션·마이그레이션·비교 반영(state.js)")
     css4 = read("style.css")
     ok(all(x in css4 for x in [".gear-slots", ".gslot", ".inv-grid", ".inv-card", ".cmp-vs", ".cmp-opts", ".cmp-stats", ".iv-eq", ".gsvg"]), "v4 장비 UI CSS(슬롯·그리드·비교 모달)")
-    ok("장비 시스템" in read("README.md") and "4.3.0" in read("README.md"), "README v4.3.0 반영")
+    ok("장비 시스템" in read("README.md") and "4.4.0" in read("README.md"), "README v4.4.0 반영")
 
     # ══════════════════════════════════════════════════════════════════════
     section("[17] 🖼️ v4.1 테마 배경 · ♾️ 환생 중간 스테이지 점프")
@@ -2799,9 +2835,9 @@ def main():
     ok(all(x in asrc42 for x in ["enterTower", "openTowerFloors", "evolvePet", "showTowerResult", "showTowerFloors"]), "app.js — 탑 입장/층 선택/결과·펫 진화 액션", "")
     ok('assets/sprites/pet/${info.sprite}.png' in asrc42, "진화 결과 모달 — 진화 스프라이트 경로(.png)", "")
     ok(all(x in css42 for x in [".tower-card", ".tower-tiles", ".tower-floor", ".pet-evo", ".mini.evo"]), "style.css — v4.2 스타일", "")
-    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.3.0" in read("sw.js") and "APP_VERSION = '4.3.0'" in read("src/data.js"), "버전·서비스워커(4.3.0 · tower.js 프리캐시)", "")
-    pkg_ok = os.path.exists(os.path.join(ROOT, "package.json")) and '"version": "4.3.0"' in read("package.json")
-    ok(pkg_ok, "package.json 버전 4.3.0(로컬 검증용)", "")
+    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.4.0" in read("sw.js") and "APP_VERSION = '4.4.0'" in read("src/data.js"), "버전·서비스워커(4.4.0 · tower.js 프리캐시)", "")
+    pkg_ok = os.path.exists(os.path.join(ROOT, "package.json")) and '"version": "4.4.0"' in read("package.json")
+    ok(pkg_ok, "package.json 버전 4.4.0(로컬 검증용)", "")
     evo_files = [f"assets/sprites/pet/pet_{n}_{s}.png" for n in ("wolf", "fox", "owl", "dragon") for s in ("awaken", "divine")]
     ok(all(os.path.exists(os.path.join(ROOT, f)) for f in evo_files), "펫 진화 스프라이트 8종 파일", ", ".join(f for f in evo_files if not os.path.exists(os.path.join(ROOT, f))))
     ok(all(f"'./{f}'" in read("sw.js") for f in evo_files), "sw.js 프리캐시에 진화 스프라이트 포함", "")
@@ -2950,7 +2986,172 @@ def main():
 
     css43 = read("style.css")
     ok(all(x in css43 for x in [".land-sum", ".ls-v", ".ls-claim", ".news-slim", ".ns-title", ".land-subbar", ".land-rec", ".buff-now"]), "style.css — v4.3 부동산 요약 바·압축 뉴스·서브 탭", "")
-    ok("land-rpg-v4.3.0" in read("sw.js") and "'4.3.0'" in read("src/data.js"), "버전·캐시 v4.3.0", "")
+    ok("land-rpg-v4.4.0" in read("sw.js") and "'4.4.0'" in read("src/data.js"), "버전·캐시 v4.4.0", "")
+
+    section("[20] ⚔️ v4.4 S31+ 무한 구간 리밸런싱 · 강화석 대량 교환 · 상위 전직")
+
+    # ── 1) 성장률 ──
+    inf44 = js(ctx, """
+      const legacyHp = (s) => {
+        const late = 1 + Math.max(0, s - 10) * ECON.monsterHpLateBoost;
+        return ECON.monsterHpBase * Math.pow(ECON.monsterHpGrowth, s - 1) * late;
+      };
+      const legacyAtk = (s) => {
+        const late = 1 + Math.min(ECON.monsterAtkLateBoost * Math.max(0, s - ECON.monsterAtkLateFrom), 1.6);
+        return ECON.monsterAtkBase * Math.pow(ECON.monsterAtkGrowth, s - 1) * late;
+      };
+      const diff = [];
+      for (let st = 1; st <= 30; st++) {
+        if (Math.round(monsterBaseHp(st)) !== Math.round(legacyHp(st))) diff.push('hp' + st);
+        if (Math.round(monsterBaseAtk(st)) !== Math.round(legacyAtk(st))) diff.push('atk' + st);
+        if (Math.round(stageGoldBase(st)) !== Math.round(ECON.goldBase * Math.pow(ECON.goldGrowth, st - 1))) diff.push('g' + st);
+        if (Math.round(stageExpBase(st)) !== Math.round(ECON.expBase * Math.pow(ECON.expGrowth, st - 1))) diff.push('e' + st);
+      }
+      const r = (f, a, b) => f(b) / f(a);
+      return {
+        diff,
+        g: [INFINITE.hpGrowth, INFINITE.atkGrowth, INFINITE.goldGrowth, INFINITE.expGrowth],
+        ratios: [r(monsterBaseHp, 30, 31), r(monsterBaseAtk, 30, 31), r(stageGoldBase, 30, 31), r(stageExpBase, 30, 31)],
+        hp: [30, 31, 35, 40, 45, 50].map(st => Math.round(monsterBaseHp(st))),
+        s45: r(monsterBaseHp, 30, 45), s60: r(monsterBaseHp, 30, 60),
+        hard: monsterBaseHp(31) > monsterBaseHp(30) * 1.07 && monsterBaseAtk(31) > monsterBaseAtk(30) * 1.04,
+      };
+    """)
+    ok(inf44["diff"] == [], "S1~30 몬스터·골드·경험치가 v4.3과 완전히 동일(회귀 없음)", json.dumps(inf44["diff"]))
+    ok(inf44["g"] == [1.08, 1.05, 1.075, 1.055], "S31+ 성장률 상향 — 체력 ×1.08 · 공격 ×1.05 · 골드 ×1.075 · 경험치 ×1.055", json.dumps(inf44["g"]))
+    ok(all(abs(inf44["ratios"][i] - inf44["g"][i]) < 0.0001 for i in range(4)) and inf44["hard"], "S31 진입부터 새 성장률이 그대로 적용", json.dumps({"r": inf44["ratios"], "g": json.dumps(inf44['g'])}))
+    ok(abs(inf44["s45"] - math.pow(1.08, 15)) < 0.01 and abs(inf44["s60"] - math.pow(1.08, 30)) < 0.05, "S45 체력 ×3.17 · S60 ×10.06 (S30 대비) — 후반일수록 벽", json.dumps({"s45": round(inf44["s45"], 2), "s60": round(inf44["s60"], 2)}))
+
+    # ── 2) 실제 전투: 긴장감 · v4.3 대비 확실히 어려워졌는가 ──
+    V44_BUILD = """
+      const s = defaultState(0);
+      s.level = 55; s.stage = 31; s.maxStage = 31;
+      s.gearRarity = { weapon: 'legend', armor: 'hero', helmet: 'hero', ring: 'rare', amulet: 'rare' };
+      s.equip = { weapon: 40, armor: 30, helmet: 25, ring: 20, amulet: 20 };
+      s.jobTier = 3;
+      s.pet = { equipped: 'wolf', unlocked: ['wolf'], chosen: true, levels: { wolf: 10 }, evo: { wolf: 2 } };
+      s.rebirth = { count: 2, points: 0, totalPoints: 120, traits: { atk: 8, hp: 6 }, bestStage: 31, at: 0 };
+      for (const c of CITIES.slice().sort((a, b) => a.base - b.base).slice(0, 8)) s.land.owned[c.key] = 30;
+    """
+    V44_SIM = """
+      (function (hpG, atkG, goldG, expG, mins) {
+        INFINITE.hpGrowth = hpG; INFINITE.atkGrowth = atkG;
+        INFINITE.goldGrowth = goldG; INFINITE.expGrowth = expG;
+        const rng = (function (seed) { let x = seed; return function () { x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296; }; })(21);
+        __BUILD__
+        const buffs = computeBuffs(s, 0);
+        const b = new Battle(s, () => buffs, rng, 0);
+        let t = 0, clears = 0, fails = 0, deaths = 0;
+        for (let i = 0; i < mins * 60 * 20; i++) {
+          t += 50; b.tick(50, t);
+          for (const ev of b.drainEvents()) {
+            if (ev.t === 'stageClear') clears++;
+            else if (ev.t === 'bossFail') fails++;
+            else if (ev.t === 'playerDeath') deaths++;
+          }
+        }
+        return { stage: s.stage, clears, fails, deaths, atk: calcStats(s, buffs).atk, hp: calcStats(s, buffs).hpMax };
+      })
+    """.replace("__BUILD__", V44_BUILD)
+    new_curve = js(ctx, "return " + V44_SIM.strip() + "(INFINITE.hpGrowth, INFINITE.atkGrowth, INFINITE.goldGrowth, INFINITE.expGrowth, 30)")
+    ctx3 = quickjs.Context()
+    ctx3.eval(bundle(FILES))
+    old_curve = json.loads(ctx3.eval("JSON.stringify(" + V44_SIM + "(1.035, 1.028, 1.06, 1.04, 30))"))
+    ok(new_curve["stage"] >= 45 and new_curve["clears"] >= 10, "v4.4 곡선에서도 S31+ 를 계속 밀고 올라간다(3단계 빌드·30분)", json.dumps(new_curve))
+    ok(new_curve["fails"] + new_curve["deaths"] > 0, "S31+ 에 긴장감 — 보스 실패·사망이 실제로 발생", json.dumps(new_curve))
+    ok(new_curve["stage"] <= old_curve["stage"] - 8, "같은 빌드·같은 시간에 v4.3보다 확실히 느리다(완만함 해소)", json.dumps({"v44": new_curve["stage"], "v43": old_curve["stage"]}, ensure_ascii=False))
+
+    # ── 3) 강화석 대량 교환 ──
+    exch = js(ctx, """
+      const s = defaultState(0);
+      s.stage = 30;
+      const price = shardPrice(s);
+      s.gold = price * 250 + 7;
+      const max = maxShardsBuy(s);
+      const counts = [shardBuyCount(s, 1), shardBuyCount(s, '10'), shardBuyCount(s, '100'), shardBuyCount(s, 'max'), shardBuyCount(s, 0), shardBuyCount(s, 'x')];
+      const shards0 = s.shards, gold0 = s.gold;
+      const r10 = exchangeShards(s, '10');
+      const afterTen = { gold: s.gold, shards: s.shards, n: r10.n, cost: r10.cost, short: r10.short };
+      const poor = defaultState(0); poor.gold = 5; poor.shards = 3;
+      const rp = exchangeShards(poor, '100');
+      const mid = defaultState(0); mid.stage = 30; mid.gold = price * 40; mid.shards = 0;
+      const r100 = exchangeShards(mid, 100);
+      const rmax = exchangeShards(mid, 'max');
+      const rmax2 = exchangeShards(mid, 'max');
+      const capMax = exchangeShards(s, 'max');   // 250 - 10 = 240개 살 수 있는 골드
+      return {
+        bulk: SHARD_BULK, price, max, counts, gold0, shards0,
+        afterTen, ok10: r10.ok,
+        rp: { ok: rp.ok, gold: poor.gold, shards: poor.shards, n: rp.n },
+        r100: { ok: r100.ok, n: r100.n, want: r100.want, short: r100.short, gold: mid.gold, shards: mid.shards },
+        rmax: { ok: rmax.ok, n: rmax.n }, rmax2: { ok: rmax2.ok },
+        capMax: { ok: capMax.ok, n: capMax.n, gold: s.gold, shards: s.shards, price },
+      };
+    """)
+    ok(exch["bulk"] == [1, 10, 100], "교환 단위 ×1 · ×10 · ×100", json.dumps(exch["bulk"]))
+    ok(exch["max"] == 250 and exch["counts"] == [1, 10, 100, 250, 0, 0], "최대 = 보유 골드 / 시세 · 잘못된 모드 0", json.dumps({"max": exch["max"], "c": exch["counts"]}))
+    ok(exch["ok10"] is True and exch["afterTen"]["n"] == 10 and exch["afterTen"]["gold"] == exch["gold0"] - exch["price"] * 10 and exch["afterTen"]["shards"] == exch["shards0"] + 10, "×10 교환 — 골드 차감·강화석 증가", json.dumps(exch["afterTen"]))
+    ok(exch["rp"]["ok"] is False and exch["rp"]["gold"] == 5 and exch["rp"]["shards"] == 3, "골드 부족 시 거부(상태 불변)", json.dumps(exch["rp"]))
+    ok(exch["r100"]["ok"] is True and exch["r100"]["n"] == 40 and exch["r100"]["want"] == 100 and exch["r100"]["short"] is True and exch["r100"]["gold"] == 0, "×100 요청에 골드가 모자라면 살 수 있는 만큼만(40) · short 표시", json.dumps(exch["r100"]))
+    ok(exch["rmax"]["ok"] is False and exch["rmax"]["n"] == 0 and exch["rmax2"]["ok"] is False and exch["capMax"]["n"] == 240 and exch["capMax"]["gold"] == 7, "최대 교환은 남은 골드까지만 · 골드 소진 뒤엔 거부", json.dumps({"n": exch["capMax"]["n"], "left": exch["capMax"]["gold"], "again": exch["rmax2"]["ok"]}))
+
+    tpl44 = js(ctx2, """
+      const s = defaultState(0);
+      s.stage = 30;
+      const price = shardPrice(s);
+      s.gold = price * 120;
+      const ui = { s, battle: { stats: calcStats(s, computeBuffs(s, 0)), def: stageDef(30), boss: null, dungeon: null, player: { hp: 1 } },
+        app: { buffs: computeBuffs(s, 0) }, logs: [], tab: 'gear', el: {}, install: { hidden: true } };
+      const rich = __tpls.gear(ui);
+      const poorS = defaultState(0); poorS.stage = 30; poorS.gold = shardPrice(poorS) * 5;
+      const ui2 = { ...ui, s: poorS, battle: { ...ui.battle, stats: calcStats(poorS, {}) } };
+      const poor = __tpls.gear(ui2);
+      return {
+        rich, poor,
+        has1: rich.includes('data-value="1"'), has10: rich.includes('data-value="10"'),
+        has100: rich.includes('data-value="100"'), hasMax: rich.includes('data-value="max"'),
+        maxText: rich.includes('최대 <b>120</b>개'), poor100off: poor.includes('data-value="100" disabled'),
+        bad: rich.includes('undefined') || rich.includes('NaN') || poor.includes('undefined') || poor.includes('NaN'),
+      };
+    """)
+    ok(tpl44["has1"] and tpl44["has10"] and tpl44["has100"] and tpl44["hasMax"] and "×1" in tpl44["rich"] and "×100" in tpl44["rich"], "강화석 교환 UI — ×1 · ×10 · ×100 · 최대 버튼", json.dumps({k: tpl44[k] for k in ["has1", "has10", "has100", "hasMax"]}))
+    ok(tpl44["maxText"] and "교환 가능" in tpl44["rich"], "보유 골드 기준 최대 교환 개수 안내", "")
+    ok(tpl44["poor100off"] is True, "골드가 모자란 단위는 비활성(disabled)", "")
+    ok(tpl44["bad"] is False, "교환 카드에 undefined/NaN 누출 없음", "")
+
+    # ── 4) 상위 전직 연출·UI·저장 ──
+    rsrc44 = read("src/render.js")
+    ok(all(x in rsrc44 for x in ["drawJobAura", "syncJob", "isUpperJob", "setLineDash"]), "render.js — 전직 오라(문양·빛기둥·후광) 구현", "")
+    player_part = rsrc44[rsrc44.index("drawPlayer(ctx, now, dt)"):rsrc44.index("── 검기 아크 ──", rsrc44.index("drawPlayer(ctx, now, dt)"))]
+    ok(player_part.index("this.drawJobAura(") < player_part.index("this.drawAura("), "전직 오라는 장비 등급 오라보다 아래층에 그린다(색 구분)", "")
+    aura_body = rsrc44[rsrc44.index("drawJobAura(ctx, px, gy, h, sc, now) {"):rsrc44.index("  groundY() {")]
+    ok("globalCompositeOperation = 'lighter'" in aura_body and "ellipse" in aura_body and "createLinearGradient" in aura_body, "전직 오라 — 가산 합성·문양·빛기둥으로 캐릭터를 해치지 않는다", "")
+    usrc44 = read("src/ui.js")
+    ok(all(x in usrc44 for x in ["JOB_COUNT", "isUpperJob", "상위 전직", "job-badge", "' hi' : ''", "promote-btn"]) and "/4" not in usrc44, "ui.js — 전직 카드 단계 표기 6단계·상위 전직 강조", "")
+    asrc44 = read("app.js")
+    ok(all(x in asrc44 for x in ["exchangeShards", "buyShards:", "JOB_COUNT", "isUpperJob"]), "app.js — 교환 액션·전직 모달 6단계 연결", "")
+    ok("${JOB_COUNT}" in asrc44 and "상위 전직" in asrc44, "전직 모달 — n/6 표기와 상위 전직 안내", "")
+    css44 = read("style.css")
+    ok(all(x in css44 for x in [".chip.xchg", ".xchg-row", ".job-card.top", ".promote-btn.upper"]), "style.css — 교환 버튼·상위 전직 카드 스타일", "")
+
+    job44 = js(ctx, """
+      const keep4 = normalizeState({ ver: 3, jobTier: 4, level: 70, maxStage: 33, gold: 10 }, 0);
+      const keep5 = normalizeState({ ver: 3, jobTier: 5, level: 90, maxStage: 41, gold: 10 }, 0);
+      const over = normalizeState({ ver: 3, jobTier: 99, gold: 10 }, 0);
+      const junk = normalizeState({ ver: 3, jobTier: 'dragon', gold: 10 }, 0);
+      const old3 = normalizeState({ ver: 3, jobTier: 3, level: 52, maxStage: 27, gold: 10 }, 0);
+      const st4 = calcStats({ ...defaultState(0), level: 70, jobTier: 4 }, {});
+      const st3 = calcStats({ ...defaultState(0), level: 70, jobTier: 3 }, {});
+      return { keep4: keep4.jobTier, keep5: keep5.jobTier, over: over.jobTier, junk: junk.jobTier, old3: old3.jobTier,
+        name4: jobOf(keep4).name, name5: jobOf(keep5).name, atk3: st3.atk, atk4: st4.atk,
+        hp3: st3.hpMax, hp4: st4.hpMax, peak: keep4.records.peakJobTier };
+    """)
+    ok(job44["keep4"] == 4 and job44["keep5"] == 5 and job44["over"] == 5 and job44["junk"] == 0 and job44["old3"] == 3, "저장 호환 — jobTier 0~5 보존·상한 정리", json.dumps({k: job44[k] for k in ["keep4", "keep5", "over", "junk", "old3"]}))
+    ok(job44["name4"] == "드래곤 로드" and job44["name5"] == "용신", "저장본의 상위 전직 칭호가 그대로 복원", json.dumps({"n4": job44["name4"], "n5": job44["name5"]}, ensure_ascii=False))
+    ok(job44["atk4"] > job44["atk3"] * 1.26 and job44["hp4"] > job44["hp3"] * 1.2 and job44["peak"] == 4, "상위 전직 배율이 실제 스탯·역대 기록에 반영", json.dumps({k: job44[k] for k in ["atk3", "atk4", "hp3", "hp4", "peak"]}))
+
+    readme44 = read("README.md")
+    ok(all(x in readme44 for x in ["v4.4.0", "드래곤 로드", "용신", "×100"]) and "×1.08" in readme44, "README — v4.4 성장률·상위 전직·대량 교환 반영", "")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:
