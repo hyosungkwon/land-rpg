@@ -2931,7 +2931,7 @@ def main():
     ok("this.bossAlert = now" in rsrc43 and "this.bossRoar" in rsrc43 and "this.redFlash = Math.max(this.redFlash, 0.3)" in rsrc43, "보스 등장 시 붉은 플래시·충격파·포효 연출", "")
     ok(all(x in rsrc43 for x in ["if (this.shake > 0.15 && this.shakeOn)", "ECON.shakeMax", "ECON.shakeTrim"]), "화면 흔들림 상한·감쇠 + 설정(shakOn) 반영")
     ok("this.impacts.length > 16" in rsrc43 and "globalCompositeOperation = 'lighter'" in rsrc43, "타격 임팩트는 최대 16개(가벼운 렌더) · 가산 합성")
-    ok("bossHit ? 1.28 : 1" in rsrc43 and "addFloater(ev.x, ev.dmg, ev.crit, ev.kind, null, bossHit ? 1.28 : 1)" in rsrc43, "보스 타격 — 피해 숫자 1.28배 강조")
+    ok("bossHit ? 1.28 : 1" in rsrc43 and "addFloater(ev.x, ev.dmg, ev.crit, ev.kind, null, bossHit ? 1.28 : 1, now)" in rsrc43, "보스 타격 — 피해 숫자 1.28배 강조")
     ok(all(x in rsrc43 for x in ["this.shake = Math.max(this.shake, bossHit ? 2.2 : 1.2)", "bossHit ? 7 : 5.4"]), "일반 타격 흔들림 완화 · 치명타·보스만 강하게(과하지 않게)")
     ok("this.impacts = [];" in rsrc43 and "this.drawImpacts(ctx, t)" in rsrc43 and "this.drawGraceBanner(ctx, W, t)" in rsrc43, "프레임 루프에 임팩트·가호 배너 연결", "")
     ok(all(x in rsrc43 for x in ["🛡 부활 가호 · 피해", "경감", "toFixed(1)}초"]), "가호 상단 배너 문구(피해 경감률·남은 초)", "")

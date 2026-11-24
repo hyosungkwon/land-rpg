@@ -262,21 +262,21 @@ export class Renderer {
     for (const ev of events) {
       if (ev.t === 'hit') {
         const bossHit = !!ev.isBoss;
-        this.addFloater(ev.x, ev.dmg, ev.crit, ev.kind, null, bossHit ? 1.28 : 1);
+        this.addFloater(ev.x, ev.dmg, ev.crit, ev.kind, null, bossHit ? 1.28 : 1, now);
         this.burst(ev.x, ev.crit ? '#ffd76a' : '#fff1cf', ev.crit ? 18 : 8, ev.isBoss);
         if (ev.crit) {
           this.burst(ev.x, '#ff6a4d', 7, false);
           this.rings.push({ x: ev.x, life: 1, r: 12, color: '#ffd76a', wide: 1.8 });
-          this.addImpact(ev.x, { crit: true, boss: bossHit, color: '#ffe08a' });
+          this.addImpact(ev.x, { crit: true, boss: bossHit, color: '#ffe08a' }, now);
           this.shake = Math.max(this.shake, bossHit ? 7 : 5.4);
           this.flash = Math.max(this.flash, 0.2);
         } else {
-          this.addImpact(ev.x, { crit: false, boss: bossHit, color: bossHit ? '#ffcf6a' : '#fff1cf' });
+          this.addImpact(ev.x, { crit: false, boss: bossHit, color: bossHit ? '#ffcf6a' : '#fff1cf' }, now);
           this.shake = Math.max(this.shake, bossHit ? 2.2 : 1.2);
         }
         if (ev.kind === 'strike') {
           this.fx.push({ key: 'strikeHit', x: ev.x, t0: now, dur: 380 });
-          this.addImpact(ev.x, { crit: false, boss: bossHit, color: '#ffd166' });
+          this.addImpact(ev.x, { crit: false, boss: bossHit, color: '#ffd166' }, now);
           this.flash = Math.max(this.flash, 0.18);
         }
         if (ev.kind === 'whirl') {
@@ -290,7 +290,7 @@ export class Renderer {
         } else {
           this.shake = Math.max(this.shake, ev.heavy ? 5.2 : 3.4);
           this.redFlash = Math.max(this.redFlash, 0.4);
-          this.addFloater(ECON.playerX, ev.dmg, false, 'hurt');
+          this.addFloater(ECON.playerX, ev.dmg, false, 'hurt', null, 1, now);
         }
       } else if (ev.t === 'monsterWindup') {
         // 공격 전조 — 기 모으기 불티 + (근거리) 바닥 경고 고리
@@ -317,7 +317,7 @@ export class Renderer {
           this.shake = 11;
           this.flash = Math.max(this.flash, 0.3);
         }
-        if (ev.gold) this.addFloater(ev.x, `+${ev.gold}`, false, 'gold');
+        if (ev.gold) this.addFloater(ev.x, `+${ev.gold}`, false, 'gold', null, 1, now);
         this.spawnLoot(ev, now);
         this.deathFx(ev, now);
       } else if (ev.t === 'skill') {
@@ -333,7 +333,7 @@ export class Renderer {
         }
         if (ev.key === 'heal') {
           this.rings.push({ x: ECON.playerX, life: 1, r: 18, color: '#8ff0a4', wide: 1 });
-          this.addFloater(ECON.playerX, `+${ev.heal || 0}`, false, 'heal');
+          this.addFloater(ECON.playerX, `+${ev.heal || 0}`, false, 'heal', null, 1, now);
         }
         if (ev.key === 'berserk') {
           this.rings.push({ x: ECON.playerX, life: 1, r: 20, color: '#ff7a59', wide: 1.6 });
@@ -351,16 +351,16 @@ export class Renderer {
       } else if (ev.t === 'lifesteal') {
         // 🩸 흡혈 — 캐릭터 발밑에 붉은 고리 + 회복 숫자
         this.rings.push({ x: ECON.playerX, life: 1, r: 14, color: '#ff6a7a', wide: 0.9 });
-        this.addFloater(ECON.playerX, `+${ev.heal || 0}`, false, 'heal');
+        this.addFloater(ECON.playerX, `+${ev.heal || 0}`, false, 'heal', null, 1, now);
       } else if (ev.t === 'gearDrop') {
         // 🎒 장비 드랍 — 등급 색 폭발 + 아이템 이름
         const rar = RARITIES[RARITY_INDEX[ev.rarity] || 0];
         this.burst(ev.x, rar.color, ev.isBoss ? 26 : 12, !!ev.isBoss);
         this.rings.push({ x: ev.x, life: 1, r: 18, color: rar.color, wide: 1.2 });
-        this.addFloater(ev.x, ev.name || '장비', false, 'gold', rar.color);
+        this.addFloater(ev.x, ev.name || '장비', false, 'gold', rar.color, 1, now);
       } else if (ev.t === 'petHit') {
         // 동행 펫의 공격 — 펫 색의 작은 참격과 숫자
-        this.addFloater(ev.x, ev.dmg, false, 'pet', ev.color);
+        this.addFloater(ev.x, ev.dmg, false, 'pet', ev.color, 1, now);
         this.burst(ev.x, ev.color || '#ffd76a', ev.crit ? 10 : 5, false);
         this.arcs.push({
           x: ev.x - 18,
@@ -394,7 +394,7 @@ export class Renderer {
           }
         } else if (ev.kind === 'gold') {
           this.rings.push({ x: ECON.playerX, life: 1, r: 20, color: '#ffd76a', wide: 1.4 });
-          this.addFloater(ECON.playerX, '골드 2배!', false, 'gold');
+          this.addFloater(ECON.playerX, '골드 2배!', false, 'gold', null, 1, now);
           for (let i = 0; i < 16; i++) {
             this.embers.push({
               x: ECON.playerX + (Math.random() - 0.5) * 90,
@@ -427,7 +427,7 @@ export class Renderer {
             });
           }
         }
-        if (ev.dmg) this.addFloater(ev.x || ECON.playerX, ev.dmg, false, 'pet', ev.color);
+        if (ev.dmg) this.addFloater(ev.x || ECON.playerX, ev.dmg, false, 'pet', ev.color, 1, now);
       } else if (ev.t === 'petEvolve') {
         // 🐾 진화 연출 — 금빛 폭발 + 고리 3중 + 배너
         this.petEvolve = now;
@@ -583,8 +583,8 @@ export class Renderer {
     }
   }
 
-  addFloater(x, text, crit, kind, color, boost) {
-    const now = Date.now();
+  addFloater(x, text, crit, kind, color, boost, at) {
+    const now = Number.isFinite(at) ? at : Date.now();
     // v3.8 다굴: 같은 순간에 여러 마리가 때리면 피해 숫자를 하나로 합쳐 읽기 쉽게 한다
     if (kind === 'hurt') {
       const last = this.floaters[this.floaters.length - 1];
@@ -616,13 +616,13 @@ export class Renderer {
    * 때린 자리에 짧고 짙은 '별' 모양 빛을 터뜨린다.
    *  - 일반: 작은 십자 · 치명타: 크고 금빛인 별 + 고리 · 보스: 두꺼운 잔상(보스 타격이 확실히 다르게 느껴진다)
    */
-  addImpact(x, opts = {}) {
+  addImpact(x, opts = {}, now) {
     if (!this.effects) return;
     const crit = !!opts.crit;
     const boss = !!opts.boss;
     this.impacts.push({
       x: Number.isFinite(x) ? x : ECON.playerX,
-      t0: Date.now(),
+      t0: Number.isFinite(now) ? now : Date.now(),
       crit,
       boss,
       color: opts.color || (crit ? '#ffe08a' : '#fff1cf'),
@@ -850,7 +850,7 @@ export class Renderer {
     const alpha = Math.min(inK, outK);
     const sc = Math.min(1.2, Math.max(0.85, W / 390));
     const w = Math.min(W * 0.9, 352);
-    const hgt = 74 * Math.min(1.1, sc);
+    const hgt = 82 * Math.min(1.1, sc);
     const x = (W - w) / 2;
     // 살짝 튀어 오르는 등장(overshoot)
     const pop = age < 340 ? 0.88 + 0.12 * easeOut(age / 340) + 0.03 * Math.sin((age / 340) * Math.PI) : 1;
@@ -924,19 +924,19 @@ export class Renderer {
     // 경고 문구
     ctx.fillStyle = '#ffe6c0';
     ctx.font = `900 ${Math.round(11 * sc)}px ${FONT}`;
-    ctx.fillText('⚠  B O S S   A P P E A R  ⚠', x + w / 2, y + 17 * sc + 4);
+    ctx.fillText('⚠  B O S S   A P P E A R  ⚠', x + w / 2, y + 16 * sc + 4);
     // 보스 한글 이름(가장 크게)
     ctx.shadowColor = 'rgba(255,120,60,0.95)';
     ctx.shadowBlur = 12;
     ctx.fillStyle = '#fff8ef';
     ctx.font = `900 ${Math.round(23 * sc)}px ${FONT}`;
-    ctx.fillText(bossName, x + w / 2, y + hgt * 0.62);
+    ctx.fillText(bossName, x + w / 2, y + hgt * 0.58);
     ctx.shadowBlur = 0;
     // 제한 시간·안내
     ctx.fillStyle = 'rgba(255,228,205,0.95)';
     ctx.font = `800 ${Math.round(10.5 * sc)}px ${FONT}`;
     const limit = Math.round(ECON.bossTimeLimitMs / 1000);
-    ctx.fillText(`⏱ ${limit}초 제한 · 격파하면 다음 스테이지로`, x + w / 2, y + hgt - 11 * sc);
+    ctx.fillText(`⏱ ${limit}초 제한 · 격파하면 다음 스테이지로`, x + w / 2, y + hgt - 9 * sc);
     ctx.restore();
   }
 
@@ -2485,7 +2485,7 @@ export class Renderer {
     }
     this.delayedHits = keep;
     for (const d of due) {
-      this.addFloater(ECON.playerX, d.dmg, false, 'hurt');
+      this.addFloater(ECON.playerX, d.dmg, false, 'hurt', null, 1, now);
       this.redFlash = Math.max(this.redFlash, 0.42);
       this.shake = Math.max(this.shake, 3.4);
     }
