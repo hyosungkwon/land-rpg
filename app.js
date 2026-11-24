@@ -1410,8 +1410,14 @@ class App {
     const opts = rebirthStartOptions(this.s);
     const cap = rebirthJumpCap(this.s);
     const prevBest = rebirthPrevBest(this.s);
-    const picked = opts.some((o) => o.stage === this._rbStart) ? this._rbStart : 1;
+    // 모달을 연 사이 스테이지가 올라 상한이 바뀔 수 있다 → 고른 값을 상한 안으로 당겨 유지한다(1로 되돌리지 않음)
+    const want = Math.floor(Number(this._rbStart) || 1);
+    const picked = want >= 1 && want <= cap ? want : 1;
     this._rbStart = picked;
+    if (picked > 1 && !opts.some((o) => o.stage === picked)) {
+      opts.push({ stage: picked, label: `S${picked}`, note: '선택' });
+      opts.sort((a, b) => a.stage - b.stage);
+    }
     const jump = rebirthJumpBonus(picked);
     const jumpTheme = picked > 1 ? stageDef(picked).theme.name : '초원';
     const startGold = rebirthStartGold(this.s) + jump.gold;
