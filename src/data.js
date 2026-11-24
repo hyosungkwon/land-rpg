@@ -17,8 +17,8 @@ export const ECON = {
 
   // 전투
   playerAttackMs: 620, // 기본 공격 간격
-  playerRange: 400, // 공격 사거리(월드 단위) — 앞줄에 붙은 몬스터 무리까지 닿게
-  playerX: 250, // 플레이어 고정 x
+  playerRange: 560, // 공격 사거리(월드 단위) — 부채꼴로 붙은 몬스터 무리까지 닿게
+  playerX: 200, // 플레이어 고정 x (왼쪽 고정 — 오른쪽은 몬스터 무리 자리)
   spawnX: 1000, // 몬스터 등장 x
   maxMonsters: 6, // v3.8: 화면에 쌓이는 최대 수(다굴)
   spawnMs: 900, // v3.8: 계속 몰려오는 스폰 주기

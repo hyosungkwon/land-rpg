@@ -980,7 +980,7 @@ export class Renderer {
     const p = b.player;
     const gy = this.groundY();
     const sc = this.scale();
-    const h = Math.min(this.H * 0.44, 118 * sc);
+    const h = Math.min(this.H * 0.42, 108 * sc);
     const w = h;
     const baseX = this.worldX(p.x);
 
@@ -1065,7 +1065,7 @@ export class Renderer {
       const reach = near ? Math.max(30 * sc, this.worldX(near.x) - px) : 62 * sc;
       const wIdx = this._rar.weapon;
       const pal = (RARITIES[wIdx] || RARITIES[0]).slash;
-      this.drawSlash(ctx, px, gy, h, sc, atkK, p.attackKind, Math.min(reach * 0.82, 132 * sc), pal, wIdx);
+      this.drawSlash(ctx, px, gy, h, sc, atkK, p.attackKind, Math.min(reach * 0.9, 176 * sc), pal, wIdx);
     }
   }
 
@@ -1125,7 +1125,7 @@ export class Renderer {
     const sc = this.scale();
     // v3.8 다굴: 무리가 많을수록 스프라이트를 조금씩 줄여 화면에 겹쳐 쌓이게 한다.
     const crowd = b.monsters.filter((m) => !m.dead && !m.dying && !m.isBoss).length;
-    const crowdK = crowd <= 2 ? 1 : Math.max(0.72, 1 - (crowd - 2) * 0.06);
+    const crowdK = crowd <= 2 ? 1 : Math.max(0.68, 1 - (crowd - 2) * 0.06);
     // 뒤 레인 → 앞 레인 순으로 그려야 앞쪽 몬스터가 위로 올라온다.
     const list = b.monsters
       .filter((m) => Number.isFinite(m.x))
