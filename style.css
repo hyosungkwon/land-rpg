@@ -1536,3 +1536,161 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .sp-k { color: var(--sub); font-weight: 700; }
 .sp-a { text-align: right; color: var(--sub); font-variant-numeric: tabular-nums; }
 .sp-b { text-align: right; color: var(--gold); font-weight: 900; font-variant-numeric: tabular-nums; }
+
+/* ─────────════════════════════ v3.9 ─ 사냥/스킬 서브 탭 · 한 화면 밀도 ─────────════════════════════ */
+/* 서브 탭 바 — 부동산 subtabs 와 같은 모양, 스크롤해도 위에 붙는다 */
+.hunt-subbar {
+  position: sticky;
+  top: -1px;
+  z-index: 6;
+  padding: 3px;
+  background: rgba(10, 14, 24, 0.95);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.3);
+}
+.hunt-subbar .subtab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  position: relative;
+  height: 33px;
+  padding: 0 3px;
+  font-size: 11px;
+}
+.subtab .nb {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 900;
+  font-style: normal;
+  line-height: 1;
+  display: none;
+  place-items: center;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 2px rgba(9, 13, 22, 0.92);
+}
+.subtab .nb.on { display: grid; }
+
+/* 말줄임 한 줄 */
+.ellip { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 스위치 소형(스탯 카드) */
+.switch.sm { width: 36px; height: 20px; flex: 0 0 36px; }
+.switch.sm::after { width: 14px; height: 14px; top: 2px; left: 2px; }
+.switch.sm.on::after { transform: translateX(16px); }
+
+/* 전투 스탯 — 4열 압축 그리드 */
+.stats-card { padding: 9px 10px; }
+.stats-card .card-head { margin-bottom: 6px; }
+.stats-card .card-title small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 232px; }
+.stat-grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.stat-grid.four .stat { padding: 4px; border-radius: 8px; }
+.stat-grid.four .stat .k { font-size: 8.5px; letter-spacing: -0.4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-grid.four .stat .v { font-size: 12px; margin-top: 2px; line-height: 1.1; }
+.stat-grid.four .stat .v small { font-size: 8px; margin-left: 1px; }
+
+/* 스킬 — 2×2 압축 셀 (아이콘을 누르면 즉시 시전, 💎는 강화) */
+.skill-card { padding: 9px 10px; }
+.skill-card .card-head { margin-bottom: 7px; }
+.skill-card .log-btn { min-width: 30px; height: 24px; padding: 0 5px; font-size: 11px; }
+.skill-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.skill-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 5px 7px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  min-width: 0;
+}
+.sc-cast {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  padding: 0;
+}
+.sc-cast .s-ico { flex: 0 0 24px; width: 24px; height: 24px; font-size: 13px; border-radius: 7px; }
+.sc-mid { display: flex; flex-direction: column; min-width: 0; }
+.sc-name {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.sc-name .lv {
+  font-size: 8px;
+  font-weight: 900;
+  padding: 0 2px;
+  border-radius: 4px;
+  background: rgba(105, 192, 255, 0.14);
+  color: var(--blue);
+  border: 1px solid rgba(105, 192, 255, 0.25);
+}
+.sc-effect { font-size: 8.5px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.skill-cell .sc-up { flex: 0 0 auto; min-height: 26px; padding: 0 4px; font-size: 9.5px; }
+.skill-cell .cd-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; margin: 0; border-radius: 0; background: rgba(0, 0, 0, 0.35); }
+
+/* 접이식 기록 모달 */
+.log-list.tall { max-height: 46vh; }
+
+/* 전직·환생 카드 압축 */
+.job-card .card-head, .rebirth-card .card-head, .dungeon-card .card-head { margin-bottom: 6px; }
+.job-card, .rebirth-card, .dungeon-card { padding: 9px 10px; }
+.job-card .btn, .rebirth-card .btn, .dungeon-card .btn { font-size: 11px; }
+.job-badge { font-size: 9.5px; }
+.rebirth-card .rb-points { font-size: 9.5px; }
+
+/* 동료 펫 — 사냥 탭은 한 줄 요약(강화·교체는 부동산 탭 펫 카드) */
+.pet-line { padding: 9px 11px; border-color: rgba(160, 200, 255, 0.22); }
+.pet-line .card-title { font-size: 12px; }
+
+/* 미션 카드 — 서브 탭 안에서 조금 더 압축 */
+.quest-card { padding: 10px 11px; }
+.q-foot .btn { padding: 0 6px; font-size: 10.5px; }
+
+/* 도감·업적 요약 */
+.codex-card { padding: 9px 10px; }
+.codex-card .card-head { margin-bottom: 6px; }
+.codex-card .cx-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
+.cx-cell {
+  padding: 5px 3px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--line);
+  text-align: center;
+  min-width: 0;
+}
+.cx-cell span { display: block; font-size: 8px; color: var(--dim); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cx-cell b { display: block; font-size: 11.5px; font-weight: 900; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.cx-cell b small { font-size: 8px; color: var(--dim); font-weight: 700; }
+
+/* 하단 사냥 탭 알림 점 */
+.tab .tab-dot {
+  position: absolute;
+  top: 6px;
+  right: 50%;
+  margin-right: -18px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 6px rgba(255, 107, 107, 0.85);
+  animation: pulse 1.4s ease-in-out infinite;
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""land-rpg v3.8.0 검증 (QuickJS + 정적 검사)
+"""land-rpg v3.9.0 검증 (QuickJS + 정적 검사)
 
 1) 모든 JS 파일 문법(파싱) 검사
 2) 정적 검사 (Firebase/로그인 흔적 0, 저장 키 v3, sw 캐시 v3.5)
@@ -92,8 +92,8 @@ def main():
     for bad in ["firebase", "signInWithPopup", "Google 로그인", "gstatic", "firebaseio", "googleapis"]:
         ok(bad.lower() not in text_all.lower(), f"Firebase/로그인 흔적 없음: {bad}")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v3.8.0" in read("sw.js"), "SW 캐시 버전 v3.8.0")
-    ok("APP_VERSION = '3.8.0'" in read("src/data.js"), "앱 버전 v3.8.0")
+    ok("land-rpg-v3.9.0" in read("sw.js"), "SW 캐시 버전 v3.9.0")
+    ok("APP_VERSION = '3.9.0'" in read("src/data.js"), "앱 버전 v3.9.0")
     ok(os.path.exists(os.path.join(ROOT, "src/savecode.js")), "src/savecode.js 존재")
     ok("'./src/savecode.js'" in read("sw.js"), "sw.js 프리캐시에 savecode.js 포함")
     ok("'./src/rebirth.js'" in read("sw.js"), "sw.js 프리캐시에 rebirth.js 포함")
@@ -231,7 +231,13 @@ def main():
 
     section("[4] 탭 템플릿 렌더 검사 (DOM 없이)")
     ui_extras = {
-        "src/ui.js": "exports.__tpls = { hunt: tplHunt, gear: tplGear, land: tplLand, settings: tplSettings, market: buildMarketList };"
+        "src/ui.js": (
+            "exports.__tpls = { hunt: tplHunt, gear: tplGear, land: tplLand, settings: tplSettings, market: buildMarketList };"
+            "exports.__HUNT_SUBS = HUNT_SUBS.map(([k]) => k);"
+            "exports.__huntSub = (ui, sub) => { ui.huntSub = sub; return tplHunt(ui); };"
+            "exports.__huntAll = (ui) => __HUNT_SUBS.map((k) => __huntSub(ui, k)).join('');"
+            "exports.__badges = (ui) => huntBadges(ui);"
+        )
     }
     ctx2 = quickjs.Context()
     ctx2.eval(bundle(FILES + ["src/ui.js"], ui_extras))
@@ -247,7 +253,8 @@ def main():
       for (const [k, fn] of Object.entries(__tpls)) {
         if (k === 'market') continue;
         let html = '';
-        for (const sub of ['home', 'market', 'buff']) { s.land.sub = sub; html += fn(ui); }
+        if (k === 'hunt') html = __huntAll(ui);
+        else for (const sub of ['home', 'market', 'buff']) { s.land.sub = sub; html += fn(ui); }
         out[k] = html;
       }
       out.market = __tpls.market(ui).html;
@@ -610,14 +617,14 @@ def main():
       s.dungeon = { best: 12345, runs: 2, last: { at: 0, gold: 999, shards: 12, kills: 8, bossKills: 1, dmg: 12345 } };
       const buffs = computeBuffs(s, 0);
       const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(7), boss: null, dungeon: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'hunt', el: {} };
-      const hunt = __tpls.hunt(ui);
+      const hunt = __huntAll(ui);
       s.land.sub = 'buff';
       const land = __tpls.land(ui);
       const set = __tpls.settings(ui);
       return { hunt, land, set, bad: /undefined|NaN|\\[object Object\\]/.test(hunt + land + set) };
     """)
     ok(tpl2["bad"] is False, "v3.2 템플릿에 undefined/NaN 누출 없음")
-    ok("✨ 전직 가능!" in tpl2["hunt"] and "황금 던전" in tpl2["hunt"] and "내 동료 펫" in tpl2["hunt"], "사냥 탭에 전직·던전·펫 카드", "")
+    ok("✨ 전직 가능!" in tpl2["hunt"] and "황금 던전" in tpl2["hunt"] and "동료 펫" in tpl2["hunt"], "사냥 탭에 전직·던전·펫 카드", "")
     ok("내 동료 펫" in tpl2["land"] and "동행 중" in tpl2["land"], "건물주 버프 탭에도 펫 카드", "")
     ok("전직" in tpl2["set"] and "황금 던전" in tpl2["set"], "설정 탭에 전직/던전 기록", "")
 
@@ -889,12 +896,12 @@ def main():
       s.gold = 20000; s.shards = 100; s.totalKills = 10; s.maxStage = 3;
       const buffs = computeBuffs(s, 0);
       const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(3), boss: null, dungeon: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'hunt', el: {}, install: { hidden: true } };
-      const hunt = __tpls.hunt(ui);
+      const hunt = __huntAll(ui);
       const settings = __tpls.settings(ui);
       const done = defaultState(0);
       done.quests = { idx: 15, claimed: QUESTS.map(q => q.id), done: 15, at: 0 };
       const ui2 = { s: done, battle: { stats: calcStats(done, {}), def: stageDef(1), boss: null, player: { hp: 1 } }, app: { buffs: {} }, logs: [], tab: 'hunt', el: {}, install: { hidden: true } };
-      const huntDone = __tpls.hunt(ui2);
+      const huntDone = __huntSub(ui2, 'quest');
       return {
         hunt, settings, huntDone,
         bad: /undefined|NaN|\\[object Object\\]/.test(hunt + settings + huntDone),
@@ -1126,7 +1133,7 @@ def main():
       const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(5), boss: null, dungeon: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'land', el: {}, install: { hidden: true } };
       const out = {};
       for (const sub of ['home', 'market', 'buff']) { s.land.sub = sub; out[sub] = __tpls.land(ui); }
-      out.hunt = __tpls.hunt(ui);
+      out.hunt = __huntSub(ui, 'skill');
       out.marketList = __tpls.market(ui).html;
       const empty = defaultState(0);
       const ui2 = { s: empty, battle: { stats: calcStats(empty, {}), def: stageDef(1), boss: null, player: { hp: 1 } }, app: { buffs: computeBuffs(empty, 0) }, logs: [], tab: 'land', el: {}, install: { hidden: true } };
@@ -1340,15 +1347,15 @@ def main():
       s.rebirth = { count: 1, points: 120, totalPoints: 300, traits: { atk: 5, gold: 3 }, bestStage: 25, at: 0 };
       const buffs = computeBuffs(s, 0);
       const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(25), boss: null, dungeon: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'hunt', el: {}, install: { hidden: true } };
-      const hunt = __tpls.hunt(ui);
+      const hunt = __huntAll(ui);
       const set = __tpls.settings(ui);
       const lowS = defaultState(0);
       const ui2 = { s: lowS, battle: { stats: calcStats(lowS, {}), def: stageDef(1), boss: null, player: { hp: 1 } }, app: { buffs: computeBuffs(lowS, 0) }, logs: [], tab: 'hunt', el: {}, install: { hidden: true } };
-      const low = __tpls.hunt(ui2);
+      const low = __huntSub(ui2, 'growth');
       const deepS = defaultState(0);
       deepS.stage = 100; deepS.maxStage = 100; deepS.level = 70;
       const ui3 = { s: deepS, battle: { stats: calcStats(deepS, {}), def: stageDef(100), boss: null, player: { hp: 1 } }, app: { buffs: computeBuffs(deepS, 0) }, logs: [], tab: 'hunt', el: {}, install: { hidden: true } };
-      const deepHunt = __tpls.hunt(ui3);
+      const deepHunt = __huntSub(ui3, 'skill');
       return { hunt, set, low, deepHunt, bad: /undefined|NaN|\\[object Object\\]/.test(hunt + set + low + deepHunt) };
     """)
     ok(tpl5["bad"] is False, "v3.5 템플릿에 undefined/NaN 누출 없음")
@@ -1862,6 +1869,60 @@ def main():
     ok(all(x in src_data for x in ["monsterAtkLateBoost", "monsterAtkLateFrom", "export const DEF", "bossHpMul: 4.2"]), "데이터 — 다굴용 공격 곡선·방어 상수")
     ok(all(x in src_render for x in ["crowdK", "lane", "showBar", "kind === 'ice'", "kind === 'sonic'", "graceUntil"]), "렌더러 — 무리 축소·레인 깊이·얼음/음파 투사체·부활 가호 연출")
     ok("피해 감소" in read("src/ui.js") and "자연 회복" in read("src/ui.js"), "스탯 화면에 피해 감소·자연 회복 표시")
+
+    section("[15] 💪 사냥/스킬 서브 탭 · 한 화면 밀도 (v3.9.0)")
+    subs = js(ctx2, """
+      const s = defaultState(0);
+      s.gold = 20000; s.shards = 120; s.level = 12; s.stage = 7; s.maxStage = 8; s.totalKills = 321;
+      const buffs = computeBuffs(s, 0);
+      const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(7), boss: null, dungeon: null, player: { hp: 100 } }, app: { buffs }, logs: [{ t: '00:01', text: '테스트 로그', kind: '' }], tab: 'hunt', el: {} };
+      const out = {};
+      for (const k of __HUNT_SUBS) out[k] = __huntSub(ui, k);
+      out.fallback = __huntSub(ui, 'bogus');
+      out.keys = __HUNT_SUBS;
+      out.bad = Object.fromEntries(Object.entries(out).filter(([k, v]) => typeof v === 'string' && /undefined|NaN|\\[object Object\\]/.test(v)).map(([k]) => [k, true]));
+      out.badgeAttrs = ['skill', 'growth', 'quest'].map((k) => (out[k].match(new RegExp('data-badge="' + k + '"')) || []).length);
+      return out;
+    """)
+    ok(subs["keys"] == ["skill", "growth", "quest"], "사냥 탭 서브 탭 3종(스킬·스탯/전직·환생/미션·도감)", json.dumps(subs["keys"], ensure_ascii=False))
+    ok(all(x in subs["skill"] for x in ["스킬·스탯", "전직·환생", "미션·도감", 'data-action="hunt-sub"']), "서브 탭 버튼 렌더·전환 액션 연결")
+    ok(all(x in subs["skill"] for x in ["전투 스탯", "피해 감소", "자연 회복", "골드 획득", "강화석 드롭", "강격", "전투 기록", "data-action=\"toggle-auto\""]), "스킬·스탯 탭 — 전투 스탯 요약 + 스킬 강화 + 자동 보스 + 접이식 기록")
+    ok(all(x in subs["growth"] for x in ["전직", "환생 (초월)", "황금 던전", "동료 펫", 'data-action="promote"', 'data-action="rebirth"', 'data-action="dungeon"', 'data-action="open-pets"']), "전직·환생 탭 — 전직·환생·던전·펫 카드/버튼")
+    ok(all(x in subs["quest"] for x in ["미션", "도감·업적", 'data-action="claim-quest"', 'data-action="open-codex"', 'data-action="open-achievements"', "수집"]), "미션·도감 탭 — 순차 미션 + 도감·업적 요약/버튼")
+    ok("황금 던전" not in subs["skill"] and "전투 스탯" not in subs["growth"] and "claim-quest" not in subs["skill"] and "황금 던전" not in subs["quest"], "각 서브 탭이 자기 카드만 싣는다(중복·스크롤 방지)")
+    ok('class="subtab active" type="button" role="tab" aria-selected="true" data-action="hunt-sub" data-value="skill"' in subs["fallback"], "잘못된 서브 값은 스킬·스탯으로 복구")
+    ok(subs["bad"] == {}, "서브 탭 3종에 undefined/NaN 누출 없음", json.dumps(subs["bad"]))
+    ok(subs["badgeAttrs"] == [1, 1, 1], "세 서브 탭 모두 알림 배지 자리 보유", json.dumps(subs["badgeAttrs"]))
+
+    badges = js(ctx2, """
+      const s = defaultState(0);
+      s.level = 40; s.stage = 40; s.maxStage = 40; s.totalKills = 1000;
+      s.rebirth = { count: 0, points: 20, totalPoints: 0, traits: {}, bestStage: 40, at: 0 };
+      s.dungeonCooldown = 0;
+      const buffs = computeBuffs(s, 0);
+      const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(40), boss: null, dungeon: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'hunt', el: {} };
+      const now = __badges(ui);
+      const fresh = defaultState(0);
+      const ui2 = { s: fresh, battle: { stats: calcStats(fresh, {}), def: stageDef(1), boss: null, player: { hp: 1 } }, app: { buffs: {} }, logs: [], tab: 'hunt', el: {} };
+      const zero = __badges(ui2);
+      const html = __huntSub(ui, 'growth');
+      return { now, zero, html };
+    """)
+    ok(badges["now"]["quest"] >= 1, "미션 보상 수령 가능 → 미션·도감 탭 배지", json.dumps(badges["now"]))
+    ok(badges["now"]["growth"] >= 2, "전직 가능·특성 포인트 보유 → 전직·환생 탭 배지", json.dumps(badges["now"]))
+    ok('class="nb on" data-badge="quest">' in badges["html"] or 'class="nb on" data-badge="growth">' in badges["html"], "배지가 서브 탭 버튼에 실제로 표시됨")
+    ok(badges["zero"]["quest"] == 0 and badges["zero"]["growth"] == 0, "새 게임: 배지 없음(던전 무료 입장은 상시 점등 방지를 위해 제외)", json.dumps(badges["zero"]))
+
+    uisrc39 = read("src/ui.js")
+    ok(all(x in uisrc39 for x in ["this.huntSub = 'skill'", "setHuntSub", "syncHuntBadges", "data-badge", "tplHuntSkill", "tplHuntGrowth", "tplHuntQuest"]), "서브 탭 상태·배지 갱신 구현(ui.js)")
+    ok("this.huntSub = ok.includes(sub) ? sub : 'skill'" in uisrc39 and "save(" not in uisrc39.split("setHuntSub(sub) {")[1].split("setLandSub")[0], "서브 탭 전환은 저장 데이터를 건드리지 않는다(세션 유지)")
+    ok("case 'hunt-sub': this.setHuntSub(v); break;" in uisrc39, "서브 탭 클릭 → setHuntSub 연결")
+    appsrc39 = read("app.js")
+    ok("subParam" in appsrc39 and "['skill', 'growth', 'quest'].includes(subParam)" in appsrc39, "?tab=hunt&sub=growth URL 파라미터 지원")
+    idxsrc = read("index.html")
+    ok('id="huntTabDot"' in idxsrc, "하단 사냥 탭 알림 점 요소")
+    css39 = read("style.css")
+    ok(all(x in css39 for x in [".hunt-subbar", ".stat-grid.four", ".skill-grid", ".skill-cell", ".pet-line", ".cx-grid", ".subtab .nb.on", ".tab .tab-dot", ".switch.sm"]), "v3.9 압축 레이아웃 CSS(서브 탭·4열 스탯·스킬 2×2·펫 스트립·배지)")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

@@ -2,7 +2,7 @@
 // 하단 탭 UI · HUD · 토스트/모달. 상태는 app.js 를 통해 읽고, 조작은 actions 로 넘긴다.
 // v3: 게스트 전용 — 로그인/클라우드 UI 없이 [사냥/스킬 | 장비/강화 | 부동산 | 설정].
 import {
-  APP_VERSION, ECON, EQUIP, EQUIP_MAX_LV, SKILLS, skillCost, enhanceCost,
+  APP_VERSION, ECON, EQUIP, EQUIP_MAX_LV, SKILLS, SKILL_UPGRADE_MAX, skillCost, enhanceCost,
   RARITIES, RARITY_INDEX, GACHA, gachaCost, rarityBonusLv,
 } from './data.js';
 import { expNeed, skillEffect, shardPrice, enhanceMaxCount } from './state.js';
@@ -41,6 +41,7 @@ export class UI {
   constructor(app) {
     this.app = app; // { s, battle, buffs, actions ... }
     this.tab = 'hunt';
+    this.huntSub = 'skill'; // 사냥 탭 서브 탭 (세션 동안 유지·저장 안 함)
     this.el = {
       hud: document.getElementById('hud'),
       gold: document.getElementById('goldVal'),
@@ -69,6 +70,7 @@ export class UI {
       soundBtn: document.getElementById('soundBtn'),
       soundIco: document.getElementById('soundIco'),
       installBtn: document.getElementById('installBtn'),
+      huntTabDot: document.getElementById('huntTabDot'),
     };
     this.logs = [];
     this.lastLive = 0;
@@ -144,6 +146,9 @@ export class UI {
       case 'enhance10': actions.enhance(btn.dataset.slot, 10); break;
       case 'enhancemax': actions.enhance(btn.dataset.slot, 'max'); break;
       case 'buy-shards': actions.buyShards(v); break;
+      case 'hunt-sub': this.setHuntSub(v); break;
+      case 'open-log': this.showLog(); break;
+      case 'open-pets': this.s.land.sub = 'buff'; this.setTab('land'); break;
       case 'land-sub': this.setLandSub(v); break;
       case 'landmark': actions.openLandmark(v); break;
       case 'land-trade': actions.landTrade(v, btn.dataset.side); break;
@@ -185,6 +190,33 @@ export class UI {
     [...this.el.tabbar.querySelectorAll('.tab')].forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
     this.el.panel.scrollTop = 0;
     this.render();
+  }
+
+  /** 사냥 탭 서브 탭 전환 — 저장 데이터는 건드리지 않고 세션에서만 기억한다 */
+  setHuntSub(sub) {
+    const ok = HUNT_SUBS.map(([k]) => k);
+    this.huntSub = ok.includes(sub) ? sub : 'skill';
+    this.el.panel.scrollTop = 0;
+    this.render();
+  }
+
+  /** 서브 탭 배지·하단 사냥 탭 알림 점을 현재 상태로 맞춘다 */
+  syncHuntBadges() {
+    let b;
+    try {
+      b = huntBadges(this);
+    } catch (e) {
+      return;
+    }
+    document.querySelectorAll('[data-badge]').forEach((el) => {
+      const v = b[el.dataset.badge] || 0;
+      el.classList.toggle('on', v > 0);
+      const txt = v > 9 ? '9+' : String(v || '');
+      if (el.textContent !== txt) el.textContent = txt;
+    });
+    if (this.el.huntTabDot) {
+      this.el.huntTabDot.classList.toggle('hidden', !(b.skill + b.growth + b.quest));
+    }
   }
 
   setLandSub(sub) {
@@ -254,6 +286,11 @@ export class UI {
       this.lastLive = now;
       this.refreshHeader();
       this.refreshPanelLive(now);
+      // 서브 탭 배지는 조금 느슨하게(0.9초) — 다른 탭에 있어도 보상/성장 알림이 갱신된다
+      if (now - (this._badgeAt || 0) > 900) {
+        this._badgeAt = now;
+        this.syncHuntBadges();
+      }
     }
   }
 
@@ -436,6 +473,22 @@ export class UI {
     this.el.modalCard.innerHTML = '';
   }
 
+  /** 📜 전투 기록 — 사냥 화면 공간을 아끼려고 모달로 띄운다 */
+  showLog() {
+    const rows = this.logs.length
+      ? this.logs
+          .slice(0, 20)
+          .map((l) => `<div class="log-item"><span class="t">${l.t}</span><span>${l.text}</span></div>`)
+          .join('')
+      : '<div class="log-item"><span class="t">—</span><span class="dim">아직 기록이 없습니다.</span></div>';
+    this.modal({
+      title: '📜 전투 기록',
+      sub: '최근 20건 · 사냥 중에도 계속 쌓입니다',
+      body: `<div class="log-list tall" id="logList">${rows}</div>`,
+      actions: [{ label: '닫기', style: 'primary', onClick: () => {} }],
+    });
+  }
+
   addLog(text, kind = '') {
     const item = { t: hhmmss(), text, kind };
     this.logs.unshift(item);
@@ -516,11 +569,10 @@ function jobCard(ui) {
     return `
   <div class="card job-card done">
     <div class="card-head">
-      <div class="card-title"><span class="t-ico">${cur.badge}</span>${esc(cur.name)}<small>최종 전직</small></div>
+      <div class="card-title"><span class="t-ico">${cur.badge}</span>${esc(cur.name)}<small>최종 전직 · ${cur.tier + 1}/4</small></div>
       <span class="job-badge" style="--jc:${cur.color}">${jobBonusText(cur)}</span>
     </div>
-    <div class="tiny muted">${esc(cur.line)}</div>
-    <div class="note" style="margin-top:8px">전직 ${cur.tier + 1}/4 완료 · 영구 <b>공격 +${cur.atkPct}% · 체력 +${cur.hpPct}%</b> 적용 중</div>
+    <div class="tiny muted" style="margin-top:2px">전직 완료 — 영구 <b>공격 +${cur.atkPct}% · 체력 +${cur.hpPct}%</b> 적용 중</div>
   </div>`;
   }
 
@@ -530,18 +582,15 @@ function jobCard(ui) {
       <div class="card-title"><span class="t-ico">${cur.badge}</span>${esc(cur.name)}<small>전직 ${cur.tier + 1}/4</small></div>
       <span class="job-badge" style="--jc:${cur.color}">${jobBonusText(cur)}</span>
     </div>
-    <div class="row" style="margin-top:2px">
-      <span class="tiny muted">다음 <b style="color:${n.color}">${n.badge} ${esc(n.name)}</b></span>
-      <span class="tiny dim">${jobBonusText(n)}</span>
-    </div>
-    <div class="row tiny" style="margin-top:7px">
+    <div class="tiny muted ellip" style="margin-top:1px">다음 <b style="color:${n.color}">${n.badge} ${esc(n.name)}</b> · ${jobBonusText(n)}</div>
+    <div class="row tiny" style="margin-top:4px">
       <span style="color:${pr.levelOk ? 'var(--green)' : 'var(--sub)'}">Lv.${s.level} / ${n.lv}</span>
       <span style="color:${pr.stageOk ? 'var(--green)' : 'var(--sub)'}">스테이지 ${s.maxStage} / ${n.stage}</span>
     </div>
-    <div class="prog" style="margin-top:5px"><i style="width:${Math.min(pr.pctLv, pr.pctStage) * 100}%"></i></div>
+    <div class="prog" style="margin-top:4px"><i style="width:${Math.min(pr.pctLv, pr.pctStage) * 100}%"></i></div>
     ${pr.canPromote
-      ? `<button class="btn primary block promote-btn" data-action="promote" style="margin-top:9px" data-live="promote">✨ 전직 가능! ${n.badge} ${esc(n.name)}</button>`
-      : `<div class="note" style="margin-top:8px">${esc(pr.reason)} · 조건을 채우면 <b>✨ 전직 가능!</b> 버튼이 나타납니다.</div>`}
+      ? `<button class="btn primary block promote-btn" data-action="promote" style="margin-top:7px;min-height:34px" data-live="promote">✨ 전직 가능! ${n.badge} ${esc(n.name)}</button>`
+      : `<div class="tiny dim ellip" style="margin-top:5px">${esc(pr.reason)}</div>`}
   </div>`;
 }
 
@@ -558,19 +607,18 @@ function rebirthCard(ui) {
       <div class="card-title"><span class="t-ico">♾️</span>환생 (초월)<small>${st.count > 0 ? `${st.count}회차` : `S${st.need} 해금`}</small></div>
       <span class="rb-points" data-live="rb-points">초월석 <b>${fmt(st.points)}</b>P</span>
     </div>
-    <div class="tiny muted">사냥 회차만 새로 시작합니다 — <b>부동산·랜드마크·임대수익, 동료 펫, 장비 등급, 업적·도감·미션</b>은 그대로 남습니다.</div>
-    <div class="row tiny" style="margin-top:8px">
+    <div class="row tiny" style="margin-top:1px">
       <span style="color:${st.can ? 'var(--gold)' : 'var(--sub)'}">이번 회차 최고 <b>S${st.stage}</b> / S${st.need}</span>
       <span class="dim">환생 시 <b style="color:var(--gold)">+${st.gain}P</b></span>
     </div>
-    <div class="prog${st.can ? ' gold' : ''}" style="margin-top:5px"><i style="width:${st.pct * 100}%"></i></div>
-    <div class="row gap6" style="margin-top:9px">
-      <button class="btn small ${st.can ? 'primary' : 'ghost'} wide" type="button" data-action="rebirth" ${st.can ? '' : 'disabled'}>
+    <div class="prog${st.can ? ' gold' : ''}" style="margin-top:4px"><i style="width:${st.pct * 100}%"></i></div>
+    <div class="row gap6" style="margin-top:7px">
+      <button class="btn small ${st.can ? 'primary' : 'ghost'} wide" type="button" data-action="rebirth" style="min-height:34px" ${st.can ? '' : 'disabled'}>
         ♾️ ${st.can ? `환생하기 · +${st.gain}P` : '환생 · 조건 미달'}
       </button>
-      <button class="btn small ghost wide" type="button" data-action="rebirth-traits">✨ 영구 특성 <b style="color:var(--gold)">${totalLv}/${maxLv}</b></button>
+      <button class="btn small ghost wide" type="button" data-action="rebirth-traits" style="min-height:34px">✨ 영구 특성 <b style="color:var(--gold)">${totalLv}/${maxLv}</b></button>
     </div>
-    <div class="tiny" style="margin-top:7px;color:${totalLv ? 'var(--blue)' : 'var(--sub)'}">${totalLv ? `초월 특성 — ${traitSummary(s)}` : '아직 특성이 없습니다 — 초월석으로 <b>영구 배율</b>을 올리세요.'}</div>
+    <div class="tiny ellip" style="margin-top:5px;color:${totalLv ? 'var(--blue)' : 'var(--dim)'}">${totalLv ? `초월 특성 — ${traitSummary(s)}` : `사냥만 초기화 · 부동산·펫·장비·업적은 유지 (특성 0/${maxLv})`}</div>
   </div>`;
 }
 
@@ -584,15 +632,14 @@ function dungeonCard(ui) {
   return `
   <div class="card dungeon-card">
     <div class="card-head">
-      <div class="card-title"><span class="t-ico">🔥</span>황금 던전<small>보스 러시 30초</small></div>
+      <div class="card-title"><span class="t-ico">🔥</span>황금 던전<small>보스 러시 30초 · 골드·강화석</small></div>
       <span class="tiny" style="color:var(--gold)" data-live="dungeon-cd">${ds.ready ? '무료 입장 가능' : `무료까지 ${mmss(ds.leftMs)}`}</span>
     </div>
-    <div class="tiny muted">30초 동안 몰려오는 황금 몹과 보스를 때려 <b>대량 골드 + 강화석</b>을 즉시 받습니다. 끝나면 원래 스테이지 자동사냥으로 복귀합니다.</div>
-    <div class="row gap6" style="margin-top:9px">
-      <button class="btn small ${ds.ready ? 'primary' : 'ghost'} wide" data-action="dungeon" data-value="free" data-live="dungeon-free" ${ds.ready && !d ? '' : 'disabled'}>🔥 무료 입장</button>
-      <button class="btn small blue wide" data-action="dungeon" data-value="shards" ${!d && ds.canPay ? '' : 'disabled'}>💎${DUNGEON.shardCost} 즉시 입장</button>
+    <div class="row gap6" style="margin-top:1px">
+      <button class="btn small ${ds.ready ? 'primary' : 'ghost'} wide" data-action="dungeon" data-value="free" data-live="dungeon-free" style="min-height:34px" ${ds.ready && !d ? '' : 'disabled'}>🔥 무료 입장</button>
+      <button class="btn small blue wide" data-action="dungeon" data-value="shards" style="min-height:34px" ${!d && ds.canPay ? '' : 'disabled'}>💎${DUNGEON.shardCost} 즉시 입장</button>
     </div>
-    <div class="tiny dim" style="margin-top:7px" data-live="dungeon-run">${
+    <div class="tiny dim ellip" style="margin-top:5px" data-live="dungeon-run">${
       d
         ? `<b style="color:var(--gold)">진행 중</b> · 남은 ${(Math.max(0, d.ends - now) / 1000).toFixed(1)}초 · 처치 ${d.kills + d.bossKills}`
         : last
@@ -703,121 +750,92 @@ function questCard(ui) {
   </div>`;
 }
 
-/* ══════════════════════════ 사냥/스킬 ══════════════════════════ */
-function tplHunt(ui) {
+/* ══════════════════════════ 사냥/스킬 — 서브 탭 (v3.9) ══════════════════════════
+ * 사냥 탭의 긴 세로 스크롤을 없애기 위해 본문을 3개 서브 탭으로 나눈다.
+ *  - skill : 전투 스탯 요약 + 스킬 강화(2×2) + 전투 기록(모달)
+ *  - growth: 전직 · 환생(초월) · 황금 던전 · 동료 펫
+ *  - quest : 순차 미션 + 도감·업적 요약
+ * 서브 탭 상태는 UI 인스턴스에만 둔다(세션 동안 유지, 저장 데이터·기존 기능 불변).
+ */
+const HUNT_SUBS = [
+  ['skill', '💪', '스킬·스탯'],
+  ['growth', '✨', '전직·환생'],
+  ['quest', '🎯', '미션·도감'],
+];
+
+/** 서브 탭 배지 — 지금 누르면 보상을 받거나 바로 성장할 수 있는 항목 수 */
+function huntBadges(ui) {
+  const s = ui.s;
+  const q = currentQuest(s);
+  const questReady = !!(q && questProgress(s, q.id).done);
+  const achReady = achievementStatus(s).filter((a) => a.claimable).length;
+  const pr = jobProgress(s);
+  const rb = rebirthStatus(s);
+  const traitReady = REBIRTH_TRAITS.some((t) => {
+    const lv = traitLevel(s, t.id);
+    return lv < t.maxLv && rb.points >= traitCost(lv);
+  });
+  // 던전 '무료 입장 가능'은 10분마다 계속 켜지므로 배지에서 뺀다(탭 안에서 바로 보임) — 상시 점등 방지
+  return {
+    skill: 0,
+    growth: (pr.canPromote ? 1 : 0) + (rb.can ? 1 : 0) + (traitReady ? 1 : 0),
+    quest: (questReady ? 1 : 0) + achReady,
+  };
+}
+
+/** 현재 서브 탭 키 — 알 수 없는 값이면 스킬·스탯으로 복구한다 */
+function huntSubOf(ui) {
+  const k = ui && ui.huntSub;
+  return HUNT_SUBS.some(([id]) => id === k) ? k : 'skill';
+}
+
+function huntSubBar(ui) {
+  const sub = huntSubOf(ui);
+  const b = huntBadges(ui);
+  return `<div class="subtabs hunt-subbar" role="tablist" aria-label="사냥 서브 탭">${HUNT_SUBS.map(
+    ([k, ico, label]) => `
+    <button class="subtab ${sub === k ? 'active' : ''}" type="button" role="tab" aria-selected="${sub === k}" data-action="hunt-sub" data-value="${k}">${ico} ${label}<i class="nb ${b[k] ? 'on' : ''}" data-badge="${k}">${b[k] > 9 ? '9+' : b[k] || ''}</i></button>`,
+  ).join('')}</div>`;
+}
+
+/* ───────────── 💪 스킬·스탯 ───────────── */
+function huntStatsCard(ui) {
   const s = ui.s;
   const b = ui.battle;
   const st = b.stats;
   const buffs = ui.app.buffs || {};
-  const remain = Math.max(0, (b.boss ? ECON.normalKillsPerStage : ECON.normalKillsPerStage - s.killsInStage));
-  const ready = s.bossReady && !b.boss;
-  const p = portfolioOf(s);
 
   const stat = (cls, k, v, unit = '') => `
     <div class="stat ${cls}"><div class="k">${k}</div><div class="v">${v}${unit ? `<small>${unit}</small>` : ''}</div></div>`;
 
-  const skillRows = Object.entries(SKILLS)
-    .map(([key, def]) => {
-      const sk = s.skills[key];
-      const power = skillEffect(key, sk.lv);
-      const detail =
-        key === 'strike' || key === 'whirl'
-          ? `위력 ${Math.round(power * 100)}%`
-          : key === 'berserk'
-            ? `공격력 +${Math.round(power * 100)}% · ${def.dur / 1000}초`
-            : `체력 ${Math.round(power * 100)}% 회복`;
-      const cost = skillCost(sk.lv);
-      const maxed = sk.lv >= 20;
-      return `
-      <div class="skill-row">
-        <div class="s-ico" style="color:${def.color}">${def.icon}</div>
-        <div class="s-mid">
-          <div class="s-name">${def.name}<span class="lv">Lv.${sk.lv}</span></div>
-          <div class="s-desc">${detail} · 재사용 ${def.cd / 1000}s</div>
-          <div class="cd-bar"><i data-live="cd-${key}"></i></div>
-        </div>
-        <div class="s-actions">
-          <button class="btn small ghost" data-action="cast" data-value="${key}" data-live="cast-${key}">시전</button>
-          <button class="btn small ${maxed ? 'ghost' : 'blue'}" data-action="upgrade-skill" data-value="${key}" ${maxed || s.shards < cost ? 'disabled' : ''}>
-            ${maxed ? 'MAX' : `💎${cost}`}
-          </button>
-        </div>
-      </div>`;
-    })
-    .join('');
-
-  const buffLine =
-    buffs.active
-      ? `<div class="tiny" style="margin-top:9px;color:var(--green)">🏢 건물주 버프 · 공격 +${buffs.atkPct}% · 골드 +${buffs.goldPct}% · 체력 +${buffs.hpPct}% · 치명타 +${buffs.critPct}% · 드롭 +${buffs.dropPct}%</div>`
-      : `<div class="tiny dim" style="margin-top:9px">🏢 부동산을 사면 영구 버프가 붙습니다. <b style="color:var(--gold)">부동산 탭 → 매물 투자</b></div>`;
-  const extraBuffs = [];
+  const buffParts = [];
+  if (buffs.active) {
+    buffParts.push(
+      `🏢 공격 +${buffs.atkPct}% · 골드 +${buffs.goldPct}% · 체력 +${buffs.hpPct}% · 치명 +${buffs.critPct}% · 드롭 +${buffs.dropPct}%`,
+    );
+  }
   if (buffs.setAtkPct || buffs.setGoldPct || buffs.setDropPct) {
-    extraBuffs.push(`공격 +${buffs.setAtkPct || 0}% · 골드 +${buffs.setGoldPct || 0}% · 드롭 +${buffs.setDropPct || 0}%`);
+    buffParts.push(`🗺️ 세트 ${buffs.setCount || 0}곳 공격 +${buffs.setAtkPct || 0}% · 골드 +${buffs.setGoldPct || 0}% · 드롭 +${buffs.setDropPct || 0}%`);
   }
   if (buffs.landmarkCount > 0) {
-    extraBuffs.push(`공격 +${buffs.landmarkAtkPct || 0}% · 골드 +${buffs.landmarkGoldPct || 0}%`);
+    buffParts.push(`🏛️ 랜드마크 ${buffs.landmarkCount}개 공격 +${buffs.landmarkAtkPct || 0}% · 골드 +${buffs.landmarkGoldPct || 0}%`);
   }
-  const setLine = extraBuffs.length
-    ? `<div class="tiny" style="margin-top:4px;color:var(--blue)">🗺️ 권역 세트 ${buffs.setCount || 0}개 · 🏛️ 랜드마크 ${buffs.landmarkCount}개 — ${extraBuffs.join(' / ')}</div>`
-    : '';
+  const buffLine = buffParts.length
+    ? `<div class="tiny ellip" style="margin-top:6px;color:var(--green)">${buffParts.join(' · ')}</div>`
+    : `<div class="tiny ellip dim" style="margin-top:6px">🏢 부동산을 사면 영구 버프 — <b style="color:var(--gold)">부동산 탭 → 매물 투자</b></div>`;
+
   const newsNow = activeNews(Date.now());
   const newsLine = newsNow
-    ? `<div class="tiny" style="margin-top:4px;color:var(--gold)">📰 ${newsNow.icon} ${esc(newsNow.title)} <span class="dim">· ${esc(newsNow.targetLabel)} 시세 ▲${newsNow.pricePct}% 임대 ▲${newsNow.rentPct}%</span></div>`
+    ? `<div class="tiny ellip" style="margin-top:3px;color:var(--gold)">📰 ${newsNow.icon} ${esc(newsNow.title)} <span class="dim">· ${esc(newsNow.targetLabel)} 시세 ▲${newsNow.pricePct}%</span></div>`
     : '';
 
-  const logs = ui.logs.length
-    ? ui.logs
-        .slice(0, 20)
-        .map((l) => `<div class="log-item"><span class="t">${l.t}</span><span>${l.text}</span></div>`)
-        .join('')
-    : `<div class="log-item"><span class="t">—</span><span class="dim">아직 기록이 없습니다.</span></div>`;
-
   return `
-  ${questCard(ui)}
-  ${jobCard(ui)}
-  ${rebirthCard(ui)}
-  ${dungeonCard(ui)}
-
-  <div class="card">
+  <div class="card stats-card">
     <div class="card-head">
-      <div class="card-title"><span class="t-ico">🗺️</span>${esc(b.def.themeName)} 사냥터<small>Lv.${s.level}</small></div>
-      <span class="tiny dim">스테이지 <b data-live="stage" style="color:var(--txt)">${s.stage}</b>${b.def.infinite ? '<span class="inf-badge">∞</span>' : ''}</span>
+      <div class="card-title"><span class="t-ico">📊</span>전투 스탯<small>${esc(b.def.themeName)} · S${s.stage}${b.def.infinite ? '<span class="inf-badge">∞</span>' : ''} · DPS <b data-live="dps" style="color:var(--sub)">${fmt(st.dps)}</b></small></div>
+      <button class="switch sm ${s.autoBoss ? 'on' : ''}" data-action="toggle-auto" aria-label="자동 보스 전환"></button>
     </div>
-    <div class="row gap8">
-      <div class="grow">
-        <div class="tiny muted" style="margin-bottom:5px">
-          ${ready ? '<b style="color:var(--gold)">보스 도전 준비 완료!</b>' : `보스까지 <b>${remain}</b>마리`}
-          <span class="dim"> · 총 처치 ${fmt(s.totalKills)}</span>
-        </div>
-        <div class="prog"><i style="width:${(Math.min(ECON.normalKillsPerStage, s.killsInStage) / ECON.normalKillsPerStage) * 100}%"></i></div>
-      </div>
-      <button class="btn small ${ready ? 'primary' : 'ghost'}" data-action="boss" ${ready ? '' : 'disabled'}>
-        ${b.boss ? '보스 전투 중' : '보스 도전'}
-      </button>
-    </div>
-    <div class="row" style="margin-top:10px">
-      <span class="tiny muted">10마리 처치마다 자동 보스</span>
-      <button class="switch ${s.autoBoss ? 'on' : ''}" data-action="toggle-auto" aria-label="자동 보스 전환"></button>
-    </div>
-  </div>
-
-  <div class="card land-hint">
-    <div class="row">
-      <div class="lh-label">내 부동산 · ${p.cities}곳 ${fmt(p.pyeong)}평</div>
-      <span class="tiny" style="color:var(--gold)" data-live="income">+💰${formatGold(p.incomePerHour)}/h</span>
-    </div>
-    <div class="row" style="margin-top:4px">
-      <span class="tiny dim">미수령 임대수익 <b data-live="rent" style="color:var(--green)">💰${fmt(Math.floor(p.accruedRent))}</b></span>
-      <button class="btn small ghost" data-action="claim-rent" data-live-rent-btn ${p.accruedRent >= 1 ? '' : 'disabled'}>수령</button>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-head">
-      <div class="card-title"><span class="t-ico">📊</span>전투 스탯</div>
-      <span class="tiny dim">예상 DPS <b data-live="dps" style="color:var(--sub)">${fmt(st.dps)}</b></span>
-    </div>
-    <div class="stat-grid">
+    <div class="stat-grid four">
       ${stat('atk', '공격력', fmt(st.atk))}
       ${stat('hp', '최대 체력', fmt(st.hpMax))}
       ${stat('def', '피해 감소', Math.round((st.dmgReduce || 0) * 100), '%')}
@@ -828,25 +846,120 @@ function tplHunt(ui) {
       ${stat('', '공격 속도', (1000 / st.attackMs).toFixed(2), '회/초')}
     </div>
     ${buffLine}
-    ${setLine}
     ${newsLine}
-  </div>
-
-  ${petCard(ui)}
-
-  <div class="card">
-    <div class="card-head">
-      <div class="card-title"><span class="t-ico">✨</span>스킬 <small>자동 시전</small></div>
-      <span class="tiny dim">💎 <b data-live="shards">${fmt(s.shards)}</b></span>
-    </div>
-    ${skillRows}
-    <div class="note" style="margin-top:9px">스킬은 쿨타임마다 자동으로 나갑니다. 터치하면 즉시 시전(수동).</div>
-  </div>
-
-  <div class="card">
-    <div class="card-head"><div class="card-title"><span class="t-ico">📜</span>전투 기록</div><span class="tiny dim">최근 20</span></div>
-    <div class="log-list" id="logList">${logs}</div>
   </div>`;
+}
+
+function huntSkillCard(ui) {
+  const s = ui.s;
+  const cells = Object.entries(SKILLS)
+    .map(([key, def]) => {
+      const sk = s.skills[key];
+      const power = skillEffect(key, sk.lv);
+      const detail =
+        key === 'strike' || key === 'whirl'
+          ? `위력 ${Math.round(power * 100)}%`
+          : key === 'berserk'
+            ? `공격력 +${Math.round(power * 100)}% · ${def.dur / 1000}초`
+            : `체력 ${Math.round(power * 100)}% 회복`;
+      const cost = skillCost(sk.lv);
+      const maxed = sk.lv >= SKILL_UPGRADE_MAX;
+      return `
+      <div class="skill-cell">
+        <button class="sc-cast" type="button" data-action="cast" data-value="${key}" aria-label="${def.name} 시전">
+          <span class="s-ico" style="color:${def.color}">${def.icon}</span>
+          <span class="sc-mid">
+            <span class="sc-name">${def.name}<span class="lv">Lv.${sk.lv}</span></span>
+            <span class="sc-effect">${detail} · ${def.cd / 1000}s</span>
+          </span>
+        </button>
+        <button class="btn small ${maxed ? 'ghost' : 'blue'} sc-up" data-action="upgrade-skill" data-value="${key}" aria-label="${def.name} 강화" ${maxed || s.shards < cost ? 'disabled' : ''}>
+          ${maxed ? 'MAX' : `💎${cost}`}
+        </button>
+        <i class="cd-bar"><i data-live="cd-${key}"></i></i>
+      </div>`;
+    })
+    .join('');
+
+  return `
+  <div class="card skill-card">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">✨</span>스킬 <small>자동 시전 · 터치하면 즉시</small></div>
+      <div class="row gap6">
+        <span class="tiny dim">💎 <b data-live="shards">${fmt(s.shards)}</b></span>
+        <button class="mini log-btn" type="button" data-action="open-log" aria-label="전투 기록 열기">📜</button>
+      </div>
+    </div>
+    <div class="skill-grid">${cells}</div>
+  </div>`;
+}
+
+function tplHuntSkill(ui) {
+  return `${huntStatsCard(ui)}${huntSkillCard(ui)}`;
+}
+
+/* ───────────── ✨ 전직·환생 ───────────── */
+/** 동료 펫 — 사냥 탭에서는 한 줄 요약만 두고, 강화·교체는 부동산 탭 '건물주 버프'의 펫 카드에서 한다 */
+function petLine(ui) {
+  const s = ui.s;
+  const ps = s.pet || { equipped: null, unlocked: [] };
+  const unlockedIds = Array.isArray(ps.unlocked) ? ps.unlocked : [];
+  const equipped = petDef(ps.equipped);
+  return `
+  <div class="card pet-line" id="petCard">
+    <div class="row">
+      <div class="grow ellip">
+        <div class="card-title"><span class="t-ico">🐾</span>동료 펫<small>${unlockedIds.length}/${PETS.length} 해금</small></div>
+        <div class="tiny dim ellip" style="margin-top:3px">${equipped ? `동행 ${equipped.emoji} ${esc(equipped.name)} · ${esc(equipped.desc)}` : '동행 중인 펫이 없습니다 — 부동산이 자라면 자동 해금'}</div>
+      </div>
+      <button class="btn small ghost" type="button" data-action="open-pets" style="min-height:32px">관리 ▸</button>
+    </div>
+  </div>`;
+}
+
+function tplHuntGrowth(ui) {
+  return `${jobCard(ui)}${rebirthCard(ui)}${dungeonCard(ui)}${petLine(ui)}`;
+}
+
+/* ───────────── 🎯 미션·도감 ───────────── */
+function codexCard(ui) {
+  const s = ui.s;
+  const c = codexStats(s);
+  const achClaimed = claimedAchievementCount(s);
+  const achReady = achievementStatus(s).filter((a) => a.claimable).length;
+  const cell = (ico, label, seen, total) => `
+    <div class="cx-cell"><span>${ico} ${label}</span><b>${seen}<small>/${total}</small></b></div>`;
+  const next = c.next;
+  return `
+  <div class="card codex-card">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">📖</span>도감·업적<small>수집 ${c.pct}%</small></div>
+      <span class="tiny dim">업적 <b style="color:var(--green)">${achClaimed}/${ACHIEVEMENTS.length}</b></span>
+    </div>
+    <div class="cx-grid">
+      ${cell('👾', '몬스터', c.monsters.seen, c.monsters.total)}
+      ${cell('🏙️', '지역', c.cities.seen, c.cities.total)}
+      ${cell('🎒', '장비', c.gear.seen, c.gear.total)}
+      ${cell('🐾', '펫', c.pets.seen, c.pets.total)}
+    </div>
+    <div class="tiny ellip" style="margin-top:7px;color:${next ? 'var(--sub)' : 'var(--gold)'}">${
+      next
+        ? `다음 마일스톤 <b style="color:var(--txt)">${next.pct}%</b> · 공격 +${next.atkPct}% · 골드 +${next.goldPct}%`
+        : '모든 도감 마일스톤을 달성했습니다 🎉'
+    }</div>
+    ${achReady ? `<div class="tiny" style="margin-top:3px;color:var(--green)">🏆 지금 받을 수 있는 업적 보상 <b>${achReady}</b>개 — 위 <b>업적</b> 버튼에서 수령</div>` : ''}
+  </div>`;
+}
+
+function tplHuntQuest(ui) {
+  return `${questCard(ui)}${codexCard(ui)}`;
+}
+
+/* ══════════════════════════ 사냥/스킬 (본문) ══════════════════════════ */
+function tplHunt(ui) {
+  const sub = huntSubOf(ui);
+  const body = sub === 'growth' ? tplHuntGrowth(ui) : sub === 'quest' ? tplHuntQuest(ui) : tplHuntSkill(ui);
+  return `${huntSubBar(ui)}${body}`;
 }
 
 /* ══════════════════════════ 장비/강화 ══════════════════════════ */

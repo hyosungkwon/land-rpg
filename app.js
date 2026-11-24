@@ -120,6 +120,11 @@ class App {
       setTimeout(() => this.showOfflinePopup(summary, ups), 450);
     }
 
+    // PWA 바로가기(?tab=hunt&sub=growth) — 사냥 탭 서브 탭까지 바로 열기
+    try {
+      const subParam = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('sub');
+      if (subParam && ['skill', 'growth', 'quest'].includes(subParam)) this.ui.huntSub = subParam;
+    } catch (e) { /* ignore */ }
     this.ui.render();
     this.checkNews(now);
     this.bindAudioUnlock();
