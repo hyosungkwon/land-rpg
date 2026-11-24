@@ -5,9 +5,10 @@ import { ECON, SKILLS, stageDef, monsterKo, monsterMotion, monsterAttack } from 
 import {
   calcStats, currentHp, skillEffect, killReward, registerKill, clearStage, monsterStats,
 } from './state.js';
-import { DUNGEON, PET_ATTACK_MS, equippedPet, petDmgPct, dungeonReward } from './meta.js';
+import { DUNGEON, PET_ATTACK_MS, equippedPet, petDmgPct, dungeonReward, petEvo, petSkillOf, petPassive, petGoldPct } from './meta.js';
+import { TOWER_RULES, TOWER_MAX_FLOOR, towerFloor, towerStageDef, towerHas, towerReward, towerCleared, towerState, towerUnlocked, towerLockReason } from './tower.js';
 import { codexMeet, codexKill } from './quests.js';
-import { tryGearDrop } from './gear.js';
+import { tryGearDrop, acquireGear } from './gear.js';
 
 const ATTACK_STOP_GAP = 380; // 보스가 멈추고 때리는 거리(캐릭터 스프라이트가 겹치지 않는 간격)
 /* ── v3.8 다굴 슬롯 ──────────────────────────────────────────────
@@ -83,7 +84,11 @@ export class Battle {
     // v3.2: 동행 펫 애니메이션 시각 · 황금 던전(보스 러시) 상태
     this.petLast = 0;
     this.petAnimAt = 0;
+    this.petSkillAt = 0; // v4.2 펫 액티브 스킬 마지막 발동
+    this.petGoldUntil = 0; // v4.2 '황금비' 골드 2배 종료 시각
     this.dungeon = null;
+    // v4.2 🗼 도전의 탑 상태(진행 중일 때만 객체)
+    this.tower = null;
     this.syncStage();
     this.spawnInitial(startAt);
   }
@@ -98,6 +103,16 @@ export class Battle {
     return !!this.dungeon;
   }
 
+  /** 🗼 도전의 탑 진행 중인가 */
+  inTower() {
+    return !!this.tower;
+  }
+
+  /** 도전의 탑 남은 시간(ms) */
+  towerLeft(now = Date.now()) {
+    return this.tower ? Math.max(0, this.tower.ends - now) : 0;
+  }
+
   /** 던전 남은 시간(ms) */
   dungeonLeft(now = Date.now()) {
     return this.dungeon ? Math.max(0, this.dungeon.ends - now) : 0;
@@ -108,6 +123,11 @@ export class Battle {
   }
 
   syncStage() {
+    // v4.2: 탑에 입장해 있으면 그 층의 테마·몬스터 구성을 쓴다(배경·HUD 가 함께 바뀐다)
+    if (this.tower) {
+      this._def = towerStageDef(this.tower.n) || stageDef(this.s.stage);
+      return;
+    }
     this._def = stageDef(this.s.stage);
   }
 
@@ -224,8 +244,13 @@ export class Battle {
     this.updateMonsters(dt, now);
     this.attack(now);
     this.petAttack(now);
+    this.petSkillTick(now);
     if (this.dungeon) {
       this.dungeonTick(now);
+      return;
+    }
+    if (this.tower) {
+      this.towerTick(now);
       return;
     }
     this.maybeSpawn(now);
@@ -294,7 +319,7 @@ export class Battle {
         const eta = (Math.abs(m.x - standX) / speed) * 1000;
         // 도착 직전 마지막 걸음에서 전조를 시작한다 → 타격은 도착 순간.
         // 타격 예정 시각(도착 또는 공격 간격 도달)에 맞춰 시작해 전조가 너무 길게 남지 않게 한다.
-        const dueW = (Number.isFinite(m.lastAttack) ? m.lastAttack : now) + ECON.monsterAttackMs;
+        const dueW = (Number.isFinite(m.lastAttack) ? m.lastAttack : now) + (m.attackGap || ECON.monsterAttackMs);
         const strikeAt = Math.max(now + eta, dueW);
         if (!m.windupAt && strikeAt - now <= m.windupBase + 60) {
           m.windupAt = now;
@@ -311,9 +336,10 @@ export class Battle {
       } else {
         m.moving = false;
         if (!m.windupBase) m.windupBase = windupFor(m);
+        const gap = m.attackGap || ECON.monsterAttackMs;
         const heavy = !!m.isBoss && (m.attackSeq || 0) % HEAVY_EVERY === HEAVY_EVERY - 1;
         const wuTotal = m.windupBase + (heavy ? 170 : 0);
-        const due = (Number.isFinite(m.lastAttack) ? m.lastAttack : now) + ECON.monsterAttackMs;
+        const due = (Number.isFinite(m.lastAttack) ? m.lastAttack : now) + gap;
         // 1) 전조: 타격 시점 직전부터 움츠리며(원거리는 기를 모으며) 예고한다
         if (!m.windupAt && now >= due - wuTotal) {
           m.windupAt = now;
@@ -328,7 +354,7 @@ export class Battle {
         // 2) 타격: 슬롯에 붙은 몬스터끼리 각자 1500ms 간격으로 때린다 → 다굴
         // 전조가 시작됐다면 반드시 전조를 마친 뒤에 때린다(슬롯 이동으로 전조가 늦게 시작된 경우 보정)
         const windupDone = !m.windupAt || now - m.windupAt >= wuTotal;
-        if (now - m.lastAttack > ECON.monsterAttackMs && windupDone) {
+        if (now - m.lastAttack > gap && windupDone) {
           m.lastAttack = now;
           m.lunge = 1;
           m.lungeAt = now;
@@ -375,6 +401,7 @@ export class Battle {
       this.emit({ t: 'playerDeath' });
       if (this.boss) this.failBoss(now, 'dead');
       if (this.dungeon) this.endDungeon(now); // 쓰러지면 던전 종료(그때까지의 보상 지급)
+      else if (this.tower) this.endTower(now, 'dead'); // 탑에서 쓰러지면 패배 — 잃는 것 없이 복귀
       // v3.8: 쓰러지면 몰려든 무리가 흩어진다 — 부활 직후 바로 다시 눌리는 일 없이 숨을 돌린다
       else this.scatterMonsters(now);
     }
@@ -429,10 +456,13 @@ export class Battle {
       let dmg = rawDmg;
       if (m.isBoss && this.stats.bossDmgPct > 0) dmg = Math.round(dmg * (1 + this.stats.bossDmgPct));
       if (kind === 'whirl' && this.stats.whirlDmgPct > 0) dmg = Math.round(dmg * (1 + this.stats.whirlDmgPct));
+      // v4.2 도전의 탑 '철벽 진형' — 주는 피해가 45% 깎인다
+      if (this.tower && towerHas(this.tower.floor, 'guard')) dmg = Math.max(1, Math.round(dmg * (1 - TOWER_RULES.guardReduce)));
       m.hp -= dmg;
       m.hitAt = now;
       m.knock = Math.min(30, (m.knock || 0) + (crit ? 18 : 10));
       if (this.dungeon) this.dungeon.dmg += dmg;
+      if (this.tower) this.tower.dmg += dmg;
       dealt += dmg;
       hits++;
       this.emit({ t: 'hit', id: m.id, dmg, crit, x: m.x, isBoss: m.isBoss, kind });
@@ -467,7 +497,26 @@ export class Battle {
       });
       return;
     }
+    // v4.2 도전의 탑: 처치 수만 세고, 보상은 층 클리어 때 한 번에 지급한다.
+    if (this.tower) {
+      if (m.isBoss) this.tower.bossKills += 1;
+      else this.tower.kills += 1;
+      this.emit({
+        t: 'monsterDeath', id: m.id, name: m.name, ko: m.ko, isBoss: m.isBoss, x: m.x,
+        gold: 0, exp: 0, shards: 0, levelUps: 0, tower: true,
+      });
+      const done = this.tower.kills + this.tower.bossKills;
+      if (done >= this.tower.goal) this.endTower(now, 'clear');
+      return;
+    }
     const reward = killReward(this.s, this.s.stage, m.isBoss, this.buffs(), this.rng);
+    // v4.2 황금 부엉이 '황금비' — 잠시 골드 획득 2배
+    if (this.petGoldUntil > now && reward.gold > 0) {
+      const extra = Math.round(reward.gold * 1.0);
+      this.s.gold += extra;
+      if (this.s.records) this.s.records.totalGold = (this.s.records.totalGold || 0) + extra;
+      reward.gold += extra;
+    }
     registerKill(this.s, m.isBoss);
     this.emit({
       t: 'monsterDeath',
@@ -513,18 +562,35 @@ export class Battle {
   }
 
   /* ───────────── 동행 펫 ───────────── */
-  /** 1.5초마다 주인공 옆에서 함께 공격한다(펫 피해 + 치명타 가능). */
+  /** 1.5초마다 주인공 옆에서 함께 공격한다(펫 피해 + 치명타 가능).
+   *  v4.2: 불꽃 꼬리(각성+)는 옆의 적까지 함께 태운다. */
   petAttack(now) {
     const pet = this.activePet();
     if (!pet || this.player.dead) return;
     if (now - (this.petLast || 0) < PET_ATTACK_MS) return;
-    const target = this.targets().find((m) => m.x - this.player.x <= ECON.playerRange);
-    if (!target) return;
+    const inRange = this.targets().filter((m) => m.x - this.player.x <= ECON.playerRange);
+    if (!inRange.length) return;
     this.petLast = now;
     this.petAnimAt = now;
-    let dmg = this.stats.atk * petDmgPct(this.s, pet.id) * (0.9 + this.rng() * 0.2);
-    if (this.berserkUntil > now) dmg *= 1 + skillEffect('berserk', this.s.skills.berserk.lv) * 0.5;
+    const pas = petPassive(this.s, pet.id);
+    const splash = Math.max(1, Math.floor(pas.splash || 1));
+    const list = inRange.slice(0, splash);
+    const base = this.stats.atk * petDmgPct(this.s, pet.id);
+    const zerk = this.berserkUntil > now ? 1 + skillEffect('berserk', this.s.skills.berserk.lv) * 0.5 : 1;
+    for (let i = 0; i < list.length; i++) {
+      const mul = (i === 0 ? 1 : 0.65) * zerk;
+      this.petHitTarget(list[i], base * mul * (0.9 + this.rng() * 0.2), now, 'hit', pet);
+    }
+  }
+
+  /** 펫 1대 피해 적용 — 치명타·넉백·집계·처치까지 공통 처리 */
+  petHitTarget(target, raw, now, kind, pet) {
+    if (!target || target.dead || target.dying) return 0;
+    let dmg = raw;
     let crit = false;
+    if (target.isBoss && this.stats.bossDmgPct > 0) dmg *= 1 + this.stats.bossDmgPct; // 용의 숨결
+    // v4.2 철벽 진형은 펫 피해에도 똑같이 적용된다
+    if (this.tower && towerHas(this.tower.floor, 'guard')) dmg *= 1 - TOWER_RULES.guardReduce;
     if (this.rng() < this.stats.crit) {
       crit = true;
       dmg *= this.stats.critDmg;
@@ -534,8 +600,59 @@ export class Battle {
     target.hitAt = now;
     target.knock = Math.min(30, (target.knock || 0) + (crit ? 14 : 8));
     if (this.dungeon) this.dungeon.dmg += dmg;
-    this.emit({ t: 'petHit', id: target.id, dmg, crit, x: target.x, pet: pet.id, ko: pet.name, color: pet.color });
+    if (this.tower) this.tower.dmg += dmg;
+    this.emit({ t: 'petHit', id: target.id, dmg, crit, x: target.x, pet: pet.id, ko: pet.name, color: pet.color, kind: kind || 'hit' });
     if (target.hp <= 0) this.killMonster(target, now);
+    return dmg;
+  }
+
+  /** v4.2 펫 고유 액티브 — 각성(★)부터 주기적으로 발동한다 */
+  petSkillTick(now) {
+    const pet = this.activePet();
+    if (!pet || this.player.dead) return;
+    if (petEvo(this.s, pet.id) < 1) return;
+    const sk = petSkillOf(this.s, pet.id);
+    const act = sk && sk.active ? sk.active : null;
+    if (!act) return;
+    if (now - (this.petSkillAt || 0) < act.cdMs) return;
+    if (act.kind === 'gold') {
+      this.petSkillAt = now;
+      this.petAnimAt = now;
+      this.petGoldUntil = now + (act.durMs || 8000);
+      this.emit({
+        t: 'petSkill', pet: pet.id, ko: pet.name, skill: sk.name, active: act.name,
+        kind: 'gold', color: pet.color, dur: act.durMs || 8000, hits: 0, dmg: 0,
+      });
+      return;
+    }
+    const inRange = this.targets().filter((m) => m.x - this.player.x <= ECON.playerRange * 1.5);
+    if (!inRange.length) return;
+    this.petSkillAt = now;
+    this.petAnimAt = now;
+    const base = this.stats.atk * petDmgPct(this.s, pet.id);
+    let total = 0;
+    let hits = 0;
+    if (act.kind === 'multi') {
+      const target = inRange[0];
+      for (let i = 0; i < Math.max(1, act.hits || 3); i++) {
+        const d = this.petHitTarget(target, base * (act.mul || 0.7) * (0.9 + this.rng() * 0.2), now, 'skill', pet);
+        if (!d) break;
+        total += d;
+        hits += 1;
+      }
+    } else {
+      const list = act.kind === 'splash' ? inRange.slice(0, 3) : inRange;
+      for (const m of list) {
+        const d = this.petHitTarget(m, base * (act.mul || 1.6) * (0.9 + this.rng() * 0.2), now, 'skill', pet);
+        if (!d) continue;
+        total += d;
+        hits += 1;
+      }
+    }
+    this.emit({
+      t: 'petSkill', pet: pet.id, ko: pet.name, skill: sk.name, active: act.name,
+      kind: act.kind, color: pet.color, dmg: total, hits, x: inRange[0].x,
+    });
   }
 
   /* ───────────── 스킬 ───────────── */
@@ -626,6 +743,7 @@ export class Battle {
 
   startBoss(now = Date.now()) {
     if (this.boss || !this.s.bossReady || this.player.dead) return false;
+    if (this.tower) return false; // 탑 도전 중에는 스테이지 보스를 부르지 않는다
     const boss = this.makeMonster(this._def.boss, true, now);
     // v3.8: 보스전은 1:1 결투 — 잡몹 무리는 물러나 보스와 정면으로 붙는다
     this.monsters = this.monsters.filter((m) => m.dying);
@@ -676,6 +794,7 @@ export class Battle {
   /** 30초 제한 던전 시작. 스테이지 보스 전투 중이거나 이미 진행 중이면 거부. */
   startDungeon(now = Date.now()) {
     if (this.dungeon) return { ok: false, reason: '이미 던전이 진행 중입니다.' };
+    if (this.tower) return { ok: false, reason: '도전의 탑 진행 중에는 입장할 수 없습니다.' };
     if (this.player.dead) return { ok: false, reason: '전투 불능 상태에서는 입장할 수 없습니다.' };
     if (this.boss) return { ok: false, reason: '스테이지 보스 전투 중에는 입장할 수 없습니다.' };
     this.dungeon = {
@@ -764,6 +883,212 @@ export class Battle {
       bossKills: d.bossKills,
       dmg: Math.round(d.dmg),
       early: now < d.ends,
+    });
+    return reward;
+  }
+
+  /* ───────────── 🗼 도전의 탑 (v4.2) ─────────────
+   * 층마다 다른 기믹으로 스펙·장비 조합을 시험한다.
+   *  - 몬스터 체력 = 내 DPS × 층별 목표 처치 시간, 공격력 = 내 최대 체력 × 층별 비율
+   *    → 스테이지가 달라도 난이도가 흔들리지 않고 빌드만 시험된다.
+   *  - 목표 달성 = 클리어(최초 1회 보상) · 쓰러짐/시간 초과 = 패배(잃는 것 없이 복귀)
+   */
+  startTower(floor, now = Date.now()) {
+    if (this.tower) return { ok: false, reason: '이미 도전의 탑에 입장해 있습니다.' };
+    if (this.dungeon) return { ok: false, reason: '황금 던전 진행 중에는 입장할 수 없습니다.' };
+    if (this.boss) return { ok: false, reason: '스테이지 보스 전투 중에는 입장할 수 없습니다.' };
+    if (this.player.dead) return { ok: false, reason: '전투 불능 상태에서는 입장할 수 없습니다.' };
+    const def = towerFloor(floor);
+    if (!def) return { ok: false, reason: '없는 층입니다.' };
+    if (!towerUnlocked(this.s, def.n)) return { ok: false, reason: towerLockReason(this.s, def.n) || `${def.n - 1}층을 먼저 클리어해야 합니다.` };
+    this.tower = {
+      n: def.n,
+      floor: def,
+      t0: now,
+      ends: now + def.timeLimitMs,
+      dmg: 0,
+      kills: 0,
+      bossKills: 0,
+      spawned: 0,
+      goal: def.goal,
+      spawnAt: now - def.spawnMs,
+      lastTick: now,
+      frenzyStep: 0,
+      bossSpawned: false,
+    };
+    this.monsters = [];
+    this.boss = null;
+    this.bossEnds = 0;
+    this.bossReadyAt = 0;
+    this.syncStage();
+    this.player.hp = this.stats.hpMax; // 입장 시 체력 완충
+    // 첫 웨이브 — 일반 층은 2마리, 보스 층은 보스 1마리
+    this.spawnTowerMonster(now);
+    if (!def.bossOnly) this.spawnTowerMonster(now - 300);
+    this.emit({
+      t: 'towerStart', n: def.n, name: def.name, gimmicks: def.gimmicks.slice(),
+      ends: this.tower.ends, duration: def.timeLimitMs, goal: def.goal, bossOnly: !!def.bossOnly,
+    });
+    return { ok: true, floor: def };
+  }
+
+  /** 탑 몬스터 1마리 생성 */
+  spawnTowerMonster(now) {
+    const t = this.tower;
+    if (!t) return null;
+    const def = t.floor;
+    if (def.bossOnly) {
+      if (t.bossSpawned) return null;
+      t.bossSpawned = true;
+      return this.makeTowerMonster(def.boss, true, now);
+    }
+    const name = def.normals[t.spawned % def.normals.length];
+    t.spawned += 1;
+    return this.makeTowerMonster(name, false, now);
+  }
+
+  /** 탑 몬스터 — 체력은 내 DPS 기준, 공격력은 내 최대 체력 기준으로 정한다 */
+  makeTowerMonster(name, isBoss, now) {
+    const t = this.tower;
+    const def = t.floor;
+    const m = this.makeMonster(name, isBoss, now);
+    const dps = Math.max(1, this.stats.dps || 1);
+    const sec = isBoss ? (def.bossSec || 16) : (def.killSec || 1.8);
+    const hp = Math.max(20, Math.round(dps * sec * (0.9 + this.rng() * 0.2)));
+    m.maxHp = hp;
+    m.hp = hp;
+    const atkPct = (def.atkOfHp || 1) * (isBoss ? TOWER_RULES.bossAtkMul : 1);
+    m.atk = Math.max(1, Math.round((this.stats.hpMax * atkPct) / 100));
+    m.baseAtk = m.atk;
+    m.tower = true;
+    // 원거리 포격 — 사거리 밖에서 더 자주 쏜다
+    if (towerHas(def, 'barrage')) {
+      m.atkKind = 'ranged';
+      m.attackGap = Math.round(ECON.monsterAttackMs * 0.8);
+      if (!m.projKind) m.projKind = 'fire';
+    }
+    m.x = ECON.spawnX + this.rng() * 70;
+    m.lastAttack = now;
+    this.monsters.push(m);
+    return m;
+  }
+
+  /** 기믹 처리 — 재생·광폭·스폰 */
+  towerTick(now) {
+    const t = this.tower;
+    if (!t) return;
+    if (now >= t.ends) {
+      this.endTower(now, 'timeout');
+      return;
+    }
+    const def = t.floor;
+    const dtSec = Math.max(0, Math.min(1, (now - (t.lastTick || now)) / 1000));
+    t.lastTick = now;
+    // ♻️ 재생의 벽 — 살아 있는 몬스터가 초당 최대 체력의 3%를 되찾는다
+    if (towerHas(def, 'regen')) {
+      for (const m of this.monsters) {
+        if (m.dead || m.dying) continue;
+        if (m.hp < m.maxHp) m.hp = Math.min(m.maxHp, m.hp + m.maxHp * TOWER_RULES.regenPerSec * dtSec);
+      }
+    }
+    // 🔥 광폭 보스 — 10초마다 보스 공격력 +25%
+    if (towerHas(def, 'frenzy')) {
+      const step = Math.floor((now - t.t0) / TOWER_RULES.frenzyEveryMs);
+      if (step > t.frenzyStep) {
+        t.frenzyStep = step;
+        for (const m of this.monsters) {
+          if (m.dead || m.dying || !m.isBoss) continue;
+          const base = m.baseAtk || m.atk;
+          m.atk = Math.max(1, Math.round(base * (1 + TOWER_RULES.frenzyStep * step)));
+        }
+        this.emit({ t: 'towerFrenzy', step, n: t.n });
+      }
+    }
+    // 스폰 — 층별 상한까지
+    const alive = this.monsters.filter((m) => !m.dead && !m.dying).length;
+    if (alive < (def.maxAlive || 6) && now - t.spawnAt >= (def.spawnMs || 700)) {
+      t.spawnAt = now;
+      this.spawnTowerMonster(now);
+    }
+  }
+
+  /**
+   * 탑 종료 — 보상 지급(클리어·최초만 온전한 보상) 후 원래 스테이지 자동사냥으로 안전 복귀.
+   * @param {'clear'|'dead'|'timeout'} how
+   */
+  endTower(now = Date.now(), how = 'timeout') {
+    const t = this.tower;
+    if (!t) return null;
+    this.tower = null;
+    const first = how === 'clear' && !towerCleared(this.s, t.n);
+    let reward = null;
+    if (how === 'clear') {
+      reward = towerReward(this.s, t.n, { first, rng: this.rng });
+      if (reward) {
+        this.s.gold = Math.floor((this.s.gold || 0) + reward.gold);
+        this.s.shards = Math.floor((this.s.shards || 0) + reward.shards);
+        if (this.s.records) this.s.records.totalGold = (this.s.records.totalGold || 0) + reward.gold;
+        if (reward.points > 0) {
+          if (!this.s.rebirth || typeof this.s.rebirth !== 'object') {
+            this.s.rebirth = { count: 0, points: 0, totalPoints: 0, traits: {}, bestStage: 1, at: 0 };
+          }
+          this.s.rebirth.points = Math.max(0, Math.floor(this.s.rebirth.points || 0)) + reward.points;
+          this.s.rebirth.totalPoints = Math.max(0, Math.floor(this.s.rebirth.totalPoints || 0)) + reward.points;
+        }
+        if (reward.item) {
+          try { acquireGear(this.s, reward.item.id, { autoEquip: true, now, source: 'tower' }); } catch (e) { /* 보상 실패가 복귀를 막지 않게 */ }
+        }
+      }
+    }
+    // 도전 기록
+    const st = towerState(this.s);
+    st.runs = Math.max(0, Math.floor(st.runs || 0)) + 1;
+    if (how === 'clear') {
+      const cleared = new Set(Array.isArray(st.cleared) ? st.cleared : []);
+      cleared.add(t.n);
+      st.cleared = [...cleared].filter((v) => v >= 1).sort((a, b) => a - b);
+      st.best = Math.max(Math.floor(st.best || 0), t.n);
+    } else {
+      st.fails = Math.max(0, Math.floor(st.fails || 0)) + 1;
+    }
+    st.last = {
+      at: now,
+      n: t.n,
+      how,
+      kills: t.kills,
+      bossKills: t.bossKills,
+      dmg: Math.round(t.dmg),
+      gold: reward ? reward.gold : 0,
+      shards: reward ? reward.shards : 0,
+      points: reward ? reward.points : 0,
+    };
+    // 몬스터 정리(진행 중에 피해를 받던 객체도 확실히 종료) 후 원래 스테이지 재스폰
+    for (const m of this.monsters) {
+      m.dead = true;
+      m.dying = 0;
+    }
+    this.monsters = [];
+    this.boss = null;
+    this.bossEnds = 0;
+    this.bossReadyAt = 0;
+    this.syncStage();
+    this.spawnInitial(now);
+    this.refreshStats(now);
+    this.emit({
+      t: 'towerEnd',
+      how,
+      n: t.n,
+      name: t.floor.name,
+      first,
+      goal: t.goal,
+      kills: t.kills,
+      bossKills: t.bossKills,
+      dmg: Math.round(t.dmg),
+      gold: reward ? reward.gold : 0,
+      shards: reward ? reward.shards : 0,
+      points: reward ? reward.points : 0,
+      item: reward && reward.item ? { id: reward.item.id, name: reward.item.name, rarity: reward.item.rarity, slot: reward.item.slot } : null,
+      next: how === 'clear' && t.n < TOWER_MAX_FLOOR ? t.n + 1 : 0,
     });
     return reward;
   }

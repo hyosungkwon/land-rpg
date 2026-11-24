@@ -23,9 +23,14 @@ import { Renderer } from './src/render.js';
 import { UI } from './src/ui.js';
 import { GameSound } from './src/sound.js';
 import {
-  PET_SPRITES, DUNGEON, petDef, syncPets as syncPetUnlocks, equipPet, upgradePet,
+  PET_SPRITES, PET_EVO_SPRITES, DUNGEON, petDef, syncPets as syncPetUnlocks, equipPet, upgradePet,
   promoteJob as promoteJobState, dungeonState, startDungeonCooldown,
+  PETS, evolvePet as evolvePetState, petEvolveInfo, petStageInfo, petSkillOf,
 } from './src/meta.js';
+import {
+  TOWER_FLOORS, TOWER_MAX_FLOOR, TOWER_GIMMICKS, towerFloor, towerProgress, towerGimmickText,
+  towerGoalText, towerRewardText, towerUnlocked, towerGimmicks, towerLockReason,
+} from './src/tower.js';
 import {
   claimQuest as claimQuestState, claimAchievement as claimAchievementState,
   achievementStatus, claimedAchievementCount, codexStats, codexDetail, codexCity, codexGear,
@@ -111,7 +116,7 @@ class App {
     // v4.1: 지금 테마 배경은 바로, 나머지 7종은 한가할 때 미리 받아 둔다
     this.renderer.preloadBackgrounds();
     this.renderer
-      .preload(['hero_idle', 'hero_attack', 'hero_skill', 'fx_claw', 'fx_burst', ...PET_SPRITES, ...this.stageMonsterNames(this.s.stage)])
+      .preload(['hero_idle', 'hero_attack', 'hero_skill', 'fx_claw', 'fx_burst', ...PET_SPRITES, ...PET_EVO_SPRITES, ...this.stageMonsterNames(this.s.stage)])
       .then(() => this.renderer.resize())
       .catch(() => {});
 
@@ -276,6 +281,8 @@ class App {
       this.battle.monsters = [];
       this.battle.boss = null;
       this.battle.dungeon = null; // 던전 중 예외가 나도 스테이지 사냥으로 복귀
+      this.battle.tower = null; // 탑 도전 중 예외가 나도 스테이지 사냥으로 복귀
+      this.battle.syncStage();
       this.battle.events = [];
       this.battle.refreshStats(Date.now());
       if (!isFinite(this.battle.player.hp)) this.battle.player.hp = this.battle.stats.hpMax;
@@ -373,6 +380,34 @@ class App {
           `🔥 던전 완료 · 처치 ${ev.kills + ev.bossKills}마리(보스 ${ev.bossKills}) · 💰+${ev.gold.toLocaleString()} 💎+${ev.shards}`,
         );
         this.showDungeonResult(ev);
+        this.ui.renderIfNeeded();
+      } else if (ev.t === 'towerStart') {
+        this.ui.addLog(
+          `🗼 <b>도전의 탑 ${ev.n}층</b> ${esc(ev.name)} — ${(ev.gimmicks || []).map((id) => (TOWER_GIMMICKS[id] ? TOWER_GIMMICKS[id].name : id)).join(' · ')}`,
+        );
+        this.ui.toast(`🗼 ${ev.n}층 시작! ${ev.bossOnly ? '보스 격파' : `${ev.goal}마리 처치`} · ${Math.round(ev.duration / 1000)}초`, 'gold');
+        this.sound.boss();
+        this.ui.renderIfNeeded();
+      } else if (ev.t === 'towerFrenzy') {
+        this.ui.addLog(`🔥 ${ev.n}층 보스 광폭 — 공격력 상승(${ev.step}회)`);
+      } else if (ev.t === 'towerEnd') {
+        this.battle.refreshStats();
+        this.checkPets(now);
+        this.save(true);
+        if (ev.how === 'clear') {
+          this.sound.fanfare();
+          const gains = [ev.gold ? `💰+${ev.gold.toLocaleString()}` : '', ev.shards ? `💎+${ev.shards}` : '', ev.points ? `✨+${ev.points}P` : '', ev.item ? `🎒${ev.item.name}` : '']
+            .filter(Boolean).join(' ');
+          this.ui.addLog(`🗼 <b>${ev.n}층 클리어</b>${ev.first ? ' (최초)' : ''} · ${gains}`);
+          this.showTowerResult(ev);
+        } else {
+          this.sound.ui();
+          this.ui.toast(
+            `🗼 ${ev.n}층 ${ev.how === 'dead' ? '패배 — 전투 불능' : '패배 — 시간 초과'} · 원래 사냥으로 복귀했습니다`,
+            'red',
+          );
+          this.ui.addLog(`🗼 ${ev.n}층 실패(${ev.how === 'dead' ? '전투 불능' : '시간 초과'}) · 처치 ${ev.kills + ev.bossKills} · 언제든 재도전`);
+        }
         this.ui.renderIfNeeded();
       }
     }
@@ -823,8 +858,7 @@ class App {
         if (this.battle.dungeon) {
           this.ui.toast('이미 던전이 진행 중입니다');
           return;
-        }
-        const ds = dungeonState(this.s, now);
+        }        const ds = dungeonState(this.s, now);
         const paid = kind === 'shards' && !ds.ready; // 무료가 가능하면 강화석을 쓰지 않는다
         if (!ds.ready && !paid) {
           this.ui.toast('무료 입장 준비 중입니다');
@@ -847,6 +881,59 @@ class App {
           `🔥 황금 던전 입장! ${DUNGEON.durationMs / 1000}초 동안 몰아칩니다${paid ? ` (💎${DUNGEON.shardCost})` : ' (무료)'}`,
           'gold',
         );
+        this.ui.render();
+      },
+
+      /* ── v4.2: 🗼 도전의 탑 · 🐾 펫 진화 ── */
+      enterTower: (n) => {
+        this.sound.unlock();
+        const now = Date.now();
+        const r = this.battle.startTower(Number(n) || 0, now);
+        if (!r.ok) {
+          this.ui.toast(r.reason, 'red');
+          return;
+        }
+        this.ui.closeModal();
+        this.save(true);
+        this.sound.boss();
+        this.ui.toast(`🗼 도전의 탑 ${r.floor.n}층 — ${r.floor.name}`, 'gold');
+        this.ui.addLog(`🗼 <b>도전의 탑 ${r.floor.n}층</b> ${esc(r.floor.name)} · ${esc(towerGimmickText(r.floor))}`);
+        this.ui.render();
+      },
+      openTowerFloors: () => this.showTowerFloors(),
+
+      evolvePet: (id) => {
+        this.sound.unlock();
+        const r = evolvePetState(this.s, id);
+        if (!r.ok) {
+          this.ui.toast(r.reason, 'red');
+          return;
+        }
+        const def = petDef(id);
+        const info = petStageInfo(this.s, id);
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.fanfare();
+        this.renderer.onEvents(
+          [{ t: 'petEvolve', pet: id, name: info.name, stage: r.stage, color: info.color }],
+          Date.now(),
+        );
+        this.ui.toast(`🐾 ${def ? def.emoji : ''} ${info.name} ${r.def.label} 진화!`, 'gold');
+        this.ui.addLog(
+          `🐾 <b>${esc(info.name)}</b> ${r.def.label} 진화 (💎${r.spent.shards} · 💰${r.spent.gold.toLocaleString()}) · ${esc(r.skill ? r.skill.name : '')}`,
+        );
+        this.ui.modal({
+          title: `🐾 ${r.def.badge} ${esc(info.name)}`,
+          sub: `${def ? def.name : ''} → ${info.name} · ${r.def.label} 단계`,
+          body: `<div class="pet-evo-burst"><img src="assets/sprites/pet/${info.sprite}" alt=""></div>
+                 <div class="modal-rewards">
+                   <div class="rw"><div class="e">⚔️</div><div class="v">×${r.def.mul}</div><div class="k">동행 피해</div></div>
+                   <div class="rw"><div class="e">💎</div><div class="v">-${r.spent.shards}</div><div class="k">강화석</div></div>
+                   <div class="rw"><div class="e">💰</div><div class="v">-${r.spent.gold.toLocaleString()}</div><div class="k">골드</div></div>
+                 </div>
+                 <div class="note">${r.skill ? `<b>${r.skill.icon} ${esc(r.skill.name)}</b> — ${esc(r.skill.text)}` : ''}<br>동행 피해·패시브가 즉시 강해졌습니다.</div>`,
+          actions: [{ label: '확인', style: 'primary', onClick: () => {} }],
+        });
         this.ui.render();
       },
 
@@ -1887,6 +1974,60 @@ class App {
              </div>
              <div class="note" style="margin-top:9px">보상은 이미 반영되었습니다. 원래 스테이지 자동사냥으로 복귀했습니다.</div>`,
       actions: [{ label: '확인', style: 'primary', onClick: () => {} }],
+    });
+  }
+
+  /* ───────────── 🗼 도전의 탑 결과 · 층 선택 (v4.2) ───────────── */
+  /** 층 클리어 결과 모달 — 최초 클리어면 보상, 재도전이면 소액 보상 */
+  showTowerResult(ev) {
+    const def = towerFloor(ev.n);
+    const rw = [
+      { e: '💰', v: ev.gold.toLocaleString(), k: '골드' },
+      { e: '💎', v: ev.shards.toLocaleString(), k: '강화석' },
+    ];
+    if (ev.points) rw.push({ e: '✨', v: `+${ev.points}P`, k: '초월석' });
+    if (ev.item) rw.push({ e: '🎒', v: ev.item.name, k: '장비' });
+    rw.push({ e: '🗼', v: `${ev.n}층`, k: ev.first ? '최초 클리어' : '재도전' });
+    this.ui.modal({
+      title: `🗼 ${ev.n}층 클리어!`,
+      sub: `${def ? def.name : ''} · ${ev.first ? '최초 클리어 보상을 받았습니다' : '재도전 보상(35%)'} · 처치 ${ev.kills + ev.bossKills}`,
+      body: `<div class="modal-rewards">${rw.map((r) => `<div class="rw"><div class="e">${r.e}</div><div class="v">${esc(r.v)}</div><div class="k">${r.k}</div></div>`).join('')}</div>
+             <div class="note" style="margin-top:9px">${ev.next ? `<b>${ev.next}층 ${esc((towerFloor(ev.next) || {}).name || '')}</b>이 열렸습니다.` : '🗼 마지막 층입니다 — 재도전으로 골드·강화석을 계속 모으세요.'}<br>원래 스테이지 자동사냥으로 복귀했습니다.</div>`,
+      actions: [
+        { label: '확인', style: 'primary', onClick: () => {} },
+        ...(ev.next ? [{ label: `🗼 ${ev.next}층 도전`, style: 'blue', onClick: () => this.actions.enterTower(ev.next) }] : []),
+      ],
+    });
+  }
+
+  /** 층 선택 모달 — 클리어/도전 가능/잠금 상태와 기믹·보상을 한눈에 */
+  showTowerFloors() {
+    const tp = towerProgress(this.s);
+    const rows = TOWER_FLOORS.map((f) => {
+      const cleared = tp.cleared.includes(f.n);
+      const open = towerUnlocked(this.s, f.n);
+      const gims = towerGimmicks(f).map((g) => `${g.icon} ${g.name}`).join(' · ');
+      const why = towerLockReason(this.s, f.n);
+      const state = cleared ? '<b style="color:var(--green)">✓ 클리어</b>' : open ? '<b style="color:var(--blue)">도전 가능</b>' : `<span class="dim">🔒 ${esc(why)}</span>`;
+      return `<div class="tower-floor ${cleared ? 'done' : open ? 'open' : 'lock'}">
+        <div class="tf-n">${f.n}</div>
+        <div class="tf-mid">
+          <div class="tf-name">${esc(f.name)} <span class="tiny dim">${esc(towerGoalText(f))}</span></div>
+          <div class="tf-gim">${esc(gims)}</div>
+          <div class="tf-rew">최초 ${esc(towerRewardText(this.s, f.n))} · 최고 S${f.minStage}</div>
+        </div>
+        <div class="tf-act">
+          <span class="tiny">${state}</span>
+          ${open ? `<button class="mini ${cleared ? '' : 'up'}" type="button" data-action="tower" data-value="${f.n}" ${this.battle && this.battle.tower ? 'disabled' : ''}>${cleared ? '재도전' : '도전'}</button>` : '<button class="mini" type="button" disabled>잠김</button>'}
+        </div>
+      </div>`;
+    }).join('');
+    this.ui.modal({
+      title: '🗼 도전의 탑 · 층 선택',
+      sub: `${tp.clearedCount}/${tp.max}층 클리어 · ${tp.allCleared ? '모든 층 클리어!' : `다음 ${tp.next}층`} · 패배해도 잃는 것은 없습니다`,
+      body: `<div class="tower-list">${rows}</div>
+             <div class="note" style="margin-top:9px">층마다 <b>기믹</b>이 다릅니다 — 다굴·포격·광폭·재생·타임어택·철벽. 장비 조합(흡혈·방어·범위 베기)을 시험해 보세요.</div>`,
+      actions: [{ label: '닫기', style: 'ghost', onClick: () => {} }],
     });
   }
 

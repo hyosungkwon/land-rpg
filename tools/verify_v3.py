@@ -24,8 +24,8 @@ import sys
 import quickjs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/render.js", "src/ui.js", "src/sound.js"]
+FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/render.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -94,8 +94,8 @@ def main():
     for bad in ["firebase", "signInWithPopup", "Google 로그인", "gstatic", "firebaseio", "googleapis"]:
         ok(bad.lower() not in text_all.lower(), f"Firebase/로그인 흔적 없음: {bad}")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v4.1.0" in read("sw.js"), "SW 캐시 버전 v4.1.0")
-    ok("APP_VERSION = '4.1.0'" in read("src/data.js"), "앱 버전 v4.1.0")
+    ok("land-rpg-v4.2.0" in read("sw.js"), "SW 캐시 버전 v4.2.0")
+    ok("APP_VERSION = '4.2.0'" in read("src/data.js"), "앱 버전 v4.2.0")
     ok(os.path.exists(os.path.join(ROOT, "src/savecode.js")), "src/savecode.js 존재")
     ok("'./src/savecode.js'" in read("sw.js"), "sw.js 프리캐시에 savecode.js 포함")
     ok("'./src/gear.js'" in read("sw.js"), "sw.js 프리캐시에 gear.js 포함")
@@ -621,8 +621,8 @@ def main():
         badPet: bad.pet, badJob: bad.jobTier, badCd: bad.dungeonCooldown, badBest: bad.dungeon.best, badRuns: bad.dungeon.runs,
       };
     """)
-    ok(compat["level"] == 40 and compat["gold"] == 7777 and compat["pet"] == {"equipped": None, "unlocked": [], "chosen": False, "levels": {}} and compat["job"] == 0 and compat["cd"] == 0, "v3.1 저장 호환(펫·전직·던전 기본값 병합)", json.dumps(compat, ensure_ascii=False))
-    ok(compat["badPet"] == {"equipped": None, "unlocked": ["fox"], "chosen": False, "levels": {"fox": 1}} and compat["badJob"] == 3 and compat["badCd"] == 0 and compat["badBest"] == 0 and compat["badRuns"] == 0, "손상된 펫/전직/던전 값 방어", json.dumps({k: compat[k] for k in ["badPet", "badJob", "badCd", "badBest", "badRuns"]}, ensure_ascii=False))
+    ok(compat["level"] == 40 and compat["gold"] == 7777 and compat["pet"] == {"equipped": None, "unlocked": [], "chosen": False, "levels": {}, "evo": {}} and compat["job"] == 0 and compat["cd"] == 0, "v3.1 저장 호환(펫·전직·던전 기본값 병합 · v4.2 evo 포함)", json.dumps(compat, ensure_ascii=False))
+    ok(compat["badPet"] == {"equipped": None, "unlocked": ["fox"], "chosen": False, "levels": {"fox": 1}, "evo": {}} and compat["badJob"] == 3 and compat["badCd"] == 0 and compat["badBest"] == 0 and compat["badRuns"] == 0, "손상된 펫/전직/던전 값 방어", json.dumps({k: compat[k] for k in ["badPet", "badJob", "badCd", "badBest", "badRuns"]}, ensure_ascii=False))
 
     tpl2 = js(ctx2, """
       const s = defaultState(0);
@@ -2306,7 +2306,7 @@ def main():
     ok(all(x in read("src/state.js") for x in ["gearMods", "normalizeGear", "syncGearRarity", "compareGear"]), "상태에 장비 옵션·마이그레이션·비교 반영(state.js)")
     css4 = read("style.css")
     ok(all(x in css4 for x in [".gear-slots", ".gslot", ".inv-grid", ".inv-card", ".cmp-vs", ".cmp-opts", ".cmp-stats", ".iv-eq", ".gsvg"]), "v4 장비 UI CSS(슬롯·그리드·비교 모달)")
-    ok("장비 시스템" in read("README.md") and "4.1.0" in read("README.md"), "README v4.1.0 반영")
+    ok("장비 시스템" in read("README.md") and "4.2.0" in read("README.md"), "README v4.2.0 반영")
 
     # ══════════════════════════════════════════════════════════════════════
     section("[17] 🖼️ v4.1 테마 배경 · ♾️ 환생 중간 스테이지 점프")
@@ -2403,6 +2403,409 @@ def main():
     ok(all(x in read("src/rebirth.js") for x in ["REBIRTH_JUMP", "rebirthJumpCap", "rebirthStartOptions", "rebirthJumpStage", "rebirthJumpBonus", "rebirthPrevBest"]), "rebirth.js — 점프 규칙 모듈", "")
     ok("preloadBackgrounds" in appsrc6, "app.js — 부팅 시 테마 배경 프리로드", "")
 
+
+    section("[18] 🗼 v4.2 도전의 탑 · 🐾 펫 진화·고유 스킬")
+    tw = js(ctx, """
+      const RNG=(seed)=>{let x=seed;return function(){x=(x*1664525+1013904223)>>>0;return x/4294967296;};};
+      function mk(floor, clearedUpto, opts) {
+        opts = opts || {};
+        const s = defaultState(0);
+        s.level = opts.level || 30;
+        s.stage = opts.stage || 12;
+        s.maxStage = opts.maxStage || Math.max(opts.stage || 12, 24);
+        const q = opts.bare ? 0 : (opts.eq == null ? 30 : opts.eq);
+        const r = opts.bare ? 'common' : (opts.rar || 'rare');
+        s.equip = { weapon:q, armor:q, helmet:q, ring:q, amulet:q };
+        s.gearRarity = { weapon:r, armor:r, helmet:r, ring:r, amulet:r };
+        s.tower = { cleared: Array.from({length: clearedUpto||0}, (_,i)=>i+1), best: clearedUpto||0, runs: 0, fails: 0, last: null };
+        const b = new Battle(s, () => ({}), RNG(opts.seed || 3), 0);
+        return { s, b };
+      }
+      function run(floor, clearedUpto, opts, ticks) {
+        const { s, b } = mk(floor, clearedUpto, opts);
+        const r0 = b.startTower(floor, 1000);
+        const gold0 = s.gold, shards0 = s.shards, items0 = s.gear.items.length;
+        let t = 1000, ev = null, stageAtEnd = null, goldAtEnd = null, shardsAtEnd = null, minPct = 100, maxAlive = 0, themeAtEnd = null, themeInTower = b.def.theme.id;
+        for (let i = 0; i < (ticks || 2200); i++) {
+          t += 50; b.tick(50, t);
+          for (const e of b.drainEvents()) if (e.t === 'towerEnd') {
+            ev = e; stageAtEnd = s.stage; goldAtEnd = s.gold - gold0; shardsAtEnd = s.shards - shards0; themeAtEnd = b.def.theme.id;
+          }
+          if (b.tower) {
+            minPct = Math.min(minPct, 100 * b.player.hp / b.stats.hpMax);
+            maxAlive = Math.max(maxAlive, b.monsters.filter(m => !m.dead && !m.dying).length);
+          }
+        }
+        return {
+          ok: r0.ok, reason: r0.reason, how: s.tower.last && s.tower.last.how,
+          ev: ev, stageAtEnd, goldAtEnd, shardsAtEnd, minPct: Math.round(minPct), maxAlive, themeInTower, themeAtEnd,
+          towerNull: b.tower === null, monsters: b.monsters.length, itemsDelta: s.gear.items.length - items0,
+          cleared: s.tower.cleared, best: s.tower.best, runs: s.tower.runs, fails: s.tower.fails,
+          points: ev && ev.points, item: ev && ev.item, next: ev && ev.next, first: ev && ev.first,
+          gold: ev && ev.gold, shards: ev && ev.shards,
+          retry: (function(){ try { return b.startTower(floor, t + 1000).ok; } catch(e) { return false; } })(),
+        };
+      }
+
+      const defs = {
+        floors: TOWER_FLOORS.map(f => f.n),
+        names: TOWER_FLOORS.map(f => f.name),
+        mins: TOWER_FLOORS.map(f => f.minStage),
+        goals: TOWER_FLOORS.map(f => f.goal),
+        limits: TOWER_FLOORS.map(f => Math.round(f.timeLimitMs / 1000)),
+        bossOnly: TOWER_FLOORS.filter(f => f.bossOnly).map(f => f.n),
+        bosses: TOWER_FLOORS.filter(f => f.bossOnly).map(f => f.boss),
+        points: TOWER_FLOORS.filter(f => (f.reward.points||0) > 0).map(f => f.n),
+        pointVals: TOWER_FLOORS.filter(f => (f.reward.points||0) > 0).map(f => f.reward.points),
+        itemFloors: TOWER_FLOORS.filter(f => f.reward.item).map(f => f.n + ':' + f.reward.item),
+        gimIds: TOWER_GIMMICK_IDS.slice(),
+        allGim: TOWER_FLOORS.map(f => f.gimmicks),
+        themeOk: TOWER_FLOORS.every(f => THEMES.some(t => t.id === f.theme)),
+        themeName: towerStageDef(7).themeName,
+        themeId: towerStageDef(7).theme.id,
+        rules: TOWER_RULES,
+        max: TOWER_MAX_FLOOR,
+        gimText: towerGimmickText(TOWER_FLOORS[6]),
+        goalText: towerGoalText(TOWER_FLOORS[2]),
+        rewardText: towerRewardText(defaultState(0), 3),
+      };
+
+      const p0 = towerProgress(defaultState(0));
+      const uStart = [towerUnlocked(defaultState(0), 1), towerUnlocked(defaultState(0), 2)];
+      const su = defaultState(0);
+      su.maxStage = 3; su.tower.cleared = [1]; su.tower.best = 1;
+      const prog = towerProgress(su);
+      const gate = { two: towerUnlocked(su, 2), three: towerUnlocked(su, 3), why3: towerLockReason(su, 3) };
+      su.maxStage = 4; su.tower.cleared = [1, 2];
+      const gate2 = { three: towerUnlocked(su, 3) };
+      const bad = normalizeState({ tower: { cleared: [1,1,99,-3,'2','x'], best: 99, runs: -5, fails: 'a', last: { n: 3, how: 'clear', gold: -1, dmg: -2 } } }, 0).tower;
+      const oldSave = normalizeState({ level: 5, pet: { unlocked: ['wolf'], equipped: 'wolf', levels: { wolf: 3 } } }, 0);
+
+      const rStage1 = defaultState(0);
+      const first = towerReward(rStage1, 3, { first: true, rng: () => 0.5 });
+      const again = towerReward(rStage1, 3, { first: false, rng: () => 0.5 });
+      const item5 = towerReward(rStage1, 5, { first: true, rng: () => 0.5 });
+      const item10 = towerReward(rStage1, 10, { first: true, rng: () => 0.5 });
+      const lowS = defaultState(0); lowS.stage = 2;
+      const highS = defaultState(0); highS.stage = 20;
+      const goldLow = towerReward(lowS, 1, { first: true, rng: () => 0.5 }).gold;
+      const goldHigh = towerReward(highS, 1, { first: true, rng: () => 0.5 }).gold;
+
+      const ent = mk(1, 0, { maxStage: 3 });
+      const e0 = ent.b.startTower(1, 1000);
+      const evStart = ent.b.drainEvents().filter(e => e.t === 'towerStart');
+      const entry = {
+        ok: e0.ok, n: ent.b.tower && ent.b.tower.n, theme: ent.b.def.theme.id, themeName: ent.b.def.themeName,
+        monsters: ent.b.monsters.length, goal: ent.b.tower && ent.b.tower.goal, sec: ent.b.tower && Math.round((ent.b.tower.ends - 1000) / 1000),
+        hpFull: ent.b.player.hp === ent.b.stats.hpMax, starts: evStart.length, gimmicks: evStart[0] && evStart[0].gimmicks,
+        dupOk: ent.b.startTower(1, 1000).ok, dunOk: ent.b.startDungeon(1000).ok, bossOk: ent.b.challengeBoss(1000),
+      };
+      const lockb = mk(2, 0, { maxStage: 2 });
+      const lockRes = lockb.b.startTower(2, 1000);
+
+      const swarm = run(7, 6, { seed: 3 }, 900);
+      const bar = mk(2, 1, { seed: 3 });
+      bar.b.startTower(2, 1000);
+      const barrage = bar.b.monsters.map(m => ({ ranged: m.atkKind === 'ranged', gap: m.attackGap || 0, proj: !!m.projKind }));
+      const regenRun = mk(4, 3, { seed: 3 });
+      regenRun.b.startTower(4, 1000);
+      const rm = regenRun.b.monsters[0];
+      rm.maxHp = 100000; rm.hp = 50000;
+      regenRun.b.towerTick(2000);
+      const regenHp = Math.round(rm.hp);
+      const guardRun = mk(6, 5, { seed: 3 });
+      guardRun.b.startTower(6, 1000);
+      guardRun.b.roll = () => ({ dmg: 1000, crit: false });
+      const gm = guardRun.b.monsters[0];
+      gm.maxHp = 1e9; gm.hp = 1e9;
+      const gBefore = gm.hp;
+      guardRun.b.emit = () => {};
+      guardRun.b.hit([gm], 1, 'normal', 1200);
+      const guardDmg = gBefore - gm.hp;
+      const plainRun = mk(4, 3, { seed: 3 });
+      plainRun.b.startTower(4, 1000);
+      plainRun.b.roll = () => ({ dmg: 1000, crit: false });
+      const pm = plainRun.b.monsters[0];
+      pm.maxHp = 1e9; pm.hp = 1e9;
+      const pBefore = pm.hp;
+      plainRun.b.emit = () => {};
+      plainRun.b.hit([pm], 1, 'normal', 1200);
+      const plainDmg = pBefore - pm.hp;
+      const fre = mk(3, 2, { seed: 3 });
+      fre.b.startTower(3, 1000);
+      const boss0 = fre.b.monsters[0];
+      const atk0 = boss0.atk;
+      fre.b.towerTick(11000);
+      const frenzy = { isBoss: !!boss0.isBoss, atk0, atk1: boss0.atk, step: fre.b.tower.frenzyStep, count: fre.b.monsters.length };
+
+      const c1 = run(1, 0, { seed: 11 });
+      const c1again = run(1, 1, { seed: 11 });
+      const c3 = run(3, 2, { seed: 5 });
+      const c5 = run(5, 4, { seed: 9 });
+      const failBare = run(10, 9, { seed: 4, level: 8, stage: 22, maxStage: 22, bare: true });
+      const winStrong = run(10, 9, { seed: 4, level: 30, stage: 24, maxStage: 24, eq: 40, rar: 'legend' });
+      const to = mk(5, 4, { seed: 2 });
+      to.b.startTower(5, 1000);
+      to.b.attack = () => {}; to.b.petAttack = () => {}; to.b.petSkillTick = () => {}; to.b.autoSkills = () => {}; to.b.castSkill = () => false;
+      let tt = 1000, toEv = null;
+      for (let i = 0; i < 700; i++) { tt += 50; to.b.tick(50, tt); for (const e of to.b.drainEvents()) if (e.t === 'towerEnd') toEv = e; }
+      const timeout = { how: to.s.tower.last && to.s.tower.last.how, gold: toEv && toEv.gold, cleared: to.s.tower.cleared, fails: to.s.tower.fails, retry: to.b.startTower(5, tt + 1000).ok, stage: to.s.stage };
+
+      return { defs, p0, uStart, prog, gate, gate2, bad, oldTower: oldSave.tower, oldPetEvo: oldSave.pet.evo,
+               first, again, item5: item5.item && item5.item.rarity, item10: item10.item && item10.item.rarity, goldLow, goldHigh,
+               entry, lockRes: { ok: lockRes.ok, reason: lockRes.reason },
+               swarm, barrage, regenHp, guardDmg, plainDmg, frenzy,
+               c1, c1again, c3, c5, failBare, winStrong, timeout };
+    """)
+    d42 = tw["defs"]
+    ok(d42["floors"] == list(range(1, 11)) and d42["max"] == 10, "도전의 탑 10층 정의", json.dumps(d42["floors"]))
+    ok(d42["names"][0] == "첫 관문" and d42["names"][6] == "무리의 파도" and d42["names"][9] == "탑의 정점", "층 이름", json.dumps(d42["names"], ensure_ascii=False))
+    ok(d42["gimIds"] == ["swarm", "barrage", "frenzy", "regen", "timeattack", "guard"], "기믹 6종(다굴·포격·광폭·재생·타임어택·철벽)", json.dumps(d42["gimIds"]))
+    ok(all(all(g in d42["gimIds"] for g in f) for f in d42["allGim"]) and len({g for f in d42["allGim"] for g in f}) == 6, "모든 층 기믹이 정의된 6종 안에서 쓰임", json.dumps(d42["allGim"]))
+    ok(d42["themeOk"] and d42["themeName"] == "도전의 탑 7층 · 무리의 파도" and d42["themeId"] == "ice", "층 테마 = 실제 배경 테마(7층 빙원)", json.dumps([d42["themeOk"], d42["themeName"]], ensure_ascii=False))
+    ok(d42["bossOnly"] == [3, 8, 10] and d42["bosses"] == ["Cerberus", "AbyssLord", "VoidWalker"], "보스 층 3·8·10층", json.dumps([d42["bossOnly"], d42["bosses"]]))
+    ok(d42["mins"] == [1, 2, 4, 6, 8, 10, 13, 16, 19, 22], "층별 최소 스테이지(1·2·4·6·8·10·13·16·19·22)", json.dumps(d42["mins"]))
+    ok(all(20 <= v <= 90 for v in d42["limits"]) and d42["limits"][4] == 26, "제한 시간 20~90초(5층 타임어택 26초)", json.dumps(d42["limits"]))
+    ok(all(g > 0 for g in d42["goals"]) and d42["points"] == [3, 6, 8, 10] and d42["pointVals"] == [2, 3, 4, 6], "처치 목표·초월석 보상 층(3·6·8·10 → 2·3·4·6P)", json.dumps([d42["goals"], d42["pointVals"]]))
+    ok(d42["itemFloors"] == ["5:rare", "10:legend"], "장비 보상 층(5층 레어 · 10층 전설)", json.dumps(d42["itemFloors"]))
+    ok(d42["rules"]["guardReduce"] == 0.45 and d42["rules"]["regenPerSec"] == 0.2 and d42["rules"]["frenzyEveryMs"] == 10000 and d42["rules"]["repeatRate"] == 0.35, "기믹 수치(철벽 45% · 재생 20%/s · 광폭 10초 · 재도전 35%)", json.dumps(d42["rules"]))
+    ok("👥 다굴 웨이브" in d42["gimText"] and "🛡️ 철벽 진형" in d42["gimText"], "기믹 한 줄 텍스트", d42["gimText"])
+    ok("초" in d42["goalText"] and ("격파" in d42["goalText"] or "처치" in d42["goalText"]), "목표 텍스트(보스 격파·처치 수 + 제한 시간)", d42["goalText"])
+    ok("💎" in d42["rewardText"] and "✨" in d42["rewardText"], "보상 미리보기 텍스트(강화석·초월석)", d42["rewardText"])
+
+    p0 = tw["p0"]
+    ok(p0["max"] == 10 and p0["clearedCount"] == 0 and p0["next"] == 1 and p0["pct"] == 0, "초기 진행도 — 0/10 · 다음 1층", json.dumps({k: p0[k] for k in ["clearedCount", "next", "pct"]}))
+    ok(tw["uStart"] == [True, False], "1층은 항상 열림, 2층은 잠김", json.dumps(tw["uStart"]))
+    ok(tw["prog"]["clearedCount"] == 1 and tw["prog"]["next"] == 2 and tw["prog"]["best"] == 1, "1층 클리어 후 진행도", json.dumps({k: tw["prog"][k] for k in ["clearedCount", "next", "best"]}))
+    ok(tw["gate"]["two"] is True and tw["gate"]["three"] is False and tw["gate"]["why3"] == "최고 스테이지 4 필요", "최고 스테이지 게이트(3층 = S4)", json.dumps(tw["gate"], ensure_ascii=False))
+    ok(tw["gate2"]["three"] is True, "스테이지가 오르면 잠금 해제", json.dumps(tw["gate2"]))
+    bad = tw["bad"]
+    ok(bad["cleared"] == [1, 2] and bad["best"] == 10 and bad["runs"] == 0 and bad["fails"] == 0, "저장 기록 정규화(중복·범위 밖·음수 방어)", json.dumps(bad, ensure_ascii=False))
+    ok(bad["last"]["n"] == 3 and bad["last"]["gold"] == 0 and bad["last"]["dmg"] == 0, "지난 도전 기록 정규화", json.dumps(bad["last"], ensure_ascii=False))
+    ok(tw["oldTower"] == {"cleared": [], "best": 0, "runs": 0, "fails": 0, "last": None} and tw["oldPetEvo"] == {}, "기존(v4.1) 세이브 호환 — 탑·펫 진화 기본값", json.dumps([tw["oldTower"], tw["oldPetEvo"]], ensure_ascii=False))
+
+    first, again = tw["first"], tw["again"]
+    ok(first["first"] is True and first["points"] == 2 and first["item"] is None, "3층 최초 클리어 — 초월석 2P", json.dumps({k: first[k] for k in ["first", "points", "gold", "shards"]}))
+    ok(again["first"] is False and again["points"] == 0 and again["gold"] == round(first["gold"] * 0.35) and again["shards"] < first["shards"], "재도전은 35% 보상(초월석 없음)", json.dumps({"first": first["gold"], "again": again["gold"]}))
+    ok(tw["item5"] == "rare" and tw["item10"] == "legend", "층별 장비 보상 등급", json.dumps([tw["item5"], tw["item10"]]))
+    ok(tw["goldLow"] < tw["goldHigh"], "보상 골드가 스테이지에 비례", json.dumps([tw["goldLow"], tw["goldHigh"]]))
+
+    entry = tw["entry"]
+    ok(entry["ok"] is True and entry["n"] == 1 and entry["theme"] == "meadow" and entry["themeName"] == "도전의 탑 1층 · 첫 관문", "탑 입장 — 층 테마로 배경 전환", json.dumps({k: entry[k] for k in ["ok", "n", "theme", "themeName"]}, ensure_ascii=False))
+    ok(entry["monsters"] == 2 and entry["goal"] == 12 and entry["sec"] == 60 and entry["hpFull"] is True, "입장 직후 웨이브·목표·시간·체력 완충", json.dumps({k: entry[k] for k in ["monsters", "goal", "sec", "hpFull"]}))
+    ok(entry["starts"] == 1 and entry["gimmicks"] == ["swarm"], "towerStart 이벤트(기믹 포함)", json.dumps(entry["gimmicks"]))
+    ok(entry["dupOk"] is False and entry["dunOk"] is False and entry["bossOk"] is False, "탑 중 중복 입장·던전·보스 도전 거부", json.dumps({k: entry[k] for k in ["dupOk", "dunOk", "bossOk"]}))
+    ok(tw["lockRes"]["ok"] is False and "층을 먼저" in tw["lockRes"]["reason"], "잠긴 층 입장 거부 사유(앞 층 클리어 필요)", tw["lockRes"]["reason"])
+
+    ok(tw["swarm"]["maxAlive"] >= 8, "👥 다굴 웨이브 — 동시 8마리 이상", json.dumps({"maxAlive": tw["swarm"]["maxAlive"], "how": tw["swarm"]["how"]}))
+    ok(all(b["ranged"] and b["gap"] == 1200 and b["proj"] for b in tw["barrage"]), "🏹 원거리 포격 — 전원 원거리·공격 간격 1.2초", json.dumps(tw["barrage"]))
+    ok(tw["regenHp"] == 70000, "♻️ 재생의 벽 — 1초에 최대 체력 20% 회복", json.dumps({"hp": tw["regenHp"]}))
+    ok(tw["guardDmg"] == 550 and tw["plainDmg"] == 1000, "🛡️ 철벽 진형 — 주는 피해 45% 감소", json.dumps({"guard": tw["guardDmg"], "plain": tw["plainDmg"]}))
+    ok(tw["frenzy"]["isBoss"] is True and tw["frenzy"]["count"] == 1 and tw["frenzy"]["atk1"] == round(tw["frenzy"]["atk0"] * 1.25), "🔥 광폭 보스 — 10초마다 공격력 +25%", json.dumps(tw["frenzy"]))
+
+    c1 = tw["c1"]
+    ok(c1["how"] == "clear" and c1["first"] is True and c1["next"] == 2, "1층 클리어 — 최초 보상·다음 층 해제", json.dumps({k: c1[k] for k in ["how", "first", "next"]}))
+    ok(c1["cleared"] == [1] and c1["best"] == 1 and c1["runs"] == 1 and c1["points"] == 0, "클리어 기록(cleared·best·runs)", json.dumps({k: c1[k] for k in ["cleared", "best", "runs"]}))
+    ok(c1["goldAtEnd"] > 0 and c1["shardsAtEnd"] >= 35, "클리어 보상 즉시 지급(골드·강화석 35)", json.dumps({"gold": c1["goldAtEnd"], "shards": c1["shardsAtEnd"]}))
+    ok(c1["themeInTower"] == "meadow" and c1["towerNull"] is True and c1["themeAtEnd"] != "meadow" and c1["monsters"] >= 1, "클리어 후 원래 스테이지 테마·사냥으로 복귀", json.dumps({k: c1[k] for k in ["themeInTower", "themeAtEnd", "monsters"]}))
+    ok(c1["stageAtEnd"] == 12, "탑 안에서는 스테이지가 오르지 않음", json.dumps({"stage": c1["stageAtEnd"]}))
+    ok(tw["c1again"]["first"] is False and tw["c1again"]["gold"] < c1["gold"] and tw["c1again"]["cleared"] == [1] and tw["c1again"]["runs"] == 1, "재도전 클리어 — 소액 보상·기록 중복 없음", json.dumps({k: tw["c1again"][k] for k in ["first", "gold", "cleared", "runs"]}))
+    ok(tw["c3"]["points"] == 2 and tw["c3"]["cleared"] == [1, 2, 3], "보스 층(3층) — 초월석 2P 지급·연속 해제", json.dumps({k: tw["c3"][k] for k in ["points", "cleared"]}))
+    ok(tw["c5"]["item"] and tw["c5"]["item"]["rarity"] == "rare" and tw["c5"]["itemsDelta"] == 1, "5층 — 레어 장비 지급(인벤토리 +1)", json.dumps({"item": tw["c5"]["item"], "delta": tw["c5"]["itemsDelta"]}, ensure_ascii=False))
+    fb = tw["failBare"]
+    ok(fb["how"] in ("dead", "timeout") and fb["goldAtEnd"] == 0 and fb["fails"] == 1 and fb["cleared"] == list(range(1, 10)), "패배 — 보상 없음·기록 유지", json.dumps({k: fb[k] for k in ["how", "goldAtEnd", "fails"]}))
+    ok(fb["towerNull"] is True and fb["monsters"] >= 1 and fb["stageAtEnd"] == 22 and fb["retry"] is True, "패배 후 원래 스테이지 사냥 복귀·즉시 재도전 가능", json.dumps({k: fb[k] for k in ["towerNull", "monsters", "stageAtEnd", "retry"]}, ensure_ascii=False))
+    ws = tw["winStrong"]
+    ok(ws["how"] == "clear" and ws["points"] == 6 and ws["minPct"] > 5, "10층은 강한 빌드만 클리어(초월석 6P)", json.dumps({k: ws[k] for k in ["how", "points", "minPct"]}))
+    ok(fb["minPct"] < ws["minPct"], "약한 빌드는 10층에서 무너지고 강한 빌드는 버팀", json.dumps({"bare": fb["minPct"], "strong": ws["minPct"]}))
+    to = tw["timeout"]
+    ok(to["how"] == "timeout" and to["gold"] == 0 and to["cleared"] == [1, 2, 3, 4] and to["fails"] == 1 and to["retry"] is True, "시간 초과 실패 — 보상 없음·기록 그대로·재도전 가능", json.dumps(to, ensure_ascii=False))
+
+    pet42 = js(ctx, """
+      const s = defaultState(0);
+      s.level = 20; s.stage = 8; s.maxStage = 8;
+      s.pet = { equipped: 'wolf', unlocked: ['wolf'], chosen: true, levels: { wolf: 3 }, evo: {} };
+      s.shards = 1000; s.gold = 100000;
+      const stages = PET_EVO_STAGES.map(x => ({ label: x.label, mul: x.mul, lv: x.lv, badge: x.badge }));
+      const base = petStageInfo(s, 'wolf');
+      const infoLow = petEvolveInfo(s, 'wolf');
+      s.pet.levels.wolf = 5;
+      const noShard = (function(){ const c = defaultState(0); c.pet = { equipped:'wolf', unlocked:['wolf'], chosen:true, levels:{wolf:5}, evo:{} }; c.gold = 100000; c.shards = 10; return petEvolveInfo(c, 'wolf'); })();
+      const noGold = (function(){ const c = defaultState(0); c.pet = { equipped:'wolf', unlocked:['wolf'], chosen:true, levels:{wolf:5}, evo:{} }; c.shards = 1000; c.gold = 10; return petEvolveInfo(c, 'wolf'); })();
+      const lockedPet = (function(){ const c = defaultState(0); return evolvePet(c, 'dragon'); })();
+      const lockedInfo = (function(){ const c = defaultState(0); return petEvolveInfo(c, 'wolf').lv; })();
+      const atk0 = calcStats(s, {}).atk, dmg0 = petDmgPct(s, 'wolf'), crit0 = calcStats(s, {}).crit;
+      const ref10 = defaultState(0);
+      ref10.pet = { equipped: 'wolf', unlocked: ['wolf'], chosen: true, levels: { wolf: 10 }, evo: {} };
+      const dmgBase10 = petDmgPct(ref10, 'wolf');
+      const sk0 = petSkillOf(s, 'wolf');
+      const r1 = evolvePet(s, 'wolf');
+      const info1 = petStageInfo(s, 'wolf');
+      const atk1 = calcStats(s, {}).atk, dmg1 = petDmgPct(s, 'wolf'), crit1 = calcStats(s, {}).crit;
+      const sk1 = petSkillOf(s, 'wolf');
+      const cost1 = r1.ok ? r1.spent : null;
+      s.pet.levels.wolf = 10;
+      const r2 = evolvePet(s, 'wolf');
+      const info2 = petStageInfo(s, 'wolf');
+      const dmg2 = petDmgPct(s, 'wolf');
+      const r3 = evolvePet(s, 'wolf');
+      const goldBefore = s.gold;
+      const owl = (function(){
+        const c = defaultState(0); c.pet = { equipped:'owl', unlocked:['owl'], chosen:true, levels:{owl:10}, evo:{ owl: 0 } };
+        const g0 = petGoldPct(c, 'owl');
+        c.pet.evo.owl = 2;
+        const g1 = petGoldPct(c, 'owl');
+        return { g0, g1, txt: petSkillText({ skill: { type: 'gold', name: 'x', active: { name: 'y', cdMs: 1000, durMs: 8000 } } }, 2) };
+      })();
+      const dragonBoss = (function(){
+        const c = defaultState(0); c.level = 20;
+        c.pet = { equipped:'dragon', unlocked:['dragon'], chosen:true, levels:{dragon:10}, evo:{ dragon: 2 } };
+        const st = calcStats(c, {});
+        const c0 = defaultState(0); c0.level = 20;
+        const st0 = calcStats(c0, {});
+        return { boss: Math.round(st.bossDmgPct * 1000) / 10, base: st0.bossDmgPct, stage: st.petStage };
+      })();
+      // syncPets 가 진화를 지우지 않는가
+      const sp = defaultState(0);
+      sp.pet = { equipped: 'wolf', unlocked: ['wolf'], chosen: true, levels: { wolf: 5 }, evo: { wolf: 1 } };
+      CITIES.slice(0, 2).forEach(c => { sp.land.owned[c.key] = 40; });
+      syncPets(sp, 0);
+      const kept = sp.pet.evo.wolf;
+      const norm = normalizeState({ pet: { unlocked: ['wolf', 'fox'], equipped: 'wolf', levels: { wolf: 9 }, evo: { wolf: 9, fox: -2, dragon: 2, xxx: 1 } } }, 0);
+      return { stages, base: { stage: base.stage, name: base.name, sprite: base.sprite, scale: base.scale },
+               infoLow: { can: infoLow.can, reason: infoLow.reason, needLv: infoLow.needLv },
+               noShard: noShard.reason, noGold: noGold.reason, lockedPet: { ok: lockedPet.ok, reason: lockedPet.reason }, lockedInfo,
+               atk0, atk1, dmg0, dmg1, dmg2, dmgBase10, crit0, crit1,
+               sk0: { unlocked: sk0.unlocked, text: sk0.text }, sk1: { unlocked: sk1.unlocked, name: sk1.name, activeName: sk1.activeName, text: sk1.text },
+               r1: { ok: r1.ok, stage: r1.stage, name: r1.name, cost: cost1 },
+               r2ok: r2.ok, stage2name: info2.name, sprite2: info2.sprite, r3: { ok: r3.ok, max: !!r3.max },
+               goldAfter: s.gold, shardsAfter: s.shards, evo: s.pet.evo, owl, dragonBoss, kept, norm: { evo: norm.pet.evo, unlocked: norm.pet.unlocked } };
+    """)
+    ok([x["label"] for x in pet42["stages"]] == ["기본", "각성", "신수"] and [x["mul"] for x in pet42["stages"]] == [1, 1.5, 2.1] and [x["lv"] for x in pet42["stages"]] == [0, 5, 10], "펫 진화 3단계(기본·각성·신수 / ×1 · ×1.5 · ×2.1)", json.dumps(pet42["stages"], ensure_ascii=False))
+    ok(pet42["base"]["stage"] == 0 and pet42["base"]["name"] == "꼬마 늑대" and pet42["base"]["sprite"] == "pet_wolf" and pet42["base"]["scale"] == 1, "기본 단계 — 원래 이름·스프라이트", json.dumps(pet42["base"], ensure_ascii=False))
+    ok(pet42["infoLow"]["can"] is False and "Lv.5" in pet42["infoLow"]["reason"], "진화 조건 — 펫 강화 레벨", json.dumps(pet42["infoLow"], ensure_ascii=False))
+    ok("강화석" in (pet42["noShard"] or "") and "골드" in (pet42["noGold"] or ""), "진화 조건 — 강화석·골드 부족 안내", json.dumps([pet42["noShard"], pet42["noGold"]], ensure_ascii=False))
+    ok(pet42["lockedPet"]["ok"] is False and "해금" in pet42["lockedPet"]["reason"] and pet42["lockedInfo"] == 1, "미해금 펫은 진화 불가", json.dumps(pet42["lockedPet"], ensure_ascii=False))
+    ok(pet42["r1"]["ok"] is True and pet42["r1"]["stage"] == 1 and pet42["r1"]["name"] == "은빛 늑대", "각성 진화 — 이름·단계 변화", json.dumps(pet42["r1"], ensure_ascii=False))
+    ok(pet42["r1"]["cost"] == {"shards": 80, "gold": 6000} and pet42["shardsAfter"] == 600 and pet42["goldAfter"] == 64000, "진화 비용 차감(💎80 · 💰6,000 → 💎320 · 💰30,000)", json.dumps({"cost": pet42["r1"]["cost"], "shards": pet42["shardsAfter"], "gold": pet42["goldAfter"]}))
+    ok(pet42["dmg1"] > pet42["dmg0"] and abs(pet42["dmg1"] / pet42["dmg0"] - 1.5) < 0.01 and pet42["atk1"] > pet42["atk0"], "각성 — 동행 피해 ×1.5 · 공격 패시브 상승", json.dumps({"d0": round(pet42["dmg0"], 3), "d1": round(pet42["dmg1"], 3), "atk0": pet42["atk0"], "atk1": pet42["atk1"]}))
+    ok(pet42["crit1"] > pet42["crit0"], "늑대 고유 스킬 — 치명타 패시브가 스탯에 반영", json.dumps({"c0": pet42["crit0"], "c1": pet42["crit1"]}))
+    ok(pet42["sk0"]["unlocked"] is False and pet42["sk1"]["unlocked"] is True and pet42["sk1"]["activeName"] == "삼연 물기" and "치명타" in pet42["sk1"]["text"], "고유 스킬 해금(각성) — 삼연 물기", json.dumps(pet42["sk1"], ensure_ascii=False))
+    ok(pet42["r2ok"] is True and pet42["stage2name"] == "달빛 수호랑" and pet42["sprite2"] == "pet_wolf_divine" and abs(pet42["dmg2"] / pet42["dmgBase10"] - 2.1) < 0.02, "신수 진화 — ×2.1 · 전용 스프라이트", json.dumps({"name": pet42["stage2name"], "sprite": pet42["sprite2"]}, ensure_ascii=False))
+    ok(pet42["r3"]["ok"] is False and pet42["r3"]["max"] is True, "최종 진화 이후 거부", json.dumps(pet42["r3"]))
+    ok(pet42["owl"]["g1"] > pet42["owl"]["g0"], "황금 부엉이 — 진화 시 골드 패시브 증가", json.dumps(pet42["owl"]["g0"], ensure_ascii=False))
+    ok(pet42["dragonBoss"]["boss"] > 0 and pet42["dragonBoss"]["base"] == 0 and pet42["dragonBoss"]["stage"] == 2, "아기 드래곤 — 보스 추가 피해 패시브", json.dumps(pet42["dragonBoss"], ensure_ascii=False))
+    ok(pet42["kept"] == 1, "syncPets 가 진화 단계를 지우지 않음", json.dumps({"kept": pet42["kept"]}))
+    ok(pet42["norm"]["evo"] == {"wolf": 2, "fox": 0} or pet42["norm"]["evo"] in ({"wolf": 2}, {"wolf": 2, "fox": 0}), "진화 저장 정규화(범위·미해금 제거)", json.dumps(pet42["norm"], ensure_ascii=False))
+
+    petbat42 = js(ctx, """
+      const RNG=(seed)=>{let x=seed;return function(){x=(x*1664525+1013904223)>>>0;return x/4294967296;};};
+      function scene(petId, stage, count) {
+        const s = defaultState(0);
+        s.level = 30; s.stage = 10; s.maxStage = 10;
+        s.pet = { equipped: petId, unlocked: [petId], chosen: true, levels: { [petId]: 10 }, evo: stage ? { [petId]: stage } : {} };
+        const b = new Battle(s, () => ({}), RNG(7), 0);
+        b.monsters = [];
+        for (let i = 0; i < count; i++) {
+          const m = b.makeMonster('Slime', false, 0);
+          m.x = 300 + i * 40; m.maxHp = 1e9; m.hp = 1e9; m.lastAttack = 1e9;
+          b.monsters.push(m);
+        }
+        b.petSkillAt = -1e9;
+        return { s, b };
+      }
+      function cast(petId, stage, count) {
+        const { s, b } = scene(petId, stage, count);
+        const ev = [];
+        b.emit = (e) => ev.push(e);
+        b.petSkillTick(1000);
+        const sk = ev.filter(e => e.t === 'petSkill')[0] || null;
+        const hits = ev.filter(e => e.t === 'petHit').length;
+        const hurt = b.monsters.filter(m => m.hp < 1e9).length;
+        return { sk: sk && { kind: sk.kind, active: sk.active, hits: sk.hits, dmg: sk.dmg, dur: sk.dur || 0 }, hits, hurt };
+      }
+      const wolf0 = cast('wolf', 0, 3);
+      const wolf2 = cast('wolf', 2, 3);
+      const fox2 = cast('fox', 2, 3);
+      const owl2 = cast('owl', 2, 3);
+      const drg2 = cast('dragon', 2, 3);
+      // 황금비 — 골드 2배가 실제 처치 보상에 붙는가
+      const go = (function(){
+        const { s, b } = scene('owl', 2, 1);
+        b.petGoldUntil = 999999;
+        const g0 = s.gold;
+        const m = b.monsters[0]; m.hp = 1; m.maxHp = 1;
+        b.emit = () => {};
+        b.hit([m], 1, 'normal', 1200);
+        const withBuff = s.gold - g0;
+        const { s: s2, b: b2 } = scene('owl', 0, 1);
+        const g1 = s2.gold;
+        const m2 = b2.monsters[0]; m2.hp = 1; m2.maxHp = 1;
+        b2.emit = () => {};
+        b2.hit([m2], 1, 'normal', 1200);
+        return { withBuff, plain: s2.gold - g1 };
+      })();
+      return { wolf0, wolf2, fox2, owl2, drg2, go };
+    """)
+    ok(petbat42["wolf0"]["sk"] is None and petbat42["wolf0"]["hits"] == 0, "기본 단계에서는 고유 스킬이 발동하지 않음", json.dumps(petbat42["wolf0"]))
+    ok(petbat42["wolf2"]["sk"] and petbat42["wolf2"]["sk"]["kind"] == "multi" and petbat42["wolf2"]["sk"]["hits"] == 3 and petbat42["wolf2"]["hurt"] == 1, "삼연 물기 — 한 대상 3연타", json.dumps(petbat42["wolf2"]))
+    ok(petbat42["fox2"]["sk"] and petbat42["fox2"]["sk"]["kind"] == "splash" and petbat42["fox2"]["hurt"] == 3, "불꽃 폭풍 — 3마리 광역", json.dumps(petbat42["fox2"]))
+    ok(petbat42["owl2"]["sk"] and petbat42["owl2"]["sk"]["kind"] == "gold" and petbat42["owl2"]["sk"]["dur"] == 8000, "황금비 — 8초 골드 2배 버프", json.dumps(petbat42["owl2"]))
+    ok(petbat42["drg2"]["sk"] and petbat42["drg2"]["sk"]["kind"] == "breath" and petbat42["drg2"]["hurt"] == 3, "화염 브레스 — 전방 광역", json.dumps(petbat42["drg2"]))
+    ok(petbat42["go"]["withBuff"] > petbat42["go"]["plain"], "황금비 동안 처치 골드가 실제로 늘어남", json.dumps(petbat42["go"]))
+
+    tpl42 = js(ctx2, """
+      const s = defaultState(0);
+      s.level = 20; s.stage = 12; s.maxStage = 14; s.gold = 200000; s.shards = 800;
+      for (const c of CITIES.slice(0, 4)) s.land.owned[c.key] = 40;
+      s.pet = { equipped: 'wolf', unlocked: ['wolf', 'fox'], chosen: true, levels: { wolf: 6, fox: 3 }, evo: { wolf: 1 } };
+      s.dungeon = { best: 0, runs: 0, last: null };
+      s.tower = { cleared: [1, 2, 3], best: 3, runs: 4, fails: 1, last: { at: 0, n: 4, how: 'timeout', kills: 6, bossKills: 0, dmg: 1200, gold: 0, shards: 0, points: 0 } };
+      const buffs = computeBuffs(s, 0);
+      const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(12), boss: null, dungeon: null, tower: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'hunt', el: {}, install: { standalone: false, installed: false, canPrompt: false, hidden: true } };
+      const growth = __huntSub(ui, 'growth');
+      s.land.sub = 'buff';
+      const land = __tpls.land(ui);
+      const settings = __tpls.settings(ui);
+      const badges = __badges(ui);
+      // 진행 중 상태
+      const running = { s, battle: { stats: calcStats(s, buffs), def: stageDef(12), boss: null, dungeon: null, tower: { n: 4, floor: TOWER_FLOORS[3], ends: Date.now() + 30000, t0: Date.now(), kills: 3, bossKills: 0, goal: 10, dmg: 0 }, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'hunt', el: {}, install: { hidden: true } };
+      const growing = __huntSub(running, 'growth');
+      return { growth, land, settings, badges, growing, tiles: (growth.match(/class=\\"tf /g) || []).length,
+               bad: /undefined|NaN|\\[object Object\\]/.test(growth + land + settings + growing) };
+    """)
+    ok(tpl42["bad"] is False, "v4.2 템플릿에 undefined/NaN 누출 없음")
+    ok("도전의 탑" in tpl42["growth"] and "tower-tiles" in tpl42["growth"] and tpl42["tiles"] == 10, "전직·환생 탭에 도전의 탑 카드(층 타일 10개)", json.dumps({"tiles": tpl42["tiles"]}))
+    ok("4층 재생의 벽" in tpl42["growth"] and "♻️ 재생의 벽" in tpl42["growth"] and "층 선택" in tpl42["growth"], "다음 층·기믹·층 선택 버튼", "")
+    ok('data-action="tower"' in tpl42["growth"] and 'data-action="tower-floors"' in tpl42["growth"], "탑 입장·층 선택 버튼 연결", "")
+    ok("진행 중" in tpl42["growing"] and "4층 재생의 벽" in tpl42["growing"] and "🗼 도전 중" in tpl42["growing"], "도전 중 카드 표시", "")
+    ok("내 동료 펫" in tpl42["land"] and "pet-evolve" in tpl42["land"] and "사냥의 본능" in tpl42["land"], "건물주 버프 탭 — 펫 카드에 진화 버튼·고유 스킬", "")
+    ok("은빛 늑대" in tpl42["land"] and "★" in tpl42["land"], "진화 단계 이름·배지 표시", "")
+    ok("도전의 탑" in tpl42["settings"] and "펫 진화" in tpl42["settings"], "설정 탭에 탑·펫 진화 기록", "")
+    ok(tpl42["badges"]["growth"] >= 0, "성장 서브 탭 배지 계산", json.dumps(tpl42["badges"]))
+
+    rsrc42 = read("src/render.js")
+    csrc42 = read("src/combat.js")
+    usrc42 = read("src/ui.js")
+    asrc42 = read("app.js")
+    css42 = read("style.css")
+    ok(all(x in rsrc42 for x in ["drawTowerHud", "drawTowerMarkers", "drawTowerBanner", "petSkill", "petStageInfo"]), "render.js — 탑 HUD·기믹 표식·펫 진화/스킬 연출", "")
+    ok(all(x in csrc42 for x in ["startTower", "endTower", "towerTick", "petSkillTick", "startDungeon", "TOWER_RULES.guardReduce"]), "combat.js — 탑 전투·펫 액티브 구현", "")
+    ok(all(x in usrc42 for x in ['data-action="tower"', 'data-action="tower-floors"', 'data-action="pet-evolve"', "tower-tiles"]), "ui.js — 탑 카드·펫 진화 버튼", "")
+    ok(all(x in asrc42 for x in ["enterTower", "openTowerFloors", "evolvePet", "showTowerResult", "showTowerFloors"]), "app.js — 탑 입장/층 선택/결과·펫 진화 액션", "")
+    ok(all(x in css42 for x in [".tower-card", ".tower-tiles", ".tower-floor", ".pet-evo", ".mini.evo"]), "style.css — v4.2 스타일", "")
+    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.2.0" in read("sw.js") and "APP_VERSION = '4.2.0'" in read("src/data.js"), "버전·서비스워커(4.2.0 · tower.js 프리캐시)", "")
+    ok('"version": "4.2.0"' in read("package.json"), "package.json 버전 4.2.0", "")
+    evo_files = [f"assets/sprites/pet/pet_{n}_{s}.png" for n in ("wolf", "fox", "owl", "dragon") for s in ("awaken", "divine")]
+    ok(all(os.path.exists(os.path.join(ROOT, f)) for f in evo_files), "펫 진화 스프라이트 8종 파일", ", ".join(f for f in evo_files if not os.path.exists(os.path.join(ROOT, f))))
+    ok(all(f"'./{f}'" in read("sw.js") for f in evo_files), "sw.js 프리캐시에 진화 스프라이트 포함", "")
+    try:
+        from PIL import Image
+        sizes = [Image.open(os.path.join(ROOT, f)).size for f in evo_files]
+        alphas = [Image.open(os.path.join(ROOT, f)).getextrema()[3][0] for f in evo_files]
+        ok(all(sz == (256, 256) for sz in sizes) and all(a == 0 for a in alphas), "진화 스프라이트 256px 투명 PNG", json.dumps({"sizes": sizes, "min_alpha": alphas}))
+    except Exception as e:  # noqa: BLE001
+        ok(False, "진화 스프라이트 검사", str(e))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

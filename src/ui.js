@@ -16,7 +16,12 @@ import {
 import {
   PETS, DUNGEON, PET_MAX_LV, petDef, petProgress, petLevel, petAtkPct, petDmgPct,
   petUpgradeCost, jobOf, jobProgress, dungeonState,
+  PET_EVO_MAX, petEvo, petStageInfo, petEvolveInfo, petSkillOf, petSkillText, petGoldPct, evoStageDef,
 } from './meta.js';
+import {
+  TOWER_FLOORS, TOWER_MAX_FLOOR, TOWER_GIMMICKS, towerFloor, towerProgress, towerGimmickText,
+  towerGoalText, towerRewardText, towerGimmicks, towerUnlocked, towerLockReason,
+} from './tower.js';
 import {
   QUESTS, ACHIEVEMENTS, questStateOf, currentQuest, questProgress, codexStats,
   achievementStatus, claimedAchievementCount,
@@ -179,7 +184,10 @@ export class UI {
       case 'rebirth-trait': actions.upgradeRebirthTrait(v); break;
       case 'pet-equip': actions.equipPet(v); break;
       case 'pet-upgrade': actions.upgradePet(v); break;
+      case 'pet-evolve': actions.evolvePet(v); break;
       case 'dungeon': actions.enterDungeon(v); break;
+      case 'tower': actions.enterTower(Number(v) || 0); break;
+      case 'tower-floors': actions.openTowerFloors(); break;
       case 'claim-quest': actions.claimQuest(v); break;
       case 'claim-achievement': actions.claimAchievement(v); break;
       case 'open-codex': actions.openCodex(v || 'monster'); break;
@@ -274,8 +282,14 @@ export class UI {
     setT(this.el.shard, fmt(s.shards));
 
     const def = b.def;
-    setT(this.el.stageNum, `스테이지 ${s.stage}${def.infinite ? ' ∞' : ''}`);
-    setT(this.el.themeName, def.themeName);
+    // v4.2: 탑 도전 중에는 스테이지 칩 대신 층 이름을 보여 준다
+    if (b.tower && b.tower.floor) {
+      setT(this.el.stageNum, `🗼 탑 ${b.tower.n}층`);
+      setT(this.el.themeName, b.tower.floor.name);
+    } else {
+      setT(this.el.stageNum, `스테이지 ${s.stage}${def.infinite ? ' ∞' : ''}`);
+      setT(this.el.themeName, def.themeName);
+    }
 
     // 처치 게이지
     const dots = this.el.killDots.children;
@@ -403,6 +417,26 @@ export class UI {
           : last
             ? `최근 보상 💰${fmt(last.gold)} · 💎${last.shards} · 최고 피해 ${fmt(s.dungeon.best)}`
             : `쿨타임 10분 · 최고 피해 기록 없음`;
+      } else if (k === 'tower-run') {
+        const t = b && b.tower;
+        const last = s.tower && s.tower.last;
+        el.textContent = t
+          ? `진행 중 · ${(Math.max(0, t.ends - now) / 1000).toFixed(1)}초`
+          : last
+            ? (last.how === 'clear' ? `최근 ${last.n}층 클리어` : `최근 ${last.n}층 ${last.how === 'dead' ? '패배' : '시간 초과'}`)
+            : '1층부터 도전';
+      } else if (k === 'tower-last') {
+        const t = b && b.tower;
+        const last = s.tower && s.tower.last;
+        el.innerHTML = t
+          ? `<b style="color:var(--blue)">진행 중</b> · ${t.n}층 ${esc(t.floor.name)} · ${(Math.max(0, t.ends - now) / 1000).toFixed(1)}초 남음`
+          : last
+            ? (last.how === 'clear'
+              ? `최근 ${last.n}층 클리어 · 💰${fmt(last.gold)} 💎${last.shards}${last.points ? ` ✨${last.points}P` : ''}`
+              : `최근 ${last.n}층 ${last.how === 'dead' ? '패배(전투 불능)' : '패배(시간 초과)'} · 언제든 재도전`)
+            : '1층부터 차례대로 — 패배해도 잃는 것은 없습니다';
+      } else if (k === 'tower-free') {
+        el.disabled = !!(b && (b.tower || b.dungeon || b.boss));
       } else if (k === 'rent') {
         el.textContent = `💰${fmt(Math.floor(s.land.accruedRent || 0))}`;
       } else if (k === 'rent-c') {
@@ -668,6 +702,56 @@ function dungeonCard(ui) {
   </div>`;
 }
 
+/* ══════════════════════════ 🗼 도전의 탑 (v4.2) ══════════════════════════
+ * 층 타일 10개로 진행도를 한눈에 보여 주고, 바로 다음 층 도전 / 층 선택 모달로 이어진다.
+ */
+function towerCard(ui) {
+  const s = ui.s;
+  const b = ui.battle;
+  const now = Date.now();
+  const tp = towerProgress(s);
+  const running = b && b.tower;
+  const last = s.tower && s.tower.last;
+  const entryN = running ? running.n : (tp.next || tp.max);
+  const def = towerFloor(entryN);
+  const tiles = TOWER_FLOORS.map((f) => {
+    const cleared = tp.cleared.includes(f.n);
+    const open = cleared || f.n === 1 || tp.cleared.includes(f.n - 1);
+    const cls = cleared ? 'done' : open ? 'open' : 'lock';
+    const g = towerGimmicks(f);
+    return `<i class="tf ${cls}${running && running.n === f.n ? ' now' : ''}" title="${f.n}층 ${esc(f.name)} · ${esc(towerGimmickText(f))}">${cleared ? '✓' : f.n}${g.length ? `<em>${g[0].icon}</em>` : ''}</i>`;
+  }).join('');
+  const lastLine = running
+    ? `<b style="color:var(--blue)">진행 중</b> · ${running.n}층 ${esc(running.floor.name)} · ${(Math.max(0, running.ends - now) / 1000).toFixed(1)}초 남음`
+    : last
+      ? (last.how === 'clear'
+        ? `최근 ${last.n}층 클리어 · 💰${fmt(last.gold)} 💎${last.shards}${last.points ? ` ✨${last.points}P` : ''}`
+        : `최근 ${last.n}층 ${last.how === 'dead' ? '패배(전투 불능)' : '패배(시간 초과)'} · 언제든 재도전`)
+      : '1층부터 차례대로 — 패배해도 잃는 것은 없습니다';
+  const canEnter = entryN > 0 && towerUnlocked(s, entryN);
+  const lockWhy = canEnter ? '' : (entryN > 0 ? towerLockReason(s, entryN) : '');
+  return `
+  <div class="card tower-card${tp.allCleared ? ' done' : ''}">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🗼</span>도전의 탑<small>${tp.clearedCount}/${tp.max}층 클리어</small></div>
+      <span class="tiny" style="color:var(--blue)" data-live="tower-run">${running ? `진행 중 · ${(Math.max(0, running.ends - now) / 1000).toFixed(1)}초` : last ? (last.how === 'clear' ? `최근 ${last.n}층 클리어` : `최근 ${last.n}층 ${last.how === 'dead' ? '패배' : '시간 초과'}`) : '1층부터 도전'}</span>
+    </div>
+    <div class="tower-tiles">${tiles}</div>
+    ${def ? `
+    <div class="tower-next">
+      <b>${def.n}층 ${esc(def.name)}</b>
+      <span class="dim">${esc(towerGoalText(def))}</span>
+    </div>
+    <div class="tiny ellip" style="color:var(--blue)">${esc(towerGimmickText(def))}</div>
+    <div class="tiny dim ellip" style="margin-top:2px">최초 클리어 ${towerRewardText(s, def.n)}</div>` : `<div class="tiny" style="color:var(--gold)">🗼 모든 층 클리어! 재도전으로 골드·강화석을 계속 모을 수 있습니다.</div>`}
+    <div class="row gap6" style="margin-top:7px">
+      <button class="btn small ${running || !canEnter ? 'ghost' : 'blue'} wide" type="button" data-action="tower" data-value="${entryN}" data-live="tower-free" style="min-height:34px" ${running || !canEnter ? 'disabled' : ''}>${running ? '🗼 도전 중' : !canEnter ? `🔒 ${esc(lockWhy)}` : `🗼 ${entryN}층 도전`}</button>
+      <button class="btn small ghost wide" type="button" data-action="tower-floors" style="min-height:34px">층 선택 ▸</button>
+    </div>
+    <div class="tiny dim ellip" style="margin-top:5px" data-live="tower-last">${lastLine}</div>
+  </div>`;
+}
+
 function petCard(ui) {
   const s = ui.s;
   const ps = s.pet || { equipped: null, unlocked: [] };
@@ -681,13 +765,31 @@ function petCard(ui) {
     const lv = petLevel(s, def.id);
     const cost = petUpgradeCost(lv);
     const maxed = lv >= PET_MAX_LV;
+    // v4.2: 진화 단계·고유 스킬
+    const info = petStageInfo(s, def.id);
+    const stage = info.stage || 0;
+    const evo = petEvolveInfo(s, def.id);
+    const skill = petSkillOf(s, def.id);
+    const badge = stage >= 2 ? '★★' : stage >= 1 ? '★' : '';
+    const evolveBtn = !unlocked
+      ? ''
+      : evo.max
+        ? '<button class="mini evo max" type="button" disabled>신수</button>'
+        : `<button class="mini evo ${evo.can ? 'ready' : ''}" type="button" data-action="pet-evolve" data-value="${def.id}" ${evo.can ? '' : 'disabled'}>${evo.next.badge}진화</button>`;
+    const evoLine = !unlocked
+      ? ''
+      : evo.max
+        ? `<div class="pet-evo done">${esc(info.def.label)} 완료 · ${esc(petSkillText(def, stage))}</div>`
+        : `<div class="pet-evo${evo.can ? ' ready' : ''}">→ ${evo.next.badge} ${esc(petStageInfo({ pet: { evo: { [def.id]: evo.next.stage } } }, def.id).name)} · Lv.${evo.lv}/${evo.needLv} · 💎${evo.cost.shards} · 💰${fmt(evo.cost.gold)}${evo.can ? ' ✓' : ` <span class="dim">(${esc(evo.reason)})</span>`}</div>`;
     return `
       <div class="pet-row ${on ? 'on' : ''} ${unlocked ? '' : 'lock'}">
-        <img class="pet-thumb" src="assets/sprites/pet/${def.sprite}.png" alt="" loading="lazy">
+        <img class="pet-thumb s${stage}" src="assets/sprites/pet/${info.sprite || def.sprite}.png" alt="" loading="lazy">
         <div class="pet-mid">
-          <div class="pet-name">${def.emoji} ${esc(def.name)}<span class="lv">Lv.${lv}</span>${on ? '<span class="pet-on">동행 중</span>' : ''}</div>
+          <div class="pet-name">${def.emoji} ${esc(info.name || def.name)}${badge ? `<span class="evo-badge s${stage}">${badge}</span>` : ''}<span class="lv">Lv.${lv}</span>${on ? '<span class="pet-on">동행 중</span>' : ''}</div>
           <div class="pet-desc">${esc(def.desc)}</div>
-          <div class="pet-stats">공격 ${Math.round(petDmgPct(s, def.id) * 100)}% · 공격력 +${petAtkPct(s, def.id)}%${def.goldPct ? ` · 골드 +${def.goldPct}%` : ''}</div>
+          <div class="pet-stats">공격 ${Math.round(petDmgPct(s, def.id) * 100)}% · 공격력 +${petAtkPct(s, def.id)}%${petGoldPct(s, def.id) ? ` · 골드 +${petGoldPct(s, def.id)}%` : ''}</div>
+          ${skill ? `<div class="pet-skill">${skill.icon} <b>${esc(skill.name)}</b> — ${esc(petSkillText(def, stage))}</div>` : ''}
+          ${evoLine}
           ${unlocked ? '' : `<div class="pet-cond">🔒 ${esc(def.cond)} · ${pr.text}</div><div class="prog tiny-prog"><i style="width:${pr.pct * 100}%"></i></div>`}
         </div>
         <div class="s-actions pet-acts">
@@ -701,20 +803,23 @@ function petCard(ui) {
               ? '<button class="mini" type="button" disabled>MAX</button>'
               : `<button class="mini up" type="button" data-action="pet-upgrade" data-value="${def.id}" ${s.shards < cost ? 'disabled' : ''}>💎${cost}</button>`
             : ''}
+          ${evolveBtn}
         </div>
       </div>`;
   }).join('');
 
+  const evoCount = PETS.filter((d) => petEvo(s, d.id) > 0).length;
   return `
   <div class="card pet-card" id="petCard">
     <div class="card-head">
-      <div class="card-title"><span class="t-ico">🐾</span>내 동료 펫<small>${unlockedIds.length}/${PETS.length} 해금</small></div>
-      <span class="tiny dim">${equipped ? `동행 ${equipped.emoji} ${esc(equipped.name)}` : '동행 없음'}</span>
+      <div class="card-title"><span class="t-ico">🐾</span>내 동료 펫<small>${unlockedIds.length}/${PETS.length} 해금 · ★진화 ${evoCount}</small></div>
+      <span class="tiny dim">${equipped ? `동행 ${equipped.emoji} ${esc(petStageInfo(s, equipped.id).name)}` : '동행 없음'}</span>
     </div>
     ${rows}
     <div class="note" style="margin-top:9px">
-      부동산이 자라면 <b>자동 해금</b>됩니다. 장착한 펫은 <b>1.5초마다 함께 공격</b>하고, 동행 중에는 패시브가 적용됩니다.
-      강화(💎) 1단계마다 함께 공격·공격력 패시브가 <b>+10%</b>씩 오릅니다(최대 Lv.${PET_MAX_LV}).
+      부동산이 자라면 <b>자동 해금</b>됩니다. 장착한 펫은 <b>1.5초마다 함께 공격</b>하고, 동행 중에는 패시브가 적용됩니다.<br>
+      강화(💎) 1단계는 동행 피해·공격력 <b>+10%</b>(최대 Lv.${PET_MAX_LV}). <b>★각성(★) → 신수(★★)</b>는 강화 Lv.5·10과 강화석·골드로 진화하며,
+      동행 피해 <b>×1.5 → ×2.1</b> 과 <b>고유 스킬</b>이 붙습니다.
     </div>
   </div>`;
 }
@@ -794,10 +899,12 @@ function huntBadges(ui) {
     const lv = traitLevel(s, t.id);
     return lv < t.maxLv && rb.points >= traitCost(lv);
   });
+  // v4.2: 지금 진화시킬 수 있는 펫이 있으면 성장 배지에 함께 표시
+  const petEvoReady = PETS.filter((d) => (s.pet && s.pet.unlocked && s.pet.unlocked.includes(d.id)) && petEvolveInfo(s, d.id).can).length;
   // 던전 '무료 입장 가능'은 10분마다 계속 켜지므로 배지에서 뺀다(탭 안에서 바로 보임) — 상시 점등 방지
   return {
     skill: 0,
-    growth: (pr.canPromote ? 1 : 0) + (rb.can ? 1 : 0) + (traitReady ? 1 : 0),
+    growth: (pr.canPromote ? 1 : 0) + (rb.can ? 1 : 0) + (traitReady ? 1 : 0) + (petEvoReady > 0 ? 1 : 0),
     quest: (questReady ? 1 : 0) + achReady,
   };
 }
@@ -924,12 +1031,19 @@ function petLine(ui) {
   const ps = s.pet || { equipped: null, unlocked: [] };
   const unlockedIds = Array.isArray(ps.unlocked) ? ps.unlocked : [];
   const equipped = petDef(ps.equipped);
+  // v4.2: 진화 단계·고유 스킬 한 줄 요약
+  const info = equipped ? petStageInfo(s, equipped.id) : null;
+  const stage = info ? info.stage : 0;
+  const skill = equipped ? petSkillOf(s, equipped.id) : null;
+  const evoCount = PETS.filter((d) => petEvo(s, d.id) > 0).length;
+  const badge = stage >= 2 ? '★★' : stage >= 1 ? '★' : '';
   return `
   <div class="card pet-line" id="petCard">
     <div class="row">
       <div class="grow ellip">
-        <div class="card-title"><span class="t-ico">🐾</span>동료 펫<small>${unlockedIds.length}/${PETS.length} 해금</small></div>
-        <div class="tiny dim ellip" style="margin-top:3px">${equipped ? `동행 ${equipped.emoji} ${esc(equipped.name)}` : '동행 중인 펫이 없습니다 — 부동산이 자라면 자동 해금'} · 교체·강화는 부동산 → 건물주 버프</div>
+        <div class="card-title"><span class="t-ico">🐾</span>동료 펫<small>${unlockedIds.length}/${PETS.length} 해금 · ★진화 ${evoCount}</small></div>
+        <div class="tiny dim ellip" style="margin-top:3px">${equipped ? `동행 ${equipped.emoji} ${badge ? `<b style="color:var(--gold)">${badge}</b> ` : ''}${esc(info.name)}` : '동행 중인 펫이 없습니다 — 부동산이 자라면 자동 해금'} · 교체·강화·진화는 부동산 → 건물주 버프</div>
+        ${skill ? `<div class="tiny ellip" style="margin-top:2px;color:${stage >= 1 ? 'var(--blue)' : 'var(--dim)'}">${skill.icon} <b>${esc(skill.name)}</b> — ${esc(petSkillText(equipped, stage))}</div>` : ''}
       </div>
       <button class="btn small ghost" type="button" data-action="open-pets" style="min-height:32px">관리 ▸</button>
     </div>
@@ -937,7 +1051,7 @@ function petLine(ui) {
 }
 
 function tplHuntGrowth(ui) {
-  return `${jobCard(ui)}${rebirthCard(ui)}${dungeonCard(ui)}${petLine(ui)}`;
+  return `${jobCard(ui)}${rebirthCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${petLine(ui)}`;
 }
 
 /* ───────────── 🎯 미션·도감 ───────────── */
@@ -1738,6 +1852,8 @@ function tplSettings(ui) {
   const setB = regionSetBuffs(s.land.owned);
   const lms = landmarkSummary(s);
   const prevSave = (ui.app && ui.app.prevSave) || null;
+  const tp = towerProgress(s);
+  const petEvoCount = PETS.filter((d) => petEvo(s, d.id) > 0).length;
 
   return `
   ${installCard(ui)}
@@ -1826,8 +1942,10 @@ function tplSettings(ui) {
     <div class="kv"><span class="k">버전</span><span class="v">${APP_VERSION} · 게스트 통합</span></div>
     <div class="kv"><span class="k">전직</span><span class="v">${jobOf(s).badge} ${esc(jobOf(s).name)}</span></div>
     <div class="kv"><span class="k">환생 · 특성</span><span class="v">♾️ ${rebirthStatus(s).count}회 · ${esc(traitSummary(s))}</span></div>
-    <div class="kv"><span class="k">동료 펫</span><span class="v">${petDef(s.pet && s.pet.equipped) ? `${petDef(s.pet.equipped).emoji} ${esc(petDef(s.pet.equipped).name)}` : '없음'}</span></div>
+    <div class="kv"><span class="k">동료 펫</span><span class="v">${petDef(s.pet && s.pet.equipped) ? `${petDef(s.pet.equipped).emoji} ${esc(petStageInfo(s, s.pet.equipped).name)}${petEvo(s, s.pet.equipped) > 0 ? ` (${petStageInfo(s, s.pet.equipped).def.label})` : ''}` : '없음'}</span></div>
+    <div class="kv"><span class="k">펫 진화</span><span class="v">★${petEvoCount}마리 / ${PETS.length}종</span></div>
     <div class="kv"><span class="k">황금 던전</span><span class="v">${fmt((s.dungeon && s.dungeon.runs) || 0)}회 · 최고 피해 ${fmt((s.dungeon && s.dungeon.best) || 0)}</span></div>
+    <div class="kv"><span class="k">도전의 탑</span><span class="v">🗼 ${tp.clearedCount}/${tp.max}층 · 도전 ${fmt((s.tower && s.tower.runs) || 0)}회</span></div>
     <div class="kv"><span class="k">장비</span><span class="v">35종 장비 · 5부위 인벤토리</span></div>
     <div class="kv"><span class="k">도감 · 업적</span><span class="v">수집 ${c.pct}% · 업적 ${achClaimed}/${ACHIEVEMENTS.length}</span></div>
     <div class="kv"><span class="k">경제</span><span class="v">골드 하나 (사냥 = 부동산)</span></div>

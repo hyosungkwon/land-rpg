@@ -4,6 +4,8 @@
 //     배경은 오프스크린 캔버스에 한 번만 그려 매 프레임 비용을 줄인다(모바일 발열/멈춤 방지).
 import { ECON, THEMES, spriteSrc, bgSrc, RARITIES, RARITY_INDEX, monsterMotion, monsterAttack } from './data.js';
 import { equippedItem } from './gear.js';
+import { petStageInfo } from './meta.js';
+import { TOWER_GIMMICKS, towerGimmicks } from './tower.js';
 
 const rnd = (seed) => {
   const x = Math.sin(seed * 127.1) * 43758.5453;
@@ -70,6 +72,9 @@ export class Renderer {
     this.promoteBadge = '✨';
     this.promoteColor = '#ffd76a';
     this.petX = null; // 펫 화면 x(부드럽게 따라온다)
+    this.petSkillFx = []; // v4.2 펫 고유 스킬 이펙트
+    this.petEvolve = 0; // v4.2 진화 연출 시작 시각
+    this.towerBanner = 0; // v4.2 도전의 탑 입장 배너
     this.onLoot = null; // (kind) => void  · 코인/보석이 캐릭터에 빨려 들어올 때
     this._rar = { weapon: 0, avg: 0, hasLegend: false };
     this.shake = 0;
@@ -361,6 +366,113 @@ export class Renderer {
           alpha: 0.9,
           w: 4,
         });
+      } else if (ev.t === 'petSkill') {
+        // v4.2 펫 고유 스킬 — 종류별 연출
+        this.petSkillFx.push({ kind: ev.kind, t0: now, x: ev.x || ECON.playerX, color: ev.color || '#ffd76a', dur: 620 });
+        if (ev.kind === 'breath') {
+          this.shake = Math.max(this.shake, 5);
+          this.flash = Math.max(this.flash, 0.14);
+          this.rings.push({ x: ev.x || ECON.playerX, life: 1, r: 24, color: ev.color || '#ff9a3d', wide: 1.6 });
+          for (let i = 0; i < 22; i++) {
+            this.embers.push({
+              x: (ev.x || ECON.playerX) - 40 + Math.random() * 90,
+              y: this.groundY() - 40 - Math.random() * 40,
+              vy: -40 - Math.random() * 90,
+              life: 1,
+              s: 1.8 + Math.random() * 2.6,
+              color: Math.random() < 0.5 ? '#ff9a3d' : (ev.color || '#ffd76a'),
+            });
+          }
+        } else if (ev.kind === 'gold') {
+          this.rings.push({ x: ECON.playerX, life: 1, r: 20, color: '#ffd76a', wide: 1.4 });
+          this.addFloater(ECON.playerX, '골드 2배!', false, 'gold');
+          for (let i = 0; i < 16; i++) {
+            this.embers.push({
+              x: ECON.playerX + (Math.random() - 0.5) * 90,
+              y: this.groundY() - Math.random() * 50,
+              vy: -70 - Math.random() * 120,
+              life: 1,
+              s: 1.4 + Math.random() * 2.2,
+              color: '#ffe08a',
+            });
+          }
+        } else if (ev.kind === 'splash') {
+          this.shake = Math.max(this.shake, 2.5);
+          for (let i = 0; i < (ev.hits || 2); i++) {
+            this.rings.push({ x: (ev.x || ECON.playerX) + i * 26, life: 1, r: 12 + i * 6, color: ev.color || '#ff9a5c', wide: 1.2 });
+          }
+        } else if (ev.kind === 'multi') {
+          for (let i = 0; i < 3; i++) {
+            this.arcs.push({
+              x: (ev.x || ECON.playerX) - 16,
+              t0: now + i * 70,
+              dur: 230,
+              dx: 0,
+              y: 52,
+              r: 30,
+              a0: -1.1,
+              sweep: 1.6,
+              color: ev.color || '#cfe6ff',
+              alpha: 0.95,
+              w: 5,
+            });
+          }
+        }
+        if (ev.dmg) this.addFloater(ev.x || ECON.playerX, ev.dmg, false, 'pet', ev.color);
+      } else if (ev.t === 'petEvolve') {
+        // 🐾 진화 연출 — 금빛 폭발 + 고리 3중 + 배너
+        this.petEvolve = now;
+        this.petEvolveName = ev.name || '진화';
+        this.flash = Math.max(this.flash, 0.4);
+        this.shake = Math.max(this.shake, 5);
+        for (let i = 0; i < 3; i++) this.rings.push({ x: ECON.playerX, life: 1, r: 14 + i * 14, color: ev.color || '#ffd76a', wide: 1.7 });
+        for (let i = 0; i < 30; i++) {
+          this.embers.push({
+            x: ECON.playerX - 40 + Math.random() * 90,
+            y: this.groundY() - Math.random() * 40,
+            vy: -110 - Math.random() * 150,
+            life: 1,
+            s: 1.6 + Math.random() * 2.6,
+            color: Math.random() < 0.6 ? '#ffe08a' : (ev.color || '#fff3cf'),
+          });
+        }
+      } else if (ev.t === 'towerStart') {
+        // 🗼 탑 입장 — 층 색 플래시 + 위로 솟는 기운
+        this.towerBanner = now;
+        this.towerBannerName = `${ev.n}층 · ${ev.name}`;
+        this.towerBannerGimmicks = (ev.gimmicks || []).slice();
+        this.flash = Math.max(this.flash, 0.32);
+        this.shake = Math.max(this.shake, 6);
+        for (let i = 0; i < 3; i++) this.rings.push({ x: ECON.playerX, life: 1, r: 18 + i * 18, color: '#a8c6ff', wide: 1.6 });
+        for (let i = 0; i < 26; i++) {
+          this.embers.push({
+            x: ECON.playerX + (Math.random() - 0.5) * 200,
+            y: this.groundY() - Math.random() * 30,
+            vy: -100 - Math.random() * 130,
+            life: 1,
+            s: 1.5 + Math.random() * 2.6,
+            color: Math.random() < 0.5 ? '#cfe0ff' : '#8fb8ff',
+          });
+        }
+      } else if (ev.t === 'towerFrenzy') {
+        this.shake = Math.max(this.shake, 4);
+        this.redFlash = Math.max(this.redFlash, 0.35);
+      } else if (ev.t === 'towerEnd') {
+        this.flash = Math.max(this.flash, ev.how === 'clear' ? 0.3 : 0.16);
+        this.shake = Math.max(this.shake, ev.how === 'clear' ? 7 : 4);
+        if (ev.how === 'clear') {
+          for (let i = 0; i < 34; i++) {
+            this.sparks.push({
+              x: ECON.playerX + (Math.random() - 0.5) * 140,
+              y: this.groundY() - 60 * this.scale(),
+              life: 1,
+              vx: (Math.random() - 0.5) * 280,
+              vy: -130 - Math.random() * 170,
+              color: Math.random() < 0.5 ? '#ffd76a' : '#cfe6ff',
+              s: 2 + Math.random() * 2.4,
+            });
+          }
+        }
       } else if (ev.t === 'dungeonStart') {
         this.flash = Math.max(this.flash, 0.34);
         this.shake = Math.max(this.shake, 5);
@@ -790,6 +902,7 @@ export class Renderer {
       this.syncRarity();
       this.drawBossRoar(ctx, t);
       this.drawPuffs(ctx, dt);
+      this.drawTowerMarkers(ctx, t);
       this.drawMonsters(ctx, t, dt);
       this.drawPet(ctx, t, dt);
       this.drawPlayer(ctx, t, dt);
@@ -818,6 +931,8 @@ export class Renderer {
       }
       this.drawBossBar(ctx, W, t);
       this.drawDungeonHud(ctx, W, t);
+      this.drawTowerHud(ctx, W, t);
+      this.drawTowerBanner(ctx, W, t);
       this.drawPromoteBanner(ctx, W, t);
     }
     ctx.restore();
@@ -1051,7 +1166,11 @@ export class Renderer {
     const gy = this.groundY();
     const sc = this.scale();
     const heroX = this.worldX(b.player.x);
-    const h = Math.min(this.H * 0.3, 78 * sc) * (pet.id === 'dragon' ? 1.08 : 1);
+    // v4.2: 진화 단계 — 이름·스프라이트·크기·색이 단계마다 달라진다
+    const info = petStageInfo(b.s, pet.id);
+    const stage = info.stage || 0;
+    const petColor = info.color || pet.color;
+    const h = Math.min(this.H * 0.3, 78 * sc) * (pet.id === 'dragon' ? 1.08 : 1) * (info.scale || 1);
     const w = h;
     // 화면 왼쪽 밖으로 잘리지 않도록 위치를 보정한다(좁은 390px 화면 대응)
     const home = Math.max(w * 0.5 + 4, heroX - Math.min(76 * sc, w * 0.9));
@@ -1063,12 +1182,13 @@ export class Renderer {
     const x = Math.max(w * 0.5 + 2, this.petX + sway + lunge * 56 * sc);
     const bob = Math.sin(now / 300 + 1.7) * 2.2 * sc - lunge * 5 * sc;
 
-    // 발밑·몸 주변 글로우(펫 색)
-    const gl = ctx.createRadialGradient(x, gy - h * 0.36, 2, x, gy - h * 0.36, h * 0.72);
-    gl.addColorStop(0, hexA(pet.color, 0.2 + lunge * 0.22));
-    gl.addColorStop(1, hexA(pet.color, 0));
+    // 발밑·몸 주변 글로우(펫 색) — 진화할수록 진하고 넓다
+    const auraK = 0.2 + stage * 0.12;
+    const gl = ctx.createRadialGradient(x, gy - h * 0.36, 2, x, gy - h * 0.36, h * (0.72 + stage * 0.12));
+    gl.addColorStop(0, hexA(petColor, auraK + lunge * 0.22));
+    gl.addColorStop(1, hexA(petColor, 0));
     ctx.fillStyle = gl;
-    ctx.fillRect(x - h * 0.9, gy - h * 1.15, h * 1.8, h * 1.25);
+    ctx.fillRect(x - h * 1.05, gy - h * 1.3, h * 2.1, h * 1.4);
 
     // 그림자
     ctx.fillStyle = 'rgba(0,0,0,0.38)';
@@ -1076,24 +1196,41 @@ export class Renderer {
     ctx.ellipse(x, gy + 2, w * 0.24, w * 0.07, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    const img = this.image(pet.sprite);
+    // ★ 각성 이상: 회전하는 오라 링(신수는 2중 + 반짝임)
+    if (this.effects && stage >= 1) {
+      ctx.save();
+      const pulse = 0.55 + 0.25 * Math.sin(now / 260);
+      for (let i = 0; i < stage; i++) {
+        const rr = w * (0.36 + i * 0.07);
+        ctx.globalAlpha = pulse * (0.8 - i * 0.2);
+        ctx.strokeStyle = hexA(petColor, 0.9);
+        ctx.lineWidth = (2.2 - i * 0.5) * sc;
+        ctx.beginPath();
+        ctx.ellipse(x, gy - h * 0.28 - i * 4 * sc, rr, rr * 0.3, Math.sin(now / 900 + i) * 0.12, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    const img = this.image(info.sprite || pet.sprite) || this.image(pet.sprite);
     if (img) {
       ctx.drawImage(img, x - w / 2, gy - h + bob, w, h);
     } else {
-      ctx.fillStyle = pet.color || '#9fc6ff';
+      ctx.fillStyle = petColor || '#9fc6ff';
       ctx.beginPath();
       ctx.arc(x, gy - h * 0.4 + bob, w * 0.28, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // 동행 이름표
+    // 동행 이름표(+진화 단계 배지)
     if (this.effects) {
       ctx.save();
       ctx.globalAlpha = 0.92;
       ctx.font = `800 ${Math.round(9 * Math.max(0.85, sc))}px ${FONT}`;
       ctx.textAlign = 'center';
-      ctx.fillStyle = hexA(pet.color, 0.95);
-      const label = `${pet.emoji || ''} ${pet.name}`.trim();
+      ctx.fillStyle = hexA(petColor, 0.95);
+      const badge = stage >= 2 ? '★★ ' : stage >= 1 ? '★ ' : '';
+      const label = `${pet.emoji || ''} ${badge}${info.name || pet.name}`.trim();
       const tw = ctx.measureText(label).width || 0;
       ctx.fillText(label, Math.max(tw / 2 + 3, x), gy - h - 3);
       ctx.restore();
@@ -2245,6 +2382,132 @@ export class Renderer {
     ctx.textAlign = 'right';
     ctx.fillStyle = 'rgba(255,220,160,0.75)';
     ctx.fillText(`보스 ${d.bossKills || 0}`, bx + bw - 12, by + hgt - 2);
+    ctx.restore();
+  }
+
+  /* ─────────── 🗼 도전의 탑 HUD (v4.2) ─────────── */
+  /** 층 이름 · 기믹 · 남은 시간 · 목표 진행도를 캔버스 상단에 그린다 */
+  drawTowerHud(ctx, W, now) {
+    const t = this.battle && this.battle.tower;
+    if (!t) return;
+    const def = t.floor || {};
+    const left = Math.max(0, t.ends - now);
+    const total = Math.max(1, t.ends - t.t0);
+    const k = Math.max(0, Math.min(1, left / total));
+    const bw = Math.min(W * 0.9, 356);
+    const bx = (W - bw) / 2;
+    const by = 50;
+    const hgt = 52;
+    const sc = Math.min(1.2, Math.max(0.85, this.W / 390));
+    const pulse = 0.7 + 0.3 * Math.sin(now / 160);
+    ctx.save();
+    ctx.shadowColor = 'rgba(120,170,255,0.75)';
+    ctx.shadowBlur = 14 * pulse;
+    const g = ctx.createLinearGradient(bx, by, bx, by + hgt);
+    g.addColorStop(0, 'rgba(20,32,64,0.95)');
+    g.addColorStop(0.5, 'rgba(12,20,40,0.95)');
+    g.addColorStop(1, 'rgba(20,32,64,0.95)');
+    ctx.fillStyle = g;
+    roundRect(ctx, bx, by, bw, hgt, 10);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = `rgba(150,190,255,${0.5 + 0.3 * pulse})`;
+    ctx.lineWidth = 2;
+    roundRect(ctx, bx + 1, by + 1, bw - 2, hgt - 2, 9);
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#dbe9ff';
+    ctx.font = `900 ${Math.round(12.5 * sc)}px ${FONT}`;
+    ctx.fillText(`🗼 ${t.n}층 · ${def.name || ''}`, bx + 12, by + 18);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = left / 1000 <= 5 ? '#ff9a9a' : '#eaf2ff';
+    ctx.font = `900 ${Math.round(15 * sc)}px ${FONT}`;
+    ctx.fillText(`${(left / 1000).toFixed(1)}s`, bx + bw - 12, by + 18);
+
+    // 남은 시간 바
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    roundRect(ctx, bx + 12, by + 24, bw - 24, 7, 4);
+    ctx.fill();
+    const bg = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+    bg.addColorStop(0, k < 0.25 ? '#ff7a7a' : '#8fb8ff');
+    bg.addColorStop(1, k < 0.25 ? '#ff9a3d' : '#cfe0ff');
+    ctx.fillStyle = bg;
+    roundRect(ctx, bx + 12, by + 24, Math.max(2, (bw - 24) * k), 7, 4);
+    ctx.fill();
+
+    // 기믹 + 목표 진행도
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(200,220,255,0.92)';
+    ctx.font = `700 ${Math.round(9.5 * sc)}px ${FONT}`;
+    const gims = towerGimmicks(def).map((x) => `${x.icon} ${x.name}`).join(' · ') || '기믹 없음';
+    ctx.fillText(gims, bx + 12, by + hgt - 4);
+    ctx.textAlign = 'right';
+    const done = (t.kills || 0) + (t.bossKills || 0);
+    ctx.fillStyle = done >= t.goal ? '#9dffb4' : 'rgba(210,230,255,0.8)';
+    ctx.fillText(def.bossOnly ? `보스 ${t.bossKills || 0}/1` : `${done}/${t.goal} 처치`, bx + bw - 12, by + hgt - 4);
+    ctx.restore();
+  }
+
+  /** 기믹 표식 — 몬스터 발밑에 층 기믹 색 고리를 깔아 한눈에 구분한다 */
+  drawTowerMarkers(ctx, now) {
+    const t = this.battle && this.battle.tower;
+    if (!t || !this.effects) return;
+    const gims = towerGimmicks(t.floor);
+    if (!gims.length) return;
+    const gy = this.groundY();
+    const sc = this.scale();
+    const pulse = 0.45 + 0.25 * Math.sin(now / 260);
+    for (const m of this.battle.monsters) {
+      if (m.dead || m.dying || !Number.isFinite(m.x)) continue;
+      const x = this.worldX(m.x);
+      const lane = m.isBoss ? 0 : (m.lane || 0);
+      const r = (m.isBoss ? 46 : 22) * sc * (1 + lane * 0.04);
+      ctx.save();
+      ctx.globalAlpha = pulse;
+      ctx.strokeStyle = hexA(gims[0].color, 0.85);
+      ctx.lineWidth = 1.6 * sc;
+      ctx.beginPath();
+      ctx.ellipse(x, gy + 3, r, r * 0.2, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      if (gims.length > 1) {
+        ctx.globalAlpha = pulse * 0.7;
+        ctx.strokeStyle = hexA(gims[1].color, 0.8);
+        ctx.beginPath();
+        ctx.ellipse(x, gy + 3, r * 0.7, r * 0.14, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  /* ─────────── 🗼 탑 입장 배너 ─────────── */
+  drawTowerBanner(ctx, W, now) {
+    if (!this.towerBanner) return;
+    const DUR = 2000;
+    const age = now - this.towerBanner;
+    if (age < 0 || age > DUR) {
+      this.towerBanner = 0;
+      return;
+    }
+    const inK = easeOut(clamp(age / 260, 0, 1));
+    const outK = age > DUR - 380 ? clamp((DUR - age) / 380, 0, 1) : 1;
+    const a = inK * outK;
+    const sc = Math.min(1.25, Math.max(0.85, W / 390));
+    const cy = this.H * 0.34;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(120,170,255,0.85)';
+    ctx.shadowBlur = 18;
+    ctx.fillStyle = '#eaf2ff';
+    ctx.font = `900 ${Math.round(20 * sc)}px ${FONT}`;
+    ctx.fillText(`🗼 도전의 탑 ${this.towerBannerName || ''}`, W / 2, cy);
+    ctx.shadowBlur = 0;
+    ctx.font = `800 ${Math.round(10.5 * sc)}px ${FONT}`;
+    ctx.fillStyle = 'rgba(190,215,255,0.95)';
+    const names = (this.towerBannerGimmicks || []).map((id) => TOWER_GIMMICKS[id]).filter(Boolean).map((g) => `${g.icon} ${g.name}`).join(' · ');
+    ctx.fillText(names, W / 2, cy + 18 * sc);
     ctx.restore();
   }
 

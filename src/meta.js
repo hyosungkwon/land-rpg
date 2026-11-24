@@ -2,6 +2,7 @@
 // v3.2 메타 성장: 🐾 부동산 연계 펫(동료) · 🔥 전직/각성 · 황금 던전(보스 러시)의 정의와 계산.
 // DOM/Canvas 의존 없음 → 헤드리스 검증 가능.
 //   - 펫: 부동산(지역 수·평수·총자산) 조건을 만족하면 자동 해금. 장착한 펫이 전투에 동행한다.
+//     v4.2: 진화 3단계(기본 → 각성 → 신수)와 펫별 고유 스킬(패시브 + 액티브)을 함께 정의한다.
 //   - 전직: 레벨 + 최고 스테이지 조건으로 4단계. 전직 시 영구 공격력·체력 배율.
 //   - 던전: 10분 쿨타임마다 무료 1회 또는 강화석으로 즉시 입장. 30초 동안 입힌 피해·처치로 보상.
 import { ECON, stageGoldBase, monsterBaseHp } from './data.js';
@@ -27,6 +28,20 @@ export const PETS = [
     unlock: { type: 'cities', n: 1 },
     cond: '보유 지역 1곳 이상',
     desc: '주인 뒤에서 가볍게 물어뜯습니다.',
+    // v4.2 진화 3단계 — 이름·스프라이트·크기가 단계마다 달라진다
+    evo: {
+      names: ['꼬마 늑대', '은빛 늑대', '달빛 수호랑'],
+      sprites: ['pet_wolf', 'pet_wolf_awaken', 'pet_wolf_divine'],
+      scale: [1, 1.18, 1.36],
+      colors: ['#9fc6ff', '#bfe0ff', '#e8f4ff'],
+    },
+    skill: {
+      name: '사냥의 본능',
+      icon: '🌙',
+      type: 'crit',
+      desc: '동행 중 치명타 확률이 오르고, 가끔 3연속 물기를 터뜨립니다.',
+      active: { name: '삼연 물기', kind: 'multi', cdMs: 9000, hits: 3, mul: 0.7 },
+    },
   },
   {
     id: 'fox',
@@ -40,6 +55,19 @@ export const PETS = [
     unlock: { type: 'pyeong', n: 100 },
     cond: '보유 100평 이상',
     desc: '불꽃 꼬리로 함께 벱니다.',
+    evo: {
+      names: ['불여우', '화염 구미호', '태양의 구미호'],
+      sprites: ['pet_fox', 'pet_fox_awaken', 'pet_fox_divine'],
+      scale: [1, 1.18, 1.36],
+      colors: ['#ff9a5c', '#ffb347', '#ffd76a'],
+    },
+    skill: {
+      name: '불꽃 꼬리',
+      icon: '🔥',
+      type: 'splash',
+      desc: '함께 공격할 때 옆의 적까지 태우고, 가끔 불꽃 폭풍을 부릅니다.',
+      active: { name: '불꽃 폭풍', kind: 'splash', cdMs: 10000, hits: 1, mul: 1.6 },
+    },
   },
   {
     id: 'owl',
@@ -53,6 +81,19 @@ export const PETS = [
     unlock: { type: 'asset', n: 50000 },
     cond: '총자산 5만 골드 이상',
     desc: '황금 깃털이 골드를 끌어옵니다.',
+    evo: {
+      names: ['황금 부엉이', '금빛 현자', '황금 신조'],
+      sprites: ['pet_owl', 'pet_owl_awaken', 'pet_owl_divine'],
+      scale: [1, 1.18, 1.36],
+      colors: ['#ffd76a', '#ffe89a', '#fff3cf'],
+    },
+    skill: {
+      name: '황금 깃털',
+      icon: '🪶',
+      type: 'gold',
+      desc: '동행 중 골드 획득이 오르고, 가끔 황금비를 뿌려 골드를 두 배로 만듭니다.',
+      active: { name: '황금비', kind: 'gold', cdMs: 20000, durMs: 8000, mul: 1.0 },
+    },
   },
   {
     id: 'dragon',
@@ -66,12 +107,31 @@ export const PETS = [
     unlock: { type: 'cities', n: 10 },
     cond: '보유 지역 10곳 이상',
     desc: '작은 숨결이지만 화력은 최강입니다.',
+    evo: {
+      names: ['아기 드래곤', '비룡', '천공의 용신'],
+      sprites: ['pet_dragon', 'pet_dragon_awaken', 'pet_dragon_divine'],
+      scale: [1, 1.18, 1.36],
+      colors: ['#c78fff', '#d9b0ff', '#f0e0ff'],
+    },
+    skill: {
+      name: '용의 숨결',
+      icon: '🐲',
+      type: 'boss',
+      desc: '보스에게 추가 피해를 주고, 가끔 화염 브레스로 전방을 쓸어버립니다.',
+      active: { name: '화염 브레스', kind: 'breath', cdMs: 12000, hits: 1, mul: 2.4 },
+    },
   },
 ];
 
 export const PET_BY_ID = Object.fromEntries(PETS.map((p, i) => [p.id, { ...p, tier: i }]));
 export const PET_IDS = PETS.map((p) => p.id);
 export const PET_SPRITES = PETS.map((p) => p.sprite);
+/** v4.2: 진화 단계별 스프라이트까지 포함한 프리로드 목록(기본 4 + 각성 4 + 신수 4) */
+export const PET_EVO_SPRITES = PETS.reduce((out, p) => {
+  const list = [p.sprite, ...((p.evo && p.evo.sprites) || [])];
+  for (const s of list) if (s && out.indexOf(s) < 0) out.push(s);
+  return out;
+}, []);
 
 /** id → 펫 정의(+tier). 없으면 null */
 export function petDef(id) {
@@ -87,18 +147,182 @@ export function petLevel(state, id) {
   return Math.max(1, Math.min(PET_MAX_LV, Math.floor(Number(lv) || 1)));
 }
 
-/** 함께 공격 피해 비율(강화 레벨 반영) */
+/* ────────────────────────────── 🐾 펫 진화 (v4.2) ──────────────────────────────
+ * 기본 → 각성 → 신수 3단계.
+ *  - 조건: 펫 강화 레벨(Lv.5 각성 / Lv.10 신수) + 강화석·골드
+ *  - 효과: 동행 피해·공격력 패시브 ×1.5 / ×2.1, 골드 보너스 증가, 스프라이트·크기·오라 변화
+ *  - 고유 스킬: 각성부터 해금(패시브 + 주기적 액티브)
+ */
+export const PET_EVO_MAX = 2;
+
+export const PET_EVO_STAGES = [
+  { stage: 0, key: 'base', label: '기본', badge: '', mul: 1, lv: 0 },
+  { stage: 1, key: 'awaken', label: '각성', badge: '★', mul: 1.5, lv: 5 },
+  { stage: 2, key: 'divine', label: '신수', badge: '★★', mul: 2.1, lv: 10 },
+];
+
+/** 진화 단계 정의(0~2) */
+export function evoStageDef(stage) {
+  const s = Math.max(0, Math.min(PET_EVO_MAX, Math.floor(Number(stage) || 0)));
+  return PET_EVO_STAGES[s];
+}
+
+/** 해당 펫의 진화 단계(0 기본 · 1 각성 · 2 신수) */
+export function petEvo(state, id) {
+  const v = state && state.pet && state.pet.evo && state.pet.evo[id];
+  return Math.max(0, Math.min(PET_EVO_MAX, Math.floor(Number(v) || 0)));
+}
+
+/** 진화 배율(동행 피해·공격력 패시브) */
+export function petEvoMul(state, id) {
+  return evoStageDef(petEvo(state, id)).mul;
+}
+
+/** 진화 단계의 이름/스프라이트/크기/색 */
+export function petStageInfo(state, id) {
+  const def = petDef(id);
+  const stage = petEvo(state, id);
+  const evo = (def && def.evo) || {};
+  const pick = (arr, fallback) => (Array.isArray(arr) && arr[stage] != null ? arr[stage] : fallback);
+  return {
+    stage,
+    def: evoStageDef(stage),
+    name: pick(evo.names, def ? def.name : ''),
+    sprite: pick(evo.sprites, def ? def.sprite : ''),
+    scale: Number(pick(evo.scale, 1)) || 1,
+    color: pick(evo.colors, def ? def.color : '#9fc6ff'),
+  };
+}
+
+/** 다음 진화 비용 — 최대 단계면 null */
+export function petEvoCost(state, id) {
+  const def = petDef(id);
+  if (!def) return null;
+  const stage = petEvo(state, id);
+  if (stage >= PET_EVO_MAX) return null;
+  const tier = def.tier || 0;
+  if (stage === 0) return { shards: 80 + tier * 40, gold: 6000 * (tier + 1) };
+  return { shards: 320 + tier * 120, gold: 30000 * (tier + 1) };
+}
+
+/**
+ * 진화 가능 여부 — UI·검증 공용
+ * { stage, next, max, can, needLv, lv, lvOk, cost, shardsOk, goldOk, reason, pct }
+ */
+export function petEvolveInfo(state, id) {
+  const def = petDef(id);
+  if (!def) return { stage: 0, next: null, max: true, can: false, reason: '알 수 없는 펫입니다.' };
+  const stage = petEvo(state, id);
+  const next = stage >= PET_EVO_MAX ? null : evoStageDef(stage + 1);
+  const lv = petLevel(state, id);
+  if (!next) return { stage, next: null, max: true, can: false, lv, needLv: 0, lvOk: true, reason: '최종 진화 완료', pct: 1 };
+  const cost = petEvoCost(state, id) || { shards: 0, gold: 0 };
+  const lvOk = lv >= next.lv;
+  const shardsOk = Math.max(0, Math.floor(Number(state && state.shards) || 0)) >= cost.shards;
+  const goldOk = Math.max(0, Math.floor(Number(state && state.gold) || 0)) >= cost.gold;
+  const can = lvOk && shardsOk && goldOk;
+  const reason = !lvOk ? `강화 Lv.${next.lv} 필요` : !shardsOk ? `강화석 ${cost.shards} 필요` : !goldOk ? `골드 ${cost.gold.toLocaleString('ko-KR')} 필요` : '진화 가능';
+  const pct = Math.max(0, Math.min(1, Math.min(lv / Math.max(1, next.lv), cost.shards ? (Math.max(0, Number(state.shards) || 0) / cost.shards) : 1)));
+  return { stage, next, max: false, can, lv, needLv: next.lv, lvOk, cost, shardsOk, goldOk, reason, pct };
+}
+
+/** 진화 실행(강화석·골드 소모) */
+export function evolvePet(state, id) {
+  const def = petDef(id);
+  if (!def) return { ok: false, reason: '알 수 없는 펫입니다.' };
+  const unlocked = (state.pet && state.pet.unlocked) || [];
+  if (!unlocked.includes(id)) return { ok: false, reason: '아직 해금되지 않은 펫입니다.' };
+  const info = petEvolveInfo(state, id);
+  if (info.max) return { ok: false, reason: '최종 진화 완료', max: true };
+  if (!info.can) return { ok: false, reason: info.reason };
+  state.shards = Math.max(0, Math.floor(state.shards - info.cost.shards));
+  state.gold = Math.max(0, Math.floor(state.gold - info.cost.gold));
+  if (!state.pet.evo || typeof state.pet.evo !== 'object') state.pet.evo = {};
+  state.pet.evo[id] = info.next.stage;
+  return { ok: true, stage: info.next.stage, def: info.next, spent: info.cost, name: petStageInfo(state, id).name, skill: petSkillOf(state, id) };
+}
+
+/* ────────────────────────────── 🐾 펫 고유 스킬 (v4.2) ──────────────────────────────
+ * 각성(★)부터 해금. 단계가 오를수록 수치가 커진다.
+ *  - crit  : 치명타 확률 +4%p/단계
+ *  - splash: 함께 공격이 옆의 적까지(1+단계 마리)
+ *  - gold  : 골드 획득 +15%/단계 · 액티브 '황금비' 동안 +100%
+ *  - boss  : 보스 추가 피해 +8%/단계
+ */
+export const PET_SKILL_RULES = {
+  critPerStage: 4, // %p
+  splashPerStage: 1, // 마리
+  goldPerStage: 15, // %
+  bossPerStage: 8, // %
+  goldBurstDur: 8000,
+};
+
+/** 펫 고유 스킬(해금 전이면 stage 0 정보만) */
+export function petSkillOf(state, id) {
+  const def = petDef(id);
+  if (!def || !def.skill) return null;
+  const stage = petEvo(state, id);
+  const sk = def.skill;
+  return {
+    ...sk,
+    stage,
+    unlocked: stage >= 1,
+    name: sk.name,
+    activeName: sk.active ? sk.active.name : '',
+    cdMs: sk.active ? sk.active.cdMs : 0,
+    text: petSkillText(def, stage),
+  };
+}
+
+/** 고유 스킬 효과 한 줄(단계 반영) */
+export function petSkillText(def, stage) {
+  const s = Math.max(0, Math.min(PET_EVO_MAX, Math.floor(Number(stage) || 0)));
+  if (!def || !def.skill) return '';
+  if (s <= 0) return '각성(★)에서 해금';
+  const t = def.skill.type;
+  if (t === 'crit') return `치명타 +${PET_SKILL_RULES.critPerStage * s}%p · ${def.skill.active.name} (${Math.round(def.skill.active.cdMs / 1000)}초) 3연타`;
+  if (t === 'splash') return `광역 타격 ${1 + s}마리 · ${def.skill.active.name} (${Math.round(def.skill.active.cdMs / 1000)}초)`;
+  if (t === 'gold') return `골드 +${PET_SKILL_RULES.goldPerStage * s}% · ${def.skill.active.name} ${Math.round(def.skill.active.durMs / 1000)}초 골드 2배`;
+  if (t === 'boss') return `보스 추가 피해 +${PET_SKILL_RULES.bossPerStage * s}% · ${def.skill.active.name} (${Math.round(def.skill.active.cdMs / 1000)}초) 광역`;
+  return '';
+}
+
+/** 진화를 반영한 펫 패시브 스탯(calcStats·전투 공용) */
+export function petPassive(state, id) {
+  const def = petDef(id);
+  if (!def) return { critPct: 0, goldPct: 0, splash: 1, bossDmgPct: 0, stage: 0 };
+  const stage = petEvo(state, id);
+  const t = def.skill ? def.skill.type : '';
+  const on = stage >= 1;
+  return {
+    stage,
+    critPct: on && t === 'crit' ? PET_SKILL_RULES.critPerStage * stage : 0,
+    goldPct: on && t === 'gold' ? PET_SKILL_RULES.goldPerStage * stage : 0,
+    splash: on && t === 'splash' ? 1 + PET_SKILL_RULES.splashPerStage * stage : 1,
+    bossDmgPct: on && t === 'boss' ? PET_SKILL_RULES.bossPerStage * stage : 0,
+  };
+}
+
+/** 함께 공격 피해 비율(강화 레벨·진화 단계 반영) */
 export function petDmgPct(state, id) {
   const def = petDef(id);
   if (!def) return 0;
-  return def.dmgPct * (1 + 0.1 * (petLevel(state, id) - 1));
+  return def.dmgPct * (1 + 0.1 * (petLevel(state, id) - 1)) * petEvoMul(state, id);
 }
 
-/** 동행 패시브 공격력(%)입니다(강화 레벨 반영). */
+/** 동행 패시브 공격력(%)입니다(강화 레벨·진화 단계 반영). */
 export function petAtkPct(state, id) {
   const def = petDef(id);
   if (!def) return 0;
-  return Math.round(def.atkPct * (1 + 0.1 * (petLevel(state, id) - 1)) * 10) / 10;
+  return Math.round(def.atkPct * (1 + 0.1 * (petLevel(state, id) - 1)) * petEvoMul(state, id) * 10) / 10;
+}
+
+/** 동행 중 골드 획득(%): 기본 goldPct + 진화·고유 스킬 */
+export function petGoldPct(state, id) {
+  const def = petDef(id);
+  if (!def) return 0;
+  const stage = petEvo(state, id);
+  return Math.round((def.goldPct * (1 + 0.4 * stage) + petPassive(state, id).goldPct) * 10) / 10;
 }
 
 /** 다음 강화 비용(강화석) — 최대치면 0 */
@@ -171,6 +395,7 @@ export function syncPets(state, now = Date.now()) {
   if (!state.pet || typeof state.pet !== 'object') state.pet = { equipped: null, unlocked: [], chosen: false };
   const raw = state.pet;
   if (!raw.levels || typeof raw.levels !== 'object') raw.levels = {};
+  if (!raw.evo || typeof raw.evo !== 'object') raw.evo = {};
   const have = new Set(Array.isArray(raw.unlocked) ? raw.unlocked.filter((id) => !!PET_BY_ID[id]) : []);
   const beforeEquipped = PET_BY_ID[raw.equipped] ? raw.equipped : null;
 
@@ -187,13 +412,19 @@ export function syncPets(state, now = Date.now()) {
   const best = unlocked.length ? unlocked[unlocked.length - 1] : null; // PETS 는 티어 오름차순
   const levels = {};
   for (const id of unlocked) levels[id] = petLevel(state, id);
+  // v4.2: 진화 단계는 해금된 펫만 남겨 그대로 보존한다
+  const evo = {};
+  for (const id of unlocked) {
+    const v = Math.max(0, Math.min(PET_EVO_MAX, Math.floor(Number(raw.evo[id]) || 0)));
+    if (v > 0) evo[id] = v;
+  }
   let equipped = beforeEquipped;
   if (!raw.chosen) equipped = best;
   else if (!equipped || !have.has(equipped)) equipped = best;
   // 자동 장착 상태에서 더 높은 펫이 새로 열리면 함께 올려준다
   if (!raw.chosen && best && petTier(best) > petTier(equipped)) equipped = best;
 
-  state.pet = { equipped, unlocked, chosen: !!raw.chosen, levels };
+  state.pet = { equipped, unlocked, chosen: !!raw.chosen, levels, evo };
   return { newly, equipped, changed: newly.length > 0 || equipped !== beforeEquipped };
 }
 
