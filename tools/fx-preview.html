@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>land-rpg v4.3 · 전투 연출 정지 프레임 (보스 등장 · 부활 가호 · 타격)</title>
+<style>
+  html, body { margin: 0; background: #05070c; color: #cfd6e4; font: 12px/1.5 system-ui, sans-serif; }
+  .wrap { padding: 0; }
+  canvas { width: 390px; height: 464px; display: block; background: #070a12; }
+  .cap { padding: 6px 8px; font-size: 11px; color: #8b96aa; white-space: pre-line; }
+</style>
+</head>
+<body>
+<!-- 개발/검증용(v4.3): 실제 전투·렌더러 코드를 가상 시계로 돌려 연출 순간에서 멈춘다.
+     배너는 2.4초(보스)·3.5초(가호)만 떠 있어 실시간 캡처가 어렵기 때문에, 화면에 뜨는 그 프레임을 그대로 그린다.
+     ?scene=boss|grace|crit|bosshit -->
+<div class="wrap"><canvas id="cv"></canvas><div class="cap" id="cap">loading…</div></div>
+<script type="module">
+import { defaultState } from '../src/state.js';
+import { Battle } from '../src/combat.js';
+import { Renderer } from '../src/render.js';
+import { stageDef, spriteSrc } from '../src/data.js';
+
+const params = new URLSearchParams(location.search);
+const scene = params.get('scene') || 'boss';
+
+// 앱의 전투 화면(390×844 에서 상단 캔버스)과 같은 비율로 그린다
+const s = defaultState(0);
+s.stage = scene === 'grace' ? 26 : 24;
+s.maxStage = s.stage;
+s.level = scene === 'grace' ? 6 : 30;
+s.totalKills = 120;
+s.killsInStage = 10;
+s.bossReady = scene === 'boss' || scene === 'bosshit';
+s.autoBoss = s.bossReady;
+s.equip = scene === 'grace'
+  ? { weapon: 0, armor: 0, helmet: 0, ring: 0, amulet: 0 }
+  : { weapon: 20, armor: 16, helmet: 16, ring: 12, amulet: 12 };
+s.gearRarity = scene === 'grace'
+  ? { weapon: 'common', armor: 'common', helmet: 'common', ring: 'common', amulet: 'common' }
+  : { weapon: 'hero', armor: 'rare', helmet: 'rare', ring: 'legend', amulet: 'hero' };
+s.land.owned = {};
+s.land.accruedRent = 120000;
+s.soundOn = false;
+
+const rng = (() => { let x = 20241125; return () => { x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296; }; })();
+const b = new Battle(s, () => ({}), rng, 0);
+const r = new Renderer(document.getElementById('cv'));
+r.setBattle(b);
+r.effects = true;
+
+const d = stageDef(s.stage);
+const load = (name) => new Promise((res) => {
+  const img = new Image();
+  img.onload = () => { r.images.set(name, img); res(); };
+  img.onerror = () => { r.images.set(name, null); res(); };
+  img.src = '../' + spriteSrc(name);
+});
+await Promise.all(['hero_idle', 'hero_attack', 'hero_skill', ...d.normals, d.boss, 'fx_claw', 'fx_burst'].map(load));
+r.resize();
+
+const DT = 16;
+let t = 0;
+let frames = 0;
+let bossAt = 0;
+let graceAt = 0;
+let critAt = 0;
+let hitBossAt = 0;
+
+function step() {
+  b.tick(DT, t);
+  const evs = b.drainEvents();
+  for (const e of evs) {
+    if (e.t === 'bossStart' && !bossAt) bossAt = t;
+    if (e.t === 'revive' && !graceAt) graceAt = t;
+    if (e.t === 'hit' && e.crit && !critAt) critAt = t;
+    if (e.t === 'hit' && e.isBoss && !hitBossAt) hitBossAt = t;
+  }
+  if (evs.length) r.onEvents(evs, t);
+  r.frame(t);
+  t += DT;
+  frames++;
+}
+
+const MAX_FRAMES = Math.round(40000 / DT);
+const done = {
+  // 배너가 완전히 들어와 빗금 띠·보스 이름이 다 보이는 순간
+  boss: () => bossAt && t - bossAt > 620 && t - bossAt < 900,
+  // 가호가 2초쯤 남은 순간(보호막·빛 고리·배너가 함께 보인다)
+  grace: () => graceAt && t - graceAt > 1400 && t - graceAt < 1750,
+  // 치명타 임팩트가 터진 직후
+  crit: () => critAt && t - critAt > 40 && t - critAt < 120,
+  // 보스 타격 임팩트 직후(임팩트 + 큰 숫자)
+  bosshit: () => hitBossAt && bossAt && t - hitBossAt > 40 && t - hitBossAt < 120,
+};
+while (frames < MAX_FRAMES) {
+  step();
+  if (done[scene] && done[scene]()) break;
+}
+r.frame(t); // 멈춘 순간을 한 프레임 더 그려 확정
+
+const cap = document.getElementById('cap');
+const p = b.player;
+cap.textContent = `${scene} · stage ${s.stage} · t=${(t / 1000).toFixed(2)}s`
+  + ` · 보스배너 ${bossAt ? Math.round(t - bossAt) + 'ms' : '-'}`
+  + ` · 가호 ${p.graceUntil && p.graceUntil > t ? ((p.graceUntil - t) / 1000).toFixed(1) + 's' : '-'}`
+  + ` · 임팩트 ${r.impacts.length}개 · 남은 흔들림 ${Math.round(r.shake * 10) / 10}px`;
+window.__fxReady = true;
+</script>
+</body>
+</html>
