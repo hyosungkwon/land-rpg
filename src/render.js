@@ -2018,7 +2018,8 @@ export class Renderer {
       const y = gy - 46 * sc + f.y;
       ctx.globalAlpha = Math.min(1, f.life * 1.7);
       ctx.textAlign = 'center';
-      const base = f.crit ? 30 : f.kind === 'gold' ? 13 : f.kind === 'pet' ? 12 : f.kind === 'heal' ? 16 : 16;
+      // v3.8 다굴: 여러 숫자가 동시에 뜨므로 기본 크기를 조금 줄여 화면이 덜 시끄럽게
+      const base = f.crit ? 25 : f.kind === 'gold' ? 12 : f.kind === 'pet' ? 11 : f.kind === 'heal' ? 15 : f.kind === 'hurt' ? 14 : 14;
       const pop = f.age < 130 ? 1 + (1 - f.age / 130) * 0.5 : 1;
       const size = base * Math.max(0.8, sc) * pop;
       if (f.crit) {
