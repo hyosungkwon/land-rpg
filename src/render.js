@@ -1818,12 +1818,12 @@ export class Renderer {
         // AI로 만든 이펙트 스프라이트(검은 배경) — 'lighter' 합성으로 광원처럼 얹는다
         const img = this.image(f.key === 'fxClaw' ? 'fx_claw' : 'fx_burst');
         if (img) {
-          const base = f.key === 'fxClaw' ? 108 : 62 + k * 96;
+          const base = f.key === 'fxClaw' ? 80 : 62 + k * 96;
           const sz = base * sc * (f.big || 1);
           ctx.globalCompositeOperation = 'lighter';
-          ctx.globalAlpha = Math.min(1, fade * (f.key === 'fxClaw' ? 1.0 : 0.95));
+          ctx.globalAlpha = Math.min(1, fade * (f.key === 'fxClaw' ? 0.82 : 0.95));
           if (f.key === 'fxClaw') {
-            ctx.translate(x, gy - 58 * sc);
+            ctx.translate(x + 12 * sc, gy - 60 * sc);
             ctx.rotate(-0.5 + k * 0.3);
           } else {
             ctx.translate(x, gy - 58 * sc);
