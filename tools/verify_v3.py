@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""land-rpg v3.7.0 검증 (QuickJS + 정적 검사)
+"""land-rpg v3.8.0 검증 (QuickJS + 정적 검사)
 
 1) 모든 JS 파일 문법(파싱) 검사
 2) 정적 검사 (Firebase/로그인 흔적 0, 저장 키 v3, sw 캐시 v3.5)
@@ -10,6 +10,7 @@
 7) ♾️ 환생·초월 특성·무한 스테이지 (v3.5)
 8) 💾 세이브 코드 인코딩/디코딩·체크섬·손상 거부·일괄 강화·빠른 매수 (v3.6)
 9) 🏃 몬스터 이동·공격·피격·사망 모션 · 투사체 · 이펙트 (v3.7)
+10) ⚔️ 다굴 전투 · 방어/회복 스탯 · 신규 몬스터 16종 · 테마 정렬 스테이지 (v3.8)
 
 사용: python3 tools/verify_v3.py
 """
@@ -91,8 +92,8 @@ def main():
     for bad in ["firebase", "signInWithPopup", "Google 로그인", "gstatic", "firebaseio", "googleapis"]:
         ok(bad.lower() not in text_all.lower(), f"Firebase/로그인 흔적 없음: {bad}")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v3.7.0" in read("sw.js"), "SW 캐시 버전 v3.7.0")
-    ok("APP_VERSION = '3.7.0'" in read("src/data.js"), "앱 버전 v3.7.0")
+    ok("land-rpg-v3.8.0" in read("sw.js"), "SW 캐시 버전 v3.8.0")
+    ok("APP_VERSION = '3.8.0'" in read("src/data.js"), "앱 버전 v3.8.0")
     ok(os.path.exists(os.path.join(ROOT, "src/savecode.js")), "src/savecode.js 존재")
     ok("'./src/savecode.js'" in read("sw.js"), "sw.js 프리캐시에 savecode.js 포함")
     ok("'./src/rebirth.js'" in read("sw.js"), "sw.js 프리캐시에 rebirth.js 포함")
@@ -669,18 +670,16 @@ def main():
     ok(s10 >= 12, "10분 내 12스테이지 (1~10 쾌적)", f"S{s10}")
     ok(s22 >= 20, "30분 내 20스테이지 (중반 돌파)", f"S{s22}")
     ok(active["end"]["stage"] > passive["end"]["stage"], "적극 플레이 > 방치", f"적극 S{active['end']['stage']} vs 방치 S{passive['end']['stage']}")
-    ok(passive["end"]["stage"] <= 22, "방치는 22스테이지에서 막힘", f"S{passive['end']['stage']}")
+    ok(passive["end"]["stage"] <= 30, "방치는 30스테이지 안에서 막힘", f"S{passive['end']['stage']}")
     ok(passive["end"]["equip"]["weapon"] == 0 and passive["end"]["gold"] > 0, "방치 봇은 강화/매수 안 함(대조군)")
     fails = active["bossFails"]
     attempts = active["bossStarts"]
-    ok(attempts > 20 and fails / max(1, attempts) < 0.75, "보스 실패율 과다 아님", f"{fails}/{attempts}")
-    print(f"  · 적극: 5분 S{bs.stage_at(active['marks'], 5)} · 10분 S{s10} · 30분 S{s22} · 60분 S{active['end']['stage']} · 보스 {attempts}회/실패 {fails}회")
-    print(f"  · 방치: 60분 S{passive['end']['stage']} · 보스 {passive['bossStarts']}회/실패 {passive['bossFails']}회")
-    ok(
-        active["end"]["stage"] == 28 and passive["end"]["stage"] == 21 and fails == 9 and passive["bossFails"] == 12,
-        "v3.6 대비 60분 시뮬 결과 동일 (모션 업데이트는 밸런스 불변)",
-        f"적극 S{active['end']['stage']}/실패{fails} · 방치 S{passive['end']['stage']}/실패{passive['bossFails']}",
-    )
+    ok(attempts > 20 and fails / max(1, attempts) < 0.6, "보스 실패율 과다 아님(다굴 재밸런싱)", f"{fails}/{attempts}")
+    print(f"  · 적극: 5분 S{bs.stage_at(active['marks'], 5)} · 10분 S{s10} · 30분 S{s22} · 60분 S{active['end']['stage']} · 보스 {attempts}회/실패 {fails}회 · 사망 {active['deaths']}회")
+    print(f"  · 방치: 60분 S{passive['end']['stage']} · 보스 {passive['bossStarts']}회/실패 {passive['bossFails']}회 · 사망 {passive['deaths']}회")
+    # v3.8 다굴: S20 이후 생존 스탯(방어·체력·회복)을 챙기지 않으면 실제로 쓰러진다
+    ok(active["deaths"] > 0, "S20+ 다굴에서 실제 사망 발생(생존 스탯 동기)", f"사망 {active['deaths']}회")
+    ok(active["end"]["stage"] >= 26 and bs.stage_at(active["marks"], 5) >= 8, "다굴 리밸런싱 후에도 성장 곡선 유지", f"5분 S{bs.stage_at(active['marks'], 5)} · 60분 S{active['end']['stage']}")
 
     section("[9] 🎯 미션 · 🏆 업적 · 📖 도감 (v3.3.0)")
     qdef = js(ctx, """
@@ -709,7 +708,7 @@ def main():
     ok(len(qdef["achIds"]) == 19 and len(set(qdef["achIds"])) == 19, "업적 19종 정의(중복 없음)", str(len(qdef["achIds"])))
     ok(all(s > 0 for s in qdef["achShards"]) and qdef["achAtk"] >= 2 and qdef["achGold"] >= 2, "업적 보상 = 💎 + 영구 스탯 보너스", json.dumps({"atk": qdef["achAtk"], "gold": qdef["achGold"]}))
     ok(qdef["weights"] == [30, 40, 20, 10] and qdef["milestones"] == [10, 25, 50, 75, 100], "도감 가중치 합 100 · 마일스톤 5단계", json.dumps(qdef["weights"]))
-    ok(qdef["monsters"] == 19 and qdef["bosses"] == 7 and qdef["petIds"] == ["wolf", "fox", "owl", "dragon"], "도감 몬스터 19종(보스 7)·펫 4종", json.dumps({"m": qdef["monsters"], "b": qdef["bosses"]}))
+    ok(qdef["monsters"] == 35 and qdef["bosses"] == 12 and qdef["petIds"] == ["wolf", "fox", "owl", "dragon"], "도감 몬스터 35종(보스 12)·펫 4종", json.dumps({"m": qdef["monsters"], "b": qdef["bosses"]}))
 
     mq = js(ctx, """
       const s = defaultState(0);
@@ -829,7 +828,7 @@ def main():
     ok(cxr["pct0"] < 10 and cxr["met0"] == 0 and cxr["slime"] == {"m": 1, "k": 4}, "몬스터 도감 — 만남·처치 수 기록", json.dumps(cxr["slime"]))
     ok(cxr["ownedAfterSell"] == 0 and len(cxr["cityNames"]) == 1 and cxr["cityPyeong"] == 5, "부동산 도감 — 매도해도 지역·최대 평수 기록 유지", json.dumps(cxr["cityNames"], ensure_ascii=False))
     ok("legend" in cxr["gearGot"] and "common" in cxr["gearGot"], "장비 등급 도감 — 획득 등급 기록", json.dumps(cxr["gearGot"]))
-    ok(cxr["monsterTotal"] == 19 and cxr["monstersMet"] == 1 and cxr["petsUnlocked"] == 0, "도감 상세 목록(19종·펫 4종)", json.dumps({"met": cxr["monstersMet"]}))
+    ok(cxr["monsterTotal"] == 35 and cxr["monstersMet"] == 1 and cxr["petsUnlocked"] == 0, "도감 상세 목록(35종·펫 4종)", json.dumps({"met": cxr["monstersMet"]}))
 
     msb = js(ctx, """
       const s = defaultState(0);
@@ -1175,7 +1174,7 @@ def main():
       };
     """)
     ok(rbd["need"] == 20 and rbd["points"][:3] == [0, 0, 3], "환생 해금 S20 · S20 지급 3P", json.dumps(rbd["points"][:3]))
-    ok(len(rbd["ids"]) == 6 and len(set(rbd["ids"])) == 6 and all(v == 20 for v in rbd["maxLv"]), "영구 특성 6종(각 Lv.1~20)", json.dumps(rbd["ids"]))
+    ok(len(rbd["ids"]) == 8 and len(set(rbd["ids"])) == 8 and all(v == 20 for v in rbd["maxLv"]) and "guard" in rbd["ids"] and "regen" in rbd["ids"], "영구 특성 8종(방어·회복 포함, 각 Lv.1~20)", json.dumps(rbd["ids"]))
     ok(rbd["mono"] == 0 and rbd["points"][4] > rbd["points"][3] and rbd["points"][5] > rbd["points"][4] * 1.5 and rbd["points"][7] > rbd["points"][6] * 2, "스테이지가 높을수록 지수·계단식으로 포인트 증가", json.dumps(rbd["points"]))
     ok(rbd["costs"] == [3, 5, 13, 41] and rbd["totalCost"] == 440, "특성 비용 = 3 + 2×레벨 · 만렙 총 440P", json.dumps({"c": rbd["costs"], "t": rbd["totalCost"]}))
 
@@ -1307,7 +1306,7 @@ def main():
     ok("∞" in inf["theme"] and inf["tier"][3] == "infinity", "무한 구간 표기(∞ · tier)", inf["theme"])
     ok(all(inf["hp"][i] < inf["hp"][i + 1] for i in range(len(inf["hp"]) - 1)) and inf["ratio31"] < inf["ratio30"] and abs(inf["ratio31"] - 1.035) < 0.0001, "S31 이후 완만한 무한 곡선(체력 단조 증가)", json.dumps({"hp": inf["hp"], "r31": round(inf["ratio31"], 4), "r30": round(inf["ratio30"], 4)}))
     ok(all(inf["atk"][i] < inf["atk"][i + 1] for i in range(2)) and all(inf["gold"][i] < inf["gold"][i + 1] for i in range(2)) and all(inf["exp"][i] < inf["exp"][i + 1] for i in range(2)), "공격·골드·경험치도 무한 구간에서 계속 성장", json.dumps({"a": inf["atk"], "g": inf["gold"], "e": inf["exp"]}))
-    ok(abs(inf["boss"]["hp"] - inf["normal"]["hp"] * 3.6) <= 2 and inf["gold"][2] < 1000000, "보스 배율 유지 · 골드 인플레 억제", json.dumps({"b": inf["boss"]["hp"], "n": inf["normal"]["hp"], "g100": inf["gold"][2]}))
+    ok(abs(inf["boss"]["hp"] - inf["normal"]["hp"] * 4.2) <= 2 and inf["gold"][2] < 1000000, "보스 배율 유지 · 골드 인플레 억제", json.dumps({"b": inf["boss"]["hp"], "n": inf["normal"]["hp"], "g100": inf["gold"][2]}))
     ok(inf["hp"][4] > inf["hp"][3] * 5, "S100 은 S50 보다 한 단계 더 깊은 구간", json.dumps({"s50": inf["hp"][3], "s100": inf["hp"][4]}))
 
     deep = js(ctx, """
@@ -1575,10 +1574,10 @@ def main():
         sprite: [spriteSrc('fx_claw'), spriteSrc('fx_burst'), spriteSrc('Slime'), spriteSrc('SlimeKing')],
       };
     """)
-    ok(mod["total"] == 19 and mod["missingMotion"] == [] and mod["missingAtk"] == [], "19종 몬스터 모두 이동/공격 모션 정의", json.dumps({"missing": mod["missingMotion"] + mod["missingAtk"]}))
-    ok(mod["arch"] == {"slime": 2, "flyer": 5, "walker": 12}, "슬라임 2 · 비행 5 · 보행 12 아키타입 분류", json.dumps(mod["arch"]))
-    ok(len(mod["ranged"]) == 7 and len(mod["melee"]) == 12 and mod["badProj"] == [], "원거리 7종(투사체 보유) · 근접 12종", json.dumps({"r": mod["ranged"], "bad": mod["badProj"]}, ensure_ascii=False))
-    ok(set(mod["moves"]) == {"claw", "slam", "bite", "fire", "feather", "dark", "holy", "acid"}, "공격 모션 8종(할퀴기·내려찍기·물기·화염·깃털·암흑·신성·산성)", json.dumps(mod["moves"]))
+    ok(mod["total"] == 35 and mod["missingMotion"] == [] and mod["missingAtk"] == [], "35종 몬스터 모두 이동/공격 모션 정의", json.dumps({"missing": mod["missingMotion"] + mod["missingAtk"]}))
+    ok(mod["arch"] == {"slime": 3, "flyer": 11, "walker": 21}, "슬라임 3 · 비행 11 · 보행 21 아키타입 분류", json.dumps(mod["arch"]))
+    ok(len(mod["ranged"]) == 14 and len(mod["melee"]) == 21 and mod["badProj"] == [], "원거리 14종(투사체 보유) · 근접 21종", json.dumps({"r": mod["ranged"], "bad": mod["badProj"]}, ensure_ascii=False))
+    ok(set(mod["moves"]) == {"claw", "slam", "bite", "fire", "feather", "dark", "holy", "acid", "ice", "sonic"}, "공격 모션 10종(할퀴기·내려찍기·물기·화염·깃털·암흑·신성·산성·얼음·음파)", json.dumps(mod["moves"]))
     ok(mod["fallback"] == ["walker", "melee", "claw"], "알 수 없는 이름은 보행·근접 할퀴기로 폴백", json.dumps(mod["fallback"]))
     ok(mod["sprite"] == ["assets/sprites/fx/fx_claw.png", "assets/sprites/fx/fx_burst.png", "assets/sprites/monster/Slime.png", "assets/sprites/boss/SlimeKing.png"], "이펙트/몬스터/보스 스프라이트 경로", json.dumps(mod["sprite"]))
 
@@ -1644,8 +1643,8 @@ def main():
     ok(mono["hurts"] == mono["attacks"], "공격 1회 = 피해 1회(전조가 피해를 중복/누락시키지 않음)", json.dumps({"a": mono["attacks"], "h": mono["hurts"]}))
     ok(mono["rangedHurts"] > 0 and mono["projHurts"] > 0, "원거리 공격은 투사체 정보를 실어 보낸다", json.dumps({"r": mono["rangedHurts"], "p": mono["projHurts"]}))
     ok("ranged" in mono["kinds"] and "melee" in mono["kinds"], "근접/원거리 공격이 모두 발생", json.dumps(mono["kinds"]))
-    ok(set(mono["moves"]) <= {"claw", "slam", "bite", "feather", "fire", "acid", "dark", "holy"} and len(mono["moves"]) >= 2, "공격별 모션 종류가 이벤트에 실린다", json.dumps(mono["moves"]))
-    ok(mono["durs"] == [300, 470], "전조 길이 = 근접 300ms · 원거리 470ms", json.dumps(mono["durs"]))
+    ok(set(mono["moves"]) <= {"claw", "slam", "bite", "feather", "fire", "acid", "dark", "holy", "ice", "sonic"} and len(mono["moves"]) >= 2, "공격별 모션 종류가 이벤트에 실린다", json.dumps(mono["moves"]))
+    ok(set([300, 470]) <= set(mono["durs"]) and set(mono["durs"]) <= {300, 390, 470, 560, 640, 730}, "전조 길이 = 근접 300ms · 원거리 470ms(+보스 보정)", json.dumps(mono["durs"]))
     ok(mono["walk"] > 0 and "arch" in mono["fields"] and "windupAt" in mono["fields"], "몬스터가 이동 거리(walk)·전조·모션 상태를 갖는다", json.dumps(mono["fields"]))
 
     csrc7 = read("src/combat.js")
@@ -1656,6 +1655,213 @@ def main():
     ok(all(x in rsrc7 for x in ["fx_claw", "fx_burst", "globalCompositeOperation = 'lighter'"]), "AI 이펙트 스프라이트를 가산 합성으로 얹는다")
     ok("monsterWindup" in read("src/render.js") and "delayedHits" in read("src/render.js"), "전조 이벤트·투사체 도착 지연 피해 표시")
     ok("'./assets/sprites/fx/fx_claw.png'" in read("sw.js") and "monsterWindup" in read("src/combat.js"), "SW 캐시 · 이벤트 연결 확인")
+
+    section("[14] ⚔️ 다굴 전투 · 방어/회복 스탯 · 신규 몬스터 (v3.8.0)")
+
+    # ── 1) 다굴: 여러 마리가 동시에 붙어 때린다 ──
+    crowd = js(ctx, """
+      const s = defaultState(0);
+      s.stage = 26; s.maxStage = 26; s.level = 44; s.jobTier = 3;
+      for (const k of Object.keys(s.equip)) s.equip[k] = 40;
+      const rng = (function (seed) { let x = seed >>> 0; return function () { x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296; }; })(5);
+      const b = new Battle(s, () => ({}), rng, 0);
+      const evs = [];
+      let t = 0;
+      let maxAlive = 0;
+      for (let i = 0; i < Math.round(40000 / 16); i++) {
+        b.tick(16, t); t += 16;
+        for (const ev of b.drainEvents()) evs.push(Object.assign({}, ev, { at: t }));
+        const alive = b.monsters.filter((m) => !m.dead && !m.dying);
+        if (alive.length > maxAlive) maxAlive = alive.length;
+      }
+      const attacks = evs.filter((e) => e.t === 'monsterAttack');
+      // 같은 1.6초 창 안에 서로 다른 몬스터가 때린 최대 수
+      let best = 0;
+      for (const a of attacks) {
+        const set = new Set(attacks.filter((x) => x.at >= a.at && x.at < a.at + 1600).map((x) => x.id));
+        if (set.size > best) best = set.size;
+      }
+      const hurt = evs.filter((e) => e.t === 'playerHurt');
+      return {
+        maxAlive, maxTogether: best, attacks: attacks.length, hurts: hurt.length,
+        kinds: [...new Set(attacks.map((a) => a.kind))].sort(),
+        reduce: Math.round((b.stats.dmgReduce || 0) * 100),
+        slots: [...new Set(b.monsters.map((m) => Math.round(m.slotX)))].sort((a, b2) => a - b2),
+        lanes: [...new Set(b.monsters.map((m) => m.lane))].sort(),
+      };
+    """)
+    ok(crowd["maxAlive"] >= 5, "무리가 화면에 5마리 이상 쌓인다(다굴)", json.dumps({"max": crowd["maxAlive"]}))
+    ok(crowd["maxTogether"] >= 3, "서로 다른 몬스터 여러 마리가 같은 순간에 동시 공격", json.dumps({"동시": crowd["maxTogether"], "공격": crowd["attacks"]}))
+    ok(crowd["hurts"] == crowd["attacks"], "동시 공격도 1회당 피해 1회로 정확히 들어간다", json.dumps({"a": crowd["attacks"], "h": crowd["hurts"]}))
+    ok("melee" in crowd["kinds"] and "ranged" in crowd["kinds"], "근접 다굴 + 원거리 투사체가 함께 온다", json.dumps(crowd["kinds"]))
+    ok(len(crowd["slots"]) >= 3 and len(crowd["lanes"]) >= 2, "몬스터가 앞뒤 레인·서로 다른 슬롯에 부채꼴로 배치", json.dumps({"slots": crowd["slots"], "lanes": crowd["lanes"]}))
+
+    # ── 2) 방어(피해 감소)·회복 스탯과 damagePlayer 반영 ──
+    defense = js(ctx, """
+      const base = defaultState(0); base.level = 40; base.jobTier = 2;
+      const plain = calcStats(base, {});
+      const armored = defaultState(0); armored.level = 40; armored.jobTier = 2;
+      armored.equip = { weapon: 0, armor: 60, helmet: 60, ring: 0, amulet: 0 };
+      const stArm = calcStats(armored, {});
+      const maxed = defaultState(0); maxed.level = 40;
+      maxed.equip = { weapon: 0, armor: 100, helmet: 100, ring: 0, amulet: 0 };
+      maxed.gearRarity = { weapon: 'common', armor: 'legend', helmet: 'legend', ring: 'common', amulet: 'common' };
+      maxed.rebirth = { count: 3, points: 0, totalPoints: 99, traits: { guard: 20 }, bestStage: 30, at: 0 };
+      const stMax = calcStats(maxed, {});
+      const regen = defaultState(0); regen.rebirth = { count: 1, points: 0, totalPoints: 9, traits: { regen: 10 }, bestStage: 21, at: 0 };
+      const stRegen = calcStats(regen, {});
+
+      // 같은 피해를 방어 0 / 방어 26% / 방어 상한으로 받았을 때
+      function take(st) {
+        const s = defaultState(0); s.level = 40;
+        const b = new Battle(s, () => ({}), () => 0.5, 0);
+        b.stats = st;
+        b.player.hp = st.hpMax;
+        const before = b.player.hp;
+        b.damagePlayer(1000, { ko: '테스트' }, 1000, {});
+        return Math.round(before - b.player.hp);
+      }
+      return {
+        plainReduce: Math.round(plain.dmgReduce * 100), plainRegen: plain.hpRegen,
+        armReduce: Math.round(stArm.dmgReduce * 100), maxReduce: Math.round(stMax.dmgReduce * 100),
+        regenUp: Math.round(stRegen.hpRegen * 1000) / 1000,
+        dmg0: take(plain), dmg26: take(stArm), dmgCap: take(stMax),
+        hpArm: stArm.hpMax > plain.hpMax,
+        regenField: 'hpRegen' in plain && 'dmgReduce' in plain,
+      };
+    """)
+    ok(defense["plainReduce"] == 0 and defense["regenField"] is True, "방어·회복 스탯이 calcStats에 있다(기본 방어 0)", json.dumps({k: defense[k] for k in ["plainReduce", "regenField"]}))
+    ok(defense["armReduce"] >= 25 and defense["hpArm"] is True, "갑옷·투구 강화 → 피해 감소 + 체력 상승", json.dumps({"r": defense["armReduce"]}))
+    ok(defense["maxReduce"] == 80, "피해 감소 상한 80% (장비+환생 특성 합산)", json.dumps({"r": defense["maxReduce"]}))
+    ok(defense["dmg0"] == 1000 and defense["dmg26"] < defense["dmg0"] and defense["dmgCap"] == 200, "damagePlayer가 방어율대로 경감한다(1000 → 200)", json.dumps({"0": defense["dmg0"], "26": defense["dmg26"], "cap": defense["dmgCap"]}))
+    ok(abs(defense["regenUp"] - 0.024) < 0.001, "환생 '생명' 특성으로 초당 회복이 늘어난다(1.2% → 2.4%)", json.dumps({"regen": defense["regenUp"]}))
+
+    # ── 3) 사망 → 무리 흩어짐 · 부활 가호 ──
+    death = js(ctx, """
+      const s = defaultState(0);
+      s.stage = 27; s.maxStage = 27; s.level = 55; s.jobTier = 3;
+      for (const k of Object.keys(s.equip)) s.equip[k] = 20;
+      const rng = (function (seed) { let x = seed >>> 0; return function () { x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296; }; })(9);
+      const b = new Battle(s, () => ({}), rng, 0);
+      const evs = [];
+      let t = 0;
+      let beforeDeath = -1, afterDeath = -1, revived = false, grace = 0, lastCrowd = 0;
+      for (let i = 0; i < Math.round(90000 / 16); i++) {
+        const crowdNow = b.monsters.filter((m) => !m.dead && !m.dying).length;
+        if (crowdNow > lastCrowd) lastCrowd = crowdNow;
+        b.tick(16, t); t += 16;
+        for (const ev of b.drainEvents()) {
+          evs.push(ev);
+          if (ev.t === 'playerDeath') beforeDeath = b.monsters.filter((m) => !m.dead && !m.dying).length;
+          if (ev.t === 'revive') { revived = true; grace = Math.max(0, (b.player.graceUntil || 0) - t); afterDeath = b.monsters.filter((m) => !m.dead && !m.dying).length; }
+        }
+      }
+      const deaths = evs.filter((e) => e.t === 'playerDeath').length;
+      return { deaths, beforeDeath, afterDeath, revived, grace: Math.round(grace), lastCrowd, scatterImpl: typeof b.scatterMonsters === 'function' };
+    """)
+    ok(death["deaths"] > 0, "S27·방어 미비 상태에서 실제로 사망한다(다굴 압박)", json.dumps({"deaths": death["deaths"]}))
+    ok(death["scatterImpl"] is True and death["lastCrowd"] >= 3 and death["beforeDeath"] == 0 and death["afterDeath"] <= 2, "쓰러지면 무리가 흩어지고 부활 시 소수부터 다시 몰린다", json.dumps({k: death[k] for k in ["lastCrowd", "beforeDeath", "afterDeath"]}))
+    ok(death["revived"] is True and death["grace"] > 2000, "부활 직후 가호(3.5초)가 걸린다", json.dumps({"grace": death["grace"]}))
+
+    # ── 4) 신규 몬스터·보스 16종: 이미지·모션·공격·도감·스테이지·프리캐시 ──
+    NEW_MONSTERS = ["Scorpion", "Mummy", "Sandworm", "Batling", "CaveSpider",
+                    "FireImp", "MagmaGolem", "IceWolf", "FrostWisp", "ShadowWraith", "AbyssEye"]
+    NEW_BOSSES = ["Anubis", "CaveTroll", "Ifrit", "IceGiant", "AbyssLord"]
+    newmeta = js(ctx, """
+      const names = %s;
+      const bosses = %s;
+      return {
+        inCatalog: names.every((n) => MONSTERS[n] && MONSTERS[n].boss === false),
+        bossesIn: bosses.every((n) => MONSTERS[n] && MONSTERS[n].boss === true),
+        motion: names.concat(bosses).filter((n) => !MONSTER_MOTION[n]),
+        atk: names.concat(bosses).filter((n) => !MONSTER_ATTACKS[n]),
+        proj: names.concat(bosses).filter((n) => MONSTER_ATTACKS[n] && MONSTER_ATTACKS[n].kind === 'ranged' && !MONSTER_ATTACKS[n].proj),
+        paths: names.concat(bosses).map((n) => spriteSrc(n)),
+        total: Object.keys(MONSTERS).length,
+        bossesTotal: Object.keys(MONSTERS).filter((n) => MONSTERS[n].boss).length,
+      };
+    """ % (json.dumps(NEW_MONSTERS), json.dumps(NEW_BOSSES)))
+    ok(newmeta["inCatalog"] and newmeta["bossesIn"], "신규 일반 11종 + 보스 5종이 도감(MONSTERS)에 등록")
+    ok(newmeta["total"] == 35 and newmeta["bossesTotal"] == 12, "몬스터 총 35종(일반 23 · 보스 12)", json.dumps({"t": newmeta["total"], "b": newmeta["bossesTotal"]}))
+    ok(not newmeta["motion"] and not newmeta["atk"] and not newmeta["proj"], "신규 16종 모두 이동 모션·공격(투사체) 정의", json.dumps(newmeta["motion"] + newmeta["atk"] + newmeta["proj"]))
+    ok(all(p.startswith("assets/sprites/monster/") for p in newmeta["paths"][:len(NEW_MONSTERS)]) and all(p.startswith("assets/sprites/boss/") for p in newmeta["paths"][len(NEW_MONSTERS):]), "스프라이트 경로가 일반/보스 폴더로 갈린다", json.dumps(newmeta["paths"][:2]))
+
+    sprite_files = [(p, 256) for p in newmeta["paths"][:len(NEW_MONSTERS)]] + [(p, 384) for p in newmeta["paths"][len(NEW_MONSTERS):]]
+    missing = [p for p, _ in sprite_files if not os.path.exists(os.path.join(ROOT, p))]
+    ok(not missing, "신규 스프라이트 16개 파일 존재", ", ".join(missing))
+    try:
+        from PIL import Image
+        bad_size, bad_mode, heavy = [], [], []
+        for p, size in sprite_files:
+            fp = os.path.join(ROOT, p)
+            im = Image.open(fp)
+            if im.size != (size, size):
+                bad_size.append((p, im.size))
+            if im.mode != "RGBA":
+                bad_mode.append(p)
+            if os.path.getsize(fp) > 260000:
+                heavy.append((p, os.path.getsize(fp)))
+            # 투명 배경 확인(모서리 알파 0)
+            if im.convert("RGBA").getpixel((0, 0))[3] != 0:
+                bad_mode.append(p + ":corner")
+        ok(not bad_size, "신규 스프라이트 규격(일반 256px · 보스 384px)", json.dumps(bad_size))
+        ok(not bad_mode, "신규 스프라이트 RGBA 투명 배경", json.dumps(bad_mode))
+        ok(not heavy, "신규 스프라이트 용량 260KB 이하", json.dumps(heavy))
+    except Exception as e:  # noqa: BLE001
+        ok(False, "신규 스프라이트 이미지 검사", str(e))
+    ok(all(f"'./{p}'" in read("sw.js") for p, _ in sprite_files), "sw.js 프리캐시에 신규 스프라이트 16개 포함")
+
+    stages = js(ctx, """
+      const defs = [];
+      for (let s = 1; s <= 40; s++) defs.push(stageDef(s));
+      const badNormals = defs.filter((d) => !d.normals.every((n) => MONSTERS[n])).length;
+      const badBoss = defs.filter((d) => !MONSTERS[d.boss] || !MONSTERS[d.boss].boss).length;
+      // 테마 정렬: STAGES 길이가 THEMES 길이의 배수여야 스테이지를 돌아도 배경과 몹이 어긋나지 않는다
+      const themeOf = {};
+      for (let s = 1; s <= 48; s++) {
+        const d = stageDef(s);
+        const key = d.normals.join(',');
+        themeOf[key] = themeOf[key] || d.theme.id;
+        d.__ok = true;
+      }
+      const seenBoss = new Set();
+      for (let s = 1; s <= STAGES.length; s++) seenBoss.add(stageDef(s).boss);
+      const themePairs = new Set();
+      for (let s = 1; s <= 48; s++) { const d = stageDef(s); themePairs.add(d.normals.join(',') + '|' + d.theme.id); }
+      return {
+        badNormals, badBoss,
+        stages: STAGES.length, themes: THEMES.length,
+        aligned: STAGES.length % THEMES.length === 0,
+        themePairs: [...themePairs].length,
+        stagesPerTheme: STAGES.length / THEMES.length,
+        bossesUsed: seenBoss.size,
+        uniqueNormals: new Set(STAGES.flatMap((d) => d.normals)).size,
+        thematic: Object.keys(themeOf).length,
+      };
+    """)
+    ok(stages["badNormals"] == 0 and stages["badBoss"] == 0, "모든 스테이지의 몬스터·보스가 도감에 존재", json.dumps(stages))
+    ok(stages["aligned"] is True and stages["stagesPerTheme"] == 3, "8개 테마 × 3스테이지 = 24스테이지(테마 정렬)", json.dumps({"s": stages["stages"], "t": stages["themes"]}))
+    ok(stages["bossesUsed"] == 12, "12종 보스가 모두 스테이지에 등장", json.dumps({"bosses": stages["bossesUsed"]}))
+    ok(stages["uniqueNormals"] == 23, "23종 일반 몬스터가 모두 스테이지에 등장", json.dumps({"normals": stages["uniqueNormals"]}))
+
+    codex_new = js(ctx, """
+      const s = defaultState(0);
+      const before = codexStats(s).monsters.seen;
+      for (const n of %s) codexMeet(s, n);
+      const st = codexStats(s);
+      return { before, monsters: st.monsters, pct: st.pct };
+    """ % json.dumps(NEW_MONSTERS + NEW_BOSSES))
+    ok(codex_new["before"] == 0 and codex_new["monsters"]["seen"] == 16, "신규 16종을 만나면 도감에 기록된다", json.dumps(codex_new["monsters"]))
+
+    src_combat = read("src/combat.js")
+    src_render = read("src/render.js")
+    src_state = read("src/state.js")
+    src_data = read("src/data.js")
+    ok(all(x in src_combat for x in ["MELEE_SLOTS", "RANGED_SLOTS", "assignSlots", "scatterMonsters", "graceUntil", "maxMonsters"]), "전투 — 슬롯 배정·무리 흩어짐·부활 가호 구현")
+    ok(all(x in src_state for x in ["dmgReduce", "hpRegen", "DEF.cap", "guardPct"]), "상태 — 방어(피해 감소)·회복 스탯 계산")
+    ok(all(x in src_data for x in ["monsterAtkLateBoost", "monsterAtkLateFrom", "export const DEF", "bossHpMul: 4.2"]), "데이터 — 다굴용 공격 곡선·방어 상수")
+    ok(all(x in src_render for x in ["crowdK", "lane", "showBar", "kind === 'ice'", "kind === 'sonic'", "graceUntil"]), "렌더러 — 무리 축소·레인 깊이·얼음/음파 투사체·부활 가호 연출")
+    ok("피해 감소" in read("src/ui.js") and "자연 회복" in read("src/ui.js"), "스탯 화면에 피해 감소·자연 회복 표시")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

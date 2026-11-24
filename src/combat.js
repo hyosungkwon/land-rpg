@@ -25,12 +25,12 @@ const MELEE_SLOTS = [
   { dx: 495, lane: -1 },
 ];
 const RANGED_SLOTS = [
-  { dx: 690, lane: -1 },
-  { dx: 780, lane: 0 },
-  { dx: 650, lane: 1 },
-  { dx: 820, lane: 1 },
-  { dx: 730, lane: 0 },
-  { dx: 700, lane: -1 },
+  { dx: 620, lane: -1 },
+  { dx: 700, lane: 0 },
+  { dx: 585, lane: 1 },
+  { dx: 740, lane: 1 },
+  { dx: 660, lane: 0 },
+  { dx: 630, lane: -1 },
 ];
 const LANE_DEPTH = 15; // 레인 1당 화면 y 오프셋(px) — 렌더러가 sc 를 곱해 쓴다
 const SLOT_TOL = 26; // 슬롯 도착 판정(월드)
@@ -289,10 +289,13 @@ export class Battle {
         // 걸음/도약 위상 — 실제로 이동한 거리만 쌓아 정지하면 모션이 멈추게 한다
         m.walk = (Number.isFinite(m.walk) ? m.walk : 0) + Math.abs(m.x - prevX);
         m.moving = true;
-        // 도착 직전 마지막 걸음에서 전조를 시작한다 → 타격은 도착 순간
         if (!m.windupBase) m.windupBase = windupFor(m);
         const eta = (Math.abs(m.x - standX) / speed) * 1000;
-        if (!m.windupAt && eta <= m.windupBase + 40) {
+        // 도착 직전 마지막 걸음에서 전조를 시작한다 → 타격은 도착 순간.
+        // 타격 예정 시각(도착 또는 공격 간격 도달)에 맞춰 시작해 전조가 너무 길게 남지 않게 한다.
+        const dueW = (Number.isFinite(m.lastAttack) ? m.lastAttack : now) + ECON.monsterAttackMs;
+        const strikeAt = Math.max(now + eta, dueW);
+        if (!m.windupAt && strikeAt - now <= m.windupBase + 60) {
           m.windupAt = now;
           m.windupDur = m.windupBase;
           m.windupHeavy = false;
@@ -301,8 +304,8 @@ export class Battle {
             kind: m.atkKind, move: m.moveKind, proj: m.projKind, color: m.atkColor,
             dur: m.windupBase, heavy: false,
           });
-        } else if (m.windupAt && eta > m.windupBase + 160) {
-          m.windupAt = 0; // 멀어지면 전조 취소
+        } else if (m.windupAt && strikeAt - now > m.windupBase + 160) {
+          m.windupAt = 0; // 늦어지면 전조 취소
         }
       } else {
         m.moving = false;
