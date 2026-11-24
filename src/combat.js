@@ -1,7 +1,7 @@
 // land-rpg / src/combat.js
 // 자동 전투 시뮬레이션. DOM·Canvas 의존 없음 → 헤드리스 검증 가능.
 // 렌더러는 이 객체의 엔티티를 읽고, UI는 events 큐를 소비한다.
-import { ECON, SKILLS, stageDef, monsterKo } from './data.js';
+import { ECON, SKILLS, stageDef, monsterKo, monsterMotion, monsterAttack } from './data.js';
 import {
   calcStats, currentHp, skillEffect, killReward, registerKill, clearStage, monsterStats,
 } from './state.js';
@@ -10,6 +10,18 @@ import { codexMeet, codexKill } from './quests.js';
 
 const ATTACK_STOP_GAP = 260; // 이 거리에서 멈추고 때린다(캐릭터 스프라이트가 겹치지 않는 간격)
 const QUEUE_GAP = 300; // 뒤에 줄 서는 몬스터가 벌어지는 간격
+// v3.7 모션: 공격 '전조(windup)' 시간. 피해 판정 시점(monsterAttackMs 간격)은 그대로 두고
+// 전조만 그 직전에 시작해 밸런스(DPS·클리어 시간·헤드리스 시뮬)를 건드리지 않는다.
+const WINDUP_MELEE_MS = 300;
+const WINDUP_RANGED_MS = 470;
+const WINDUP_BOSS_EXTRA_MS = 90;
+const HEAVY_EVERY = 3; // 보스는 3번째 공격마다 강공격 모션(피해량은 동일)
+
+/** 몬스터 공격 전조 길이(ms) */
+function windupFor(m) {
+  const a = monsterAttack(m.name);
+  return (a.kind === 'ranged' ? WINDUP_RANGED_MS : WINDUP_MELEE_MS) + (m.isBoss ? WINDUP_BOSS_EXTRA_MS : 0);
+}
 
 export class Battle {
   constructor(state, getBuffs, rng = Math.random, startAt = Date.now()) {
@@ -99,6 +111,7 @@ export class Battle {
   /* ───────────── 스폰 ───────────── */
   makeMonster(name, isBoss, now) {
     const def = stageDef(this.s.stage);
+    const atkDef = monsterAttack(name);
     const variant = 0.9 + this.rng() * 0.2;
     const base = monsterStats(this.s.stage, isBoss, variant);
     const scale = isBoss ? 1.5 : 0.92 + this.rng() * 0.22;
@@ -123,6 +136,20 @@ export class Battle {
       dead: false,
       born: now,
       animSeed: this.rng() * Math.PI * 2,
+      // v3.7 모션 상태 — 렌더러가 읽어 이동/공격/피격을 그린다
+      arch: monsterMotion(name),
+      atkKind: atkDef.kind,
+      moveKind: atkDef.move,
+      projKind: atkDef.proj || null,
+      atkColor: atkDef.color,
+      walk: 0,          // 이동 누적 거리(월드) — 걸음/도약 위상
+      moving: false,
+      windupAt: 0,      // 전조 시작 시각
+      windupDur: 0,
+      windupBase: 0,
+      windupHeavy: false,
+      strikeAt: 0,      // 실제 타격 시각
+      attackSeq: 0,
     };
   }
 
@@ -199,13 +226,66 @@ export class Battle {
       const dist = m.x - p.x;
       if (m.x > standX + 2) {
         const speed = m.isBoss ? 62 : 96 + (m.scale - 1) * 40; // 월드단위/초
+        const prevX = m.x;
         m.x = Math.max(standX, m.x - (speed * dt) / 1000);
-      } else if (dist <= ATTACK_STOP_GAP + (m.isBoss ? 100 : 40) && now - m.lastAttack > ECON.monsterAttackMs) {
-        m.lastAttack = now;
-        m.lunge = 1;
-        m.lungeAt = now;
-        const raw = m.atk * (0.88 + this.rng() * 0.24);
-        this.damagePlayer(raw, m, now);
+        // 걸음/도약 위상 — 실제로 이동한 거리만 쌓아 정지하면 모션이 멈추게 한다
+        m.walk = (Number.isFinite(m.walk) ? m.walk : 0) + Math.abs(m.x - prevX);
+        m.moving = true;
+        // 도착 직전 마지막 걸음에서 전조를 시작한다 → 타격은 도착 순간(기존 타이밍 그대로)
+        if (!m.windupBase) m.windupBase = windupFor(m);
+        const eta = ((m.x - standX) / speed) * 1000;
+        if (!m.windupAt && eta <= m.windupBase + 40) {
+          m.windupAt = now;
+          m.windupDur = m.windupBase;
+          m.windupHeavy = false;
+          this.emit({
+            t: 'monsterWindup', id: m.id, ko: m.ko, x: m.x, isBoss: m.isBoss,
+            kind: m.atkKind, move: m.moveKind, proj: m.projKind, color: m.atkColor,
+            dur: m.windupBase, heavy: false,
+          });
+        } else if (m.windupAt && eta > m.windupBase + 160) {
+          m.windupAt = 0; // 멀어지면 전조 취소
+        }
+      } else {
+        m.moving = false;
+        if (dist <= ATTACK_STOP_GAP + (m.isBoss ? 100 : 40)) {
+          if (!m.windupBase) m.windupBase = windupFor(m);
+          const heavy = !!m.isBoss && (m.attackSeq || 0) % HEAVY_EVERY === HEAVY_EVERY - 1;
+          const wuTotal = m.windupBase + (heavy ? 170 : 0);
+          const due = (Number.isFinite(m.lastAttack) ? m.lastAttack : now) + ECON.monsterAttackMs;
+          // 1) 전조: 타격 시점 직전부터 움츠리며(원거리는 기를 모으며) 예고한다
+          if (!m.windupAt && now >= due - wuTotal) {
+            m.windupAt = now;
+            m.windupDur = wuTotal;
+            m.windupHeavy = heavy;
+            this.emit({
+              t: 'monsterWindup', id: m.id, ko: m.ko, x: m.x, isBoss: m.isBoss,
+              kind: m.atkKind, move: m.moveKind, proj: m.projKind, color: m.atkColor,
+              dur: wuTotal, heavy,
+            });
+          }
+          // 2) 타격: 기존과 같은 간격 조건(밸런스 불변) — 돌진과 함께 피해가 들어간다
+          if (now - m.lastAttack > ECON.monsterAttackMs) {
+            m.lastAttack = now;
+            m.lunge = 1;
+            m.lungeAt = now;
+            m.strikeAt = now;
+            m.windupAt = 0;
+            m.attackSeq = (m.attackSeq || 0) + 1;
+            const heavyNow = !!m.windupHeavy;
+            this.emit({
+              t: 'monsterAttack', id: m.id, ko: m.ko, x: m.x, isBoss: m.isBoss,
+              kind: m.atkKind, move: m.moveKind, proj: m.projKind, color: m.atkColor, heavy: heavyNow,
+            });
+            const raw = m.atk * (0.88 + this.rng() * 0.24);
+            this.damagePlayer(raw, m, now, {
+              ranged: m.atkKind === 'ranged', move: m.moveKind, proj: m.projKind,
+              color: m.atkColor, heavy: heavyNow,
+            });
+          }
+        } else {
+          m.windupAt = 0; // 사거리 밖으로 밀리면 전조 취소
+        }
       }
     }
     for (const m of this.monsters) {
@@ -219,12 +299,12 @@ export class Battle {
     this.monsters = this.monsters.filter((m) => !m.dead);
   }
 
-  damagePlayer(raw, from, now) {
+  damagePlayer(raw, from, now, info) {
     if (this.player.dead) return;
     const dmg = Math.max(1, Math.round(raw));
     this.player.hp -= dmg;
     this.player.hurtAt = now;
-    this.emit({ t: 'playerHurt', dmg, from: from.ko });
+    this.emit({ t: 'playerHurt', dmg, from: from.ko, ...(info || {}) });
     if (this.player.hp <= 0) {
       this.player.hp = 0;
       this.player.dead = true;
@@ -281,6 +361,8 @@ export class Battle {
   killMonster(m, now) {
     m.hp = 0;
     m.dying = now;
+    m.windupAt = 0;
+    m.moving = false;
     // 📖 도감: 처치 수 기록(던전 몹 포함)
     try { codexKill(this.s, m.name); } catch (e) { /* ignore */ }
     // 황금 던전: 보상은 종료 시 한 번에 지급하고, 여기서는 처치 수만 센다.
@@ -436,7 +518,7 @@ export class Battle {
     this.bossEnds = now + ECON.bossTimeLimitMs;
     this.s.bossReady = false;
     this.bossReadyAt = 0;
-    this.emit({ t: 'bossStart', name: boss.name, ko: boss.ko });
+    this.emit({ t: 'bossStart', name: boss.name, ko: boss.ko, x: boss.x, arch: boss.arch });
     return true;
   }
 

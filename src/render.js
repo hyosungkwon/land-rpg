@@ -2,7 +2,7 @@
 // 상단 Canvas 자동사냥 뷰 렌더러. 전투 로직은 combat.js, 여기서는 그리기만 한다.
 // v2: 새 스프라이트(대기/공격/스킬 3프레임) + 검기 아크·타격 스파크·스킬 이펙트.
 //     배경은 오프스크린 캔버스에 한 번만 그려 매 프레임 비용을 줄인다(모바일 발열/멈춤 방지).
-import { ECON, THEMES, spriteSrc, RARITIES, RARITY_INDEX } from './data.js';
+import { ECON, THEMES, spriteSrc, RARITIES, RARITY_INDEX, monsterMotion, monsterAttack } from './data.js';
 
 const rnd = (seed) => {
   const x = Math.sin(seed * 127.1) * 43758.5453;
@@ -58,6 +58,11 @@ export class Renderer {
     this.fx = []; // 스킬 이펙트
     this.embers = [];
     this.drops = []; // 몬스터 사망 시 튀어오르는 금화/보석 (자석 드롭)
+    // v3.7 몬스터 모션 — 투사체·먼지·지연 피해·보스 포효
+    this.projectiles = []; // 몬스터 원거리 공격 투사체(화염구·깃털·암흑·신성·산성)
+    this.puffs = []; // 발걸음/착지/사망 먼지·연기(화면 좌표)
+    this.delayedHits = []; // 투사체가 도착할 때 표시할 피해 숫자/플래시
+    this.bossRoar = null; // 보스 등장 포효 연출
     this.bossAlert = 0; // BOSS 등장 경고 시작 시각
     this.promote = 0; // ✨ 전직 팡파르 시작 시각
     this.promoteName = '';
@@ -223,19 +228,34 @@ export class Renderer {
           this.flash = Math.max(this.flash, 0.18);
         }
       } else if (ev.t === 'playerHurt') {
-        this.shake = Math.max(this.shake, 3.4);
-        this.redFlash = Math.max(this.redFlash, 0.4);
-        this.addFloater(ECON.playerX, ev.dmg, false, 'hurt');
-        // 몬스터의 할퀴기 자국(붉은 아크)
-        this.arcs.push({ x: ECON.playerX + 26, t0: now, dur: 300, dx: 0, y: 48, r: 30, a0: -0.9, sweep: 1.6, color: '#ff9b8a', alpha: 0.9, w: 5 });
-        this.sparks.push({
-          x: ECON.playerX + 20,
-          y: this.groundY() - 46 * this.scale(),
-          life: 1,
-          vx: 40,
-          vy: -40,
-          color: '#ff8f8f',
-        });
+        if (ev.ranged) {
+          // 원거리: 투사체가 날아가 명중할 때 숫자·플래시를 보여 준다(약 0.24초 뒤)
+          this.delayedHits.push({ at: now + 235, dmg: ev.dmg });
+          this.shake = Math.max(this.shake, 1.2);
+        } else {
+          this.shake = Math.max(this.shake, ev.heavy ? 5.2 : 3.4);
+          this.redFlash = Math.max(this.redFlash, 0.4);
+          this.addFloater(ECON.playerX, ev.dmg, false, 'hurt');
+        }
+      } else if (ev.t === 'monsterWindup') {
+        // 공격 전조 — 기 모으기 불티 + (근거리) 바닥 경고 고리
+        if (ev.kind === 'ranged') {
+          for (let i = 0; i < (ev.heavy ? 14 : 7); i++) {
+            const a = Math.random() * Math.PI * 2;
+            this.embers.push({
+              x: ev.x + Math.cos(a) * 34,
+              y: this.groundY() - 46 * this.scale() + Math.sin(a) * 30 * this.scale(),
+              vy: -18 - Math.random() * 26,
+              life: 1,
+              s: 1.2 + Math.random() * 1.8,
+              color: ev.color || '#ffd76a',
+            });
+          }
+        } else if (ev.isBoss) {
+          this.shake = Math.max(this.shake, 1.4);
+        }
+      } else if (ev.t === 'monsterAttack') {
+        this.monsterStrikeFx(ev, now);
       } else if (ev.t === 'monsterDeath') {
         this.burst(ev.x, ev.isBoss ? '#ffcf6a' : '#d7e2f2', ev.isBoss ? 34 : 16, true);
         if (ev.isBoss) {
@@ -244,6 +264,7 @@ export class Renderer {
         }
         if (ev.gold) this.addFloater(ev.x, `+${ev.gold}`, false, 'gold');
         this.spawnLoot(ev, now);
+        this.deathFx(ev, now);
       } else if (ev.t === 'skill') {
         this.fx.push({ key: ev.key, x: ev.x || ECON.playerX, t0: now, dur: ev.key === 'whirl' ? 560 : ev.key === 'strike' ? 420 : 760 });
         if (ev.key === 'whirl') {
@@ -342,6 +363,21 @@ export class Renderer {
         this.shake = 8;
         this.flash = Math.max(this.flash, 0.16);
         this.bossAlert = now;
+        // 위압감 있는 등장: 발밑 충격파 + 지면 먼지 파도
+        this.bossRoar = { t0: now, x: Number.isFinite(ev.x) ? ev.x : ECON.spawnX };
+        const gyy = this.groundY();
+        for (let i = 0; i < 16; i++) {
+          this.puffs.push({
+            x: this.worldX(Number.isFinite(ev.x) ? ev.x : ECON.spawnX) + (Math.random() - 0.5) * 60 * this.scale(),
+            y: gyy - Math.random() * 6,
+            r: (4 + Math.random() * 7) * this.scale(),
+            vx: (Math.random() - 0.5) * 80,
+            vy: -20 - Math.random() * 40,
+            life: 1,
+            color: 'rgba(255,190,140,0.42)',
+          });
+        }
+        for (let i = 0; i < 2; i++) this.rings.push({ x: Number.isFinite(ev.x) ? ev.x : ECON.spawnX, life: 1, r: 20 + i * 18, color: '#ff7a5c', wide: 2.2 });
       } else if (ev.t === 'levelUp') {
         this.rings.push({ x: ECON.playerX, life: 1, r: 10, color: '#ffe08a', wide: 1.2 });
       }
@@ -672,10 +708,13 @@ export class Renderer {
 
     if (this.battle) {
       this.syncRarity();
+      this.drawBossRoar(ctx, t);
+      this.drawPuffs(ctx, dt);
       this.drawMonsters(ctx, t, dt);
       this.drawPet(ctx, t, dt);
       this.drawPlayer(ctx, t, dt);
       if (this.effects) {
+        this.drawProjectiles(ctx, t);
         this.drawFx(ctx, t);
         this.drawArcs(ctx, t);
         this.drawRings(ctx, dt);
@@ -684,12 +723,17 @@ export class Renderer {
         this.drawLoot(ctx, dt, t);
         this.drawFloaters(ctx, dt, t);
         this.drawBossAlert(ctx, W, t);
+        this.flushDelayedHits(t);
       } else {
         this.fx = [];
         this.rings = [];
         this.sparks = [];
         this.floaters = [];
         this.drops = [];
+        this.puffs = [];
+        this.projectiles = [];
+        this.delayedHits = [];
+        this.bossRoar = null;
         this.bossAlert = 0;
       }
       this.drawBossBar(ctx, W, t);
@@ -1044,62 +1088,186 @@ export class Renderer {
     ctx.restore();
   }
 
-  /* ─────────── 몬스터 ─────────── */
+  /* ─────────── 몬스터 (v3.7 이동·공격·피격 모션) ───────────
+   * 스프라이트는 1장이지만, 종류별 움직임 문법(슬라임 도약 / 비행 호버 / 보행 걸음)과
+   * 전조 → 돌진 → 타격 → 피격 → 사망의 5단계 변형으로 '살아 움직이는' 느낌을 만든다.
+   */
   drawMonsters(ctx, now, dt) {
     const b = this.battle;
     const gy = this.groundY();
     const sc = this.scale();
     for (const m of b.monsters) {
       if (!Number.isFinite(m.x)) continue;
+      const arch = m.arch || monsterMotion(m.name);
+      const atkDef = monsterAttack(m.name);
+      const color = m.atkColor || atkDef.color || '#ffd166';
       const knock = Number.isFinite(m.knock) ? m.knock : 0;
       const x = this.worldX(m.x + knock);
       const lungeAge = now - (m.lungeAt || 0);
-      const lunge = lungeAge >= 0 && lungeAge < 240 ? (1 - lungeAge / 240) : 0;
+      const lunge = lungeAge >= 0 && lungeAge < 260 ? Math.sin(Math.PI * clamp(1 - lungeAge / 260, 0, 1)) : 0;
       let h = (m.isBoss ? 168 : 84) * sc * (m.isBoss ? 1 : m.scale);
       h = Math.min(h, this.H * (m.isBoss ? 0.62 : 0.4));
       const w = h;
-      let alpha = 1;
-      let sink = 0;
-      let rot = 0;
-      if (m.dying) {
-        const k = clamp((now - m.dying) / 450, 0, 1);
-        alpha = 1 - k;
-        sink = k * 16 * sc;
-        rot = k * 0.35;
-      }
-      // 줄 서 있는 몬스터끼리 완전히 겹치지 않도록 아주 얕은 깊이차를 준다
       const depth = ((m.id % 3) - 1) * 5 * sc;
       const depthScale = 1 - (m.id % 3) * 0.02;
       const hitAge = now - (m.hitAt || 0);
-      const hit = hitAge >= 0 && hitAge < 95;
-      const pop = hit ? 1 + 0.07 * (1 - hitAge / 120) : 1;
-      const bob = Math.sin(now / 260 + m.animSeed) * 2.4 * sc;
-      const lungeX = -lunge * 16 * sc;
+      const hitK = hitAge >= 0 && hitAge < 130 ? 1 - hitAge / 130 : 0;
+      const pop = 1 + hitK * 0.08;
+
+      // 이동 상태(정지하면 걸음 모션이 부드럽게 멈춘다)
+      const moving = !!m.moving;
+      const moveK = (m.__moveK = (m.__moveK || 0) + ((moving ? 1 : 0) - (m.__moveK || 0)) * Math.min(1, dt / 140));
+      const walk = Number.isFinite(m.walk) ? m.walk : 0;
+      const tsec = now / 1000;
+      const seed = m.animSeed || 0;
+
+      let lift = 0;         // 화면 위로 떠오르는 높이(px)
+      let dx = 0;           // 좌우 오프셋(px)
+      let sx = 1;           // 가로 신축(스쿼시 & 스트레치)
+      let sy = 1;           // 세로 신축
+      let rot = 0;          // 발끝 기준 기울기
+      let shadowK = 1;      // 그림자 크기 배율
+      let shadowA = 0.4;
+
+      if (arch === 'slime') {
+        // 통통 튀는 도약 — 착지 순간 가로로 퍼지는 스쿼시, 그림자 크기 연동
+        const HOP = 92;
+        const ph = (walk % HOP) / HOP;
+        if (moveK > 0.02) {
+          const hop = Math.sin(Math.PI * ph);
+          const land = Math.max(0, 1 - Math.min(ph, 1 - ph) / 0.16);
+          lift = hop * h * 0.32 * moveK;
+          sx *= 1 + (0.22 * land - 0.07 * hop) * moveK;
+          sy *= 1 - (0.22 * land - 0.06 * hop) * moveK;
+          shadowK *= 1 - hop * 0.45 * moveK;
+          shadowA *= 1 - hop * 0.35 * moveK;
+          if (this.effects && moveK > 0.4 && m.__ph != null && ph < m.__ph - 0.5) {
+            this.stepDust(x, gy, sc, 3, 'rgba(225,230,240,0.4)');
+          }
+          m.__ph = ph;
+        } else {
+          const j = Math.sin(tsec * 1.6 + seed); // 대기: 젤리처럼 출렁
+          sy *= 1 + 0.045 * j;
+          sx *= 1 - 0.038 * j;
+        }
+      } else if (arch === 'flyer') {
+        // 공중 부유 + 날갯짓(빠른 신축) + 지면에서 뜬 그림자
+        const flap = Math.sin(tsec * 9.5 + seed);
+        lift = h * 0.15 + Math.sin(tsec * 2.4 + seed) * h * 0.04 + flap * h * 0.012;
+        sx *= 1 + 0.038 * flap;
+        sy *= 1 - 0.032 * flap;
+        rot += Math.sin(tsec * 2.1 + seed * 0.6) * 0.05 - moveK * 0.045;
+        dx += Math.sin(tsec * 1.7 + seed) * 2.4 * sc;
+        shadowK *= 0.62;
+        shadowA *= 0.62;
+      } else {
+        // 보행 — 좌우 걸음 바운스 + 앞쪽 기울기 + 발걸음 먼지
+        const STEP = 22;
+        const ph = (walk / STEP) % 2;
+        const step = Math.abs(Math.sin(Math.PI * ph));
+        lift = step * 4.4 * sc * moveK;
+        dx += Math.sin(Math.PI * ph) * 1.5 * sc * moveK;
+        rot += -0.05 * moveK + Math.sin(Math.PI * 2 * ph) * 0.014 * moveK;
+        sx *= 1 + 0.022 * step * moveK;
+        sy *= 1 - 0.02 * step * moveK;
+        const half = Math.floor(ph);
+        if (this.effects && moveK > 0.35 && m.__step != null && m.__step !== half) {
+          this.stepDust(x + (half ? 1 : -1) * 6 * sc, gy, sc, 2, 'rgba(215,220,232,0.36)');
+        }
+        m.__step = half;
+      }
+
+      // 대기 중 호흡·살짝 흔들림(이동 중에는 약하게)
+      const idle = 1 - moveK;
+      if (idle > 0.02) {
+        const breath = Math.sin(tsec * 1.8 + seed);
+        sy *= 1 + 0.022 * breath * idle;
+        sx *= 1 - 0.016 * breath * idle;
+        dx += Math.sin(tsec * 0.9 + seed) * 1.2 * sc * idle;
+        rot += Math.sin(tsec * 0.65 + seed) * 0.013 * idle;
+      }
+
+      // 공격 전조 — 뒤로 젖히며(원거리) / 웅크리며(근거리) 몸을 모은다
+      const wuAge = now - (m.windupAt || 0);
+      const wuDur = m.windupDur || 300;
+      const winding = (m.windupAt || 0) > 0 && wuAge >= 0 && wuAge < wuDur;
+      const wk = winding ? clamp(wuAge / wuDur, 0, 1) : 0;
+      if (winding) {
+        const e = easeOut(wk);
+        if (m.atkKind === 'ranged') {
+          rot += 0.13 * e;
+          dx += 4 * sc * e;
+          sy *= 1 + 0.055 * e;
+          sx *= 1 + 0.02 * e;
+          lift += 3 * sc * e + Math.sin(wuAge / 60) * 0.9 * sc * e;
+        } else {
+          dx += 13 * sc * e;
+          sy *= 1 - 0.14 * e;
+          sx *= 1 + 0.11 * e;
+          rot += 0.11 * e;
+        }
+      }
+
+      // 돌진 — 플레이어 쪽으로 빠르게 파고들며 앞으로 기운다
+      if (lunge > 0) {
+        dx -= (m.isBoss ? 54 : 38) * sc * lunge;
+        rot -= 0.13 * lunge;
+        sx *= 1 + 0.07 * lunge;
+        sy *= 1 - 0.05 * lunge;
+        lift += 2 * sc * lunge;
+      }
+
+      // 피격 — 밀려나며 찌그러지고 타격 방향으로 기운다
+      if (hitK > 0) {
+        dx += 8 * sc * hitK;
+        rot += 0.2 * hitK;
+        sx *= 1 + 0.12 * hitK;
+        sy *= 1 - 0.1 * hitK;
+      }
+
+      // 사망 — 뒤로 튕겨 오르며 회전·축소되고 연기로 흩어진다
+      let alpha = 1;
+      if (m.dying) {
+        const k = clamp((now - m.dying) / 450, 0, 1);
+        alpha = 1 - k;
+        dx += easeOut(k) * 72 * sc;
+        rot += k * 1.7;
+        lift += Math.sin(Math.PI * Math.min(1, k * 1.15)) * h * 0.14;
+        sx *= 1 - 0.22 * k;
+        sy *= 1 - 0.22 * k;
+      }
+
+      const footY = gy - lift + depth;
+      const kx = sx * pop * depthScale;
+      const ky = sy * pop * depthScale;
+      const shadowScale = shadowK * (1 - clamp(lift / (h * 1.4), 0, 1) * 0.45);
+
+      // 1) 지면 그림자
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, alpha) * shadowA;
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.ellipse(x, gy + 2, w * 0.28 * shadowScale, w * 0.085 * shadowScale, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
 
       ctx.save();
       ctx.globalAlpha = Math.max(0, alpha);
-      // 그림자
-      ctx.fillStyle = 'rgba(0,0,0,0.4)';
-      ctx.beginPath();
-      ctx.ellipse(x, gy + 2, w * 0.28, w * 0.08, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      const cxp = x + lungeX;
-      const cyp = gy - h * 0.5 + bob + sink + depth;
+      const auraY = footY - h * 0.5;
       if (m.isBoss) {
-        const grd = ctx.createRadialGradient(cxp, cyp, 6, cxp, cyp, h * 0.8);
+        const grd = ctx.createRadialGradient(x, auraY, 6, x, auraY, h * 0.8);
         grd.addColorStop(0, 'rgba(255,70,50,0.22)');
         grd.addColorStop(1, 'rgba(255,70,50,0)');
         ctx.fillStyle = grd;
-        ctx.fillRect(cxp - h, cyp - h, h * 2, h * 2);
+        ctx.fillRect(x - h, auraY - h, h * 2, h * 2);
       }
       // 황금 던전 몬스터: 금빛 광휘 + 잔불
       if (m.gold) {
-        const gg = ctx.createRadialGradient(cxp, cyp, 6, cxp, cyp, h * 0.78);
+        const gg = ctx.createRadialGradient(x, auraY, 6, x, auraY, h * 0.78);
         gg.addColorStop(0, 'rgba(255,205,80,0.3)');
         gg.addColorStop(1, 'rgba(255,180,60,0)');
         ctx.fillStyle = gg;
-        ctx.fillRect(cxp - h, cyp - h, h * 2, h * 2);
+        ctx.fillRect(x - h, auraY - h, h * 2, h * 2);
         if (this.effects && this.embers.length < 150 && Math.random() < 0.3) {
           this.embers.push({
             x: m.x + (Math.random() - 0.5) * 30,
@@ -1111,35 +1279,40 @@ export class Renderer {
           });
         }
       }
+
+      // 2) 전조 텔레그래프(기 모으기 오라 / 바닥 경고)
+      if (this.effects && winding) this.drawWindup(ctx, m, x + dx, footY, h, sc, wk, color);
+
+      // 3) 본체 — 발끝 기준 변형(스쿼시·기울기·회전)
       const img = this.image(m.name);
+      ctx.save();
+      ctx.translate(x + dx, footY);
+      ctx.rotate(rot);
+      ctx.scale(kx, ky);
       if (img) {
-        ctx.save();
-        ctx.translate(cxp, cyp);
-        if (rot) ctx.rotate(rot);
-        ctx.scale(pop * depthScale, pop * depthScale);
-        ctx.drawImage(img, -w / 2, -h / 2, w, h);
-        if (hit) {
+        ctx.drawImage(img, -w / 2, -h, w, h);
+        if (hitK > 0.02) {
           const white = this.whiteOf(m.name, img);
           if (white) {
-            ctx.globalAlpha = 0.6 * (1 - hitAge / 95);
-            ctx.drawImage(white, -w / 2, -h / 2, w, h);
+            ctx.globalAlpha = 0.55 * hitK * Math.max(0, alpha);
+            ctx.drawImage(white, -w / 2, -h, w, h);
             ctx.globalAlpha = Math.max(0, alpha);
           }
         }
-        ctx.restore();
       } else {
         ctx.fillStyle = '#7d8fa6';
         ctx.beginPath();
-        ctx.arc(cxp, cyp, h * 0.33, 0, Math.PI * 2);
+        ctx.arc(0, -h * 0.5, h * 0.33, 0, Math.PI * 2);
         ctx.fill();
       }
+      ctx.restore();
 
-      // 체력바
+      // 4) 체력바
       if (!m.dying) {
         const bw = m.isBoss ? 96 * sc : 46 * sc;
         const bh = m.isBoss ? 6 : 4.5;
-        const bx = cxp - bw / 2;
-        const by = cyp - h * 0.55 - 10;
+        const bx = x + dx - bw / 2;
+        const by = footY - h * ky - 10;
         ctx.fillStyle = 'rgba(0,0,0,0.62)';
         roundRect(ctx, bx - 1, by - 1, bw + 2, bh + 2, 2);
         ctx.fill();
@@ -1152,6 +1325,381 @@ export class Renderer {
       }
       ctx.restore();
     }
+  }
+
+  /** 공격 전조 연출 — 원거리는 가슴에 뭉치는 기, 근거리는 발밑 경고 고리 */
+  drawWindup(ctx, m, cx, footY, h, sc, wk, color) {
+    const e = easeOut(wk);
+    const pulse = 0.7 + 0.3 * Math.sin(wk * Math.PI * 5);
+    if (m.atkKind === 'ranged') {
+      const cy = footY - h * 0.62;
+      const rad = 5 * sc + e * h * 0.17;
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(2, rad));
+      g.addColorStop(0, 'rgba(255,255,255,0.95)');
+      g.addColorStop(0.42, hexA(color, 0.85));
+      g.addColorStop(1, hexA(color, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.max(2, rad), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = hexA(color, 0.45 + 0.35 * pulse);
+      ctx.lineWidth = 1.6 * sc;
+      ctx.beginPath();
+      ctx.arc(cx, cy, rad * 1.5, wk * 6, wk * 6 + 2.4);
+      ctx.stroke();
+      if (m.windupHeavy) {
+        ctx.strokeStyle = hexA('#ff8a5c', 0.5 * e);
+        ctx.lineWidth = 2.2 * sc;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad * 2.1, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    } else {
+      // 때릴 지점(플레이어 발밑)에 조여오는 붉은 원
+      const px = this.worldX(this.battle.player.x);
+      const gy = this.groundY();
+      const big = (m.isBoss ? 1.45 : 1) * (m.windupHeavy ? 1.25 : 1);
+      const r = (34 - 12 * e) * sc * big;
+      ctx.strokeStyle = hexA('#ff5a3d', 0.32 + 0.55 * e);
+      ctx.lineWidth = (1.6 + 2.6 * e) * sc;
+      ctx.beginPath();
+      ctx.ellipse(px, gy + 2, r, r * 0.34, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = hexA('#ff5a3d', 0.08 + 0.18 * e);
+      ctx.beginPath();
+      ctx.ellipse(px, gy + 2, r * 0.85, r * 0.28, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // 몬스터 몸의 웅크림 오라
+      const cy = footY - h * 0.42;
+      const g2 = ctx.createRadialGradient(cx, cy, 4, cx, cy, h * 0.55);
+      g2.addColorStop(0, hexA(color, 0.2 * e));
+      g2.addColorStop(1, hexA(color, 0));
+      ctx.fillStyle = g2;
+      ctx.fillRect(cx - h, cy - h, h * 2, h * 2);
+    }
+  }
+
+  /** 발걸음·착지 먼지(화면 좌표) */
+  stepDust(x, gy, sc, n, color) {
+    if (!this.effects) return;
+    if (this.puffs.length > 110) return;
+    for (let i = 0; i < n; i++) {
+      this.puffs.push({
+        x: x + (Math.random() - 0.5) * 16 * sc,
+        y: gy - Math.random() * 3,
+        r: (2 + Math.random() * 4) * sc,
+        vx: (Math.random() - 0.5) * 26,
+        vy: -8 - Math.random() * 18,
+        life: 1,
+        color: color || 'rgba(215,220,232,0.38)',
+      });
+    }
+  }
+
+  drawPuffs(ctx, dt) {
+    if (!this.puffs.length) return;
+    for (const p of this.puffs) {
+      p.x += (p.vx * dt) / 1000;
+      p.y += (p.vy * dt) / 1000;
+      p.vy += 10 * (dt / 1000);
+      p.r += 7 * (dt / 1000);
+      ctx.globalAlpha = Math.max(0, p.life) * 0.8;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+      p.life -= dt / 640;
+    }
+    this.puffs = this.puffs.filter((p) => p.life > 0);
+    ctx.globalAlpha = 1;
+  }
+
+  /** 몬스터 타격 연출 — 할퀴기 궤적 / 내려찍기 충격파 / 물기 / 투사체 발사 */
+  monsterStrikeFx(ev, now) {
+    if (!this.effects) return;
+    const gy = this.groundY();
+    const sc = this.scale();
+    const color = ev.color || '#ffd166';
+    const px = ECON.playerX;
+    const big = ev.isBoss ? 1.55 : 1;
+    if (ev.kind === 'ranged') {
+      this.spawnProjectile(ev, now);
+      this.rings.push({ x: ev.x, life: 1, r: 10, color, wide: 1.2 });
+      for (let i = 0; i < 7; i++) {
+        const a = Math.random() * Math.PI * 2;
+        this.sparks.push({
+          x: ev.x + Math.cos(a) * 16,
+          y: gy - 58 * sc + Math.sin(a) * 16,
+          life: 1,
+          vx: Math.cos(a) * 90,
+          vy: Math.sin(a) * 90 - 20,
+          color,
+          s: 1.4 + Math.random() * 1.8,
+        });
+      }
+      this.shake = Math.max(this.shake, ev.heavy ? 3 : 1.5);
+      return;
+    }
+    if (ev.move === 'slam') {
+      this.fx.push({ key: 'slam', x: px, t0: now, dur: 430, big });
+      this.fx.push({ key: 'fxBurst', x: px, t0: now, dur: 320, big: big * 0.9 });
+      this.rings.push({ x: px, life: 1, r: 16, color: ev.heavy ? '#ff7a3d' : '#ffd166', wide: 2.2 * big });
+      this.rings.push({ x: px - 6, life: 1, r: 8, color: '#fff3cf', wide: 1.1 });
+      for (let i = 0; i < Math.round(10 * big); i++) {
+        this.stepDust(this.worldX(px) + (Math.random() - 0.5) * 70 * sc, gy, sc, 1, 'rgba(224,214,190,0.5)');
+      }
+      this.shake = Math.max(this.shake, ev.heavy ? 7.5 : 4.4);
+    } else if (ev.move === 'bite') {
+      this.arcs.push({ x: px + 20, t0: now, dur: 300, dx: 0, y: 62, r: 26 * big, a0: -0.15, sweep: 1.5, color, alpha: 0.95, w: 5.2 });
+      this.arcs.push({ x: px + 20, t0: now, dur: 300, dx: 0, y: 44, r: 24 * big, a0: Math.PI - 1.45, sweep: 1.5, color, alpha: 0.9, w: 5.2 });
+      this.burst(px + 16, '#ff6a5a', ev.heavy ? 12 : 7, false);
+      this.shake = Math.max(this.shake, 3.3);
+    } else {
+      // 할퀴기: 굵기가 다른 발톱 궤적 3줄 (+불꽃 발톱 이펙트 스프라이트)
+      if (ev.color !== '#e8eef6') this.fx.push({ key: 'fxClaw', x: px, t0: now, dur: 340, big });
+      for (let i = 0; i < 3; i++) {
+        this.arcs.push({
+          x: px + 20,
+          t0: now + i * 24,
+          dur: 330,
+          dx: -i * 4,
+          y: 46 + i * 9,
+          r: (22 + i * 9) * big,
+          a0: -1.05 - i * 0.12,
+          sweep: 1.7,
+          color: i === 1 ? '#fff0d0' : color,
+          alpha: 0.95 - i * 0.13,
+          w: (5 - i * 0.9) * (big > 1 ? 1.3 : 1),
+        });
+      }
+      this.sparks.push({ x: px + 22, y: gy - 48 * sc, life: 1, vx: 60, vy: -30, color: '#ffb3a0', s: 2.4 });
+      this.shake = Math.max(this.shake, ev.heavy ? 5 : 3);
+    }
+    if (ev.heavy) this.flash = Math.max(this.flash, 0.12);
+  }
+
+  /** 몬스터 사망 연출 — 연기 기둥 + 떠오르는 불티 */
+  deathFx(ev, now) {
+    if (!this.effects) return;
+    const sc = this.scale();
+    const gy = this.groundY();
+    const x = this.worldX(ev.x);
+    const n = ev.isBoss ? 16 : 7;
+    for (let i = 0; i < n; i++) {
+      this.puffs.push({
+        x: x + (Math.random() - 0.5) * 42 * sc,
+        y: gy - Math.random() * 50 * sc,
+        r: (3 + Math.random() * 6) * sc * (ev.isBoss ? 1.5 : 1),
+        vx: (Math.random() - 0.5) * 44,
+        vy: -12 - Math.random() * 34,
+        life: 1,
+        color: ev.isBoss ? 'rgba(255,190,120,0.5)' : 'rgba(190,200,220,0.42)',
+      });
+    }
+    for (let i = 0; i < (ev.isBoss ? 18 : 6); i++) {
+      this.embers.push({
+        x: ev.x + (Math.random() - 0.5) * 30,
+        y: gy - Math.random() * 52 * sc,
+        vy: -40 - Math.random() * 70,
+        life: 1,
+        s: 1.2 + Math.random() * 1.8,
+        color: ev.isBoss ? '#ffd76a' : '#cfe0f5',
+      });
+    }
+  }
+
+  /* ─────────── 원거리 투사체 (화염구·깃털·암흑·신성·산성) ─────────── */
+  spawnProjectile(ev, now) {
+    const sc = this.scale();
+    const gy = this.groundY();
+    this.projectiles.push({
+      kind: ev.proj || 'fire',
+      x0: this.worldX(ev.x),
+      x1: this.worldX(ECON.playerX) + 4,
+      y0: gy - (ev.isBoss ? 104 : 58) * sc,
+      y1: gy - 60 * sc,
+      t0: now,
+      dur: ev.isBoss ? 290 : 245,
+      wob: Math.random() * Math.PI * 2,
+      color: ev.color || '#ff8a3d',
+      k: (ev.isBoss ? 1.45 : 1) * sc,
+    });
+    if (this.projectiles.length > 14) this.projectiles.shift();
+  }
+
+  drawProjectiles(ctx, now) {
+    if (!this.projectiles.length) return;
+    const keep = [];
+    for (const p of this.projectiles) {
+      const k = clamp((now - p.t0) / p.dur, 0, 1);
+      const x = lerp(p.x0, p.x1, k);
+      const y = lerp(p.y0, p.y1, k) - Math.sin(Math.PI * k) * 30 * (p.k || 1) + Math.sin(k * Math.PI * 3 + p.wob) * 3;
+      for (let i = 3; i >= 1; i--) {
+        const kk = clamp(k - i * 0.055, 0, 1);
+        const tx = lerp(p.x0, p.x1, kk);
+        const ty = lerp(p.y0, p.y1, kk) - Math.sin(Math.PI * kk) * 30 * (p.k || 1);
+        ctx.globalAlpha = Math.max(0, 0.34 - i * 0.09);
+        this.drawProjectileBody(ctx, p, tx, ty, 1 - i * 0.2);
+      }
+      ctx.globalAlpha = 1;
+      this.drawProjectileBody(ctx, p, x, y, 1);
+      if (k >= 1) {
+        this.projectileImpact(p, x, y, now);
+        continue;
+      }
+      keep.push(p);
+    }
+    this.projectiles = keep;
+    ctx.globalAlpha = 1;
+  }
+
+  drawProjectileBody(ctx, p, x, y, k) {
+    const s = Math.max(3, 12.5 * (p.k || 1) * k);
+    ctx.save();
+    ctx.translate(x, y);
+    const col = p.color || '#ff8a3d';
+    if (p.kind === 'feather') {
+      ctx.rotate(-0.55);
+      ctx.shadowColor = hexA(col, 0.9);
+      ctx.shadowBlur = 8;
+      const g = ctx.createLinearGradient(0, -s, 0, s);
+      g.addColorStop(0, 'rgba(255,255,255,0.95)');
+      g.addColorStop(0.55, hexA(col, 0.95));
+      g.addColorStop(1, hexA(col, 0.1));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, s * 0.42, s * 1.15, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(0, -s);
+      ctx.lineTo(0, s);
+      ctx.stroke();
+    } else if (p.kind === 'dark') {
+      ctx.shadowColor = hexA(col, 0.9);
+      ctx.shadowBlur = 12;
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, s);
+      g.addColorStop(0, 'rgba(255,255,255,0.85)');
+      g.addColorStop(0.35, hexA(col, 0.95));
+      g.addColorStop(1, 'rgba(40,10,60,0.05)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, s, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = hexA('#e7d4ff', 0.8);
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, s * 1.5, s * 0.55, Math.PI / 5, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (p.kind === 'holy') {
+      ctx.shadowColor = hexA(col, 0.95);
+      ctx.shadowBlur = 14;
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, s * 1.3);
+      g.addColorStop(0, 'rgba(255,255,255,0.95)');
+      g.addColorStop(0.45, hexA(col, 0.9));
+      g.addColorStop(1, hexA(col, 0));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, s * 1.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,250,220,0.95)';
+      ctx.lineWidth = Math.max(1.4, s * 0.22);
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 1.7);
+      ctx.lineTo(0, s * 1.7);
+      ctx.moveTo(-s * 1.7, 0);
+      ctx.lineTo(s * 1.7, 0);
+      ctx.stroke();
+    } else if (p.kind === 'acid') {
+      ctx.shadowColor = hexA(col, 0.85);
+      ctx.shadowBlur = 9;
+      const g = ctx.createRadialGradient(-s * 0.3, -s * 0.3, 0, 0, 0, s * 1.1);
+      g.addColorStop(0, '#f0ffe0');
+      g.addColorStop(0.5, hexA(col, 0.95));
+      g.addColorStop(1, hexA('#2f7a3d', 0.15));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, s * 1.05, s * 0.9, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = hexA('#d9ffd0', 0.85);
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath();
+        ctx.arc(-s * 1.1 - i * s * 0.5, Math.sin(i * 2) * s * 0.5, s * 0.22, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      // 화염구
+      ctx.shadowColor = hexA(col, 0.95);
+      ctx.shadowBlur = 13;
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, s * 1.15);
+      g.addColorStop(0, '#fffbe6');
+      g.addColorStop(0.3, '#ffd76a');
+      g.addColorStop(0.66, hexA(col, 0.95));
+      g.addColorStop(1, hexA('#c0260a', 0.05));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(0, 0, s * 1.15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = hexA('#ff9a3d', 0.8);
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.6, -s * 0.8);
+      ctx.lineTo(-s * 2.4, 0);
+      ctx.lineTo(-s * 0.6, s * 0.8);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  projectileImpact(p, x, y, now) {
+    const wx = this.worldFromScreen(x);
+    const col = p.kind === 'holy' ? '#fff2c4' : p.kind === 'dark' ? '#b98bff' : p.kind === 'feather' ? '#bfeaff' : p.kind === 'acid' ? '#9df0a8' : '#ffb066';
+    if (p.kind === 'fire' || p.kind === 'acid') this.fx.push({ key: 'fxBurst', x: wx, t0: typeof now === 'number' ? now : Date.now(), dur: 300, big: 0.95 });
+    this.burst(wx, col, p.kind === 'fire' ? 14 : 10, true);
+    this.rings.push({ x: wx, life: 1, r: 8, color: col, wide: 1.4 });
+    this.shake = Math.max(this.shake, 2.6);
+    if (p.kind === 'fire' || p.kind === 'acid') {
+      for (let i = 0; i < 4; i++) this.stepDust(x, this.groundY(), this.scale(), 1, 'rgba(255,180,110,0.4)');
+    }
+  }
+
+  worldFromScreen(x) {
+    return (x / Math.max(1, this.W)) * 1120;
+  }
+
+  /** 보스 등장 포효 — 지면을 가르는 충격파 고리 */
+  drawBossRoar(ctx, now) {
+    const r = this.bossRoar;
+    if (!r) return;
+    const age = now - r.t0;
+    const DUR = 900;
+    if (age < 0 || age > DUR) {
+      this.bossRoar = null;
+      return;
+    }
+    const k = age / DUR;
+    const gy = this.groundY();
+    const sc = this.scale();
+    const x = this.worldX(r.x);
+    ctx.save();
+    for (let i = 0; i < 3; i++) {
+      const kk = clamp(k - i * 0.13, 0, 1);
+      if (kk <= 0) continue;
+      ctx.globalAlpha = (1 - kk) * 0.5;
+      ctx.strokeStyle = i ? '#ff8a5c' : '#ffd166';
+      ctx.lineWidth = (4 - i) * sc;
+      ctx.beginPath();
+      ctx.ellipse(x, gy + 2, (36 + kk * 250) * sc, (12 + kk * 84) * sc, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = (1 - k) * 0.32;
+    const g = ctx.createLinearGradient(x, gy - 200 * sc, x, gy);
+    g.addColorStop(0, 'rgba(255,120,60,0)');
+    g.addColorStop(1, 'rgba(255,150,80,0.55)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x - 26 * sc, gy - 200 * sc, 52 * sc, 200 * sc);
+    ctx.restore();
   }
 
   /* ─────────── 이펙트 ─────────── */
@@ -1235,6 +1783,53 @@ export class Renderer {
         ctx.beginPath();
         ctx.ellipse(cx, gy - 10 * sc, (10 + k * 70) * sc, (6 + k * 26) * sc, 0, 0, Math.PI * 2);
         ctx.stroke();
+      } else if (f.key === 'slam') {
+        // 내려찍기: 위에서 꽂히는 충격 기둥 + 바닥을 가르는 충격파
+        const big = f.big || 1;
+        ctx.globalAlpha = fade * 0.8;
+        const g = ctx.createLinearGradient(x, gy - 150 * sc * big, x, gy);
+        g.addColorStop(0, 'rgba(255,235,180,0)');
+        g.addColorStop(0.5, `rgba(255,205,110,${0.3 * fade})`);
+        g.addColorStop(1, 'rgba(255,140,60,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.moveTo(x - 8 * sc * big, gy - 132 * sc * big);
+        ctx.lineTo(x + 8 * sc * big, gy - 132 * sc * big);
+        ctx.lineTo(x + 3 * sc * big, gy);
+        ctx.lineTo(x - 3 * sc * big, gy);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = fade * 0.7;
+        ctx.strokeStyle = '#fff3cf';
+        ctx.lineWidth = 2.2 * sc;
+        ctx.beginPath();
+        ctx.ellipse(x, gy - 6 * sc, (14 + k * 96 * big) * sc, (5 + k * 30 * big) * sc, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        // 튀는 잔해
+        ctx.fillStyle = 'rgba(255,210,150,0.85)';
+        for (let i = 0; i < 4; i++) {
+          const a = -Math.PI / 2 + (i - 1.5) * 0.5;
+          const d = k * 60 * big * sc;
+          ctx.beginPath();
+          ctx.arc(x + Math.cos(a) * d, gy - 8 * sc + Math.sin(a) * d * 0.6, (1.5 + (1 - k) * 2.5) * sc, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (f.key === 'fxClaw' || f.key === 'fxBurst') {
+        // AI로 만든 이펙트 스프라이트(검은 배경) — 'lighter' 합성으로 광원처럼 얹는다
+        const img = this.image(f.key === 'fxClaw' ? 'fx_claw' : 'fx_burst');
+        if (img) {
+          const base = f.key === 'fxClaw' ? 108 : 62 + k * 96;
+          const sz = base * sc * (f.big || 1);
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = Math.min(1, fade * (f.key === 'fxClaw' ? 1.0 : 0.95));
+          if (f.key === 'fxClaw') {
+            ctx.translate(x, gy - 58 * sc);
+            ctx.rotate(-0.5 + k * 0.3);
+          } else {
+            ctx.translate(x, gy - 58 * sc);
+          }
+          ctx.drawImage(img, -sz / 2, -sz / 2, sz, sz);
+        }
       } else if (f.key === 'heal') {
         // 치유: 발치에서 올라오는 초록 빛 입자 + 부드러운 고리
         ctx.globalAlpha = fade * 0.75;
@@ -1318,6 +1913,23 @@ export class Renderer {
     this.embers = this.embers.filter((e) => e.life > 0);
     if (this.embers.length > 180) this.embers.splice(0, this.embers.length - 180);
     ctx.globalAlpha = 1;
+  }
+
+  /** 투사체 도착 시점에 맞춰 피해 숫자·붉은 플래시를 터뜨린다 */
+  flushDelayedHits(now) {
+    if (!this.delayedHits.length) return;
+    const due = [];
+    const keep = [];
+    for (const d of this.delayedHits) {
+      if (now >= d.at) due.push(d);
+      else keep.push(d);
+    }
+    this.delayedHits = keep;
+    for (const d of due) {
+      this.addFloater(ECON.playerX, d.dmg, false, 'hurt');
+      this.redFlash = Math.max(this.redFlash, 0.42);
+      this.shake = Math.max(this.shake, 3.4);
+    }
   }
 
   drawFloaters(ctx, dt, now) {

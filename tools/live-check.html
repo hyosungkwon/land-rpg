@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>land-rpg v3.7 · 390×844 라이브 점검</title>
+<style>
+  html, body { margin: 0; background: #05070c; color: #cfd6e4; font: 12px/1.5 system-ui, sans-serif; }
+  .wrap { display: flex; gap: 12px; padding: 10px; align-items: flex-start; }
+  .phone { width: 390px; height: 844px; border-radius: 22px; overflow: hidden; box-shadow: 0 0 0 6px #161d2b; flex: 0 0 auto; }
+  iframe { width: 390px; height: 844px; border: 0; display: block; background: #070a12; }
+  pre { margin: 0; font-size: 11px; line-height: 1.45; color: #9fb0c8; white-space: pre-wrap; max-width: 520px; }
+  .ok { color: #6fe0a0; } .bad { color: #ff7b7b; }
+</style>
+</head>
+<body>
+<!-- 개발/검증용: 390×844 뷰포트에서 앱을 실제로 돌리며 콘솔/네트워크 오류와 렌더링을 점검한다. -->
+<div class="wrap">
+  <div class="phone"><iframe id="frame" src="../index.html?tab=hunt" title="land-rpg 390×844"></iframe></div>
+  <pre id="out">점검 중… (약 16초)</pre>
+</div>
+<script>
+const frame = document.getElementById('frame');
+const out = document.getElementById('out');
+const logs = [];
+let started = 0;
+
+function attach(w) {
+  try {
+    const ce = w.console.error.bind(w.console);
+    w.console.error = (...a) => { logs.push(['console.error', a.map((x) => String(x && x.stack || x)).join(' ')]); ce(...a); };
+    const cw = w.console.warn.bind(w.console);
+    w.console.warn = (...a) => { logs.push(['console.warn', a.map((x) => String(x && x.stack || x)).join(' ')]); cw(...a); };
+    w.addEventListener('error', (e) => logs.push(['error', (e.message || '') + ' @ ' + (e.filename || '') + ':' + (e.lineno || '')]));
+    w.addEventListener('unhandledrejection', (e) => logs.push(['rejection', String(e.reason)]));
+  } catch (e) {
+    logs.push(['attach-fail', String(e)]);
+  }
+}
+
+function sample(w) {
+  const doc = w.document;
+  const cv = doc.getElementById('battle');
+  if (!cv) return { ok: false, reason: 'canvas 없음' };
+  const ctx = cv.getContext('2d');
+  const d = ctx.getImageData(0, 0, cv.width, cv.height).data;
+  let sum = 0;
+  let n = 0;
+  for (let i = 0; i < d.length; i += 4 * 97) { sum += d[i] + d[i + 1] + d[i + 2] + d[i + 3]; n++; }
+  return { ok: true, w: cv.width, h: cv.height, avg: Math.round(sum / n) };
+}
+
+async function report() {
+  const w = frame.contentWindow;
+  const doc = w.document;
+  const title = doc.title;
+  const stage = (doc.querySelector('.stage-chip, #stageChip, [data-chip="stage"]') || {}).textContent || '';
+  const a = sample(w);
+  await new Promise((r) => setTimeout(r, 350));
+  const b = sample(w);
+  const res = w.performance.getEntriesByType('resource')
+    .filter((e) => e.name.indexOf(location.origin) === 0)
+    .map((e) => ({ u: e.name.replace(location.origin, ''), s: e.responseStatus, size: e.transferSize, dur: Math.round(e.duration) }));
+  const failed = res.filter((e) => typeof e.s === 'number' && e.s >= 400);
+  // transferSize 0 은 캐시/서비스워커 응답일 뿐 실패가 아니다 → 상태 코드 0/4xx/5xx 만 문제로 본다
+  const zero = res.filter((e) => e.s === 0 || (typeof e.s === 'number' && e.s >= 400));
+  const bad = logs.filter((l) => l[0] !== 'console.warn');
+  const animating = a.ok && b.ok && (a.avg !== b.avg);
+  const report = {
+    title,
+    stageText: stage.trim(),
+    canvas: { w: a.w, h: a.h, avgA: a.avg, avgB: b.avg, animating },
+    resources: res.length,
+    failedResources: failed,
+    logs,
+    errors: bad.length,
+    animating,
+    at: new Date().toISOString(),
+  };
+  window.__liveCheck = report;
+  const line = (ok, t) => `<span class="${ok ? 'ok' : 'bad'}">${ok ? '✓' : '✗'}</span> ${t}`;
+  out.innerHTML = [
+    line(!bad.length, `콘솔 오류 ${bad.length}건` + (bad.length ? '\n   ' + bad.map((l) => l[0] + ': ' + l[1]).join('\n   ') : '')),
+    line(failed.length === 0, `네트워크 실패 ${failed.length}건 / 요청 ${res.length}건` + (failed.length ? '\n   ' + failed.map((f) => f.u + ' → ' + f.s).join('\n   ') : '')),
+    line(zero.length === 0, `오류 응답 ${zero.length}건` + (zero.length ? '\n   ' + zero.slice(0, 6).map((f) => f.u + ' → ' + f.s).join('\n   ') : '')),
+    line(a.ok && a.avg > 20, `캔버스 ${a.w}×${a.h} 렌더(평균 ${a.avg})`),
+    line(animating, `애니메이션 진행(프레임 변화 ${a.avg} → ${b.avg})`),
+    '',
+    '리소스:',
+    ...res.map((r) => `  ${r.s || '?'} ${String(r.size).padStart(7)}B ${r.u}`),
+    '',
+    '경고:',
+    ...logs.filter((l) => l[0] === 'console.warn').slice(0, 8).map((l) => '  ' + l[1].slice(0, 200)),
+  ].join('\n');
+}
+
+frame.addEventListener('load', () => {
+  if (!started) started = Date.now();
+  setTimeout(() => {
+    attach(frame.contentWindow);
+    setTimeout(report, 15000);
+  }, 300);
+});
+</script>
+</body>
+</html>

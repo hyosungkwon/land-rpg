@@ -2,7 +2,7 @@
 // 밸런스·몬스터·장비·스킬 정의. DOM 의존 없음(헤드리스 테스트 가능).
 // v3: 게스트 전용 통합 경제 — 골드 하나로 사냥과 부동산을 함께 굴린다.
 
-export const APP_VERSION = '3.6.0';
+export const APP_VERSION = '3.7.0';
 export const SAVE_KEY = 'land_rpg_unified_v3';
 export const SAVE_VERSION = 3;
 
@@ -156,6 +156,72 @@ export const MONSTERS = {
   Seraphim: { ko: '세라핌', boss: true },
 };
 
+/* ────────────────────────────── 몬스터 모션 (v3.7) ──────────────────────────────
+ * 스프라이트는 1장뿐이라, 렌더러가 종류별 '움직임 문법'으로 살아 있는 느낌을 만든다.
+ *  - slime  : 통통 튀는 점프 + 착지 스쿼시 & 스트레치(그림자 크기 연동)
+ *  - flyer  : 공중 호버링 + 날갯짓(신축·기울기) + 지면에서 떨어진 그림자
+ *  - walker : 좌우 걸음 바운스 + 앞쪽 기울기 + 발걸음 먼지
+ */
+export const MONSTER_MOTION = {
+  // 슬라임류
+  Slime: 'slime',
+  SlimeKing: 'slime',
+  // 비행 · 부유형
+  Harpy: 'flyer',
+  Drake: 'flyer',
+  RedDragon: 'flyer',
+  Seraphim: 'flyer',
+  VoidWalker: 'flyer',
+  // 보행 · 돌격형
+  Goblin: 'walker',
+  Kobold: 'walker',
+  Skeleton: 'walker',
+  Zombie: 'walker',
+  Orc: 'walker',
+  Werewolf: 'walker',
+  Golem: 'walker',
+  Minotaur: 'walker',
+  Cyclops: 'walker',
+  Troll: 'walker',
+  Cerberus: 'walker',
+  DeathLord: 'walker',
+};
+
+/** 몬스터 이름 → 모션 아키타입(모르면 보행형) */
+export function monsterMotion(name) {
+  return MONSTER_MOTION[name] || 'walker';
+}
+
+/* 공격 방식 — 근접(할퀴기/내려찍기/물기)과 원거리 투사체(화염구·깃털·암흑·신성·산성).
+ * kind: melee | ranged,  move: claw | slam | bite | fire | feather | dark | holy | acid
+ * 색은 렌더러의 전조 오라·궤적·투사체 색으로 그대로 쓰인다. */
+export const MONSTER_ATTACKS = {
+  Slime: { kind: 'melee', move: 'slam', color: '#7fe0b0' },
+  Goblin: { kind: 'melee', move: 'claw', color: '#ffcf6a' },
+  Kobold: { kind: 'melee', move: 'claw', color: '#ffd166' },
+  Orc: { kind: 'melee', move: 'slam', color: '#ffa94d' },
+  Skeleton: { kind: 'melee', move: 'claw', color: '#e8eef6' },
+  Zombie: { kind: 'melee', move: 'bite', color: '#a6e07f' },
+  Werewolf: { kind: 'melee', move: 'claw', color: '#ff8a5c' },
+  Cyclops: { kind: 'melee', move: 'slam', color: '#ffb066' },
+  Minotaur: { kind: 'melee', move: 'slam', color: '#ff9b4d' },
+  Golem: { kind: 'melee', move: 'slam', color: '#c8b08a' },
+  Harpy: { kind: 'ranged', move: 'feather', proj: 'feather', color: '#9fe0ff' },
+  Drake: { kind: 'ranged', move: 'fire', proj: 'fire', color: '#ff8a3d' },
+  SlimeKing: { kind: 'ranged', move: 'acid', proj: 'acid', color: '#8ef0a8' },
+  Troll: { kind: 'melee', move: 'slam', color: '#b7e07f' },
+  Cerberus: { kind: 'melee', move: 'bite', color: '#ff7a5c' },
+  DeathLord: { kind: 'ranged', move: 'dark', proj: 'dark', color: '#b98bff' },
+  RedDragon: { kind: 'ranged', move: 'fire', proj: 'fire', color: '#ff6a3d' },
+  VoidWalker: { kind: 'ranged', move: 'dark', proj: 'dark', color: '#c78fff' },
+  Seraphim: { kind: 'ranged', move: 'holy', proj: 'holy', color: '#ffe9a8' },
+};
+
+/** 몬스터 이름 → 공격 정의(모르면 근접 할퀴기) */
+export function monsterAttack(name) {
+  return MONSTER_ATTACKS[name] || { kind: 'melee', move: 'claw', color: '#ffd166' };
+}
+
 /* 플레이어 캐릭터 3프레임 (대기 / 공격 / 스킬) */
 export const HERO_FRAMES = {
   idle: 'hero_idle',
@@ -207,9 +273,10 @@ export function stageDef(stage) {
   };
 }
 
-/** 스프라이트 경로. 히어로 3프레임은 assets/sprites/ 루트, 몬스터/보스/펫은 하위 폴더. */
+/** 스프라이트 경로. 히어로 3프레임은 assets/sprites/ 루트, 몬스터/보스/펫/이펙트는 하위 폴더. */
 export function spriteSrc(name) {
   if (typeof name === 'string' && name.indexOf('pet_') === 0) return `assets/sprites/pet/${name}.png`;
+  if (typeof name === 'string' && name.indexOf('fx_') === 0) return `assets/sprites/fx/${name}.png`;
   if (name === 'warrior' || name === 'hero_idle') return 'assets/sprites/hero_idle.png';
   if (name === 'hero_attack') return 'assets/sprites/hero_attack.png';
   if (name === 'hero_skill') return 'assets/sprites/hero_skill.png';

@@ -102,7 +102,7 @@ class App {
     this.ui.init();
     this.initInstall();
     this.renderer
-      .preload(['hero_idle', 'hero_attack', 'hero_skill', ...PET_SPRITES, ...this.stageMonsterNames(this.s.stage)])
+      .preload(['hero_idle', 'hero_attack', 'hero_skill', 'fx_claw', 'fx_burst', ...PET_SPRITES, ...this.stageMonsterNames(this.s.stage)])
       .then(() => this.renderer.resize())
       .catch(() => {});
 

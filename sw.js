@@ -1,5 +1,5 @@
 // land-rpg / sw.js — 오프라인 캐시 (게스트 전용: 네트워크가 없어도 처음부터 끝까지 플레이)
-const VERSION = 'land-rpg-v3.6.0';
+const VERSION = 'land-rpg-v3.7.0';
 // 같은 릴리스 안에서 자산을 고친 경우 BUILD 를 올린다 → 열린 탭이 새 캐시로 넘어온다.
 const BUILD = 'r1';
 const CACHE = `${VERSION}-${BUILD}`;
@@ -34,6 +34,9 @@ const CORE = [
   './assets/sprites/pet/pet_fox.png',
   './assets/sprites/pet/pet_owl.png',
   './assets/sprites/pet/pet_dragon.png',
+  // 몬스터 공격 이펙트 2종 (v3.7 — 추가 광원 합성용)
+  './assets/sprites/fx/fx_claw.png',
+  './assets/sprites/fx/fx_burst.png',
   // 일반 몬스터 12종
   './assets/sprites/monster/Slime.png',
   './assets/sprites/monster/Goblin.png',

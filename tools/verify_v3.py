@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""land-rpg v3.6.0 검증 (QuickJS + 정적 검사)
+"""land-rpg v3.7.0 검증 (QuickJS + 정적 검사)
 
 1) 모든 JS 파일 문법(파싱) 검사
 2) 정적 검사 (Firebase/로그인 흔적 0, 저장 키 v3, sw 캐시 v3.5)
@@ -9,6 +9,7 @@
 6) 펫·전직·던전 (v3.2) · 미션·업적·도감 (v3.3) · 호재 뉴스·권역 세트·랜드마크 (v3.4)
 7) ♾️ 환생·초월 특성·무한 스테이지 (v3.5)
 8) 💾 세이브 코드 인코딩/디코딩·체크섬·손상 거부·일괄 강화·빠른 매수 (v3.6)
+9) 🏃 몬스터 이동·공격·피격·사망 모션 · 투사체 · 이펙트 (v3.7)
 
 사용: python3 tools/verify_v3.py
 """
@@ -90,8 +91,8 @@ def main():
     for bad in ["firebase", "signInWithPopup", "Google 로그인", "gstatic", "firebaseio", "googleapis"]:
         ok(bad.lower() not in text_all.lower(), f"Firebase/로그인 흔적 없음: {bad}")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v3.6.0" in read("sw.js"), "SW 캐시 버전 v3.6.0")
-    ok("APP_VERSION = '3.6.0'" in read("src/data.js"), "앱 버전 v3.6.0")
+    ok("land-rpg-v3.7.0" in read("sw.js"), "SW 캐시 버전 v3.7.0")
+    ok("APP_VERSION = '3.7.0'" in read("src/data.js"), "앱 버전 v3.7.0")
     ok(os.path.exists(os.path.join(ROOT, "src/savecode.js")), "src/savecode.js 존재")
     ok("'./src/savecode.js'" in read("sw.js"), "sw.js 프리캐시에 savecode.js 포함")
     ok("'./src/rebirth.js'" in read("sw.js"), "sw.js 프리캐시에 rebirth.js 포함")
@@ -675,6 +676,11 @@ def main():
     ok(attempts > 20 and fails / max(1, attempts) < 0.75, "보스 실패율 과다 아님", f"{fails}/{attempts}")
     print(f"  · 적극: 5분 S{bs.stage_at(active['marks'], 5)} · 10분 S{s10} · 30분 S{s22} · 60분 S{active['end']['stage']} · 보스 {attempts}회/실패 {fails}회")
     print(f"  · 방치: 60분 S{passive['end']['stage']} · 보스 {passive['bossStarts']}회/실패 {passive['bossFails']}회")
+    ok(
+        active["end"]["stage"] == 28 and passive["end"]["stage"] == 21 and fails == 9 and passive["bossFails"] == 12,
+        "v3.6 대비 60분 시뮬 결과 동일 (모션 업데이트는 밸런스 불변)",
+        f"적극 S{active['end']['stage']}/실패{fails} · 방치 S{passive['end']['stage']}/실패{passive['bossFails']}",
+    )
 
     section("[9] 🎯 미션 · 🏆 업적 · 📖 도감 (v3.3.0)")
     qdef = js(ctx, """
@@ -1551,6 +1557,105 @@ def main():
     ok(all(x in uisrc6 for x in ['data-action="save-export"', 'data-action="save-import"', 'data-action="save-undo"', 'data-action="enhance5"', 'data-action="enhancemax"', 'data-action="rent-info"', "case 'save-export'", "case 'enhancemax'"]), "UI 액션 연결(백업·강화·임대)", "")
     ok(all(x in css6 for x in [".save-card", ".save-code", ".save-preview", ".g-acts", ".rent-meta"]), "v3.6 세이브·일괄 강화 CSS", "")
     ok("lang-rpg" not in css6, "CSS 깨짐 없음", "")
+
+
+    section("[13] 🏃 몬스터 이동·공격·피격·사망 모션 · 투사체 (v3.7.0)")
+    mod = js(ctx, """
+      const names = Object.keys(MONSTERS);
+      const missingMotion = names.filter((n) => !MONSTER_MOTION[n]);
+      const missingAtk = names.filter((n) => !MONSTER_ATTACKS[n]);
+      const arch = names.reduce((m, n) => { const a = MONSTER_MOTION[n]; m[a] = (m[a] || 0) + 1; return m; }, {});
+      const ranged = names.filter((n) => MONSTER_ATTACKS[n].kind === 'ranged');
+      const melee = names.filter((n) => MONSTER_ATTACKS[n].kind === 'melee');
+      return {
+        total: names.length, missingMotion, missingAtk, arch,
+        ranged, melee, badProj: ranged.filter((n) => !MONSTER_ATTACKS[n].proj),
+        moves: [...new Set(names.map((n) => MONSTER_ATTACKS[n].move))].sort(),
+        fallback: [monsterMotion('Unknown'), monsterAttack('Unknown').kind, monsterAttack('Unknown').move],
+        sprite: [spriteSrc('fx_claw'), spriteSrc('fx_burst'), spriteSrc('Slime'), spriteSrc('SlimeKing')],
+      };
+    """)
+    ok(mod["total"] == 19 and mod["missingMotion"] == [] and mod["missingAtk"] == [], "19종 몬스터 모두 이동/공격 모션 정의", json.dumps({"missing": mod["missingMotion"] + mod["missingAtk"]}))
+    ok(mod["arch"] == {"slime": 2, "flyer": 5, "walker": 12}, "슬라임 2 · 비행 5 · 보행 12 아키타입 분류", json.dumps(mod["arch"]))
+    ok(len(mod["ranged"]) == 7 and len(mod["melee"]) == 12 and mod["badProj"] == [], "원거리 7종(투사체 보유) · 근접 12종", json.dumps({"r": mod["ranged"], "bad": mod["badProj"]}, ensure_ascii=False))
+    ok(set(mod["moves"]) == {"claw", "slam", "bite", "fire", "feather", "dark", "holy", "acid"}, "공격 모션 8종(할퀴기·내려찍기·물기·화염·깃털·암흑·신성·산성)", json.dumps(mod["moves"]))
+    ok(mod["fallback"] == ["walker", "melee", "claw"], "알 수 없는 이름은 보행·근접 할퀴기로 폴백", json.dumps(mod["fallback"]))
+    ok(mod["sprite"] == ["assets/sprites/fx/fx_claw.png", "assets/sprites/fx/fx_burst.png", "assets/sprites/monster/Slime.png", "assets/sprites/boss/SlimeKing.png"], "이펙트/몬스터/보스 스프라이트 경로", json.dumps(mod["sprite"]))
+
+    fx_files = ["assets/sprites/fx/fx_claw.png", "assets/sprites/fx/fx_burst.png"]
+    ok(all(os.path.exists(os.path.join(ROOT, f)) for f in fx_files), "이펙트 스프라이트 2종 파일 존재", ", ".join(f for f in fx_files if not os.path.exists(os.path.join(ROOT, f))))
+    ok(all(f"'./{f}'" in read("sw.js") for f in fx_files), "sw.js 프리캐시에 이펙트 스프라이트 포함")
+    try:
+        from PIL import Image
+        metas = []
+        for f in fx_files:
+            im = Image.open(os.path.join(ROOT, f))
+            metas.append([im.size, im.mode, os.path.getsize(os.path.join(ROOT, f))])
+        ok(all(m[0] == (320, 320) and m[1] == "RGB" for m in metas), "이펙트 스프라이트 320px RGB(합성용)", json.dumps(metas))
+        ok(all(m[2] < 200000 for m in metas), "이펙트 스프라이트 용량 200KB 미만(모바일 캐시 부담 없음)", json.dumps([m[2] for m in metas]))
+    except Exception as e:  # noqa: BLE001
+        ok(False, "이펙트 스프라이트 검사", str(e))
+
+    mono = js(ctx, """
+      const s = defaultState(0);
+      s.stage = 7; s.maxStage = 7; s.level = 8; s.totalKills = 0; s.killsInStage = 0; s.bossReady = false;
+      const rng = (function (seed) { let x = seed >>> 0; return function () { x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296; }; })(99);
+      const b = new Battle(s, () => ({}), rng, 0);
+      const evs = [];
+      let t = 0;
+      for (let i = 0; i < Math.round(30000 / 16); i++) {
+        b.tick(16, t);
+        for (const ev of b.drainEvents()) evs.push(Object.assign({}, ev, { at: t }));
+        t += 16;
+      }
+      const attacks = evs.filter((e) => e.t === 'monsterAttack');
+      const windups = evs.filter((e) => e.t === 'monsterWindup');
+      const hurts = evs.filter((e) => e.t === 'playerHurt');
+      let ordered = true;
+      let minLead = 1e9;
+      let maxLead = 0;
+      let cadence = 1e9;
+      const last = {};
+      for (const a of attacks) {
+        const w = windups.filter((x) => x.id === a.id && x.at <= a.at).pop();
+        if (!w) { ordered = false; continue; }
+        minLead = Math.min(minLead, a.at - w.at);
+        maxLead = Math.max(maxLead, a.at - w.at);
+        if (last[a.id] != null) cadence = Math.min(cadence, a.at - last[a.id]);
+        last[a.id] = a.at;
+      }
+      const m = b.monsters[0];
+      return {
+        attacks: attacks.length, windups: windups.length, hurts: hurts.length, ordered,
+        minLead, maxLead, cadence,
+        kinds: [...new Set(attacks.map((a) => a.kind))].sort(),
+        moves: [...new Set(attacks.map((a) => a.move))].sort(),
+        rangedHurts: hurts.filter((h) => h.ranged).length,
+        projHurts: hurts.filter((h) => h.proj).length,
+        durs: [...new Set(windups.map((w) => w.dur))].sort((a, b) => a - b),
+        walk: b.monsters.filter((x) => (x.walk || 0) > 0).length,
+        moving: b.monsters.filter((x) => x.moving).length,
+        fields: m ? ['arch', 'atkKind', 'moveKind', 'walk', 'windupAt', 'windupDur', 'strikeAt', 'attackSeq'].filter((k) => k in m) : [],
+      };
+    """)
+    ok(mono["attacks"] > 5 and mono["windups"] >= mono["attacks"], "몬스터 공격 이벤트 + 전조 이벤트 발생", json.dumps({"a": mono["attacks"], "w": mono["windups"]}))
+    ok(mono["ordered"] is True and 240 <= mono["minLead"] and mono["maxLead"] <= 820, "모든 공격은 전조(240~820ms) 뒤에 들어간다", json.dumps({"min": mono["minLead"], "max": mono["maxLead"]}))
+    ok(mono["cadence"] >= 1500, "공격 간격은 기존 1500ms 이상 유지(밸런스 불변)", str(mono["cadence"]))
+    ok(mono["hurts"] == mono["attacks"], "공격 1회 = 피해 1회(전조가 피해를 중복/누락시키지 않음)", json.dumps({"a": mono["attacks"], "h": mono["hurts"]}))
+    ok(mono["rangedHurts"] > 0 and mono["projHurts"] > 0, "원거리 공격은 투사체 정보를 실어 보낸다", json.dumps({"r": mono["rangedHurts"], "p": mono["projHurts"]}))
+    ok("ranged" in mono["kinds"] and "melee" in mono["kinds"], "근접/원거리 공격이 모두 발생", json.dumps(mono["kinds"]))
+    ok(set(mono["moves"]) <= {"claw", "slam", "bite", "feather", "fire", "acid", "dark", "holy"} and len(mono["moves"]) >= 2, "공격별 모션 종류가 이벤트에 실린다", json.dumps(mono["moves"]))
+    ok(mono["durs"] == [300, 470], "전조 길이 = 근접 300ms · 원거리 470ms", json.dumps(mono["durs"]))
+    ok(mono["walk"] > 0 and "arch" in mono["fields"] and "windupAt" in mono["fields"], "몬스터가 이동 거리(walk)·전조·모션 상태를 갖는다", json.dumps(mono["fields"]))
+
+    csrc7 = read("src/combat.js")
+    rsrc7 = read("src/render.js")
+    ok(all(x in csrc7 for x in ["WINDUP_MELEE_MS", "WINDUP_RANGED_MS", "monsterWindup", "monsterAttack", "windupBase", "m.walk", "m.moving", "HEAVY_EVERY"]), "전투 — 전조/이동/강공격 상태 구현")
+    ok(all(x in rsrc7 for x in ["monsterMotion", "monsterAttack", "drawWindup", "stepDust", "drawPuffs", "spawnProjectile", "drawProjectiles", "projectileImpact", "deathFx", "drawBossRoar", "flushDelayedHits", "worldFromScreen"]), "렌더러 — 이동/공격/투사체/사망 연출 구현")
+    ok(all(x in rsrc7 for x in ["arch === 'slime'", "arch === 'flyer'", "const STEP = 22", "const HOP = 92", "shadowK", "squash".replace('squash', 'sx *=')]), "렌더러 — 슬라임 도약·비행 호버·보행 바운스·그림자 연동")
+    ok(all(x in rsrc7 for x in ["fx_claw", "fx_burst", "globalCompositeOperation = 'lighter'"]), "AI 이펙트 스프라이트를 가산 합성으로 얹는다")
+    ok("monsterWindup" in read("src/render.js") and "delayedHits" in read("src/render.js"), "전조 이벤트·투사체 도착 지연 피해 표시")
+    ok("'./assets/sprites/fx/fx_claw.png'" in read("sw.js") and "monsterWindup" in read("src/combat.js"), "SW 캐시 · 이벤트 연결 확인")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:
