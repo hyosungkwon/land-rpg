@@ -51,7 +51,7 @@
       equipped: opts.pet || 'wolf',
       unlocked: ['wolf', 'fox', 'owl', 'dragon'],
       chosen: true,
-      levels: { wolf: 10, fox: 7, owl: 10, dragon: 4 },
+      levels: { wolf: 10, fox: 10, owl: 10, dragon: 4 },
       evo: opts.evo || { wolf: 2, fox: 1, owl: 2 },
     };
     // 🗼 도전의 탑 — 4층까지 클리어, 5층 도전 가능
@@ -66,7 +66,7 @@
     s.rebirth = { count: 1, points: 12, totalPoints: 24, traits: { atk: 4, guard: 4, hp: 3, regen: 2 }, bestStage: 26, at: 0 };
     s.records.playMs = 7200 * 1000;
     // 부동산 — 건물주 버프/펫 카드가 살아 있게
-    s.land.owned = {};
+    s.land.owned = opts.owned || { '11_0_0': 40, '11_1_0': 40, '2_0_0': 60, '3_0_0': 30 };
     s.land.sub = opts.sub || 'buff';
     s.land.rentAt = now;
     s.lastActiveAt = now; // 오프라인 팝업이 뜨지 않게
