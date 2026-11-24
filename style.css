@@ -1658,7 +1658,7 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .rebirth-card .rb-points { font-size: 9.5px; }
 
 /* 동료 펫 — 사냥 탭은 한 줄 요약(강화·교체는 부동산 탭 펫 카드) */
-.pet-line { padding: 9px 11px; border-color: rgba(160, 200, 255, 0.22); }
+.pet-line { padding: 7px 10px; border-color: rgba(160, 200, 255, 0.22); }
 .pet-line .card-title { font-size: 12px; }
 
 /* 미션 카드 — 서브 탭 안에서 조금 더 압축 */

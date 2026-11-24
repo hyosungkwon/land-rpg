@@ -582,10 +582,9 @@ function jobCard(ui) {
       <div class="card-title"><span class="t-ico">${cur.badge}</span>${esc(cur.name)}<small>전직 ${cur.tier + 1}/4</small></div>
       <span class="job-badge" style="--jc:${cur.color}">${jobBonusText(cur)}</span>
     </div>
-    <div class="tiny muted ellip" style="margin-top:1px">다음 <b style="color:${n.color}">${n.badge} ${esc(n.name)}</b> · ${jobBonusText(n)}</div>
-    <div class="row tiny" style="margin-top:4px">
-      <span style="color:${pr.levelOk ? 'var(--green)' : 'var(--sub)'}">Lv.${s.level} / ${n.lv}</span>
-      <span style="color:${pr.stageOk ? 'var(--green)' : 'var(--sub)'}">스테이지 ${s.maxStage} / ${n.stage}</span>
+    <div class="row tiny" style="margin-top:3px;gap:6px">
+      <span class="ellip muted">다음 <b style="color:${n.color}">${n.badge} ${esc(n.name)}</b> <span class="dim">${jobBonusText(n)}</span></span>
+      <span style="flex:0 0 auto;color:var(--sub)"><span style="color:${pr.levelOk ? 'var(--green)' : 'var(--sub)'}">Lv.${s.level}/${n.lv}</span> · <span style="color:${pr.stageOk ? 'var(--green)' : 'var(--sub)'}">S${s.maxStage}/${n.stage}</span></span>
     </div>
     <div class="prog" style="margin-top:4px"><i style="width:${Math.min(pr.pctLv, pr.pctStage) * 100}%"></i></div>
     ${pr.canPromote
@@ -910,7 +909,7 @@ function petLine(ui) {
     <div class="row">
       <div class="grow ellip">
         <div class="card-title"><span class="t-ico">🐾</span>동료 펫<small>${unlockedIds.length}/${PETS.length} 해금</small></div>
-        <div class="tiny dim ellip" style="margin-top:3px">${equipped ? `동행 ${equipped.emoji} ${esc(equipped.name)} · ${esc(equipped.desc)}` : '동행 중인 펫이 없습니다 — 부동산이 자라면 자동 해금'}</div>
+        <div class="tiny dim ellip" style="margin-top:3px">${equipped ? `동행 ${equipped.emoji} ${esc(equipped.name)}` : '동행 중인 펫이 없습니다 — 부동산이 자라면 자동 해금'} · 교체·강화는 부동산 → 건물주 버프</div>
       </div>
       <button class="btn small ghost" type="button" data-action="open-pets" style="min-height:32px">관리 ▸</button>
     </div>
