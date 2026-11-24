@@ -1474,11 +1474,11 @@ function newsSlim(ui) {
   return `
   <div class="news-slim">
     <div class="ns-top">
-      <span class="news-live">● LIVE</span>
+      <span class="news-live">●</span>
       <span class="ns-kicker">📰 부동산 호재</span>
+      <span class="ns-title">${n.icon} ${esc(n.title)}</span>
       <span class="ns-clock" data-live="news-left">${mmss(n.endsAt - Date.now())}</span>
     </div>
-    <div class="ns-title">${n.icon} ${esc(n.title)}</div>
     <div class="ns-fx">${esc(n.targetLabel)} · <span class="up">시세 ▲${n.pricePct}%</span> · <span class="up">임대 ▲${n.rentPct}%</span> · <span data-live="news-own">${esc(newsOwnShort(ui.s, n))}</span></div>
   </div>`;
 }

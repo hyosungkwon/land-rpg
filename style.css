@@ -2068,16 +2068,19 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 
 /* 압축 뉴스 — 매물·버프 탭 상단 한 줄 */
 .news-slim {
-  padding: 7px 10px 8px;
-  margin-bottom: 8px;
+  padding: 6px 9px 7px;
+  margin-bottom: 7px;
   border-radius: 11px;
   background: linear-gradient(120deg, rgba(255, 207, 92, 0.12), rgba(18, 26, 42, 0.86) 70%);
   border: 1px solid rgba(255, 207, 92, 0.24);
 }
-.ns-top { display: flex; align-items: center; gap: 6px; font-size: 9px; font-weight: 800; }
-.ns-kicker { color: var(--gold); }
-.ns-clock { margin-left: auto; color: var(--sub); font-variant-numeric: tabular-nums; font-size: 9.5px; }
-.ns-title { font-size: 11.5px; font-weight: 800; margin-top: 2px; letter-spacing: -0.2px; }
+.ns-top { display: flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 800; min-width: 0; }
+.ns-kicker { color: var(--gold); flex: 0 0 auto; }
+.ns-clock { flex: 0 0 auto; color: var(--sub); font-variant-numeric: tabular-nums; font-size: 9.5px; }
+.ns-title {
+  flex: 1 1 auto; min-width: 0; font-size: 11px; font-weight: 800; letter-spacing: -0.3px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .ns-fx { font-size: 9.5px; color: var(--dim); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ns-fx .up { color: #ff9a8a; font-weight: 800; }
 
