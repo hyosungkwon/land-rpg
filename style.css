@@ -740,7 +740,9 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   position: relative;
   width: min(100%, 440px);
   max-height: 82dvh;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: linear-gradient(180deg, #182238, #101724);
   border: 1px solid var(--line-2);
   border-radius: 18px;
@@ -758,7 +760,8 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   gap: 7px;
 }
 .modal-card .sub { font-size: 11.5px; color: var(--sub); margin-bottom: 12px; line-height: 1.5; }
-.modal-body { font-size: 12px; }
+.modal-body { font-size: 12px; overflow-y: auto; min-height: 0; -webkit-overflow-scrolling: touch; }
+.modal-card h3, .modal-card .sub, .modal-actions { flex: 0 0 auto; }
 .modal-rewards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
 .modal-rewards .rw {
   background: rgba(255, 255, 255, 0.04);
@@ -1439,7 +1442,7 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .rb-jump-head b { font-size: 11px; color: var(--txt); }
 .rb-jump-head span { font-size: 9.5px; color: var(--dim); line-height: 1.4; }
 .rb-jump-head span b { font-size: 9.5px; color: #a9efc0; }
-.rb-jump-opts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.rb-jump-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(56px, 1fr)); gap: 5px; }
 .jump-chip {
   display: flex;
   flex-direction: column;

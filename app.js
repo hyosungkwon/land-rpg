@@ -1444,7 +1444,7 @@ class App {
           <div class="rb-jump-head"><b>🏁 시작 스테이지</b><span>직전 최고 <b>S${prevBest}</b>의 55%인 <b>S${cap}</b>까지만 고를 수 있습니다</span></div>
           <div class="rb-jump-opts">${chips}</div>
           <div class="rb-jump-pick">${picked > 1
-            ? `<b>S${picked} · ${esc(jumpTheme)}</b> 에서 시작 · Lv.${jump.level} · 💰${(rebirthStartGold(this.s) + jump.gold).toLocaleString()}`
+            ? `<b>S${picked} · ${esc(jumpTheme)}</b>에서 시작 · Lv.${jump.level} · 💰${(rebirthStartGold(this.s) + jump.gold).toLocaleString()}`
             : 'S1부터 천천히 다시 시작합니다.'}<br>
             <span class="dim">직전 최고까지 한 번에 건너뛰는 것은 막혀 있습니다. 점프한 만큼만 레벨·골드를 최소 보정합니다.</span></div>
         </div>`
