@@ -849,7 +849,8 @@ export class Renderer {
     const outK = clamp((DUR - age) / 420, 0, 1);
     const alpha = Math.min(inK, outK);
     const sc = Math.min(1.2, Math.max(0.85, W / 390));
-    const w = Math.min(W * 0.9, 352);
+    // 오른쪽 퀵 스킬 버튼(약 48px)을 가리지 않는 폭
+    const w = Math.min(W * 0.74, 290);
     const hgt = 82 * Math.min(1.1, sc);
     const x = (W - w) / 2;
     // 살짝 튀어 오르는 등장(overshoot)
