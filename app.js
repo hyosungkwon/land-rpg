@@ -1517,7 +1517,7 @@ class App {
                <div class="rw"><div class="e">✨</div><div class="v">+${r.points}P</div><div class="k">초월석</div></div>
                <div class="rw"><div class="e">💰</div><div class="v">${r.startGold.toLocaleString()}</div><div class="k">시작 골드</div></div>
              </div>
-             <div class="note" style="margin-top:9px">Lv.${r.level} · <b>${where}</b> 에서 새 회차를 시작합니다. ${kept}.${r.start > 1
+             <div class="note" style="margin-top:9px">Lv.${r.level} · <b>${where}</b>에서 새 회차를 시작합니다. ${kept}.${r.start > 1
                ? `<br>🏁 직전 최고의 55% 상한 안에서 고른 점프입니다 — 장비 강화는 0강이니 초반 몇 판으로 다시 맞추면 됩니다.`
                : ''}<br>
              ✨ <b>영구 특성</b>을 올리면 다음 회차가 훨씬 빨라집니다.</div>`,
