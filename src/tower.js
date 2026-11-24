@@ -6,7 +6,7 @@
 //   · 최초 클리어에만 골드·강화석·초월석·장비를 지급하고, 재도전은 소액 보상만 준다.
 //   · 패배/시간 초과 시에도 잃는 것은 없고 원래 사냥 스테이지로 안전하게 돌아간다(무한 재도전).
 // DOM 의존 없음 → 헤드리스 검증 가능.
-import { stageGoldBase, RARITIES, RARITY_INDEX, THEMES } from './data.js';
+import { stageGoldBase, RARITIES, RARITY_INDEX, THEMES, monsterKo } from './data.js';
 import { rebirthBonus } from './rebirth.js';
 import { randomItemOfRarity } from './gear.js';
 
@@ -162,7 +162,7 @@ export function towerGimmickText(def) {
 export function towerGoalText(def) {
   if (!def) return '—';
   const sec = Math.round(def.timeLimitMs / 1000);
-  return def.bossOnly ? `${def.boss} 격파 · ${sec}초` : `${def.goal}마리 처치 · ${sec}초`;
+  return def.bossOnly ? `${monsterKo(def.boss)} 격파 · ${sec}초` : `${def.goal}마리 처치 · ${sec}초`;
 }
 
 /**
