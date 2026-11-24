@@ -1393,7 +1393,7 @@ function tplGear(ui) {
     <div class="chips xchg-row">
       ${bulkBtns}
       <button class="chip xchg max" data-action="buy-shards" data-value="max" ${maxShards > 0 ? '' : 'disabled'}>
-        최대 <b>${fmt(maxShards)}</b>개<small>${maxShards > 0 ? `💰${fmt(price * maxShards)}` : '골드 부족'}</small>
+        <span class="lbl">최대 <b>${fmt(maxShards)}</b>개</span><small>${maxShards > 0 ? `💰${fmt(price * maxShards)}` : '골드 부족'}</small>
       </button>
     </div>
     <div class="note" style="margin-top:9px">
