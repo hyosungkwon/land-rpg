@@ -24,6 +24,7 @@
 <div id="list"></div>
 <script type="module">
   import { defaultState } from '../src/state.js';
+  import { CITIES } from '../src/land.js';
 
   const KEY = 'land_rpg_unified_v3';
   const BACKUP = KEY + '__backup_v42';
@@ -66,7 +67,9 @@
     s.rebirth = { count: 1, points: 12, totalPoints: 24, traits: { atk: 4, guard: 4, hp: 3, regen: 2 }, bestStage: 26, at: 0 };
     s.records.playMs = 7200 * 1000;
     // 부동산 — 건물주 버프/펫 카드가 살아 있게
-    s.land.owned = opts.owned || { '11_0_0': 40, '11_1_0': 40, '2_0_0': 60, '3_0_0': 30 };
+    // 실제 시군구 키로 보유(건물주 버프·펫 해금 조건이 살아 있게)
+    s.land.owned = {};
+    for (const c of CITIES.slice(0, 5)) s.land.owned[c.key] = 40;
     s.land.sub = opts.sub || 'buff';
     s.land.rentAt = now;
     s.lastActiveAt = now; // 오프라인 팝업이 뜨지 않게
