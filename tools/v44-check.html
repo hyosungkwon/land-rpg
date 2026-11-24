@@ -127,7 +127,14 @@
     return out;
   };
 
+  const TO = { xchg: '[data-action="buy-shards"]', promote: '.job-card', aura: null, aura3: null };
   const show = () => {
+    try {
+      const sel = TO[scene];
+      if (sel && fr.contentDocument && fr.contentDocument.querySelector(sel)) {
+        fr.contentDocument.querySelector(sel).scrollIntoView({ block: 'center' });
+      }
+    } catch (e) { /* ignore */ }
     const r = report();
     document.getElementById('rep').textContent = JSON.stringify(r, null, 1);
     document.getElementById('status').textContent = r.errs.length ? `오류 ${r.errs.length}건` : '오류 0건';
