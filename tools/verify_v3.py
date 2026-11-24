@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""land-rpg v3.9.0 검증 (QuickJS + 정적 검사)
+"""land-rpg v4.0.0 검증 (QuickJS + 정적 검사)
 
 1) 모든 JS 파일 문법(파싱) 검사
 2) 정적 검사 (Firebase/로그인 흔적 0, 저장 키 v3, sw 캐시 v3.5)
@@ -11,6 +11,7 @@
 8) 💾 세이브 코드 인코딩/디코딩·체크섬·손상 거부·일괄 강화·빠른 매수 (v3.6)
 9) 🏃 몬스터 이동·공격·피격·사망 모션 · 투사체 · 이펙트 (v3.7)
 10) ⚔️ 다굴 전투 · 방어/회복 스탯 · 신규 몬스터 16종 · 테마 정렬 스테이지 (v3.8)
+11) ⚔️ v4.0 장비 종류·옵션·장착 인벤토리 (카탈로그 35종·드랍·비교·분해·세이브 마이그레이션)
 
 사용: python3 tools/verify_v3.py
 """
@@ -22,8 +23,8 @@ import sys
 import quickjs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FILES = ["src/data.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/render.js", "src/ui.js", "src/sound.js"]
+FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/render.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -92,10 +93,11 @@ def main():
     for bad in ["firebase", "signInWithPopup", "Google 로그인", "gstatic", "firebaseio", "googleapis"]:
         ok(bad.lower() not in text_all.lower(), f"Firebase/로그인 흔적 없음: {bad}")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v3.9.0" in read("sw.js"), "SW 캐시 버전 v3.9.0")
-    ok("APP_VERSION = '3.9.0'" in read("src/data.js"), "앱 버전 v3.9.0")
+    ok("land-rpg-v4.0.0" in read("sw.js"), "SW 캐시 버전 v4.0.0")
+    ok("APP_VERSION = '4.0.0'" in read("src/data.js"), "앱 버전 v4.0.0")
     ok(os.path.exists(os.path.join(ROOT, "src/savecode.js")), "src/savecode.js 존재")
     ok("'./src/savecode.js'" in read("sw.js"), "sw.js 프리캐시에 savecode.js 포함")
+    ok("'./src/gear.js'" in read("sw.js"), "sw.js 프리캐시에 gear.js 포함")
     ok("'./src/rebirth.js'" in read("sw.js"), "sw.js 프리캐시에 rebirth.js 포함")
     ok("'./src/region.js'" in read("sw.js"), "sw.js 프리캐시에 region.js 포함")
     ok(os.path.exists(os.path.join(ROOT, "src/sound.js")), "src/sound.js 존재")
@@ -342,10 +344,22 @@ def main():
     p2 = js(ctx, """
       const s = defaultState(0); s.gold = 5000; s.shards = 0; s.gearRarity.weapon = 'legend';
       const r = pullGear(s, 1, (function(){const a=[0.999,0.0];let i=0;return function(){return a[(i++)%a.length];};})());
-      return { rarity: s.gearRarity.weapon, shards: s.shards, equipped: r.results[0].equipped, dust: r.results[0].shards };
+      return { rarity: s.gearRarity.weapon, shards: s.shards, equipped: r.results[0].equipped,
+               dust: r.results[0].shards, items: s.gear.items.length, dup: r.results[0].duplicate };
     """)
-    ok(p2["rarity"] == "legend" and p2["equipped"] is False, "동급 중복은 장착하지 않음", json.dumps(p2))
-    ok(p2["shards"] == 70 and p2["dust"] == 70, "중복 장비 → 강화석 자동 분해", json.dumps(p2))
+    ok(p2["rarity"] == "legend" and p2["equipped"] is False, "동급은 자동 장착하지 않음(비교 후 직접 장착)", json.dumps(p2))
+    ok(p2["items"] == 1 and p2["shards"] == 0 and p2["dup"] is False, "동급 장비는 인벤토리에 보관(v4 — 갈아끼울 수 있게)", json.dumps(p2))
+
+    p2b = js(ctx, """
+      const s = defaultState(0); s.gold = 3000; s.shards = 0;
+      const r1 = pullGear(s, 1, () => 0);
+      const id = r1.results[0].itemId;
+      const s2 = defaultState(0); s2.gold = 3000; s2.shards = 0;
+      acquireGear(s2, id); acquireGear(s2, id);
+      const again = acquireGear(s2, id);
+      return { id, shards: s2.shards, dup: again.duplicate, items: s2.gear.items.length };
+    """)
+    ok(p2b["dup"] is True and p2b["items"] == 1 and p2b["shards"] == 2 + 2, "같은 아이템 중복 획득 → 강화석 자동 분해", json.dumps(p2b))
 
     p3 = js(ctx, """
       const s = defaultState(0); s.gold = 600; s.shards = 0; s.gearRarity.weapon = 'advanced';
@@ -1924,11 +1938,363 @@ def main():
     css39 = read("style.css")
     ok(all(x in css39 for x in [".hunt-subbar", ".stat-grid.four", ".skill-grid", ".skill-cell", ".pet-line", ".cx-grid", ".subtab .nb.on", ".tab .tab-dot", ".switch.sm"]), "v3.9 압축 레이아웃 CSS(서브 탭·4열 스탯·스킬 2×2·펫 스트립·배지)")
 
+    section("[16] ⚔️ v4.0 장비 종류 · 고유 옵션 · 장착 인벤토리")
+
+    # ── 1) 카탈로그: 5부위 × 5등급 × 여러 종류 ──
+    cat = js(ctx, """
+      const slots = ['weapon', 'armor', 'helmet', 'ring', 'amulet'];
+      const perSlot = {};
+      for (const sl of slots) {
+        const list = GEAR_BY_SLOT[sl];
+        perSlot[sl] = {
+          n: list.length,
+          rarities: RARITY_IDS.filter(r => list.some(it => it.rarity === r)),
+          names: list.map(it => it.name),
+          icons: list.map(it => gearIcon(it, 32)),
+          optKeys: list.map(it => Object.keys(it.opts || {})),
+          descs: list.map(it => !!it.desc),
+        };
+      }
+      const all = GEAR_ITEMS;
+      return {
+        total: all.length,
+        ids: all.map(it => it.id),
+        names: all.map(it => it.name),
+        forms: all.map(it => it.form),
+        icons: all.map(it => gearIcon(it, 32)),
+        descs: all.every(it => typeof it.desc === 'string' && it.desc.length > 3),
+        perSlot,
+        rarities: RARITY_IDS,
+        hasAllRarity: RARITY_IDS.every(r => all.some(it => it.rarity === r)),
+        eachSlotAll: slots.every(sl => perSlot[sl].rarities.length === 5),
+        eachSlotOpts: slots.every(sl => perSlot[sl].optKeys.every(k => k.length > 0)),
+        legendOpts: (GEAR_BY_RARITY['legend'] || []).map(it => it.opts),
+        optKeys: GEAR_OPT_KEYS.slice(),
+        optMeta: Object.keys(GEAR_OPTS).every(k => !!GEAR_OPTS[k].name && !!GEAR_OPTS[k].icon),
+      };
+    """)
+    ok(30 <= cat["total"] <= 40, "장비 카탈로그 25~35종 이상(부위별 5~7종)", f"{cat['total']}종")
+    ok(all(5 <= cat["perSlot"][sl]["n"] <= 7 for sl in cat["perSlot"]), "부위별 5~7종", json.dumps({k: v["n"] for k, v in cat["perSlot"].items()}))
+    ok(len(set(cat["ids"])) == cat["total"], "아이템 id 중복 없음", str(len(set(cat["ids"]))))
+    ok(len(set(cat["names"])) == cat["total"], "아이템 이름 모두 다름", str(len(set(cat["names"]))))
+    ok(len(set(cat["icons"])) == cat["total"], "아이템마다 다른 모양(SVG) — 35종 모두 구분됨", str(len(set(cat["icons"]))))
+    ok(all(x in cat["icons"][0] for x in ["<svg", "viewBox=\"0 0 32 32\""]), "아이콘이 인라인 SVG 로 그려짐", cat["icons"][0][:60])
+    ok(cat["eachSlotAll"] is True, "모든 부위에 5등급(일반~전설)이 모두 존재", json.dumps({k: v["rarities"] for k, v in cat["perSlot"].items()}, ensure_ascii=False))
+    ok(cat["descs"] is True and cat["eachSlotOpts"] is True, "모든 장비에 설명·고유 옵션 존재")
+    ok(len(cat["optKeys"]) >= 9 and cat["optMeta"] is True, "고유 옵션 9종 이상(흡혈·공속·보스추뎀·치명·방어·회복·골드·드랍·범위)",
+       json.dumps(cat["optKeys"], ensure_ascii=False))
+    ok(all(o.get("lifesteal") or o.get("bossDmg") or o.get("whirlDmg") or o.get("atkSpd") or o.get("critPct") or o.get("critDmg") for o in cat["legendOpts"]), "전설 장비는 전투 체감 옵션 보유", json.dumps(cat["legendOpts"], ensure_ascii=False))
+
+    # ── 2) 고유 옵션이 실제 스탯·전투에 반영 ──
+    opt = js(ctx, """
+      const mk = (ids) => { const s = defaultState(0); s.level = 30; for (const id of ids) acquireGear(s, id, { autoEquip: true }); return s; };
+      const base = mk([]);
+      const st0 = calcStats(base, {});
+      const dragon = mk(['w_dragon']);
+      const stD = calcStats(dragon, {});
+      const frost = mk(['w_frost']);
+      const stF = calcStats(frost, {});
+      const guard = mk(['a_abyss', 'h_abyss']);
+      const stG = calcStats(guard, {});
+      const amulet = mk(['m_grail']);
+      const stA = calcStats(amulet, {});
+      const mods = gearMods(mk(['w_dragon', 'a_abyss', 'h_crown', 'r_eye', 'm_grail']));
+      return {
+        base: { atk: st0.atk, amp: st0.attackMs, crit: st0.crit, cd: st0.critDmg, red: st0.dmgReduce, regen: st0.hpRegen, gold: st0.goldMult, drop: st0.dropMult, ls: st0.lifesteal, boss: st0.bossDmgPct, whirl: st0.whirlDmgPct },
+        dragon: { atk: stD.atk, ls: stD.lifesteal, boss: stD.bossDmgPct, whirl: stD.whirlDmgPct },
+        frost: { amp: stF.attackMs, crit: stF.crit },
+        guard: { red: stG.dmgReduce, regen: stG.hpRegen, ls: stG.lifesteal },
+        amulet: { gold: stA.goldMult, drop: stA.dropMult, whirl: stA.whirlDmgPct },
+        mods,
+        sumKeys: GEAR_OPT_KEYS.filter(k => mods[k] > 0),
+      };
+    """)
+    ok(opt["dragon"]["atk"] > opt["base"]["atk"] and abs(opt["dragon"]["ls"] - 0.06) < 1e-6, "공격력·흡혈 옵션이 calcStats 에 반영", json.dumps(opt["dragon"]))
+    ok(abs(opt["dragon"]["boss"] - 0.22) < 1e-6 and abs(opt["dragon"]["whirl"] - 0.12) < 1e-6, "보스 추가 피해·범위 베기 옵션 반영", json.dumps(opt["dragon"]))
+    ok(opt["frost"]["amp"] < opt["base"]["amp"] and opt["frost"]["crit"] > opt["base"]["crit"], "공격 속도 옵션 → 공격 간격 단축", json.dumps({"b": opt["base"]["amp"], "f": opt["frost"]["amp"]}))
+    ok(opt["guard"]["red"] > opt["base"]["red"] and opt["guard"]["regen"] > opt["base"]["regen"], "피해 감소·자연 회복 옵션 반영", json.dumps(opt["guard"]))
+    ok(opt["amulet"]["gold"] > opt["base"]["gold"] and opt["amulet"]["drop"] > opt["base"]["drop"], "골드 획득·강화석 드랍 옵션 반영", json.dumps(opt["amulet"]))
+    ok(len(opt["sumKeys"]) >= 9 and opt["mods"]["critDmg"] > 0, "슬롯 5부위 옵션이 합산됨", json.dumps(opt["mods"], ensure_ascii=False))
+
+    battleopt = js(ctx, """
+      const mk = (ids) => { const s = defaultState(0); s.level = 30; for (const id of ids) acquireGear(s, id); return s; };
+      const plain = mk([]);
+      const geared = mk(['w_dragon']);
+      const rngF = () => 0.5;
+      function dmgOf(s, kind, isBoss) {
+        const b = new Battle(s, () => ({}), rngF, 0);
+        b.stats = calcStats(s, {});
+        b.player.hp = 500; b.stats.hpMax = 2000;
+        const m = { id: 1, ko: 'T', isBoss: !!isBoss, hp: 1e9, maxHp: 1e9, x: 400, dead: false, dying: 0, knock: 0 };
+        b.monsters = [m];
+        b.hit([m], 1, kind, 1000);
+        const ev = b.drainEvents().filter(e => e.t === 'hit')[0];
+        return { dmg: ev ? ev.dmg : 0, hp: b.player.hp };
+      }
+      const n0 = dmgOf(plain, 'normal', false).dmg;
+      const n1 = dmgOf(geared, 'normal', false).dmg;
+      const b1 = dmgOf(geared, 'normal', true).dmg;
+      const plainBoss = dmgOf(plain, 'normal', true).dmg;
+      // 흡혈: 피해를 입히면 HP 가 회복된다
+      const b = new Battle(geared, () => ({}), rngF, 0);
+      b.stats = calcStats(geared, {});
+      b.stats.hpMax = 4000;
+      b.player.hp = 100;
+      const m = { id: 2, ko: 'T', isBoss: false, hp: 1e9, maxHp: 1e9, x: 400, dead: false, dying: 0, knock: 0 };
+      b.monsters = [m];
+      b.hit([m], 1, 'normal', 1000);
+      const healed = b.player.hps || b.player.hp;
+      const healEv = b.drainEvents().filter(e => e.t === 'lifesteal').length;
+      // 범위 베기: m_grail 의 whirlDmg 20%
+      const wh = mk(['m_grail']);
+      const wNormal = dmgOf(wh, 'normal', false).dmg;
+      const wWhirl = dmgOf(wh, 'whirl', false).dmg;
+      return { n0, n1, b1, plainBoss, healed, healEv, wNormal, wWhirl, atk: b.stats.atk };
+    """)
+    ok(battleopt["n1"] > battleopt["n0"], "장비 공격력 옵션이 실제 피해량을 올린다", f"{battleopt['n0']} → {battleopt['n1']}")
+    ok(battleopt["b1"] > battleopt["n1"] and abs((battleopt["b1"] / max(1, battleopt["n1"])) - 1.22) < 0.03, "보스 추가 피해 옵션이 보스에게만 +22%", f"일반 {battleopt['n1']} vs 보스 {battleopt['b1']}")
+    ok(battleopt["healed"] > 100 and battleopt["healEv"] >= 1, "흡혈 옵션이 전투에서 HP 를 회복시킨다", f"100 → {battleopt['healed']}")
+    ok(battleopt["wWhirl"] > battleopt["wNormal"] and abs((battleopt["wWhirl"] / max(1, battleopt["wNormal"])) - 1.2) < 0.03, "범위 베기 피해 옵션이 광역기에 반영", f"{battleopt['wNormal']} → {battleopt['wWhirl']}")
+
+    # ── 3) 인벤토리 · 장착 · 분해 · 강화 레벨 공유 ──
+    inv = js(ctx, """
+      const s = defaultState(0); s.shards = 500; s.level = 20;
+      const before = equippedRarity(s, 'weapon');
+      const a1 = acquireGear(s, 'w_iron');            // 빈 슬롯 → 자동 장착
+      const a2 = acquireGear(s, 'w_flame');           // 더 높은 등급 → 자동 교체
+      const ownedAfter = gearOwned(s).length;
+      const keepsOld = gearOwned(s).some(r => r.def.id === 'w_iron' && !r.equipped);
+      const a3 = acquireGear(s, 'w_flame');           // 중복 → 분해
+      const lv0 = s.equip.weapon;
+      tryEnhance(s, 'weapon', 3);
+      const lv1 = s.equip.weapon;
+      const eq2 = equipGear(s, gearOwned(s).find(r => r.def.id === 'w_iron').uid); // 갈아끼워도
+      const lv2 = s.equip.weapon;                     // 강화 레벨은 부위에 남는다
+      const grAfterSwap = s.gearRarity.weapon;
+      const cur = equippedItem(s, 'weapon');
+      const dm = dismantleGear(s, gearOwned(s).find(r => r.def.id === 'w_iron').uid);
+      const slotEmpty = s.gear.equipped.weapon === null && equippedRarity(s, 'weapon') === 'common';
+      const dupShards = a3.shards;
+      return {
+        before, a1eq: a1.equipped, a2eq: a2.equipped, ownedAfter, keepsOld, dup: !!a3.duplicate, dupShards,
+        lv0, lv1, lv2, eq2ok: eq2.ok, grAfterSwap, curName: cur && cur.name, dmShards: dm.shards, slotEmpty,
+        gr: s.gearRarity, shards: s.shards,
+      };
+    """)
+    ok(inv["before"] == "common" and inv["a1eq"] is True, "빈 슬롯은 첫 장비를 자동 장착", json.dumps(inv, ensure_ascii=False))
+    ok(inv["a2eq"] is True and inv["keepsOld"] is True and inv["ownedAfter"] == 2, "더 높은 등급은 자동 교체 · 이전 장비는 인벤토리 보관", json.dumps({k: inv[k] for k in ["a2eq", "keepsOld", "ownedAfter"]}))
+    ok(inv["dup"] is True and inv["dupShards"] == 14, "같은 아이템 중복 → 강화석 자동 분해(레어 14)", json.dumps({"dup": inv["dup"], "shards": inv["dupShards"]}))
+    ok(inv["lv1"] == inv["lv0"] + 3 and inv["lv2"] == inv["lv1"], "강화 레벨은 부위에 남아 장비를 갈아껴도 유지", json.dumps({k: inv[k] for k in ["lv0", "lv1", "lv2"]}))
+    ok(inv["eq2ok"] is True and inv["grAfterSwap"] == "common" and inv["curName"] == "철검", "직접 장착하면 등급 미러(gearRarity)도 함께 바뀐다", json.dumps({"gr": inv["grAfterSwap"], "name": inv["curName"]}, ensure_ascii=False))
+    ok(inv["dmShards"] == 2 and inv["slotEmpty"] is True, "분해하면 슬롯이 비고(일반) 강화석이 들어온다", json.dumps({"s": inv["dmShards"], "empty": inv["slotEmpty"]}))
+
+    bulk = js(ctx, """
+      const s = defaultState(0); s.level = 20;
+      acquireGear(s, 'w_iron'); acquireGear(s, 'a_leather'); acquireGear(s, 'h_cloth');
+      acquireGear(s, 'w_dragon'); acquireGear(s, 'a_scale'); acquireGear(s, 'r_copper'); acquireGear(s, 'm_wood');
+      const before = gearOwned(s);
+      const tCommon = dismantleTargets(s, 'common');
+      const tLow = dismantleTargets(s, 'low');
+      const expShards = tCommon.reduce((a, r) => a + dismantleValue(r.def), 0);
+      const eqBefore = before.filter(r => r.equipped).length;
+      const r = bulkDismantle(s, 'common');
+      const after = gearOwned(s);
+      const eqAfter = after.filter(x => x.equipped).length;
+      const removedEquipped = tCommon.filter(t => t.equipped).length;
+      const anyEquippedLeft = after.every(x => !x.equipped || !tCommon.some(t => t.uid === x.uid));
+      return {
+        total: before.length, tCommon: tCommon.length, tLow: tLow.length, lowLe: tCommon.length,
+        count: r.count, shards: r.shards, expShards,
+        left: after.length, eqBefore, eqAfter, removedEquipped, anyEquippedLeft,
+        names: tCommon.map(t => t.def.name), equippedNames: after.filter(x => x.equipped).map(x => x.def.name),
+      };
+    """)
+    ok(bulk["tCommon"] >= 2 and bulk["count"] == bulk["tCommon"] and bulk["shards"] == bulk["expShards"],
+       "일반 등급 일괄 분해 — 대상 수·강화석이 정확히 계산됨", json.dumps(bulk, ensure_ascii=False))
+    ok(bulk["tLow"] <= bulk["tCommon"] and bulk["lowLe"] == bulk["tCommon"], "'낮은 등급' 대상은 일반 등급 일괄 대상의 부분집합", json.dumps({"low": bulk["tLow"], "common": bulk["tCommon"]}))
+    ok(bulk["eqAfter"] == bulk["eqBefore"] and bulk["removedEquipped"] == 0 and bulk["left"] == bulk["total"] - bulk["count"],
+       "일괄 분해가 장착 장비는 건드리지 않는다", json.dumps({"eq0": bulk["eqBefore"], "eq1": bulk["eqAfter"], "left": bulk["left"]}))
+
+    # ── 4) 뽑기: 등급 안에서 종류가 다양하게 ──
+    gvar = js(ctx, """
+      const s = defaultState(0); s.gold = 500000;
+      let seed = 987654321; const rng = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+      const slotSeen = {}; const raritySeen = {}; let pulls = 0, equipped = 0, dropped = 0;
+      for (let i = 0; i < 30; i++) {
+        const r = pullGear(s, 10, rng, i);
+        pulls += 10;
+        for (const it of r.results) {
+          slotSeen[it.slot] = (slotSeen[it.slot] || 0) + 1;
+          raritySeen[it.rarity] = (raritySeen[it.rarity] || 0) + 1;
+          if (it.equipped) equipped++;
+          if (it.itemId) dropped++;
+        }
+      }
+      const kinds = new Set(Object.keys(s.gear.seen));
+      return { pulls, kinds: kinds.size, slotSeen, raritySeen, equipped, items: s.gear.items.length, totalKinds: GEAR_ITEMS.length, gr: s.gearRarity, shards: s.shards, pity: s.gacha.pity };
+    """)
+    ok(gvar["pulls"] == 300 and gvar["kinds"] >= 25, "300회 뽑기로 25종 이상 수집(등급 안 종류 다양화)", f"{gvar['kinds']}/{gvar['totalKinds']}종")
+    ok(all(gvar["slotSeen"].get(sl, 0) > 0 for sl in ["weapon", "armor", "helmet", "ring", "amulet"]), "5부위가 모두 나온다", json.dumps(gvar["slotSeen"], ensure_ascii=False))
+    ok(all(gvar["raritySeen"].get(r, 0) > 0 for r in ["common", "advanced", "rare", "hero", "legend"]), "5등급이 모두 나온다", json.dumps(gvar["raritySeen"], ensure_ascii=False))
+    ok(gvar["items"] <= gvar["totalKinds"] and gvar["equipped"] >= 5, "인벤토리는 종류 수를 넘지 않고 5부위가 채워진다", json.dumps({"items": gvar["items"], "eq": gvar["equipped"]}))
+
+    # ── 5) 사냥·보스 드랍 ──
+    drops = js(ctx, """
+      const s = defaultState(0);
+      const r = (v) => () => v;
+      const normalHit = tryGearDrop(s, { isBoss: false, stage: 3, rng: r(0), now: 1 });
+      const missNormal = tryGearDrop(s, { isBoss: false, stage: 3, rng: r(0.5), now: 2 });
+      const bossHit = tryGearDrop(s, { isBoss: true, stage: 3, rng: r(0.1), now: 3 });
+      const missBoss = tryGearDrop(s, { isBoss: true, stage: 3, rng: r(0.9), now: 4 });
+      // 등급 분포: 스테이지가 높을수록 고등급이 잘 나온다
+      function avgIdx(stage, isBoss) {
+        let seed = 4242; const rng = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+        let sum = 0; const N = 3000;
+        for (let i = 0; i < N; i++) sum += rollDropRarityIdx(stage, isBoss, rng);
+        return sum / N;
+      }
+      // 처치 드랍: 몬스터를 잡으면 gearDrop 이벤트가 나온다(운 좋은 rng)
+      const s2 = defaultState(0); s2.level = 5;
+      const b = new Battle(s2, () => ({}), r(0), 0);
+      const m = { id: 9, ko: '슬라임', isBoss: false, hp: 1, maxHp: 1, x: 300, dead: false, dying: 0, knock: 0 };
+      b.monsters = [m];
+      b.hit([m], 50, 'normal', 1000);
+      const evs = b.drainEvents().map(e => e.t);
+      return {
+        normalHit: normalHit && normalHit.item ? normalHit.item.id : null,
+        missNormal: !!missNormal,
+        bossHit: bossHit && bossHit.item ? bossHit.item.name : null,
+        missBoss: !!missBoss,
+        avgLow: avgIdx(1, false), avgMid: avgIdx(15, false), avgHigh: avgIdx(30, false), avgBoss: avgIdx(15, true),
+        gearDropEvent: evs.indexOf('gearDrop') >= 0, evNames: evs,
+        dropConst: GEAR_DROP,
+        dropped: s2.gear.drops,
+      };
+    """)
+    ok(drops["normalHit"] is not None and drops["missNormal"] is False, "일반 몬스터 드랍 판정(0.6%)", json.dumps({"hit": drops["normalHit"], "miss": drops["missNormal"]}))
+    ok(drops["bossHit"] is not None and drops["missBoss"] is False, "보스 드랍 판정(15% 우대)", json.dumps({"hit": drops["bossHit"], "miss": drops["missBoss"]}))
+    ok(drops["avgLow"] < drops["avgMid"] < drops["avgHigh"] and drops["avgBoss"] > drops["avgMid"], "스테이지·보스일수록 고등급이 잘 나온다",
+       json.dumps({k: round(drops[k], 2) for k in ["avgLow", "avgMid", "avgHigh", "avgBoss"]}))
+    ok(drops["gearDropEvent"] is True and drops["dropped"] >= 1, "처치 시 gearDrop 이벤트가 발생하고 인벤토리에 들어간다", json.dumps(drops["evNames"], ensure_ascii=False))
+
+    # ── 6) v3 세이브 마이그레이션 ──
+    mig = js(ctx, """
+      const old = {
+        ver: 3, level: 22, exp: 90, gold: 4321, shards: 55,
+        equip: { weapon: 9, armor: 5, helmet: 4, ring: 3, amulet: 2 },
+        gearRarity: { weapon: 'legend', armor: 'hero', helmet: 'common', ring: 'rare', amulet: 'advanced' },
+        stage: 9, maxStage: 9, killsInStage: 3, skills: { strike: { lv: 2, last: 0 } },
+        land: { owned: { '0_0_0': 2 }, accruedRent: 5 }, records: { totalGold: 777 },
+      };
+      // v3 와 완전히 같은 상태(장비 아이템 없이 등급만)의 스탯
+      const v3like = normalizeState(JSON.parse(JSON.stringify(old)), 0);
+      v3like.gear.items = []; v3like.gear.equipped = { weapon: null, armor: null, helmet: null, ring: null, amulet: null };
+      const statV3 = calcStats(v3like, {});
+      const n = normalizeState(old, 0);
+      const statNow = calcStats(n, {});
+      const again = normalizeState(JSON.parse(JSON.stringify(n)), 0);
+      const items = n.gear.items.map(r => ({ id: r.id, uid: r.uid }));
+      return {
+        equip: n.equip, gr: n.gearRarity, level: n.level, gold: n.gold, shards: n.shards, owned: n.land.owned['0_0_0'],
+        items, equipped: n.gear.equipped, count: items.length,
+        statV3: { atk: statV3.atk, hp: statV3.hpMax, crit: statV3.crit, red: statV3.dmgReduce, gold: statV3.goldMult },
+        statNow: { atk: statNow.atk, hp: statNow.hpMax, crit: statNow.crit, red: statNow.dmgReduce, gold: statNow.goldMult },
+        idempotent: again.gear.items.length === items.length && json(again.gear.equipped) === json(n.gear.equipped),
+        names: items.map(r => GEAR_BY_ID[r.id].name),
+      };
+      function json(o) { return JSON.stringify(o); }
+    """)
+    ok(mig["count"] == 4 and all(mig["equipped"][s] for s in ["weapon", "armor", "ring", "amulet"]) and mig["equipped"]["helmet"] is None,
+       "v3 세이브: 등급이 있던 4부위가 그 등급 장비로 마이그레이션", json.dumps(mig["names"], ensure_ascii=False))
+    ok(mig["equip"] == {"weapon": 9, "armor": 5, "helmet": 4, "ring": 3, "amulet": 2}, "기존 강화 레벨 그대로 유지", json.dumps(mig["equip"]))
+    ok(mig["gr"] == {"weapon": "legend", "armor": "hero", "helmet": "common", "ring": "rare", "amulet": "advanced"}, "기존 등급 그대로 유지", json.dumps(mig["gr"]))
+    ok(mig["level"] == 22 and mig["gold"] == 4321 and mig["shards"] == 55 and mig["owned"] == 2, "레벨·골드·강화석·부동산 진행도 유지", json.dumps({k: mig[k] for k in ["level", "gold", "shards", "owned"]}))
+    ok(mig["statNow"]["atk"] >= mig["statV3"]["atk"] and mig["statNow"]["hp"] >= mig["statV3"]["hp"] and mig["statNow"]["red"] >= mig["statV3"]["red"],
+       "마이그레이션 후 스탯이 줄지 않는다(장비 옵션은 보너스)", json.dumps({"v3": mig["statV3"], "now": mig["statNow"]}))
+    ok(mig["idempotent"] is True, "정규화를 반복해도 장비가 중복 생성되지 않는다", str(mig["idempotent"]))
+
+    badgear = js(ctx, """
+      const s = normalizeState({
+        gear: {
+          items: [{ uid: 3, id: 'w_dragon' }, { uid: 3, id: 'w_flame' }, { uid: 'x', id: 'nope' }, null, { id: 'a_plate' }, { uid: 99, id: 'm_grail' }],
+          equipped: { weapon: 3, armor: 99, helmet: 12345, ring: null, amulet: 'x' },
+          nextUid: -5, filter: 'bogus', seen: { w_dragon: 2, nope: 5 }, drops: -3,
+        },
+      }, 0);
+      const uids = s.gear.items.map(r => r.uid);
+      return {
+        uids, eq: s.gear.equipped, uniq: new Set(uids).size === uids.length, nextUid: s.gear.nextUid,
+        filter: s.gear.filter, seen: s.gear.seen, drops: s.gear.drops, gr: s.gearRarity,
+        armorSlot: s.gear.equipped.armor === null,
+        weaponName: equippedItem(s, 'weapon') ? equippedItem(s, 'weapon').name : null,
+      };
+    """)
+    ok(badgear["uniq"] is True and len(badgear["uids"]) == 4, "손상된 장비 목록 정리(중복 uid·미지 아이템 제거)", json.dumps(badgear["uids"]))
+    ok(badgear["armorSlot"] is True and badgear["weaponName"] is not None, "다른 부위 아이템을 장착한 손상 값은 비우고, 맞는 부위만 유지", json.dumps(badgear["eq"], ensure_ascii=False))
+    ok(badgear["filter"] == "all" and badgear["drops"] == 0 and badgear["seen"] == {"w_dragon": 2} and badgear["nextUid"] > max(badgear["uids"]), "필터·드랍 수·도감 기록 방어", json.dumps({"f": badgear["filter"], "s": badgear["seen"], "n": badgear["nextUid"]}, ensure_ascii=False))
+
+    codegear = js(ctx, """
+      const s = defaultState(0); s.level = 12; s.gold = 9000;
+      acquireGear(s, 'w_frost'); acquireGear(s, 'a_guard'); acquireGear(s, 'r_eye');
+      const code = encodeSave(s);
+      const back = decodeSave(code, 0);
+      const before = gearOwned(s).map(r => r.uid + ':' + r.def.id + ':' + (r.equipped ? 1 : 0)).sort().join(',');
+      const after = back.ok ? gearOwned(back.state).map(r => r.uid + ':' + r.def.id + ':' + (r.equipped ? 1 : 0)).sort().join(',') : '';
+      return { ok: back.ok, same: before === after, len: code.length, n: back.ok ? gearOwned(back.state).length : 0 };
+    """)
+    ok(codegear["ok"] is True and codegear["same"] is True and codegear["n"] == 3, "세이브 코드에 장비 인벤토리·장착이 담긴다", json.dumps(codegear))
+
+    # ── 7) UI · 렌더 · 연결 ──
+    ui_gear = js(ctx2, """
+      const s = defaultState(0); s.level = 18; s.gold = 32000; s.shards = 210;
+      acquireGear(s, 'w_dragon'); acquireGear(s, 'a_leather'); acquireGear(s, 'r_copper'); acquireGear(s, 'm_wood'); acquireGear(s, 'h_iron');
+      acquireGear(s, 'w_iron'); acquireGear(s, 'w_steel'); acquireGear(s, 'a_chain');
+      const buffs = computeBuffs(s, 0);
+      const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(3), boss: null, dungeon: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'gear', el: {} };
+      const html = __tpls.gear(ui);
+      s.gear.filter = 'weapon';
+      const filtered = __tpls.gear(ui);
+      const empty = defaultState(0);
+      const ui2 = { s: empty, battle: { stats: calcStats(empty, {}), def: stageDef(1), boss: null, player: { hp: 1 } }, app: { buffs: {} }, logs: [], tab: 'gear', el: {} };
+      const emptyHtml = __tpls.gear(ui2);
+      return {
+        html, filtered, emptyHtml,
+        bad: /undefined|NaN|\\[object Object\\]/.test(html + filtered + emptyHtml),
+        slots: (html.match(/class=\"gslot/g) || []).length,
+        inv: (html.match(/class=\"inv-card/g) || []).length,
+        filters: (html.match(/data-action=\"gear-filter\"/g) || []).length,
+        itemBtns: (html.match(/data-action=\"gear-item\"/g) || []).length,
+        eqBadge: (html.match(/iv-eq/g) || []).length,
+        svgs: (html.match(/<svg/g) || []).length,
+        emptyInv: emptyHtml.indexOf('아직 보유한 장비가 없습니다') >= 0,
+        filteredNames: (filtered.match(/inv-card/g) || []).length,
+      };
+    """)
+    ok(ui_gear["bad"] is False, "장비 탭에 undefined/NaN 누출 없음")
+    ok(ui_gear["slots"] == 5, "장착 5부위 슬롯 카드 렌더", str(ui_gear["slots"]))
+    ok(ui_gear["inv"] == 8 and ui_gear["eqBadge"] == 5, "보유 장비 그리드 + 장착중 표시", json.dumps({"inv": ui_gear["inv"], "eq": ui_gear["eqBadge"]}))
+    ok(ui_gear["filters"] == 6, "부위별 필터 6종(전체+5부위)", str(ui_gear["filters"]))
+    ok(ui_gear["filteredNames"] == 3, "필터를 고르면 그 부위만 보인다(무기 3종)", str(ui_gear["filteredNames"]))
+    ok(ui_gear["svgs"] >= 13 and ui_gear["itemBtns"] >= 8, "장비마다 SVG 아이콘 + 클릭(비교) 버튼", json.dumps({"svg": ui_gear["svgs"], "btn": ui_gear["itemBtns"]}))
+    ok(ui_gear["emptyInv"] is True, "장비가 없을 때 안내 문구", str(ui_gear["emptyInv"]))
+    ok(all(x in ui_gear["html"] for x in ["장착 중", "보유 장비", "일반 등급 일괄 분해", "강화석 구매", "장비 강화"]), "장비 탭 구성(장착·인벤·일괄 분해·강화)", "")
+
+    appsrc = read("app.js")
+    ok(all(x in appsrc for x in ["openGearItem", "equipGearItem", "confirmDismantleGear", "confirmBulkDismantle", "compareGear"]), "장비 비교·장착·분해 액션 구현(app.js)")
+    ok(all(x in read("src/ui.js") for x in ['case \'gear-item\'', 'case \'gear-equip\'', 'case \'gear-dismantle\'', 'case \'gear-bulk\'', 'case \'gear-filter\'', 'setGearFilter']), "장비 카드 클릭 → 비교/장착/분해 연결(ui.js)")
+    ok(all(x in read("src/render.js") for x in ["equippedItem", "_rar.pal", "_rar.tint", "gearDrop", "lifesteal"]), "무기 종류별 검기 색·오라 + 드랍/흡혈 연출(render.js)")
+    ok(all(x in read("src/combat.js") for x in ["bossDmgPct", "whirlDmgPct", "lifesteal", "tryGearDrop", "gearDrop"]), "전투에 흡혈·보스 추뎀·범위 베기·드랍 반영(combat.js)")
+    ok(all(x in read("src/state.js") for x in ["gearMods", "normalizeGear", "syncGearRarity", "compareGear"]), "상태에 장비 옵션·마이그레이션·비교 반영(state.js)")
+    css4 = read("style.css")
+    ok(all(x in css4 for x in [".gear-slots", ".gslot", ".inv-grid", ".inv-card", ".cmp-vs", ".cmp-opts", ".cmp-stats", ".iv-eq", ".gsvg"]), "v4 장비 UI CSS(슬롯·그리드·비교 모달)")
+    ok("장비 시스템" in read("README.md") and "4.0.0" in read("README.md"), "README v4.0.0 반영")
+
+
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:
         print("실패 항목:\n - " + "\n - ".join(failures))
         return 1
-    print("✅ v3 게스트 통합판 검증 통과")
+    print("✅ v4 게스트 통합판 검증 통과")
     return 0
 
 

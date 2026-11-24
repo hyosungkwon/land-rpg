@@ -19,7 +19,7 @@ import sys
 import quickjs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FILES = ["src/data.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js"]
+FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js"]
 
 
 def strip_module(src):

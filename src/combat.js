@@ -7,6 +7,7 @@ import {
 } from './state.js';
 import { DUNGEON, PET_ATTACK_MS, equippedPet, petDmgPct, dungeonReward } from './meta.js';
 import { codexMeet, codexKill } from './quests.js';
+import { tryGearDrop } from './gear.js';
 
 const ATTACK_STOP_GAP = 380; // 보스가 멈추고 때리는 거리(캐릭터 스프라이트가 겹치지 않는 간격)
 /* ── v3.8 다굴 슬롯 ──────────────────────────────────────────────
@@ -420,16 +421,30 @@ export class Battle {
 
   hit(list, mul, kind, now) {
     let hits = 0;
+    let dealt = 0;
     for (const m of list) {
       if (m.dead || m.dying) continue;
-      const { dmg, crit } = this.roll(mul, now);
+      const { dmg: rawDmg, crit } = this.roll(mul, now);
+      // v4.0 장비 옵션: 보스 추가 피해 · 범위 베기 피해
+      let dmg = rawDmg;
+      if (m.isBoss && this.stats.bossDmgPct > 0) dmg = Math.round(dmg * (1 + this.stats.bossDmgPct));
+      if (kind === 'whirl' && this.stats.whirlDmgPct > 0) dmg = Math.round(dmg * (1 + this.stats.whirlDmgPct));
       m.hp -= dmg;
       m.hitAt = now;
       m.knock = Math.min(30, (m.knock || 0) + (crit ? 18 : 10));
       if (this.dungeon) this.dungeon.dmg += dmg;
+      dealt += dmg;
       hits++;
       this.emit({ t: 'hit', id: m.id, dmg, crit, x: m.x, isBoss: m.isBoss, kind });
       if (m.hp <= 0) this.killMonster(m, now);
+    }
+    // v4.0 장비 옵션: 흡혈 — 입힌 피해의 일부를 되찾는다
+    if (dealt > 0 && this.stats.lifesteal > 0 && !this.player.dead) {
+      const heal = Math.round(dealt * this.stats.lifesteal);
+      if (heal > 0 && this.player.hp < this.stats.hpMax) {
+        this.player.hp = Math.min(this.stats.hpMax, this.player.hp + heal);
+        this.emit({ t: 'lifesteal', heal });
+      }
     }
     return hits;
   }
@@ -471,6 +486,28 @@ export class Battle {
       this.refreshStats(now);
       this.player.hp = this.stats.hpMax; // 레벨업 시 완충
     }
+    // v4.0: 사냥·보스 처치로 장비가 드랍된다(보스 우대) — 파밍의 재미
+    try {
+      const drop = tryGearDrop(this.s, {
+        isBoss: m.isBoss, stage: this.s.stage, buffs: this.buffs(), rng: this.rng, now,
+      });
+      if (drop && drop.item) {
+        this.emit({
+          t: 'gearDrop',
+          x: m.x,
+          itemId: drop.item.id,
+          name: drop.item.name,
+          ko: drop.item.name,
+          rarity: drop.item.rarity,
+          slot: drop.item.slot,
+          equipped: !!drop.equipped,
+          duplicate: !!drop.duplicate,
+          shards: drop.shards || 0,
+          isBoss: m.isBoss,
+        });
+        if (drop.equipped) this.refreshStats(now);
+      }
+    } catch (e) { /* 드랍 실패가 전투를 멈추지 않게 */ }
     if (m.isBoss) this.defeatBoss(now);
     else if (this.s.bossReady && !this.boss) this.bossReadyAt = now;
   }

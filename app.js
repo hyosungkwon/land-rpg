@@ -4,8 +4,14 @@
 import { APP_VERSION, ECON, EQUIP, EQUIP_MAX_LV, SKILLS, SAVE_KEY, stageDef, RARITIES, RARITY_INDEX, spriteSrc, enhanceCost } from './src/data.js';
 import {
   loadState, saveState, offlineSummary, applyOffline, tryEnhance, tryUpgradeSkill,
-  shardPrice, buyShards, pullGear, recordNews, enhanceMaxCount, normalizeState,
+  shardPrice, buyShards, pullGear, recordNews, enhanceMaxCount, normalizeState, compareGear,
 } from './src/state.js';
+import {
+  gearItem, gearIcon, gearOptionList, equippedItem, equippedRarity, gearOwned, gearOptionSummary,
+  equipGear, dismantleGear, bulkDismantle, dismantleTargets, dismantleValue, itemScore, GEAR_OPTS,
+} from './src/gear.js';
+
+const GEAR_OPT_LABEL = (k) => (GEAR_OPTS[k] ? `${GEAR_OPTS[k].icon} ${GEAR_OPTS[k].name}` : k);
 import { encodeSave, decodeSave, summarizeSave } from './src/savecode.js';
 import { Battle } from './src/combat.js';
 import {
@@ -299,6 +305,19 @@ class App {
           this.ui.addLog(`👑 <b>${ev.ko}</b> 처치! 💰${ev.gold.toLocaleString()} 💎${ev.shards}`);
         } else if (ev.shards > 0) {
           this.ui.addLog(`${ev.ko} 처치 · 💰${ev.gold} 💎${ev.shards}`);
+        }
+      } else if (ev.t === 'gearDrop') {
+        // 🎒 v4.0 장비 드랍 — 인벤토리/자동 장착
+        const rar = RARITIES[RARITY_INDEX[ev.rarity] || 0];
+        if (ev.duplicate) {
+          this.ui.addLog(`🎒 <b>${esc(ev.ko)}</b> 중복 획득 → 💎${ev.shards}`);
+        } else {
+          this.ui.addLog(`🎒 <b>${esc(ev.ko)}</b> 획득 (${rar.name})${ev.equipped ? ' · 자동 장착' : ' · 인벤토리 보관'}`);
+          if ((RARITY_INDEX[ev.rarity] || 0) >= 2 || ev.isBoss) {
+            this.ui.toast(`🎒 ${rar.name} ${ev.ko}!${ev.equipped ? ' 자동 장착' : ' 획득'}`, 'gold');
+          }
+          this.sound.gacha(rar.id);
+          this.ui.renderIfNeeded();
         }
       } else if (ev.t === 'levelUp') {
         this.ui.toast(`⬆️ 레벨 업! Lv.${ev.level}`, 'green');
@@ -678,6 +697,32 @@ class App {
         this.ui.toast(`💎 강화석 ${r.n}개 구매 (💰${r.cost.toLocaleString()})`, 'green');
         this.ui.render();
       },
+
+      /* ── ⚔️ 장비 인벤토리 (v4.0) ── */
+      openGearItem: (uid) => this.openGearItem(uid),
+      openGearByItemId: (itemId) => {
+        const row = gearOwned(this.s).find((x) => x.def.id === itemId);
+        if (!row) {
+          this.ui.toast('이미 분해된 장비입니다');
+          return;
+        }
+        this.openGearItem(row.uid);
+      },
+      equipGearItem: (uid) => {
+        const r = equipGear(this.s, uid);
+        if (!r.ok) {
+          if (!r.noop) this.ui.toast(r.reason || '장착할 수 없습니다', 'red');
+          return;
+        }
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.ui();
+        this.ui.toast(`${EQUIP[r.item.slot].icon} ${r.item.name} 장착!`, 'green');
+        this.ui.render();
+        this.openGearItem(uid);
+      },
+      dismantleGearItem: (uid) => this.confirmDismantleGear(uid),
+      bulkDismantleGear: (mode) => this.confirmBulkDismantle(mode),
 
       /* ── 부동산 ── */
       landTrade: (key, side) => this.openLandTrade(key, side),
@@ -1602,16 +1647,16 @@ class App {
       .join('');
     const rows = r.results
       .map((item) => {
-        const def = EQUIP[item.slot];
+        const def = gearItem(item.itemId);
         const tag = item.equipped
-          ? item.replaced && item.shards
-            ? `교체 장착 · 이전 분해 +💎${item.shards}`
-            : 'NEW 자동 장착'
-          : `중복 분해 +💎${item.shards}`;
-        return `<div class="gr-row ${item.equipped ? '' : 'dust'}">
-          <span class="ico">${def.icon}</span>
-          <span class="nm">${def.name}</span>
-          <span class="rb ${item.rarity}">${item.name}</span>
+          ? (item.replaced && item.shards ? `교체 장착 · 이전 분해 +💎${item.shards}` : 'NEW 자동 장착')
+          : item.duplicate
+            ? `중복 분해 +💎${item.shards}`
+            : '인벤토리 보관 · 비교 후 장착';
+        return `<div class="gr-row ${item.equipped ? '' : 'dust'}" ${def ? `data-action="gear-result-item" data-value="${def.id}"` : ''}>
+          <span class="ico">${def ? gearIcon(def, 26) : '🎒'}</span>
+          <span class="nm">${def ? esc(def.name) : esc(item.itemName || '')}</span>
+          <span class="rb ${item.rarity}">${esc(item.rarityName || item.name)}</span>
           <span class="tag">${tag}</span>
         </div>`;
       })
@@ -1623,8 +1668,160 @@ class App {
       sub: `${n}회 · ${unit}${r.spent.toLocaleString()} 사용 · 최고 ${best.name}`,
       body: `<div class="gr-sum">${summary}</div>
              <div class="gacha-result">${rows}</div>
-             <div class="note" style="margin-top:9px">분해 💎+${r.shards} · 천장까지 ${r.pityLeft}회 · 누적 ${r.total}회</div>`,
+             <div class="note" style="margin-top:9px">분해 💎+${r.shards} · 천장까지 ${r.pityLeft}회 · 누적 ${r.total}회<br>장착하지 않은 장비는 <b>장비 탭 → 보유 장비</b>에서 비교하고 교체할 수 있습니다.</div>`,
       actions: [{ label: '확인', style: 'primary', onClick: () => {} }],
+    });
+  }
+
+  /* ───────────── ⚔️ 장비 상세 · 비교 · 분해 (v4.0) ───────────── */
+  /** 장비 카드 → 현재 장착 장비와 옵션·스탯을 나란히 비교 */
+  openGearItem(uid) {
+    const s = this.s;
+    const id = Math.floor(Number(uid));
+    const cmp = compareGear(s, id, this.buffs);
+    if (!cmp) {
+      this.ui.toast('장비를 찾을 수 없습니다', 'red');
+      return;
+    }
+    const it = cmp.item;
+    const r = RARITIES[RARITY_INDEX[it.rarity] || 0];
+    const curItem = equippedItem(s, it.slot);
+    const curRarity = equippedRarity(s, it.slot);
+    const isOn = cmp.equipped;
+    const lv = s.equip[it.slot] || 0;
+
+    // 옵션 비교 — 두 장비에 나오는 옵션 키를 모두 보여 준다
+    const keys = [...new Set([...gearOptionList(it).map((o) => o.key), ...gearOptionList(curItem).map((o) => o.key)])];
+    const valOf = (item, k) => (item && item.opts && Number(item.opts[k]) ? Number(item.opts[k]) : 0);
+    const optRows = keys.length
+      ? keys.map((k) => {
+        const a = valOf(it, k);
+        const b = valOf(curItem, k);
+        const d = a - b;
+        const cls = d > 0 ? 'up' : d < 0 ? 'down' : 'same';
+        return `<div class="cmp-opt">
+          <span class="co-k">${esc(GEAR_OPT_LABEL(k))}</span>
+          <span class="co-now">${b ? `+${b}${GEAR_OPTS[k].unit}` : '—'}</span>
+          <span class="co-new ${cls}">${a ? `+${a}${GEAR_OPTS[k].unit}` : '—'}${d ? `<i>(${d > 0 ? '▲' : '▼'}${Math.abs(d)})</i>` : ''}</span>
+        </div>`;
+      }).join('')
+      : '<div class="tiny dim">고유 옵션이 없는 기본 장비입니다.</div>';
+
+    const d = cmp.delta;
+    const stat = (label, v, fmtFn, inverse = false) => {
+      const better = inverse ? v < 0 : v > 0;
+      const cls = Math.abs(v) < 1e-9 ? 'same' : better ? 'up' : 'down';
+      const arrow = Math.abs(v) < 1e-9 ? '—' : (v > 0 ? '▲' : '▼');
+      return `<div class="cs"><span>${label}</span><b class="${cls}">${arrow}${Math.abs(v) < 1e-9 ? '' : fmtFn(Math.abs(v))}</b></div>`;
+    };
+    const pct1 = (v) => `${(v * 100).toFixed(1)}%`;
+    const stats = [
+      stat('공격력', d.atk, (v) => Math.round(v).toLocaleString()),
+      stat('체력', d.hpMax, (v) => Math.round(v).toLocaleString()),
+      stat('DPS', d.dps, (v) => Math.round(v).toLocaleString()),
+      stat('치명타 확률', d.crit * 100, (v) => `${v.toFixed(1)}%p`),
+      stat('치명타 피해', d.critDmg, (v) => `+${v.toFixed(2)}x`),
+      stat('피해 감소', d.dmgReduce * 100, (v) => `${v.toFixed(1)}%p`),
+      stat('골드 획득', d.goldMult * 100, (v) => `${v.toFixed(1)}%p`),
+      stat('강화석 드랍', d.dropMult * 100, (v) => `${v.toFixed(1)}%p`),
+      stat('공격 간격', d.attackMs, (v) => `${Math.round(v)}ms`, true),
+      stat('흡혈', d.lifesteal * 100, (v) => `${v.toFixed(1)}%p`),
+      stat('보스 추뎀', d.bossDmgPct * 100, (v) => `${v.toFixed(1)}%p`),
+      stat('범위 베기', d.whirlDmgPct * 100, (v) => `${v.toFixed(1)}%p`),
+    ].filter((html) => !html.includes('class="same">—')).join('');
+
+    const body = `
+      <div class="cmp-head">
+        <span class="cmp-ico">${gearIcon(it, 54)}</span>
+        <span class="cmp-title">
+          <span class="cmp-name">${esc(it.name)} <span class="rb ${r.id}">${r.name}</span></span>
+          <span class="cmp-sub">${EQUIP[it.slot].icon} ${EQUIP[it.slot].name} · ${esc(it.desc || '')} · 강화 +${lv} (부위 공유)</span>
+        </span>
+      </div>
+      <div class="cmp-vs">
+        <div class="cv-col now">
+          <div class="cv-h">지금 장착</div>
+          <div class="cv-body">${curItem ? gearIcon(curItem, 30) : '<span class="cv-none">—</span>'}</div>
+          <div class="cv-n">${curItem ? esc(curItem.name) : '없음'} <span class="rb ${curRarity}">${RARITIES[RARITY_INDEX[curRarity] || 0].name}</span></div>
+        </div>
+        <div class="cv-col new">
+          <div class="cv-h">이 장비</div>
+          <div class="cv-body">${gearIcon(it, 30)}</div>
+          <div class="cv-n">${esc(it.name)} <span class="rb ${r.id}">${r.name}</span></div>
+        </div>
+      </div>
+      ${isOn ? '<div class="note" style="margin:0 0 8px">지금 장착 중인 장비입니다. 같은 부위의 다른 장비를 눌러 비교해 보세요.</div>' : ''}
+      <div class="cmp-sec">고유 옵션 <small>지금 → 이 장비</small></div>
+      <div class="cmp-opts">${optRows}</div>
+      <div class="cmp-sec">장착하면 달라지는 것</div>
+      <div class="cmp-stats">${stats || '<div class="tiny dim">스탯 변화 없음</div>'}</div>`;
+
+    const actions = [];
+    if (!isOn) {
+      actions.push({ label: `⚔️ 장착하기`, style: 'primary', onClick: () => this.actions.equipGearItem(id) });
+    }
+    actions.push({
+      label: `♻️ 분해 · 💎${dismantleValue(it)}`,
+      style: 'ghost',
+      onClick: () => this.confirmDismantleGear(id),
+    });
+    actions.push({ label: '닫기', style: 'ghost', onClick: () => {} });
+    this.ui.modal({ title: '⚔️ 장비 비교', sub: isOn ? '장착 중' : '장착하면 아래 수치만큼 바뀝니다(부위 강화 레벨은 그대로)', body, actions });
+  }
+
+  confirmDismantleGear(uid) {
+    const id = Math.floor(Number(uid));
+    const row = gearOwned(this.s).find((x) => x.uid === id);
+    if (!row) {
+      this.ui.toast('장비를 찾을 수 없습니다', 'red');
+      return;
+    }
+    const shards = dismantleValue(row.def);
+    this.ui.modal({
+      title: '♻️ 장비 분해',
+      sub: `${row.def.name} (${RARITIES[RARITY_INDEX[row.def.rarity] || 0].name}) → 💎${shards}`,
+      body: `<div class="cmp-head"><span class="cmp-ico">${gearIcon(row.def, 48)}</span><span class="cmp-title"><span class="cmp-name">${esc(row.def.name)}</span><span class="cmp-sub">${gearOptionSummary(row.def) || '고유 옵션 없음'}</span></span></div>
+        ${row.equipped ? '<div class="note" style="margin-top:8px">⚠️ <b>장착 중인 장비</b>입니다. 분해하면 이 부위는 빈 상태가 됩니다(강화 레벨은 부위에 남습니다).</div>' : ''}
+        <div class="note" style="margin-top:8px">분해하면 되돌릴 수 없습니다.</div>`,
+      actions: [
+        { label: `분해하고 💎${shards} 받기`, style: 'red', onClick: () => {
+          const r = dismantleGear(this.s, id);
+          if (!r.ok) { this.ui.toast(r.reason || '분해할 수 없습니다', 'red'); return; }
+          this.battle.refreshStats();
+          this.save(true);
+          this.ui.toast(`♻️ ${r.item.name} 분해 · 💎+${r.shards}`, 'green');
+          this.ui.render();
+        } },
+        { label: '취소', style: 'ghost', onClick: () => this.openGearItem(id) },
+      ],
+    });
+  }
+
+  confirmBulkDismantle(mode) {
+    const m = mode === 'common' ? 'common' : 'low';
+    const targets = dismantleTargets(this.s, m);
+    if (!targets.length) {
+      this.ui.toast('분해할 장비가 없습니다');
+      return;
+    }
+    const shards = targets.reduce((a, row) => a + dismantleValue(row.def), 0);
+    const label = m === 'common' ? '일반 등급' : '장착보다 낮은 등급';
+    const rows = targets.slice(0, 8).map((row) => `<div class="gr-row dust"><span class="ico">${gearIcon(row.def, 24)}</span><span class="nm">${esc(row.def.name)}</span><span class="rb ${row.def.rarity}">${RARITIES[RARITY_INDEX[row.def.rarity] || 0].name}</span><span class="tag">💎${dismantleValue(row.def)}</span></div>`).join('');
+    this.ui.modal({
+      title: '♻️ 일괄 분해',
+      sub: `${label} ${targets.length}개 → 💎${shards}`,
+      body: `<div class="gacha-result">${rows}</div>${targets.length > 8 ? `<div class="tiny dim" style="margin-top:6px">…외 ${targets.length - 8}개</div>` : ''}
+        <div class="note" style="margin-top:8px">장착 중인 장비는 대상에서 제외됩니다. 되돌릴 수 없습니다.</div>`,
+      actions: [
+        { label: `${targets.length}개 분해 · 💎${shards}`, style: 'red', onClick: () => {
+          const r = bulkDismantle(this.s, m);
+          if (!r.ok) { this.ui.toast(r.reason || '분해할 장비가 없습니다'); return; }
+          this.save(true);
+          this.ui.toast(`♻️ 장비 ${r.count}개 분해 · 💎+${r.shards}`, 'green');
+          this.ui.render();
+        } },
+        { label: '취소', style: 'ghost', onClick: () => {} },
+      ],
     });
   }
 

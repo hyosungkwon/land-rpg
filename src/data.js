@@ -2,7 +2,7 @@
 // 밸런스·몬스터·장비·스킬 정의. DOM 의존 없음(헤드리스 테스트 가능).
 // v3: 게스트 전용 통합 경제 — 골드 하나로 사냥과 부동산을 함께 굴린다.
 
-export const APP_VERSION = '3.9.0';
+export const APP_VERSION = '4.0.0';
 export const SAVE_KEY = 'land_rpg_unified_v3';
 export const SAVE_VERSION = 3;
 
@@ -398,7 +398,11 @@ export const DEF = {
   regenBase: 0.012, // 초당 최대 체력 대뱄 자연 회복
 };
 
-/* ────────────────────────────── 장비 5부위 ────────────────────────────── */
+/* ────────────────────────────── 장비 5부위 ──────────────────────────────
+ * v4.0: 부위 이름·강화 효과는 그대로 두고, 그 위에 '장비 종류·고유 옵션·인벤토리'(src/gear.js)가 얹힌다.
+ *  · 강화 레벨(s.equip)은 부위에 남는다 → 어떤 장비로 갈아껴도 강화 수치가 유지된다.
+ *  · gearRarity 는 장착 아이템의 등급을 그대로 비추는 값(렌더러·도감 호환).
+ */
 export const EQUIP_SLOTS = ['weapon', 'armor', 'helmet', 'ring', 'amulet'];
 export const EQUIP_MAX_LV = 100;
 

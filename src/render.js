@@ -3,6 +3,7 @@
 // v2: 새 스프라이트(대기/공격/스킬 3프레임) + 검기 아크·타격 스파크·스킬 이펙트.
 //     배경은 오프스크린 캔버스에 한 번만 그려 매 프레임 비용을 줄인다(모바일 발열/멈춤 방지).
 import { ECON, THEMES, spriteSrc, RARITIES, RARITY_INDEX, monsterMotion, monsterAttack } from './data.js';
+import { equippedItem } from './gear.js';
 
 const rnd = (seed) => {
   const x = Math.sin(seed * 127.1) * 43758.5453;
@@ -293,6 +294,16 @@ export class Renderer {
             });
           }
         }
+      } else if (ev.t === 'lifesteal') {
+        // 🩸 흡혈 — 캐릭터 발밑에 붉은 고리 + 회복 숫자
+        this.rings.push({ x: ECON.playerX, life: 1, r: 14, color: '#ff6a7a', wide: 0.9 });
+        this.addFloater(ECON.playerX, `+${ev.heal || 0}`, false, 'heal');
+      } else if (ev.t === 'gearDrop') {
+        // 🎒 장비 드랍 — 등급 색 폭발 + 아이템 이름
+        const rar = RARITIES[RARITY_INDEX[ev.rarity] || 0];
+        this.burst(ev.x, rar.color, ev.isBoss ? 26 : 12, !!ev.isBoss);
+        this.rings.push({ x: ev.x, life: 1, r: 18, color: rar.color, wide: 1.2 });
+        this.addFloater(ev.x, ev.name || '장비', false, 'gold', rar.color);
       } else if (ev.t === 'petHit') {
         // 동행 펫의 공격 — 펫 색의 작은 참격과 숫자
         this.addFloater(ev.x, ev.dmg, false, 'pet', ev.color);
@@ -610,20 +621,26 @@ export class Renderer {
     ctx.restore();
   }
 
-  /* ─────────── 장비 등급 색 (오라·검기) ─────────── */
+  /* ─────────── 장비 등급 색 (오라·검기) + v4.0 무기 종류 색 ─────────── */
   syncRarity() {
     const s = this.battle && this.battle.s;
     const gr = s && s.gearRarity;
-    if (!gr) { this._rar = { weapon: 0, avg: 0, hasLegend: false }; return this._rar; }
-    const key = `${gr.weapon}|${gr.armor}|${gr.helmet}|${gr.ring}|${gr.amulet}`;
+    if (!gr) { this._rar = { weapon: 0, avg: 0, hasLegend: false, weaponGear: null, pal: null }; return this._rar; }
+    const wItem = s ? equippedItem(s, 'weapon') : null;
+    const key = `${gr.weapon}|${gr.armor}|${gr.helmet}|${gr.ring}|${gr.amulet}|${wItem ? wItem.id : '-'}`;
     if (this._rarKey === key) return this._rar;
     this._rarKey = key;
     const ids = Object.keys(gr);
     const sum = ids.reduce((a, k) => a + (RARITY_INDEX[gr[k]] || 0), 0);
+    const wIdx = RARITY_INDEX[gr.weapon] || 0;
     this._rar = {
-      weapon: RARITY_INDEX[gr.weapon] || 0,
+      weapon: wIdx,
       avg: ids.length ? Math.ceil(sum / ids.length - 1e-9) : 0,
       hasLegend: ids.some((k) => gr[k] === 'legend'),
+      weaponGear: wItem,
+      // 무기 고유 검기 색(화염검·빙결검·천둥창…) — 없으면 등급 색을 쓴다
+      pal: wItem && wItem.fx ? wItem.fx : (RARITIES[wIdx] || RARITIES[0]).slash,
+      tint: wItem ? wItem.tint : null,
     };
     return this._rar;
   }
@@ -652,6 +669,14 @@ export class Renderer {
       ctx.lineWidth = 1.1 * sc;
       ctx.beginPath();
       ctx.ellipse(px, gy + 1, h * 0.42 * (1 + 0.05 * pulse), h * 0.14 * (1 + 0.06 * pulse), 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    // v4.0: 무기 종류의 색(화염·빙결·번개…)을 발밑 고리에 한 번 더 얹어 무기 교체가 눈에 보이게
+    if (this._rar.tint) {
+      ctx.strokeStyle = hexA(this._rar.tint, 0.4 + 0.25 * pulse);
+      ctx.lineWidth = 1.2 * sc;
+      ctx.beginPath();
+      ctx.ellipse(px, gy + 1, h * 0.22 * (1 + 0.06 * pulse), h * 0.07 * (1 + 0.1 * pulse), 0, 0, Math.PI * 2);
       ctx.stroke();
     }
     ctx.restore();
@@ -1064,7 +1089,7 @@ export class Renderer {
       for (const m of b.monsters) if (!m.dead && !m.dying && (!near || m.x < near.x)) near = m;
       const reach = near ? Math.max(30 * sc, this.worldX(near.x) - px) : 62 * sc;
       const wIdx = this._rar.weapon;
-      const pal = (RARITIES[wIdx] || RARITIES[0]).slash;
+      const pal = this._rar.pal || (RARITIES[wIdx] || RARITIES[0]).slash;
       this.drawSlash(ctx, px, gy, h, sc, atkK, p.attackKind, Math.min(reach * 0.9, 176 * sc), pal, wIdx);
     }
   }

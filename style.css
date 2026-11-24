@@ -1694,3 +1694,206 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   box-shadow: 0 0 6px rgba(255, 107, 107, 0.85);
   animation: pulse 1.4s ease-in-out infinite;
 }
+
+/* ══════════════════ v4.0: 장비 종류 · 장착 슬롯 · 인벤토리 · 비교 ══════════════════ */
+
+/* 아이콘(SVG) 공통 */
+.gsvg { display: block; flex: 0 0 auto; }
+.gs-ico .gsvg, .iv-ico .gsvg, .cmp-ico .gsvg, .cv-body .gsvg, .g-ico .gsvg { width: 100%; height: 100%; }
+.gs-ico .gsvg, .iv-ico .gsvg { width: 40px; height: 40px; }
+
+/* ⚔️ 장착 5부위 슬롯 */
+.gear-slots { display: flex; flex-direction: column; gap: 6px; }
+.gslot {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 9px;
+  border-radius: 12px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  transition: transform 0.1s, border-color 0.15s;
+}
+.gslot:active { transform: scale(0.99); }
+.gslot.on { background: linear-gradient(120deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)); }
+.gslot.on.legend { border-color: rgba(255, 122, 61, 0.5); box-shadow: 0 0 0 1px rgba(255, 122, 61, 0.16) inset; }
+.gslot.on.hero { border-color: rgba(185, 139, 255, 0.42); }
+.gslot.on.rare { border-color: rgba(105, 192, 255, 0.4); }
+.gslot.on.advanced { border-color: rgba(94, 225, 163, 0.38); }
+.gslot.empty { border-style: dashed; opacity: 0.86; }
+.gs-ico {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--line);
+}
+.gs-none { font-size: 20px; opacity: 0.55; }
+.gs-mid { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.gs-name { display: flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 800; letter-spacing: -0.2px; }
+.gs-sub { font-size: 10px; color: var(--sub); font-weight: 700; }
+.gs-sub .lv { color: var(--gold); font-weight: 900; }
+.gs-opts { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 1px; }
+.opt {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 6px;
+  font-size: 9px;
+  font-weight: 800;
+  color: #cfe2ff;
+  background: rgba(105, 192, 255, 0.12);
+  border: 1px solid rgba(105, 192, 255, 0.2);
+  white-space: nowrap;
+}
+.opt.dim { color: var(--dim); background: rgba(255, 255, 255, 0.03); border-color: var(--line); }
+
+/* 🎒 인벤토리 */
+.gear-filters { margin-bottom: 9px; }
+.chip.danger { color: #ffb3b3; border-color: rgba(255, 107, 107, 0.42); background: rgba(255, 107, 107, 0.1); }
+.inv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.inv-card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px;
+  border-radius: 12px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  min-width: 0;
+  transition: transform 0.1s, border-color 0.15s;
+}
+.inv-card:active { transform: scale(0.98); }
+.inv-card.on {
+  border-color: rgba(255, 207, 92, 0.5);
+  background: linear-gradient(150deg, rgba(255, 207, 92, 0.12), rgba(255, 255, 255, 0.02));
+}
+.iv-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 4px; }
+.iv-ico {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.26);
+  border: 1px solid var(--line);
+}
+.iv-tag { display: flex; justify-content: flex-end; }
+.iv-eq {
+  font-style: normal;
+  font-size: 8.5px;
+  font-weight: 900;
+  padding: 1px 5px;
+  border-radius: 6px;
+  color: #241500;
+  background: linear-gradient(180deg, #ffe9a8, #ffb020);
+  box-shadow: 0 0 8px rgba(255, 190, 60, 0.35);
+}
+.iv-name {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.iv-rar { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.iv-slot { font-size: 8.5px; color: var(--dim); font-weight: 800; white-space: nowrap; }
+.iv-opts { display: flex; flex-wrap: wrap; gap: 3px; }
+.inv-empty {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 12px;
+  border-radius: 12px;
+  border: 1px dashed var(--line);
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--dim);
+  line-height: 1.6;
+}
+.inv-empty b { color: var(--sub); font-size: 11.5px; }
+.gear-tools { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+.btn.red { background: linear-gradient(135deg, #ff8a8a, #d63a3a); color: #2a0505; border-color: rgba(255, 170, 170, 0.5); }
+
+/* 장비 비교 모달 */
+.cmp-head { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+.cmp-ico {
+  flex: 0 0 54px;
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--line-2);
+}
+.cmp-title { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cmp-name { display: flex; align-items: center; gap: 5px; font-size: 14px; font-weight: 900; letter-spacing: -0.3px; }
+.cmp-sub { font-size: 10px; color: var(--dim); line-height: 1.45; }
+.cmp-vs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 9px; }
+.cv-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  text-align: center;
+}
+.cv-col.new { border-color: rgba(255, 207, 92, 0.34); background: rgba(255, 207, 92, 0.06); }
+.cv-h { font-size: 9px; font-weight: 900; color: var(--dim); letter-spacing: 0.4px; }
+.cv-body { width: 34px; height: 34px; display: grid; place-items: center; }
+.cv-none { font-size: 16px; color: var(--dim); }
+.cv-n { font-size: 10.5px; font-weight: 800; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: center; }
+.cmp-sec {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 10px 0 5px;
+  font-size: 10.5px;
+  font-weight: 900;
+  color: var(--sub);
+}
+.cmp-sec small { font-size: 9px; color: var(--dim); font-weight: 700; }
+.cmp-opts { display: flex; flex-direction: column; gap: 3px; }
+.cmp-opt {
+  display: grid;
+  grid-template-columns: 1fr 64px 92px;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 10.5px;
+}
+.co-k { color: var(--sub); font-weight: 800; }
+.co-now { text-align: right; color: var(--dim); font-weight: 800; font-variant-numeric: tabular-nums; }
+.co-new { text-align: right; font-weight: 900; font-variant-numeric: tabular-nums; }
+.co-new i { font-style: normal; font-size: 9px; margin-left: 3px; opacity: 0.9; }
+.cmp-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.cs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 10px;
+}
+.cs span { color: var(--dim); font-weight: 700; }
+.cs b { font-weight: 900; font-variant-numeric: tabular-nums; }
+.up { color: var(--green); }
+.down { color: #ff8f8f; }
+.same { color: var(--dim); }
+.gr-row[data-action] { cursor: pointer; }

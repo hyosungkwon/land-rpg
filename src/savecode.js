@@ -136,6 +136,7 @@ export function compactSave(state) {
     delete c.land.sort;
   }
   if (c.news && typeof c.news === 'object') c.news.log = [];
+  if (c.gear && typeof c.gear === 'object') delete c.gear.filter; // 화면 필터는 담지 않는다
   return c;
 }
 

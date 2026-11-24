@@ -2,7 +2,7 @@
 // 하단 탭 UI · HUD · 토스트/모달. 상태는 app.js 를 통해 읽고, 조작은 actions 로 넘긴다.
 // v3: 게스트 전용 — 로그인/클라우드 UI 없이 [사냥/스킬 | 장비/강화 | 부동산 | 설정].
 import {
-  APP_VERSION, ECON, EQUIP, EQUIP_MAX_LV, SKILLS, SKILL_UPGRADE_MAX, skillCost, enhanceCost,
+  APP_VERSION, ECON, EQUIP, EQUIP_SLOTS, EQUIP_MAX_LV, SKILLS, SKILL_UPGRADE_MAX, skillCost, enhanceCost,
   RARITIES, RARITY_INDEX, GACHA, gachaCost, rarityBonusLv,
 } from './data.js';
 import { expNeed, skillEffect, shardPrice, enhanceMaxCount } from './state.js';
@@ -21,6 +21,12 @@ import {
   QUESTS, ACHIEVEMENTS, questStateOf, currentQuest, questProgress, codexStats,
   achievementStatus, claimedAchievementCount,
 } from './quests.js';
+import {
+  GEAR_ITEMS, GEAR_FILTERS, GEAR_OPTS, GEAR_DROP,
+  gearIcon, gearItem, gearList, gearOwned, gearOptionList, gearOptionSummary,
+  equippedItem, equippedRarity, gearCollection, gearSlotCounts, dismantleValue,
+  dismantleTargets,
+} from './gear.js';
 import {
   REBIRTH, REBIRTH_TRAITS, rebirthStatus, rebirthBonus, traitLevel, traitCost, traitSummary,
 } from './rebirth.js';
@@ -147,6 +153,12 @@ export class UI {
       case 'enhancemax': actions.enhance(btn.dataset.slot, 'max'); break;
       case 'buy-shards': actions.buyShards(v); break;
       case 'hunt-sub': this.setHuntSub(v); break;
+      case 'gear-filter': this.setGearFilter(v); break;
+      case 'gear-item': actions.openGearItem(Number(v)); break;
+      case 'gear-result-item': actions.openGearByItemId(v); break;
+      case 'gear-equip': actions.equipGearItem(Number(v)); break;
+      case 'gear-dismantle': actions.dismantleGearItem(Number(v)); break;
+      case 'gear-bulk': actions.bulkDismantleGear(v); break;
       case 'open-log': this.showLog(); break;
       case 'open-pets': this.s.land.sub = 'buff'; this.setTab('land'); break;
       case 'land-sub': this.setLandSub(v); break;
@@ -197,6 +209,13 @@ export class UI {
     const ok = HUNT_SUBS.map(([k]) => k);
     this.huntSub = ok.includes(sub) ? sub : 'skill';
     this.el.panel.scrollTop = 0;
+    this.render();
+  }
+
+  /** 장비 인벤토리 필터(전체/무기/갑옷/투구/반지/아뮬렛) — 세션 UI 상태 */
+  setGearFilter(f) {
+    if (!this.s.gear) return;
+    this.s.gear.filter = GEAR_FILTERS.includes(f) ? f : 'all';
     this.render();
   }
 
@@ -961,13 +980,116 @@ function tplHunt(ui) {
   return `${huntSubBar(ui)}${body}`;
 }
 
-/* ══════════════════════════ 장비/강화 ══════════════════════════ */
+/* ══════════════════════════ 장비/강화 (v4.0 대개편) ══════════════════════════
+ * 위→아래: 🎁 뽑기 → ⚔️ 장착 5부위 슬롯 → 🎒 보유 인벤토리(필터·비교·분해) → 🔨 부위 강화 → 그 외
+ */
 const rarityBadge = (id) => {
   const r = RARITIES[RARITY_INDEX[id] || 0];
   return `<span class="rb ${r.id}">${r.name}</span>`;
 };
 
 const rarityName = (id) => (RARITIES[RARITY_INDEX[id] || 0] || RARITIES[0]).name;
+
+/** 부위에 장착된 아이템 uid(없으면 0) */
+const slotUid = (s, slot) => {
+  const uid = s.gear && s.gear.equipped ? s.gear.equipped[slot] : null;
+  return uid ? Number(uid) : 0;
+};
+
+const optChips = (item, max = 3) => {
+  const list = gearOptionList(item);
+  if (!list.length) return '<span class="opt dim">고유 옵션 없음</span>';
+  return list.slice(0, max).map((o) => `<span class="opt">${esc(o.text)}</span>`).join('');
+};
+
+/** ⚔️ 현재 장착 중인 5부위 슬롯 카드 */
+function gearSlotCards(s) {
+  const rows = EQUIP_SLOTS.map((slot) => {
+    const def = EQUIP[slot];
+    const it = equippedItem(s, slot);
+    const rid = equippedRarity(s, slot);
+    const lv = s.equip[slot];
+    const uid = slotUid(s, slot);
+    const idAttr = it && uid ? ` data-action="gear-item" data-value="${uid}"` : ' disabled';
+    return `
+      <button class="gslot${it ? ' on' : ' empty'}" type="button"${idAttr}>
+        <span class="gs-ico">${it ? gearIcon(it, 40) : `<b class="gs-none">${def.icon}</b>`}</span>
+        <span class="gs-mid">
+          <span class="gs-name">${it ? esc(it.name) : `${def.name} 없음`}${rarityBadge(rid)}</span>
+          <span class="gs-sub">${def.icon} ${def.name} <b class="lv">+${lv}</b>${it ? '' : ' · 뽑기·사냥으로 획득'}</span>
+          <span class="gs-opts">${it ? optChips(it, 2) : '<span class="opt dim">장착하면 고유 옵션이 붙습니다</span>'}</span>
+        </span>
+      </button>`;
+  }).join('');
+  return `
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">⚔️</span>장착 중 <small>5부위</small></div>
+      <span class="tiny dim">장비를 눌러 비교·교체</span>
+    </div>
+    <div class="gear-slots">${rows}</div>
+  </div>`;
+}
+
+/** 🎒 보유 장비 인벤토리 — 필터 · 그리드 · 일괄 분해 */
+function gearInventory(s) {
+  const g = s.gear || {};
+  const filter = GEAR_FILTERS.includes(g.filter) ? g.filter : 'all';
+  const owned = gearOwned(s);
+  const list = gearList(s, filter);
+  const col = gearCollection(s);
+  const counts = gearSlotCounts(s);
+  const lowTargets = dismantleTargets(s, 'low');
+  const commonTargets = dismantleTargets(s, 'common');
+  const shardsOf = (rows) => rows.reduce((a, r) => a + dismantleValue(r.def), 0);
+
+  const filterChips = GEAR_FILTERS.map((f) => {
+    const label = f === 'all' ? '전체' : EQUIP[f].name;
+    const n = f === 'all' ? owned.length : owned.filter((r) => r.def.slot === f).length;
+    return `<button class="chip${f === filter ? ' on' : ''}" type="button" data-action="gear-filter" data-value="${f}" aria-pressed="${f === filter}">${label} ${n}</button>`;
+  }).join('');
+
+  const cards = list.length
+    ? list.map((row) => `
+      <button class="inv-card${row.equipped ? ' on' : ''}" type="button" data-action="gear-item" data-value="${row.uid}">
+        <span class="iv-top">
+          <span class="iv-ico">${gearIcon(row.def, 38)}</span>
+          <span class="iv-tag">${row.equipped ? '<i class="iv-eq">장착중</i>' : rarityBadge(row.def.rarity)}</span>
+        </span>
+        <span class="iv-name">${esc(row.def.name)}</span>
+        <span class="iv-rar">${rarityBadge(row.def.rarity)}<b class="iv-slot">${EQUIP[row.def.slot].icon}${EQUIP[row.def.slot].name}</b></span>
+        <span class="iv-opts">${optChips(row.def, 2)}</span>
+      </button>`).join('')
+    : `<div class="inv-empty">
+        <b>${filter === 'all' ? '아직 보유한 장비가 없습니다' : `${EQUIP[filter].name} 장비가 없습니다`}</b>
+        <span>🎁 뽑기 · 몬스터 처치 · 보스 처치로 장비를 모아 보세요.<br>장착보다 낮은 등급이나 중복은 자동으로 강화석이 됩니다.</span>
+      </div>`;
+
+  const bulkLow = lowTargets.length
+    ? `<button class="chip danger" type="button" data-action="gear-bulk" data-value="low">낮은 등급 일괄 분해 ${lowTargets.length}개 · 💎${fmt(shardsOf(lowTargets))}</button>`
+    : '';
+  const bulkCommon = commonTargets.length
+    ? `<button class="chip" type="button" data-action="gear-bulk" data-value="common">일반 등급 일괄 분해 ${commonTargets.length}개 · 💎${fmt(shardsOf(commonTargets))}</button>`
+    : '';
+
+  return `
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🎒</span>보유 장비 <small>${owned.length}/${GEAR_ITEMS.length}종</small></div>
+      <span class="tiny dim">도감 ${col.seen}/${col.total}종</span>
+    </div>
+    <div class="chips gear-filters">${filterChips}</div>
+    <div class="inv-grid">${cards}</div>
+    ${(bulkLow || bulkCommon)
+      ? `<div class="gear-tools">${bulkLow}${bulkCommon}</div>`
+      : '<div class="tiny dim" style="margin-top:8px">분해할 장비가 없습니다 — 장착보다 낮은 등급이 모이면 일괄 분해 버튼이 생깁니다.</div>'}
+    <div class="note" style="margin-top:9px">
+      카드를 누르면 <b>지금 장착한 장비와 옵션을 나란히 비교</b>하고 그 자리에서 <b>장착</b>하거나 <b>강화석으로 분해</b>할 수 있습니다.
+      강화 레벨은 <b>부위</b>에 남으므로 새 장비로 갈아껴도 강화 수치가 사라지지 않습니다.
+      ${EQUIP_SLOTS.map((slot) => `${EQUIP[slot].icon}${EQUIP[slot].name} ${counts[slot].have}/${counts[slot].total}`).join(' · ')}
+    </div>
+  </div>`;
+}
 
 function gachaCard(ui) {
   const s = ui.s;
@@ -980,10 +1102,7 @@ function gachaCard(ui) {
   const can10 = (s[cur] || 0) >= c10.amount;
   const pity = Math.max(0, Math.min(GACHA.pityLegend - 1, Math.floor(g.pity || 0)));
   const left = GACHA.pityLegend - pity;
-
-  const equipped = Object.entries(EQUIP)
-    .map(([slot, def]) => `<span class="eq-chip">${def.icon}${rarityBadge(s.gearRarity[slot])}</span>`)
-    .join('');
+  const col = gearCollection(s);
 
   const rates = RARITIES.map(
     (r) => `<span class="rate-chip"><span class="rb ${r.id}">${r.name}</span><b>${r.weight}%</b></span>`,
@@ -992,13 +1111,13 @@ function gachaCard(ui) {
   return `
   <div class="card gacha-card">
     <div class="card-head">
-      <div class="card-title"><span class="t-ico">🎁</span>장비 뽑기 <small>일반 → 전설</small></div>
+      <div class="card-title"><span class="t-ico">🎁</span>장비 뽑기 <small>일반 → 전설 · ${col.total}종</small></div>
       <span class="tiny dim">최고 <b style="color:var(--gold)">${rarityName(g.best)}</b></span>
     </div>
     <div class="rates">${rates}</div>
     <div class="row" style="margin-top:8px">
       <span class="tiny muted">천장까지 <b style="color:var(--gold)">${left}회</b> <span class="dim">· ${GACHA.pityLegend}회 내 전설 확정</span></span>
-      <span class="tiny dim">누적 ${fmt(g.total)}회</span>
+      <span class="tiny dim">누적 ${fmt(g.total)}회 · 수집 ${col.seen}/${col.total}</span>
     </div>
     <div class="prog" style="margin-top:5px"><i style="width:${(pity / GACHA.pityLegend) * 100}%"></i></div>
     <div class="row gap8" style="margin-top:9px">
@@ -1016,10 +1135,10 @@ function gachaCard(ui) {
         🎉 10회 연속<small>${unit}${fmt(c10.amount)} · 레어+ 보장</small>
       </button>
     </div>
-    <div class="equipped">${equipped}</div>
     <div class="note" style="margin-top:9px">
-      더 높은 등급은 <b>자동 장착</b>, 중복·교체된 장비는 <b>강화석으로 자동 분해</b>됩니다.
-      등급은 강화 레벨에 <b>보정</b>으로 더해지고, 발밑 <b>오라</b>와 <b>검기 색</b>이 장착 등급을 따라갑니다.
+      같은 등급 안에서도 <b>이름·모양·고유 옵션이 다른 ${col.total}종</b>이 나옵니다.
+      등급이 더 높으면 <b>자동 장착</b>, 같은 등급은 <b>인벤토리에 보관</b>(직접 비교·장착), 중복은 <b>강화석으로 자동 분해</b>됩니다.
+      검기 색과 오라는 장착한 <b>무기 종류</b>를 따라갑니다.
     </div>
   </div>`;
 }
@@ -1034,7 +1153,8 @@ function tplGear(ui) {
   const rows = Object.entries(EQUIP)
     .map(([slot, def]) => {
       const lv = s.equip[slot];
-      const rid = s.gearRarity[slot];
+      const rid = equippedRarity(s, slot);
+      const it = equippedItem(s, slot);
       const bonus = rarityBonusLv(rid);
       const maxed = lv >= EQUIP_MAX_LV;
       const cost = enhanceCost(lv);
@@ -1046,9 +1166,9 @@ function tplGear(ui) {
       return `
       <div class="gear-row">
         <div class="g-top">
-          <div class="g-ico">${def.icon}</div>
+          <div class="g-ico">${it ? gearIcon(it, 38) : def.icon}</div>
           <div class="g-mid">
-            <div class="g-name">${def.name}${rarityBadge(rid)}<span class="lv">+${lv}</span></div>
+            <div class="g-name">${it ? esc(it.name) : def.name}${rarityBadge(rid)}<span class="lv">+${lv}</span></div>
             <div class="g-stat">${def.stat} ${unitText(cur)}${maxed ? ' · 최대' : ` → <b style="color:var(--green)">${unitText(next)}</b>`}</div>
             ${bonus > 0 ? `<div class="g-rar">등급 보정 +${bonus}강 상당</div>` : ''}
           </div>
@@ -1067,10 +1187,12 @@ function tplGear(ui) {
 
   return `
   ${gachaCard(ui)}
+  ${gearSlotCards(s)}
+  ${gearInventory(s)}
 
   <div class="card">
     <div class="card-head">
-      <div class="card-title"><span class="t-ico">🎒</span>장비 강화 <small>5부위</small></div>
+      <div class="card-title"><span class="t-ico">🔨</span>장비 강화 <small>부위 공유</small></div>
       <span class="tiny dim">총 강화 <b style="color:var(--txt)">${total}</b>/${EQUIP_MAX_LV * 5}</span>
     </div>
     <div class="row gap8">
@@ -1099,6 +1221,8 @@ function tplGear(ui) {
     <div class="kv"><span class="k">💍 반지</span><span class="v">치명타 +${EQUIP.ring.per}%/강화</span></div>
     <div class="kv"><span class="k">🧿 부적</span><span class="v">골드 +${EQUIP.amulet.per}%/강화</span></div>
     <div class="kv"><span class="k">🏅 등급 보정</span><span class="v">일반 +0 · 고급 +4 · 레어 +9 · 영웅 +16 · 전설 +25강</span></div>
+    <div class="kv"><span class="k">🎯 장비 옵션</span><span class="v">흡혈 · 공속 · 보스 추뎀 · 치명타 · 피해 감소 · 회복 · 골드/드랍 · 범위 베기 — 모두 실제 전투에 반영</span></div>
+    <div class="kv"><span class="k">🎒 사냥 드랍</span><span class="v">몬스터 ${(GEAR_DROP.normalChance * 100).toFixed(1)}% · 보스 ${(GEAR_DROP.bossChance * 100).toFixed(0)}% (스테이지가 높을수록 고등급)</span></div>
   </div>
 
   <div class="card">

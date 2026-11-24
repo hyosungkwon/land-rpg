@@ -10,6 +10,10 @@ import {
 import {
   normalizeRebirth, rebirthBonus,
 } from './rebirth.js';
+import {
+  newGearState, normalizeGear, syncGearRarity, gearMods, acquireGear, equippedRarity,
+  shouldAutoEquip, randomItemOfRarity, gearItem, GEAR_BY_RARITY,
+} from './gear.js';
 import { defaultLand } from './land.js';
 import { PET_IDS, PET_MAX_LV, JOB_MAX, jobOf, equippedPet, petLevel, petAtkPct } from './meta.js';
 import {
@@ -32,6 +36,8 @@ export function defaultState(now = nowMs()) {
     equip: { weapon: 0, armor: 0, helmet: 0, ring: 0, amulet: 0 },
     // v3.1 장비 등급(뽑기) — 부위별로 하나씩 장착된다.
     gearRarity: { weapon: 'common', armor: 'common', helmet: 'common', ring: 'common', amulet: 'common' },
+    // v4.0 장비 인벤토리 — 부위별 아이템(종류·옵션·모양)과 장착 슬롯
+    gear: newGearState(),
     gacha: { pity: 0, total: 0, best: 'common', legend: 0, cur: 'gold' },
     soundOn: true,
     skills: {
@@ -85,6 +91,9 @@ export function normalizeState(raw, now = nowMs()) {
     const v = raw.gearRarity && raw.gearRarity[k];
     s.gearRarity[k] = typeof v === 'string' && RARITY_IDS.includes(v) ? v : 'common';
   }
+  // v4.0: 장비 인벤토리 정규화 + v3 등급 저장본 마이그레이션(등급 → 그 등급의 장비 1종)
+  s.gear = normalizeGear(raw.gear, s.gearRarity, now);
+  syncGearRarity(s);
   s.gacha = { ...d.gacha, ...(raw.gacha && typeof raw.gacha === 'object' ? raw.gacha : {}) };
   s.gacha.pity = clamp(Math.floor(num(s.gacha.pity, 0)), 0, GACHA.pityLegend - 1);
   s.gacha.total = Math.max(0, Math.floor(num(s.gacha.total, 0)));
@@ -276,6 +285,8 @@ export function calcStats(s, buffs = NO_BUFF) {
   const gr = s.gearRarity || {};
   // 등급 보정: 장비 강화 레벨에 등급 환산 레벨을 더한다(전설 +25강 상당).
   const eLv = (slot) => e[slot] + rarityBonusLv(gr[slot]);
+  // v4.0: 장착 장비의 고유 옵션 합계(흡혈·공속·보스 추뎀·치명타·방어·회복·골드·드랍·범위 베기)
+  const gm = gearMods(s);
   const job = jobOf(s);
   const pet = equippedPet(s);
   const jobAtkMul = 1 + (job.atkPct || 0) / 100;
@@ -290,21 +301,25 @@ export function calcStats(s, buffs = NO_BUFF) {
   const rbHpMul = 1 + rb.hpPct / 100;
   const baseAtk = 12 + 2.6 * L + 0.035 * L * L;
   const equipAtk = EQUIP.weapon.per * eLv('weapon');
-  const atk = (baseAtk + equipAtk) * (1 + (b.atkPct + extraAtk) / 100) * jobAtkMul * petAtkMul * colAtkMul * rbAtkMul;
+  const atk = (baseAtk + equipAtk) * (1 + (b.atkPct + extraAtk + gm.atkPct) / 100) * jobAtkMul * petAtkMul * colAtkMul * rbAtkMul;
   const hpMax =
     (150 + 30 * L + EQUIP.armor.per * eLv('armor') + EQUIP.helmet.per * eLv('helmet'))
-    * (1 + (b.hpPct + extraHp) / 100) * jobHpMul * rbHpMul;
-  const crit = Math.min(0.5, 0.05 + (EQUIP.ring.per / 100) * eLv('ring') + (b.critPct + extraCrit) / 100);
-  const critDmg = 2.0 + rb.critDmgAdd;
-  // v3.8 방어·회복 — 다굴에서 버티는 힘. 갑옷/투구 강화(등급 환산 포함) + 환생 '수호' 특성
+    * (1 + (b.hpPct + extraHp + gm.hpPct) / 100) * jobHpMul * rbHpMul;
+  const crit = Math.min(0.5, 0.05 + (EQUIP.ring.per / 100) * eLv('ring') + (b.critPct + extraCrit + gm.critPct) / 100);
+  const critDmg = 2.0 + rb.critDmgAdd + gm.critDmg / 100;
+  // v3.8 방어·회복 — 다굴에서 버티는 힘. 갑옷/투구 강화(등급 환산 포함) + 환생 '수호' 특성 + v4 장비 옵션
   const defFromGear = EQUIP.armor.defPer * eLv('armor') + EQUIP.helmet.defPer * eLv('helmet');
-  const dmgReduce = Math.min(DEF.cap, (defFromGear + (rb.guardPct || 0)) / 100);
-  const hpRegen = Math.min(0.06, DEF.regenBase + (rb.regenPct || 0) / 100);
+  const dmgReduce = Math.min(DEF.cap, (defFromGear + (rb.guardPct || 0) + gm.dmgRed) / 100);
+  const hpRegen = Math.min(0.1, DEF.regenBase + (rb.regenPct || 0) / 100 + gm.regen / 100);
   const goldMult =
-    1 + (EQUIP.amulet.per / 100) * eLv('amulet') + (b.goldPct + extraGold + rb.goldPct) / 100 + (pet ? pet.goldPct / 100 : 0)
+    1 + (EQUIP.amulet.per / 100) * eLv('amulet') + (b.goldPct + extraGold + rb.goldPct + gm.goldPct) / 100 + (pet ? pet.goldPct / 100 : 0)
     + (col.goldPct || 0) / 100;
-  const dropMult = 1 + (b.dropPct + extraDrop + rb.shardPct) / 100;
-  const attackMs = Math.max(300, ECON.playerAttackMs - L * 2);
+  const dropMult = 1 + (b.dropPct + extraDrop + rb.shardPct + gm.dropPct) / 100;
+  // v4.0: 공격 속도 옵션 — 기본 공격 간격을 줄인다(하한 300ms · 최대 40% 단축)
+  const attackMs = Math.max(300, (ECON.playerAttackMs - L * 2) * (1 - Math.min(0.4, gm.atkSpd / 100)));
+  const lifesteal = Math.min(0.2, gm.lifesteal / 100); // 흡혈 상한 20%
+  const bossDmgPct = gm.bossDmg / 100;
+  const whirlDmgPct = gm.whirlDmg / 100;
   const dps = (atk / (attackMs / 1000)) * (1 + crit * (critDmg - 1));
   return {
     atk: Math.round(atk),
@@ -316,6 +331,9 @@ export function calcStats(s, buffs = NO_BUFF) {
     goldMult,
     dropMult,
     attackMs,
+    lifesteal,
+    bossDmgPct,
+    whirlDmgPct,
     dps: Math.round(dps),
     jobTier: job.tier,
     petId: pet ? pet.id : null,
@@ -334,6 +352,16 @@ export function calcStats(s, buffs = NO_BUFF) {
     rebirthCount: rb.count,
     // v3.8 방어 기여도(UI 표시용)
     defFromGear: Math.round(defFromGear * 10) / 10,
+    // v4.0 장비 옵션 기여도(UI 표시용)
+    gearAtkPct: gm.atkPct,
+    gearHpPct: gm.hpPct,
+    gearCritPct: gm.critPct,
+    gearCritDmgPct: gm.critDmg,
+    gearDmgRedPct: gm.dmgRed,
+    gearRegenPct: gm.regen,
+    gearGoldPct: gm.goldPct,
+    gearDropPct: gm.dropPct,
+    gearAtkSpdPct: gm.atkSpd,
   };
 }
 
@@ -406,13 +434,16 @@ function rollRarityIdx(rng) {
 }
 
 /**
- * 장비 뽑기. 등급이 더 높으면 자동 장착(이전 장비는 분해), 같거나 낮으면 자동 분해.
+ * 장비 뽑기 (v4.0) — 등급을 먼저 뽑고, 그 등급 안에서 **여러 종류의 장비** 중 하나가 나온다.
+ *  · 등급이 더 높은 장비는 자동 장착, 같은 등급은 인벤토리에 보관(비교 후 직접 장착).
+ *  · 같은 아이템 중복은 강화석으로 자동 분해된다.
  * @returns {{ok:boolean, results?:Array, spent?:number, cur?:string, shards?:number, best?:string, pity?:number, pityLeft?:number, reason?:string}}
  */
-export function pullGear(s, times = 1, rng = Math.random) {
+export function pullGear(s, times = 1, rng = Math.random, now = nowMs()) {
   const n = times >= 10 ? 10 : 1;
   if (!s.gacha) s.gacha = { pity: 0, total: 0, best: 'common', legend: 0, cur: 'gold' };
   if (!s.gearRarity) s.gearRarity = { weapon: 'common', armor: 'common', helmet: 'common', ring: 'common', amulet: 'common' };
+  if (!s.gear) s.gear = newGearState();
   const pay = gachaCost(s.gacha.cur, n);
   const have = Math.max(0, Math.floor(s[pay.cur] || 0));
   if (have < pay.amount) {
@@ -438,7 +469,7 @@ export function pullGear(s, times = 1, rng = Math.random) {
   const gIdx = RARITY_INDEX[GACHA.tenGuarantee] || 2;
   if (n === 10 && !rolled.some((i) => i >= gIdx)) rolled[n - 1] = gIdx; // 10회 최소 레어 보장
 
-  // 2) 비용 차감 → 부위 배정 → 자동 장착/분해
+  // 2) 비용 차감 → 부위 → 종류 → 자동 장착/보관/분해
   s[pay.cur] -= pay.amount;
   const slots = Object.keys(s.gearRarity);
   const results = [];
@@ -447,22 +478,37 @@ export function pullGear(s, times = 1, rng = Math.random) {
   let legends = 0;
   for (const idx of rolled) {
     const rarity = RARITIES[idx];
-    const slot = slots[Math.floor(rng() * slots.length)] || 'weapon';
-    const curIdx = RARITY_INDEX[s.gearRarity[slot]] || 0;
-    const equipped = idx > curIdx;
-    let shards = 0;
+    const slot = slots[Math.floor(rng() * slots.length) % slots.length] || 'weapon';
+    const pool = GEAR_BY_RARITY[rarity.id].filter((it) => it.slot === slot);
+    const list = pool.length ? pool : GEAR_BY_RARITY[rarity.id];
+    const item = list[Math.floor(rng() * list.length) % list.length] || randomItemOfRarity(rarity.id, rng);
+    const prevRarity = equippedRarity(s, slot);
+    const curIdx = RARITY_INDEX[prevRarity] || 0;
+    const equip = shouldAutoEquip(s, item);
+    const hadItem = !!equippedItemId(s, slot);
+    const acq = acquireGear(s, item.id, { autoEquip: equip, now, source: 'gacha' });
+    let shards = acq.shards || 0;
     let replaced = null;
-    if (equipped) {
-      replaced = s.gearRarity[slot];
-      s.gearRarity[slot] = rarity.id;
-      if (curIdx > 0) shards += RARITIES[curIdx].dust; // 교체된 이전 장비 분해
-    } else {
-      shards += rarity.dust; // 중복 장비 분해
+    if (equip) {
+      replaced = prevRarity;
+      // v3식 '등급만' 있던 슬롯을 교체하면 그 등급은 분해된다(아이템이 있으면 인벤토리에 남는다)
+      if (!hadItem && curIdx > 0) { shards += RARITIES[curIdx].dust; s.shards += RARITIES[curIdx].dust; }
     }
-    if (shards > 0) { s.shards += shards; dust += shards; }
+    if (shards > 0) dust += shards;
     if (idx > bestIdx) bestIdx = idx;
     if (idx === RARITIES.length - 1) legends += 1;
-    results.push({ slot, rarity: rarity.id, name: rarity.name, equipped, replaced, shards });
+    results.push({
+      slot,
+      rarity: rarity.id,
+      name: rarity.name,
+      rarityName: rarity.name,
+      itemId: item.id,
+      itemName: item.name,
+      equipped: equip,
+      duplicate: !!acq.duplicate,
+      replaced,
+      shards,
+    });
   }
 
   s.gacha.pity = pity;
@@ -481,6 +527,30 @@ export function pullGear(s, times = 1, rng = Math.random) {
     pityLeft: GACHA.pityLegend - pity,
     total: s.gacha.total,
   };
+}
+
+/** 슬롯에 장착된 아이템 uid(없으면 null) */
+function equippedItemId(s, slot) {
+  const g = s && s.gear;
+  return g && g.equipped ? g.equipped[slot] || null : null;
+}
+
+/** 뽑기·미리보기용 비교 — 후보를 장착했다면 스탯이 어떻게 바뀌는지 */
+export function compareGear(s, uid, buffs = NO_BUFF) {
+  const g = s && s.gear;
+  const row = g && Array.isArray(g.items) ? g.items.find((x) => x.uid === Math.floor(Number(uid))) : null;
+  const it = row ? gearItem(row.id) : null;
+  if (!it) return null;
+  const before = calcStats(s, buffs);
+  const prev = g.equipped[it.slot];
+  g.equipped[it.slot] = row.uid;
+  const after = calcStats(s, buffs);
+  g.equipped[it.slot] = prev;
+  const delta = {};
+  for (const k of ['atk', 'hpMax', 'crit', 'critDmg', 'dmgReduce', 'hpRegen', 'goldMult', 'dropMult', 'attackMs', 'dps', 'lifesteal', 'bossDmgPct', 'whirlDmgPct']) {
+    delta[k] = (after[k] || 0) - (before[k] || 0);
+  }
+  return { item: it, before, after, delta, equipped: prev === row.uid, slotRarity: equippedRarity(s, it.slot) };
 }
 
 /** 지금 보유 강화석으로 한 번에 올릴 수 있는 최대 강화 횟수 (0 ~ 남은 단계) */
