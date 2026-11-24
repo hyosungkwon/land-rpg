@@ -1853,18 +1853,18 @@ function tplLandBuff(ui) {
   const pr = buffProgress(s);
 
   const rows = [
-    ['⚔️ 공격력', buffs.atkPct, pr.atk, '보유 지역 1곳당 +1.5%'],
-    ['💰 골드 획득', buffs.goldPct, pr.gold, '매물 평가액이 커질수록'],
-    ['❤️ 최대 체력', buffs.hpPct, pr.hp, '보유 200평당 +1%'],
-    ['🎯 치명타', buffs.critPct, pr.crit, '보유 지역 2곳당 +0.2%'],
-    ['💎 드롭률', buffs.dropPct, pr.drop, '보유 1,000평당 +1%'],
+    ['⚔️ 공격력', buffs.atkPct, pr.atk],
+    ['💰 골드 획득', buffs.goldPct, pr.gold],
+    ['❤️ 최대 체력', buffs.hpPct, pr.hp],
+    ['🎯 치명타', buffs.critPct, pr.crit],
+    ['💎 드롭률', buffs.dropPct, pr.drop],
   ]
     .map(
-      ([label, val, p, hint]) => `
+      ([label, val, p]) => `
       <div class="buff-row">
         <div class="buff-head"><b>${label}</b><span>+${Number(val).toFixed(1)}%</span></div>
         <div class="prog" style="margin-top:4px"><i style="width:${p.pct * 100}%"></i></div>
-        <div class="buff-next">${esc(p.next)} <span class="dim">· ${hint}</span></div>
+        <div class="buff-next">${esc(p.next)}</div>
       </div>`,
     )
     .join('');
