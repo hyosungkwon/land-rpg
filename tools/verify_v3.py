@@ -2793,6 +2793,7 @@ def main():
     ok(all(x in csrc42 for x in ["startTower", "endTower", "towerTick", "petSkillTick", "startDungeon", "TOWER_RULES.guardReduce"]), "combat.js — 탑 전투·펫 액티브 구현", "")
     ok(all(x in usrc42 for x in ['data-action="tower"', 'data-action="tower-floors"', 'data-action="pet-evolve"', "tower-tiles"]), "ui.js — 탑 카드·펫 진화 버튼", "")
     ok(all(x in asrc42 for x in ["enterTower", "openTowerFloors", "evolvePet", "showTowerResult", "showTowerFloors"]), "app.js — 탑 입장/층 선택/결과·펫 진화 액션", "")
+    ok('assets/sprites/pet/${info.sprite}.png' in asrc42, "진화 결과 모달 — 진화 스프라이트 경로(.png)", "")
     ok(all(x in css42 for x in [".tower-card", ".tower-tiles", ".tower-floor", ".pet-evo", ".mini.evo"]), "style.css — v4.2 스타일", "")
     ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.2.0" in read("sw.js") and "APP_VERSION = '4.2.0'" in read("src/data.js"), "버전·서비스워커(4.2.0 · tower.js 프리캐시)", "")
     ok('"version": "4.2.0"' in read("package.json"), "package.json 버전 4.2.0", "")

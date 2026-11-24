@@ -925,7 +925,7 @@ class App {
         this.ui.modal({
           title: `🐾 ${r.def.badge} ${esc(info.name)}`,
           sub: `${def ? def.name : ''} → ${info.name} · ${r.def.label} 단계`,
-          body: `<div class="pet-evo-burst"><img src="assets/sprites/pet/${info.sprite}" alt=""></div>
+          body: `<div class="pet-evo-burst"><img src="assets/sprites/pet/${info.sprite}.png" alt=""></div>
                  <div class="modal-rewards">
                    <div class="rw"><div class="e">⚔️</div><div class="v">×${r.def.mul}</div><div class="k">동행 피해</div></div>
                    <div class="rw"><div class="e">💎</div><div class="v">-${r.spent.shards}</div><div class="k">강화석</div></div>
