@@ -80,7 +80,7 @@
     if (opts.bossReady) {
       s.bossReady = true;
       s.killsInStage = 10; // 보스 도전 가능
-      s.autoBoss = false;  // 배너를 잡을 수 있게 수동
+      s.autoBoss = opts.autoBoss !== false; // 로드 1.4초 뒤 자동 도전 — 등장 배너를 잡기 좋다
     }
     return s;
   }
