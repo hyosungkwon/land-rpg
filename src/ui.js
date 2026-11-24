@@ -1827,7 +1827,7 @@ function tplSettings(ui) {
     <div class="kv"><span class="k">환생 · 특성</span><span class="v">♾️ ${rebirthStatus(s).count}회 · ${esc(traitSummary(s))}</span></div>
     <div class="kv"><span class="k">동료 펫</span><span class="v">${petDef(s.pet && s.pet.equipped) ? `${petDef(s.pet.equipped).emoji} ${esc(petDef(s.pet.equipped).name)}` : '없음'}</span></div>
     <div class="kv"><span class="k">황금 던전</span><span class="v">${fmt((s.dungeon && s.dungeon.runs) || 0)}회 · 최고 피해 ${fmt((s.dungeon && s.dungeon.best) || 0)}</span></div>
-    <div class="kv"><span class="k">장비</span><span class="v">5부위 강화 + 등급 뽑기</span></div>
+    <div class="kv"><span class="k">장비</span><span class="v">35종 장비 · 5부위 인벤토리</span></div>
     <div class="kv"><span class="k">도감 · 업적</span><span class="v">수집 ${c.pct}% · 업적 ${achClaimed}/${ACHIEVEMENTS.length}</span></div>
     <div class="kv"><span class="k">경제</span><span class="v">골드 하나 (사냥 = 부동산)</span></div>
     <div class="kv"><span class="k">부동산</span><span class="v">전국 ${CITIES.length}개 시군구</span></div>
