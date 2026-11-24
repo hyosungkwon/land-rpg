@@ -2791,7 +2791,9 @@ export class Renderer {
     const w = Math.min(W * 0.72, 268);
     const hgt = 30;
     const x = (W - w) / 2;
-    const y = 6;
+    // 보스 바(62~106)·던전 HUD(54~100)·탑 HUD(50~102)가 있으면 그 아래로, 없으면 상단 침(스테이지) 바로 아래로
+    const busy = !!(b.boss || b.dungeon || b.tower);
+    const y = busy ? 112 : 44;
     const pulse = 0.7 + 0.3 * Math.sin(now / 130);
     ctx.save();
     ctx.shadowColor = 'rgba(120,200,255,0.85)';
