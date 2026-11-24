@@ -1471,7 +1471,7 @@ class App {
       actions: st.can
         ? [
             { label: '취소', onClick: () => {} },
-            { label: `♾️ 환생 · +${st.gain}P · S${picked}부터`, style: 'primary', onClick: () => this.doRebirth(picked) },
+            { label: `♾️ 환생하기 · +${st.gain}P`, style: 'primary', onClick: () => this.doRebirth(picked) },
           ]
         : [
             { label: '닫기', onClick: () => {} },
