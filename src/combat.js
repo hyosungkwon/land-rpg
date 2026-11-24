@@ -34,7 +34,7 @@ const RANGED_SLOTS = [
 ];
 const LANE_DEPTH = 15; // 레인 1당 화면 y 오프셋(px) — 렌더러가 sc 를 곱해 쓴다
 const SLOT_TOL = 26; // 슬롯 도착 판정(월드)
-const WALK_SPEED = 158; // 몬스터 이동 속도(월드/초) — 6마리가 빠르게 채워진다
+const WALK_SPEED = 205; // 몬스터 이동 속도(월드/초) — 6마리가 빠르게 채워진다
 // v3.7 모션: 공격 '전조(windup)' 시간. 피해 판정 시점(monsterAttackMs 간격)은 그대로 두고
 // 전조만 그 직전에 시작해 밸런스(DPS·클리어 시간·헤드리스 시뮬)를 건드리지 않는다.
 const WINDUP_MELEE_MS = 300;
@@ -282,7 +282,7 @@ export class Battle {
       const walking = dist > SLOT_TOL;
 
       if (walking) {
-        const speed = m.isBoss ? 78 : WALK_SPEED + (m.scale - 1) * 60; // 월드단위/초
+        const speed = m.isBoss ? 132 : WALK_SPEED + (m.scale - 1) * 60; // 월드단위/초
         const prevX = m.x;
         const step = (speed * dt) / 1000;
         m.x = m.x > standX ? Math.max(standX, m.x - step) : Math.min(standX, m.x + step);
