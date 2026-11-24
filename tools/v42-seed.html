@@ -39,14 +39,17 @@
     s.level = opts.level || 22;
     s.gold = opts.gold ?? 320000;
     s.shards = opts.shards ?? 1800;
+    if (opts.weak) { s.level = Math.max(s.level, 24); s.stage = 24; s.maxStage = 24; s.peakStage = 24; }
     s.totalKills = stage * 14;
     s.bossKills = stage;
     s.soundOn = false;
     s.jobTier = 2;
     s.effects = true;
-    const eq = 30;
+    const eq = opts.weak ? 14 : 30;
     s.equip = { weapon: eq, armor: eq, helmet: eq, ring: eq, amulet: eq };
-    s.gearRarity = { weapon: 'rare', armor: 'rare', helmet: 'rare', ring: 'legend', amulet: 'hero' };
+    s.gearRarity = opts.weak
+      ? { weapon: 'advanced', armor: 'advanced', helmet: 'advanced', ring: 'advanced', amulet: 'advanced' }
+      : { weapon: 'rare', armor: 'rare', helmet: 'rare', ring: 'legend', amulet: 'hero' };
     // 🐾 펫 — 해금 4종 + 진화 단계(늑대 신수 · 여우 각성 · 부엉이 신수 · 드래곤 기본)
     s.pet = {
       equipped: opts.pet || 'wolf',
@@ -84,7 +87,8 @@
   };
 
   function put(scene) {
-    const opts = { sub: scene === 'pet' ? 'buff' : 'growth' };
+    // 바닥 모달·전투 화면은 '벽'에 걸린 빌드로 시드해 화면이 계속 다시 그려지지 않게 한다
+    const opts = { sub: scene === 'pet' ? 'buff' : 'growth', weak: scene === 'floors' || scene === 'battle' };
     const s = seed(opts);
     if (scene === 'pet') {
       s.land.owned = { '11_0_0': 40, '11_1_0': 40, '2_0_0': 60, '3_0_0': 30 };
