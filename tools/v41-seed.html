@@ -71,13 +71,14 @@
   }
 
   const presets = [
-    { label: 'S34 · 고목림 (환생 가능)', opts: { stage: 34, level: 44, sub: 'growth' } },
-    { label: 'S30 · 용암 지대', opts: { stage: 30, level: 40 } },
-    { label: 'S31 · 빙원', opts: { stage: 31, level: 42 } },
-    { label: 'S32 · 심연', opts: { stage: 32, level: 43 } },
-    { label: 'S27 · 폐허', opts: { stage: 27, level: 36 } },
-    { label: 'S12 · 모래벌', opts: { stage: 12, level: 18 } },
-    { label: 'S4 · 초원', opts: { stage: 4, level: 6 } },
+    { label: 'S34 (환생 가능)', opts: { stage: 34, level: 44, sub: 'growth' } },
+    { label: 'S30', opts: { stage: 30, level: 40 } },
+    { label: 'S31', opts: { stage: 31, level: 42 } },
+    { label: 'S32', opts: { stage: 32, level: 43 } },
+    { label: 'S29', opts: { stage: 29, level: 38 } },
+    { label: 'S27', opts: { stage: 27, level: 36 } },
+    { label: 'S12', opts: { stage: 12, level: 18 } },
+    { label: 'S4', opts: { stage: 4, level: 6 } },
   ];
 
   const q = new URLSearchParams(location.search);
@@ -89,7 +90,7 @@
   const list = document.getElementById('list');
   for (const p of presets) {
     const b = document.createElement('button');
-    b.textContent = p.label + ' — ' + stageDef(p.opts.stage).theme.name;
+    b.textContent = p.label + ' · ' + stageDef(p.opts.stage).theme.name + (p.opts.sub ? ' (전직·환생 탭)' : '');
     b.onclick = () => put(p.opts);
     list.appendChild(b);
   }
