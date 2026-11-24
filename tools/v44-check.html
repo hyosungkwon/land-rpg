@@ -17,8 +17,8 @@
 </style>
 </head>
 <body>
-<!-- 개발/검증용(v4.4): 테스트 세이브를 심고 index.html 을 390×844 iframe 에 띄우면서
-     로드 중 발생하는 오류·리소스 실패를 수집해 아래에 보고한다.
+<!-- 개발/검증용(v4.4): 테스트 세이브를 심고 앱을 390×844 iframe 으로 띄운 뒤,
+     앱이 스스로 모은 로드/실행 오류(index.html 의 window.__errs)·렌더 결과를 아래에 보고한다.
        ?scene=xchg     장비 탭 — 강화석 ×1·×10·×100·최대 교환 카드
        ?scene=promote  전직·환생 탭 — 드래곤 로드(5단계) 전직 가능 카드
        ?scene=aura     사냥 탭 — 상위 전직 오라(🐉 진홍 빛기둥·불티·후광)
@@ -91,13 +91,6 @@
   }
 
   const sc = SCENES[scene] || SCENES.xchg;
-  // 앱은 부팅할 때 location.search 의 tab/sub 를 읽는다 → iframe URL 에 그대로 실어 준다
-  if (!q.get('tab')) {
-    const u = new URL(location.href);
-    u.searchParams.set('tab', sc.tab);
-    if (sc.sub) u.searchParams.set('sub', sc.sub);
-    location.replace(u.toString());
-  }
   const s = seed(sc);
   try {
     const cur = localStorage.getItem(KEY);
@@ -105,48 +98,49 @@
   } catch (e) { /* ignore */ }
   localStorage.setItem(KEY, JSON.stringify(s));
 
-  // ── 앱을 390×844 iframe 에 띄우면서 로드 처음부터 오류를 수집한다 ──
-  const RECORDER = '<script>window.__errs=[];' +
-    'addEventListener("error",function(e){try{if(e.target&&e.target.tagName){window.__errs.push("res:"+(e.target.src||e.target.href||e.target.tagName));}else{window.__errs.push("err:"+(e.message||String(e.error)));}}catch(x){}},true);' +
-    'addEventListener("unhandledrejection",function(e){window.__errs.push("reject:"+String(e.reason&&e.reason.message||e.reason));});' +
-    '<\/script>';
-
-  const html = await (await fetch('../index.html', { cache: 'no-store' })).text();
-  const doc = html.replace('<head>', '<head><base href="../">' + RECORDER);
+  const src = `../index.html?tab=${sc.tab}${sc.sub ? '&sub=' + sc.sub : ''}`;
   const fr = document.getElementById('fr');
-  const d = fr.contentDocument || fr.contentWindow.document;
-  d.open(); d.write(doc); d.close();
+  fr.src = src;
 
-  setTimeout(() => {
+  const report = () => {
+    const out = { scene, errs: [], cards: 0, text: {}, cache: null, url: '' };
     try {
       const w = fr.contentWindow;
       const wd = w.document;
       const text = wd.body ? wd.body.innerText : '';
-      const r = {
-        scene,
-        errs: w.__errs || [],
-        tab: (w.location.search || '').slice(0, 60),
-        cards: wd.querySelectorAll('.card').length,
-        has100: text.includes('×100'),
-        hasMax: text.includes('최대'),
-        hasUpperJob: text.includes('상위 전직'),
-        hasPromoteBtn: !!wd.querySelector('[data-action="promote"]'),
-        title: wd.querySelector('.card-title') ? wd.querySelector('.card-title').innerText.slice(0, 40) : '',
-        cache: null,
+      out.errs = (w.__errs || []).slice(0, 12);
+      out.url = (w.location.pathname + w.location.search).slice(0, 80);
+      out.cards = wd.querySelectorAll('.card').length;
+      out.text = {
+        x100: text.includes('×100'),
+        max: text.includes('최대'),
+        upper: text.includes('상위 전직'),
+        promoteBtn: !!wd.querySelector('[data-action="promote"]'),
+        jobTitle: (wd.querySelector('.job-card .card-title') || {}).innerText || '',
+        badge: (wd.querySelector('.job-card .job-badge') || {}).innerText || '',
+        gold: (wd.querySelector('#goldVal') || {}).innerText || '',
       };
-      caches && caches.keys ? caches.keys().then((k) => {
-        r.cache = k.filter((x) => x.indexOf('land-rpg') === 0);
-        document.getElementById('rep').textContent = JSON.stringify(r, null, 1);
-        window.__report = r;
-        document.getElementById('status').textContent = (r.errs.length ? '오류 ' + r.errs.length + '건' : '오류 0건');
-      }) : null;
-      document.getElementById('rep').textContent = JSON.stringify(r, null, 1);
-      window.__report = r;
-      document.getElementById('status').textContent = (r.errs.length ? '오류 ' + r.errs.length + '건' : '오류 0건');
+      out.hud = { stage: (wd.querySelector('#stageChip') || {}).innerText || '', lv: (wd.querySelector('#lvChip') || {}).innerText || '' };
     } catch (e) {
-      document.getElementById('status').textContent = '보고 실패: ' + e.message;
+      out.err = e.message;
     }
-  }, 3200);
+    return out;
+  };
+
+  const show = () => {
+    const r = report();
+    document.getElementById('rep').textContent = JSON.stringify(r, null, 1);
+    document.getElementById('status').textContent = r.errs.length ? `오류 ${r.errs.length}건` : '오류 0건';
+    window.__report = r;
+    if (caches && caches.keys) {
+      caches.keys().then((k) => {
+        window.__report.cache = k.filter((x) => x.indexOf('land-rpg') === 0);
+        document.getElementById('rep').textContent = JSON.stringify(window.__report, null, 1);
+      });
+    }
+  };
+  setTimeout(show, 3500);
+  setTimeout(show, 6500);
 </script>
 </body>
 </html>

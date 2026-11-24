@@ -14,6 +14,8 @@
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="style.css">
+<!-- 오류 수집(검증·현장 진단용): window.__errs 에 로드/실행 오류를 모은다. 화면·동작에는 영향 없음 -->
+<script>window.__errs=[];(function(){function push(v){try{window.__errs.push(String(v));if(window.__errs.length>40)window.__errs.shift();}catch(e){}}addEventListener("error",function(e){try{if(e.target&&e.target.tagName&&e.target.tagName!=="WINDOW"){push("res:"+(e.target.tagName+" "+(e.target.src||e.target.href||"")));}else{push("err:"+(e.message||String(e.error)));}}catch(x){}},true);addEventListener("unhandledrejection",function(e){push("reject:"+String((e.reason&&e.reason.message)||e.reason));});})();</script>
 </head>
 <body>
 
