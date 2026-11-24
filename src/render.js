@@ -980,7 +980,7 @@ export class Renderer {
     const p = b.player;
     const gy = this.groundY();
     const sc = this.scale();
-    const h = Math.min(this.H * 0.42, 108 * sc);
+    const h = Math.min(this.H * 0.4, 100 * sc);
     const w = h;
     const baseX = this.worldX(p.x);
 
@@ -1125,7 +1125,7 @@ export class Renderer {
     const sc = this.scale();
     // v3.8 다굴: 무리가 많을수록 스프라이트를 조금씩 줄여 화면에 겹쳐 쌓이게 한다.
     const crowd = b.monsters.filter((m) => !m.dead && !m.dying && !m.isBoss).length;
-    const crowdK = crowd <= 2 ? 1 : Math.max(0.68, 1 - (crowd - 2) * 0.06);
+    const crowdK = crowd <= 2 ? 1 : Math.max(0.58, 1 - (crowd - 2) * 0.085);
     // 뒤 레인 → 앞 레인 순으로 그려야 앞쪽 몬스터가 위로 올라온다.
     const list = b.monsters
       .filter((m) => Number.isFinite(m.x))
@@ -1145,7 +1145,7 @@ export class Renderer {
       h = Math.min(h, this.H * (m.isBoss ? 0.62 : 0.38));
       const w = h;
       // 레인별 앞뒤 오프셋(뒤 레인은 위로, 앞 레인은 아래로) — 겹쳐도 깊이가 읽힌다
-      const depth = (lane * 15 + ((m.id % 3) - 1) * 2.5) * sc;
+      const depth = (lane * 18 + ((m.id % 3) - 1) * 2.5) * sc;
       const hitAge = now - (m.hitAt || 0);
       const hitK = hitAge >= 0 && hitAge < 130 ? 1 - hitAge / 130 : 0;
       const pop = 1 + hitK * 0.08;

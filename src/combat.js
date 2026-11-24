@@ -17,20 +17,20 @@ const ATTACK_STOP_GAP = 380; // 보스가 멈추고 때리는 거리(캐릭터 �
  * 여러 마리가 각자 슬롯에 붙어 동시에 공격 → 실제로 다굴 피해가 누적된다.
  */
 const MELEE_SLOTS = [
-  { dx: 320, lane: 0 },
-  { dx: 430, lane: -1 },
-  { dx: 365, lane: 1 },
-  { dx: 520, lane: 0 },
-  { dx: 470, lane: 1 },
-  { dx: 400, lane: -1 },
+  { dx: 270, lane: 0 },
+  { dx: 455, lane: -1 },
+  { dx: 345, lane: 1 },
+  { dx: 545, lane: 0 },
+  { dx: 400, lane: 1 },
+  { dx: 495, lane: -1 },
 ];
 const RANGED_SLOTS = [
-  { dx: 640, lane: -1 },
-  { dx: 720, lane: 0 },
-  { dx: 600, lane: 1 },
-  { dx: 760, lane: 1 },
-  { dx: 690, lane: 0 },
-  { dx: 660, lane: -1 },
+  { dx: 690, lane: -1 },
+  { dx: 780, lane: 0 },
+  { dx: 650, lane: 1 },
+  { dx: 820, lane: 1 },
+  { dx: 730, lane: 0 },
+  { dx: 700, lane: -1 },
 ];
 const LANE_DEPTH = 15; // 레인 1당 화면 y 오프셋(px) — 렌더러가 sc 를 곱해 쓴다
 const SLOT_TOL = 26; // 슬롯 도착 판정(월드)
