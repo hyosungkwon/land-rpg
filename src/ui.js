@@ -480,10 +480,7 @@ export class UI {
         el.style.width = `${n ? Math.min(100, Math.max(0, ((now - n.startsAt) / span) * 100)) : 0}%`;
       } else if (k === 'news-own') {
         const n = activeNews(now);
-        const owned = (s.land && s.land.owned) || {};
-        let hit = 0;
-        for (const key of Object.keys(owned)) if (newsCovers(n, key)) hit++;
-        el.textContent = hit > 0 ? `내 지역 ${hit}곳 적용 중` : `${n ? n.targetLabel : ''} · 내 지역 해당 없음`;
+        el.textContent = newsOwnShort(s, n);
       }
     });
     // 임대수령 버튼은 적립액에 따라 실시간으로 활성/문구가 바뀐다
@@ -961,7 +958,7 @@ function huntStatsCard(ui) {
   const buffParts = [];
   if (buffs.active) {
     buffParts.push(
-      `🏢 공격 +${buffs.atkPct}% · 골드 +${buffs.goldPct}% · 체력 +${buffs.hpPct}% · 치명 +${buffs.critPct}% · 드롭 +${buffs.dropPct}%`,
+      `🏢 공격 +${buffs.atkPct}% · 골드 +${buffs.goldPct}% · 체력 +${buffs.hpPct}% · 치명 +${Math.round((buffs.critPct || 0) * 10) / 10}% · 드롭 +${buffs.dropPct}%`,
     );
   }
   if (buffs.setAtkPct || buffs.setGoldPct || buffs.setDropPct) {
@@ -1461,6 +1458,15 @@ function newsBanner(ui, now = Date.now()) {
   </div>`;
 }
 
+/** 압축 뉴스용 짧은 내 지역 문구 — 대상 라벨과 겹치지 않게 */
+function newsOwnShort(s, n) {
+  if (!n) return '';
+  const owned = (s.land && s.land.owned) || {};
+  let hit = 0;
+  for (const key of Object.keys(owned)) if (newsCovers(n, key)) hit++;
+  return hit > 0 ? `내 지역 ${hit}곳 적용` : '내 지역 해당 없음';
+}
+
 /** 매물 투자·버프 탭 상단 한 줄 뉴스 — 카드형 뉴스의 압축판 */
 function newsSlim(ui) {
   const n = activeNews(Date.now());
@@ -1473,7 +1479,7 @@ function newsSlim(ui) {
       <span class="ns-clock" data-live="news-left">${mmss(n.endsAt - Date.now())}</span>
     </div>
     <div class="ns-title">${n.icon} ${esc(n.title)}</div>
-    <div class="ns-fx">${esc(n.targetLabel)} · <span class="up">시세 ▲${n.pricePct}%</span> · <span class="up">임대 ▲${n.rentPct}%</span> · <span data-live="news-own">${esc(newsOwnText(ui.s, n))}</span></div>
+    <div class="ns-fx">${esc(n.targetLabel)} · <span class="up">시세 ▲${n.pricePct}%</span> · <span class="up">임대 ▲${n.rentPct}%</span> · <span data-live="news-own">${esc(newsOwnShort(ui.s, n))}</span></div>
   </div>`;
 }
 

@@ -89,14 +89,15 @@
     'land-home': { tab: 'land', sub: 'home' },
     'land-market': { tab: 'land', sub: 'market' },
     'land-buff': { tab: 'land', sub: 'buff' },
-    boss: { tab: 'hunt', sub: 'skill', bossReady: true },
+    boss: { tab: 'hunt', sub: 'skill', bossReady: true, auto: true },
     grace: { tab: 'hunt', sub: 'skill', weak: true },
   };
 
   function put(scene) {
     const sc = SCENES[scene] || SCENES['land-home'];
     const opts = { sub: sc.sub };
-    if (sc.bossReady) Object.assign(opts, { bossReady: true, stage: 10, level: 22, autoBoss: false });
+    // 보스 장면 — 390×844 화면에서 '진짜 앱'의 보스 등장 배너를 잡을 수 있게 자동 도전(로드 1.4초 뒤)
+    if (sc.bossReady) Object.assign(opts, { bossReady: true, stage: 24, level: 30, equip: 16, autoBoss: !!sc.auto });
     if (sc.weak) Object.assign(opts, { stage: 26, level: 6, equip: 0, gold: 1200, shards: 30, autoBoss: false });
     const s = seed(opts);
     try {
@@ -116,7 +117,7 @@
     ['🏠 내 부동산·수령 (요약 바 · 보유 매물)', 'land-home'],
     ['🛒 매물 투자 (229개 검색·필터)', 'land-market'],
     ['⚡ 버프·세트·펫 (펫 진화)', 'land-buff'],
-    ['👑 보스 등장 배너 (보스 버튼을 누르세요)', 'boss'],
+    ['👑 보스 등장 배너 (로드 1.4초 뒤 자동 도전)', 'boss'],
     ['🛡 부활 가호 (약한 빌드 — 금방 쓰러집니다)', 'grace'],
   ];
   for (const [label, key] of presets) {
