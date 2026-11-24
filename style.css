@@ -2045,7 +2045,7 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 /* ─────────════════════════════ v4.3 ─ 🏢 부동산 서브 탭 · 요약 바 · 압축 뉴스 ─────────════════════════════ */
 /* 상단 요약 바 — 모든 서브 탭 맨 위. 미수령이 쌓이면 테두리가 초록으로 바뀐다 */
 .land-sum {
-  padding: 9px 11px 10px;
+  padding: 7px 10px 8px;
   background: linear-gradient(165deg, rgba(255, 207, 92, 0.13), rgba(16, 23, 38, 0.94) 62%);
   border-color: rgba(255, 207, 92, 0.26);
 }
@@ -2054,13 +2054,13 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .ls-asset { font-size: 17px; font-weight: 900; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
 .ls-meta { font-size: 10.5px; color: var(--sub); font-weight: 700; white-space: nowrap; }
 .ls-meta b { color: var(--txt); font-variant-numeric: tabular-nums; }
-.ls-mid { display: flex; align-items: center; gap: 6px; margin-top: 4px; min-width: 0; }
+.ls-mid { display: flex; align-items: center; gap: 5px; margin-top: 3px; min-width: 0; }
 .ls-k { font-size: 10px; color: var(--dim); font-weight: 700; white-space: nowrap; }
 .ls-v { font-size: 15px; font-weight: 900; color: var(--green); font-variant-numeric: tabular-nums; letter-spacing: -0.3px; }
 .ls-inc { font-size: 9.5px; color: var(--dim); margin-left: auto; white-space: nowrap; }
 .ls-inc b { color: var(--gold); font-weight: 800; }
-.ls-info { flex: 0 0 auto; min-width: 36px; height: 21px; font-size: 9.5px; padding: 0 6px; }
-.ls-claim { margin-top: 7px; min-height: 34px; font-size: 12px; }
+.ls-info { flex: 0 0 auto; min-width: 34px; height: 21px; font-size: 9.5px; padding: 0 5px; }
+.ls-claim { flex: 0 0 auto; min-height: 30px; height: 30px; padding: 0 9px; font-size: 11px; border-radius: 9px; }
 
 /* 부동산 서브 탭 — 사냥 탭과 같은 sticky 바, 라벨이 길어 살짝 작게 */
 .land-subbar { margin-bottom: 8px; }

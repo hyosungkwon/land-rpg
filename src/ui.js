@@ -1641,10 +1641,10 @@ function landSummaryBar(ui) {
       <b class="ls-v" data-live="rent">💰${fmt(Math.floor(p.accruedRent))}</b>
       <span class="ls-inc">시간 <b data-live="income">+💰${formatGold(p.incomePerHour)}/h</b></span>
       <button class="mini ghost ls-info" type="button" data-action="rent-info">내역</button>
+      <button class="btn small ${claimable ? 'green' : 'ghost'} ls-claim" type="button" data-action="claim-rent" data-live-rent-btn data-label="💤 일괄 수령" data-empty="적립 중…" ${claimable ? '' : 'disabled'}>
+        ${claimable ? '💤 일괄 수령' : '적립 중…'}
+      </button>
     </div>
-    <button class="btn ${claimable ? 'green' : 'ghost'} block ls-claim" type="button" data-action="claim-rent" data-live-rent-btn data-label="💤 임대수익 일괄 수령" data-empty="쌓이는 중…" ${claimable ? '' : 'disabled'}>
-      ${claimable ? '💤 임대수익 일괄 수령' : '쌓이는 중…'}
-    </button>
   </div>`;
 }
 
