@@ -1702,7 +1702,7 @@ class App {
         return `<div class="cmp-opt">
           <span class="co-k">${esc(GEAR_OPT_LABEL(k))}</span>
           <span class="co-now">${b ? `+${b}${GEAR_OPTS[k].unit}` : '—'}</span>
-          <span class="co-new ${cls}">${a ? `+${a}${GEAR_OPTS[k].unit}` : '—'}${d ? `<i>(${d > 0 ? '▲' : '▼'}${Math.abs(d)})</i>` : ''}</span>
+          <span class="co-new ${cls}">${a ? `+${a}${GEAR_OPTS[k].unit}` : '—'}${d ? `<i>(${d > 0 ? '▲' : '▼'}${Math.abs(d)}${GEAR_OPTS[k].unit})</i>` : ''}</span>
         </div>`;
       }).join('')
       : '<div class="tiny dim">고유 옵션이 없는 기본 장비입니다.</div>';
