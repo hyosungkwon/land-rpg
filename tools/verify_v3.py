@@ -2088,6 +2088,24 @@ def main():
     ok(inv["eq2ok"] is True and inv["grAfterSwap"] == "common" and inv["curName"] == "철검", "직접 장착하면 등급 미러(gearRarity)도 함께 바뀐다", json.dumps({"gr": inv["grAfterSwap"], "name": inv["curName"]}, ensure_ascii=False))
     ok(inv["dmShards"] == 2 and inv["slotEmpty"] is True, "분해하면 슬롯이 비고(일반) 강화석이 들어온다", json.dumps({"s": inv["dmShards"], "empty": inv["slotEmpty"]}))
 
+    cmp = js(ctx, """
+      const s = defaultState(0); s.level = 30;
+      acquireGear(s, 'w_axe'); acquireGear(s, 'w_iron');
+      const axeUid = gearOwned(s).find(r => r.def.id === 'w_axe').uid;
+      const sword = gearOwned(s).find(r => r.def.id === 'w_iron');
+      const c = compareGear(s, sword.uid, {});
+      const restored = s.gearRarity.weapon === 'advanced' && s.gear.equipped.weapon === axeUid;
+      const same = compareGear(s, axeUid, {});
+      return {
+        before: c.before.atk, after: c.after.atk, atk: c.delta.atk, critD: c.delta.crit,
+        bossD: c.delta.bossDmgPct, whirl: c.delta.whirlDmgPct, restored,
+        sameAtk: same.delta.atk, item: c.item.name,
+      };
+    """)
+    ok(cmp["atk"] < 0 and cmp["after"] < cmp["before"], "비교: 낮은 등급으로 바꾸면 등급 보정까지 계산해 공격력 감소", json.dumps({k: cmp[k] for k in ["before", "after", "atk"]}))
+    ok(cmp["bossD"] < 0 and cmp["whirl"] < 0, "비교: 잃는 옵션(보스 추뎀·범위 베기)이 음수로 표시", json.dumps({k: cmp[k] for k in ["bossD", "whirl"]}))
+    ok(cmp["restored"] is True and cmp["sameAtk"] == 0, "비교는 상태를 바꾸지 않는다(장착·등급 원상 복구)", json.dumps({"restored": cmp["restored"], "same": cmp["sameAtk"]}))
+
     bulk = js(ctx, """
       const s = defaultState(0); s.level = 20;
       acquireGear(s, 'w_iron'); acquireGear(s, 'a_leather'); acquireGear(s, 'h_cloth');

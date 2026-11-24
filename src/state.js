@@ -543,9 +543,13 @@ export function compareGear(s, uid, buffs = NO_BUFF) {
   if (!it) return null;
   const before = calcStats(s, buffs);
   const prev = g.equipped[it.slot];
+  const prevRarity = s.gearRarity ? s.gearRarity[it.slot] : 'common';
+  // 등급 미러도 함께 바꿔야 '등급 보정 레벨' 차이까지 비교에 들어간다
   g.equipped[it.slot] = row.uid;
+  if (s.gearRarity) s.gearRarity[it.slot] = it.rarity;
   const after = calcStats(s, buffs);
   g.equipped[it.slot] = prev;
+  if (s.gearRarity) s.gearRarity[it.slot] = prevRarity;
   const delta = {};
   for (const k of ['atk', 'hpMax', 'crit', 'critDmg', 'dmgReduce', 'hpRegen', 'goldMult', 'dropMult', 'attackMs', 'dps', 'lifesteal', 'bossDmgPct', 'whirlDmgPct']) {
     delta[k] = (after[k] || 0) - (before[k] || 0);
