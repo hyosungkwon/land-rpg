@@ -26,11 +26,13 @@ export function rebirthPointsFor(stage) {
   return Math.max(REBIRTH.minPoints, Math.round(REBIRTH.pointBase * Math.pow(n, REBIRTH.pointExp)));
 }
 
-/* ────────────────────────────── 영구 특성 6종 ──────────────────────────────
+/* ────────────────────────────── 영구 특성 7종 ──────────────────────────────
  * 포인트로 레벨을 올리고, 효과는 calcStats·전투·보상에 영구 반영된다.
  *  atk       공격력 +4%/Lv        gold   골드 획득 +5%/Lv
  *  hp        최대 체력 +5%/Lv      shard  강화석 획득 +6%/Lv
  *  startGold 환생 직후 시작 골드  critDmg 치명타 피해 +3%p/Lv
+ *  guard     피해 감소 +2%p/Lv (v3.8)  — 고스테이지 다굴을 버티는 핵심
+ *  regen     초당 회복 +0.12%/s/Lv (v3.8)
  */
 export const REBIRTH_TRAITS = [
   {
@@ -38,12 +40,22 @@ export const REBIRTH_TRAITS = [
     desc: '공격력이 영구히 오릅니다.', effect: (lv) => `공격력 +${lv * 4}%`,
   },
   {
-    id: 'gold', name: '초월의 금고', icon: '💰', per: 5, unit: '%', maxLv: 20,
-    desc: '사냥·임대 등 모든 골드 획득이 늘어납니다.', effect: (lv) => `골드 획득 +${lv * 5}%`,
+    id: 'guard', name: '초월의 수호', icon: '🛡️', per: 2, unit: '%p', maxLv: 20,
+    desc: '받는 피해가 영구히 줄어든다 — 몰려드는 무리를 버팁니다.',
+    effect: (lv) => `피해 감소 +${lv * 2}%p`,
   },
   {
     id: 'hp', name: '초월의 심장', icon: '❤️', per: 5, unit: '%', maxLv: 20,
     desc: '최대 체력이 영구히 오릅니다.', effect: (lv) => `최대 체력 +${lv * 5}%`,
+  },
+  {
+    id: 'regen', name: '초월의 생명', icon: '🌿', per: 0.12, unit: '%/s', maxLv: 20,
+    desc: '자연 회복이 빨라져 오래 버팁니다.',
+    effect: (lv) => `초당 회복 +${(lv * 0.12).toFixed(2)}%/s`,
+  },
+  {
+    id: 'gold', name: '초월의 금고', icon: '💰', per: 5, unit: '%', maxLv: 20,
+    desc: '사냥·임대 등 모든 골드 획득이 늘어납니다.', effect: (lv) => `골드 획득 +${lv * 5}%`,
   },
   {
     id: 'shard', name: '초월의 결정', icon: '💎', per: 6, unit: '%', maxLv: 20,
@@ -115,6 +127,8 @@ export function rebirthBonus(state) {
   let shardPct = 0;
   let startGold = 0;
   let critDmgAdd = 0;
+  let guardPct = 0;
+  let regenPct = 0;
   let totalLv = 0;
   for (const def of REBIRTH_TRAITS) {
     const lv = traitLevel(state, def.id);
@@ -126,6 +140,8 @@ export function rebirthBonus(state) {
     else if (def.id === 'shard') shardPct = lv * def.per;
     else if (def.id === 'startGold') startGold = lv * def.per;
     else if (def.id === 'critDmg') critDmgAdd = (lv * def.per) / 100;
+    else if (def.id === 'guard') guardPct = lv * def.per;
+    else if (def.id === 'regen') regenPct = lv * def.per;
   }
   return {
     atkPct,
@@ -134,6 +150,8 @@ export function rebirthBonus(state) {
     shardPct,
     critDmgAdd,
     startGold,
+    guardPct,
+    regenPct,
     totalLv,
     count: Math.max(0, Math.floor(num(rb.count, 0))),
     points: Math.max(0, Math.floor(num(rb.points, 0))),
@@ -285,7 +303,9 @@ export function traitSummary(state) {
   const b = rebirthBonus(state);
   const parts = [];
   if (b.atkPct) parts.push(`공격 +${b.atkPct}%`);
+  if (b.guardPct) parts.push(`피해감소 +${b.guardPct}%p`);
   if (b.hpPct) parts.push(`체력 +${b.hpPct}%`);
+  if (b.regenPct) parts.push(`회복 +${b.regenPct.toFixed(2)}%/s`);
   if (b.goldPct) parts.push(`골드 +${b.goldPct}%`);
   if (b.shardPct) parts.push(`강화석 +${b.shardPct}%`);
   if (b.critDmgAdd) parts.push(`치명피해 +${Math.round(b.critDmgAdd * 100)}%p`);

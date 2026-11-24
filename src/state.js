@@ -2,7 +2,7 @@
 // 게임 상태 · 저장 · 성장 계산. DOM 의존 없음.
 // v3: 로그인/클라우드 없음. 골드 하나로 사냥 + 부동산을 함께 굴리는 통합 상태.
 import {
-  ECON, EQUIP, EQUIP_MAX_LV, SKILLS, SKILL_UPGRADE_MAX,
+  ECON, EQUIP, EQUIP_MAX_LV, SKILLS, SKILL_UPGRADE_MAX, DEF,
   SAVE_KEY, SAVE_VERSION, enhanceCost, skillCost, skillPowerMul,
   RARITIES, RARITY_INDEX, RARITY_IDS, GACHA, gachaCost, rarityBonusLv,
   stageGoldBase, stageExpBase, monsterBaseHp, monsterBaseAtk,
@@ -296,6 +296,10 @@ export function calcStats(s, buffs = NO_BUFF) {
     * (1 + (b.hpPct + extraHp) / 100) * jobHpMul * rbHpMul;
   const crit = Math.min(0.5, 0.05 + (EQUIP.ring.per / 100) * eLv('ring') + (b.critPct + extraCrit) / 100);
   const critDmg = 2.0 + rb.critDmgAdd;
+  // v3.8 방어·회복 — 다굴에서 버티는 힘. 갑옷/투구 강화(등급 환산 포함) + 환생 '수호' 특성
+  const defFromGear = EQUIP.armor.defPer * eLv('armor') + EQUIP.helmet.defPer * eLv('helmet');
+  const dmgReduce = Math.min(DEF.cap, (defFromGear + (rb.guardPct || 0)) / 100);
+  const hpRegen = Math.min(0.06, DEF.regenBase + (rb.regenPct || 0) / 100);
   const goldMult =
     1 + (EQUIP.amulet.per / 100) * eLv('amulet') + (b.goldPct + extraGold + rb.goldPct) / 100 + (pet ? pet.goldPct / 100 : 0)
     + (col.goldPct || 0) / 100;
@@ -307,6 +311,8 @@ export function calcStats(s, buffs = NO_BUFF) {
     hpMax: Math.round(hpMax),
     crit,
     critDmg,
+    dmgReduce,
+    hpRegen,
     goldMult,
     dropMult,
     attackMs,
@@ -323,7 +329,11 @@ export function calcStats(s, buffs = NO_BUFF) {
     rebirthGoldPct: rb.goldPct,
     rebirthHpPct: rb.hpPct,
     rebirthShardPct: rb.shardPct,
+    rebirthGuardPct: rb.guardPct || 0,
+    rebirthRegenPct: rb.regenPct || 0,
     rebirthCount: rb.count,
+    // v3.8 방어 기여도(UI 표시용)
+    defFromGear: Math.round(defFromGear * 10) / 10,
   };
 }
 

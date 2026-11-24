@@ -1,7 +1,7 @@
 // land-rpg / sw.js — 오프라인 캐시 (게스트 전용: 네트워크가 없어도 처음부터 끝까지 플레이)
-const VERSION = 'land-rpg-v3.7.0';
+const VERSION = 'land-rpg-v3.8.0';
 // 같은 릴리스 안에서 자산을 고친 경우 BUILD 를 올린다 → 열린 탭이 새 캐시로 넘어온다.
-const BUILD = 'r2';
+const BUILD = 'r1';
 const CACHE = `${VERSION}-${BUILD}`;
 const CORE = [
   './',
@@ -37,7 +37,7 @@ const CORE = [
   // 몬스터 공격 이펙트 2종 (v3.7 — 추가 광원 합성용)
   './assets/sprites/fx/fx_claw.png',
   './assets/sprites/fx/fx_burst.png',
-  // 일반 몬스터 12종
+  // 일반 몬스터 23종 (v3.8: 모래벌·동굴·용암·빙원·심연 11종 추가)
   './assets/sprites/monster/Slime.png',
   './assets/sprites/monster/Goblin.png',
   './assets/sprites/monster/Kobold.png',
@@ -50,14 +50,30 @@ const CORE = [
   './assets/sprites/monster/Minotaur.png',
   './assets/sprites/monster/Golem.png',
   './assets/sprites/monster/Drake.png',
-  // 보스 7종
+  './assets/sprites/monster/Scorpion.png',
+  './assets/sprites/monster/Mummy.png',
+  './assets/sprites/monster/Sandworm.png',
+  './assets/sprites/monster/Batling.png',
+  './assets/sprites/monster/CaveSpider.png',
+  './assets/sprites/monster/FireImp.png',
+  './assets/sprites/monster/MagmaGolem.png',
+  './assets/sprites/monster/IceWolf.png',
+  './assets/sprites/monster/FrostWisp.png',
+  './assets/sprites/monster/ShadowWraith.png',
+  './assets/sprites/monster/AbyssEye.png',
+  // 보스 12종 (v3.8: 5종 추가)
   './assets/sprites/boss/SlimeKing.png',
   './assets/sprites/boss/Troll.png',
   './assets/sprites/boss/Cerberus.png',
   './assets/sprites/boss/DeathLord.png',
   './assets/sprites/boss/RedDragon.png',
   './assets/sprites/boss/VoidWalker.png',
-  './assets/sprites/boss/Seraphim.png'
+  './assets/sprites/boss/Seraphim.png',
+  './assets/sprites/boss/Anubis.png',
+  './assets/sprites/boss/CaveTroll.png',
+  './assets/sprites/boss/Ifrit.png',
+  './assets/sprites/boss/IceGiant.png',
+  './assets/sprites/boss/AbyssLord.png'
 ];
 
 self.addEventListener('install', (event) => {

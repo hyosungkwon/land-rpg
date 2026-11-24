@@ -820,6 +820,8 @@ function tplHunt(ui) {
     <div class="stat-grid">
       ${stat('atk', '공격력', fmt(st.atk))}
       ${stat('hp', '최대 체력', fmt(st.hpMax))}
+      ${stat('def', '피해 감소', Math.round((st.dmgReduce || 0) * 100), '%')}
+      ${stat('regen', '자연 회복', ((st.hpRegen || 0) * 100).toFixed(2), '%/s')}
       ${stat('crit', '치명타', (st.crit * 100).toFixed(1), '%')}
       ${stat('gold', '골드 획득', `+${Math.round((st.goldMult - 1) * 100)}`, '%')}
       ${stat('', '강화석 드롭', `+${Math.round((st.dropMult - 1) * 100)}`, '%')}

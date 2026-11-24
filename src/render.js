@@ -385,6 +385,18 @@ export class Renderer {
   }
 
   addFloater(x, text, crit, kind, color) {
+    const now = Date.now();
+    // v3.8 다굴: 같은 순간에 여러 마리가 때리면 피해 숫자를 하나로 합쳐 읽기 쉽게 한다
+    if (kind === 'hurt') {
+      const last = this.floaters[this.floaters.length - 1];
+      if (last && last.kind === 'hurt' && now - (last.at || 0) < 190) {
+        last.sum = (last.sum || Number(last.text) || 0) + (Number(text) || 0);
+        last.text = String(last.sum);
+        last.life = 1;
+        last.at = now;
+        return;
+      }
+    }
     this.floaters.push({
       x,
       y: 0,
@@ -393,6 +405,7 @@ export class Renderer {
       kind,
       color: color || null,
       life: 1,
+      at: now,
       vx: (Math.random() - 0.5) * 26,
       vy: crit ? -84 : -60,
     });
@@ -993,6 +1006,20 @@ export class Renderer {
     // 장비 등급 오라 (발밑·주변 색)
     if (this.effects && !dead) this.drawAura(ctx, px, gy, h, sc, now);
 
+    // v3.8 부활 직후의 가호 — 잠깐 반투과 보호막(다굴 재시작 완충)
+    if (!dead && p.graceUntil && now < p.graceUntil) {
+      const k = Math.max(0, (p.graceUntil - now) / 3500);
+      const rr = h * 0.62;
+      const gg = ctx.createRadialGradient(px, gy - h * 0.5, rr * 0.35, px, gy - h * 0.5, rr);
+      gg.addColorStop(0, 'rgba(150,220,255,0)');
+      gg.addColorStop(0.75, `rgba(150,220,255,${0.16 * k})`);
+      gg.addColorStop(1, `rgba(190,240,255,${0.34 * k})`);
+      ctx.fillStyle = gg;
+      ctx.beginPath();
+      ctx.ellipse(px, gy - h * 0.5, rr * 0.78, rr, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     // 광폭 아우라
     if (b.berserkUntil > now) {
       const a = 0.2 + Math.sin(now / 90) * 0.08;
@@ -1096,8 +1123,15 @@ export class Renderer {
     const b = this.battle;
     const gy = this.groundY();
     const sc = this.scale();
-    for (const m of b.monsters) {
-      if (!Number.isFinite(m.x)) continue;
+    // v3.8 다굴: 무리가 많을수록 스프라이트를 조금씩 줄여 화면에 겹쳐 쌓이게 한다.
+    const crowd = b.monsters.filter((m) => !m.dead && !m.dying && !m.isBoss).length;
+    const crowdK = crowd <= 2 ? 1 : Math.max(0.72, 1 - (crowd - 2) * 0.06);
+    // 뒤 레인 → 앞 레인 순으로 그려야 앞쪽 몬스터가 위로 올라온다.
+    const list = b.monsters
+      .filter((m) => Number.isFinite(m.x))
+      .slice()
+      .sort((a, c) => (a.lane || 0) - (c.lane || 0) || a.x - c.x);
+    for (const m of list) {
       const arch = m.arch || monsterMotion(m.name);
       const atkDef = monsterAttack(m.name);
       const color = m.atkColor || atkDef.color || '#ffd166';
@@ -1105,11 +1139,13 @@ export class Renderer {
       const x = this.worldX(m.x + knock);
       const lungeAge = now - (m.lungeAt || 0);
       const lunge = lungeAge >= 0 && lungeAge < 260 ? Math.sin(Math.PI * clamp(1 - lungeAge / 260, 0, 1)) : 0;
-      let h = (m.isBoss ? 168 : 84) * sc * (m.isBoss ? 1 : m.scale);
-      h = Math.min(h, this.H * (m.isBoss ? 0.62 : 0.4));
+      const lane = m.isBoss ? 0 : (m.lane || 0);
+      const depthScale = 1 + lane * 0.045;
+      let h = (m.isBoss ? 168 : 84 * crowdK) * sc * (m.isBoss ? 1 : m.scale * depthScale);
+      h = Math.min(h, this.H * (m.isBoss ? 0.62 : 0.38));
       const w = h;
-      const depth = ((m.id % 3) - 1) * 5 * sc;
-      const depthScale = 1 - (m.id % 3) * 0.02;
+      // 레인별 앞뒤 오프셋(뒤 레인은 위로, 앞 레인은 아래로) — 겹쳐도 깊이가 읽힌다
+      const depth = (lane * 15 + ((m.id % 3) - 1) * 2.5) * sc;
       const hitAge = now - (m.hitAt || 0);
       const hitK = hitAge >= 0 && hitAge < 130 ? 1 - hitAge / 130 : 0;
       const pop = 1 + hitK * 0.08;
@@ -1307,12 +1343,13 @@ export class Renderer {
       }
       ctx.restore();
 
-      // 4) 체력바
-      if (!m.dying) {
-        const bw = m.isBoss ? 96 * sc : 46 * sc;
-        const bh = m.isBoss ? 6 : 4.5;
+      // 4) 체력바 — 무리가 많을 땐 다친 몬스터만 보여 화면이 지저분해지지 않게 한다
+      const showBar = m.isBoss || m.hp < m.maxHp || (now - (m.hitAt || 0) < 900);
+      if (!m.dying && showBar) {
+        const bw = (m.isBoss ? 96 : 44 * Math.max(0.8, crowdK)) * sc;
+        const bh = m.isBoss ? 6 : 4;
         const bx = x + dx - bw / 2;
-        const by = footY - h * ky - 10;
+        const by = footY - h * ky - 9 - lane * 2;
         ctx.fillStyle = 'rgba(0,0,0,0.62)';
         roundRect(ctx, bx - 1, by - 1, bw + 2, bh + 2, 2);
         ctx.fill();
@@ -1611,6 +1648,42 @@ export class Renderer {
       ctx.moveTo(-s * 1.7, 0);
       ctx.lineTo(s * 1.7, 0);
       ctx.stroke();
+    } else if (p.kind === 'ice') {
+      // 서리 파편 — 뾰족한 결정 + 옅은 잔설
+      ctx.rotate(0.35);
+      ctx.shadowColor = hexA(col, 0.95);
+      ctx.shadowBlur = 12;
+      const g = ctx.createLinearGradient(0, -s * 1.4, 0, s * 1.2);
+      g.addColorStop(0, 'rgba(255,255,255,0.98)');
+      g.addColorStop(0.5, hexA(col, 0.95));
+      g.addColorStop(1, hexA('#3f7fc0', 0.35));
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(0, -s * 1.5);
+      ctx.lineTo(s * 0.72, 0);
+      ctx.lineTo(0, s * 0.9);
+      ctx.lineTo(-s * 0.72, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(240,252,255,0.9)';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    } else if (p.kind === 'sonic') {
+      // 음파 — 겹친 고리
+      ctx.shadowColor = hexA(col, 0.9);
+      ctx.shadowBlur = 10;
+      for (let i = 0; i < 3; i++) {
+        ctx.globalAlpha *= 0.72;
+        ctx.strokeStyle = hexA(col, 0.95 - i * 0.22);
+        ctx.lineWidth = Math.max(1, 2.4 - i * 0.5);
+        ctx.beginPath();
+        ctx.ellipse(-i * s * 0.7, 0, s * (1.05 - i * 0.22), s * (0.72 - i * 0.16), 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath();
+      ctx.arc(0, 0, s * 0.3, 0, Math.PI * 2);
+      ctx.fill();
     } else if (p.kind === 'acid') {
       ctx.shadowColor = hexA(col, 0.85);
       ctx.shadowBlur = 9;
@@ -1654,7 +1727,8 @@ export class Renderer {
 
   projectileImpact(p, x, y, now) {
     const wx = this.worldFromScreen(x);
-    const col = p.kind === 'holy' ? '#fff2c4' : p.kind === 'dark' ? '#b98bff' : p.kind === 'feather' ? '#bfeaff' : p.kind === 'acid' ? '#9df0a8' : '#ffb066';
+    const col = p.kind === 'holy' ? '#fff2c4' : p.kind === 'dark' ? '#b98bff' : p.kind === 'feather' ? '#bfeaff'
+      : p.kind === 'acid' ? '#9df0a8' : p.kind === 'ice' ? '#bfeaff' : p.kind === 'sonic' ? '#b9c8ff' : '#ffb066';
     if (p.kind === 'fire' || p.kind === 'acid') this.fx.push({ key: 'fxBurst', x: wx, t0: typeof now === 'number' ? now : Date.now(), dur: 300, big: 0.95 });
     this.burst(wx, col, p.kind === 'fire' ? 14 : 10, true);
     this.rings.push({ x: wx, life: 1, r: 8, color: col, wide: 1.4 });

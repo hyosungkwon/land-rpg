@@ -8,8 +8,33 @@ import {
 import { DUNGEON, PET_ATTACK_MS, equippedPet, petDmgPct, dungeonReward } from './meta.js';
 import { codexMeet, codexKill } from './quests.js';
 
-const ATTACK_STOP_GAP = 260; // 이 거리에서 멈추고 때린다(캐릭터 스프라이트가 겹치지 않는 간격)
-const QUEUE_GAP = 300; // 뒤에 줄 서는 몬스터가 벌어지는 간격
+const ATTACK_STOP_GAP = 260; // 보스가 멈추고 때리는 거리(캐릭터 스프라이트가 겹치지 않는 간격)
+/* ── v3.8 다굴 슬롯 ──────────────────────────────────────────────
+ * 몬스터는 '줄'이 아니라 캐릭터 앞쪽 부채꼴 슬롯을 하나씩 차지한다.
+ *  - dx   : 플레이어 x 로부터의 거리(월드). 근접은 사거리(playerRange) 안쪽,
+ *           원거리는 뒤쪽에서 투사체를 쏜다.
+ *  - lane : 앞뒤 레인(-1 뒤 · 0 가운데 · 1 앞). 렌더러가 y 오프셋·깊이 스케일로 그린다.
+ * 여러 마리가 각자 슬롯에 붙어 동시에 공격 → 실제로 다굴 피해가 누적된다.
+ */
+const MELEE_SLOTS = [
+  { dx: 250, lane: 0 },
+  { dx: 172, lane: 1 },
+  { dx: 330, lane: -1 },
+  { dx: 305, lane: 1 },
+  { dx: 215, lane: -1 },
+  { dx: 350, lane: 0 },
+];
+const RANGED_SLOTS = [
+  { dx: 560, lane: -1 },
+  { dx: 470, lane: 0 },
+  { dx: 640, lane: 1 },
+  { dx: 520, lane: 1 },
+  { dx: 600, lane: 0 },
+  { dx: 495, lane: -1 },
+];
+const LANE_DEPTH = 15; // 레인 1당 화면 y 오프셋(px) — 렌더러가 sc 를 곱해 쓴다
+const SLOT_TOL = 26; // 슬롯 도착 판정(월드)
+const WALK_SPEED = 158; // 몬스터 이동 속도(월드/초) — 6마리가 빠르게 채워진다
 // v3.7 모션: 공격 '전조(windup)' 시간. 피해 판정 시점(monsterAttackMs 간격)은 그대로 두고
 // 전조만 그 직전에 시작해 밸런스(DPS·클리어 시간·헤드리스 시뮬)를 건드리지 않는다.
 const WINDUP_MELEE_MS = 300;
@@ -122,7 +147,7 @@ export class Battle {
       name,
       ko: monsterKo(name),
       isBoss: !!isBoss,
-      x: isBoss ? ECON.spawnX + 40 : ECON.spawnX + this.rng() * 90,
+      x: isBoss ? ECON.spawnX + 40 : ECON.spawnX + this.rng() * 70,
       y: 0,
       hp: Math.round(base.hp),
       maxHp: Math.round(base.hp),
@@ -136,6 +161,9 @@ export class Battle {
       dead: false,
       born: now,
       animSeed: this.rng() * Math.PI * 2,
+      // v3.8 다굴: 차지할 슬롯(전투가 매 틱 갱신) · 앞뒤 레인
+      slotX: ECON.spawnX,
+      lane: 0,
       // v3.7 모션 상태 — 렌더러가 읽어 이동/공격/피격을 그린다
       arch: monsterMotion(name),
       atkKind: atkDef.kind,
@@ -161,15 +189,11 @@ export class Battle {
 
   spawnNormal(now) {
     if (this.boss) return;
+    if (this.monsters.filter((m) => !m.dead && !m.dying).length >= ECON.maxMonsters) return;
     const normals = this._def.normals;
     // 스테이지마다 처치 수 기준으로 몬스터 종류를 돌려가며 등장
     const pick = normals[(this.s.totalKills + this.monsters.length) % normals.length];
     const m = this.makeMonster(pick, false, now);
-    // 같은 위치에서 겹쳐 나오지 않도록 오른쪽 몬스터 뒤로 최소 간격을 띄운다.
-    // 이미 줄이 길면(화면 밖) 잠시 대기 → 화면 밖 몬스터의 체력바만 떠 보이는 현상 방지
-    const right = this.monsters.reduce((mx, o) => (o.x > mx ? o.x : mx), 0);
-    if (right > 780) return;
-    if (m.x < right + 150) m.x = right + 150;
     this.monsters.push(m);
   }
 
@@ -186,7 +210,10 @@ export class Battle {
       if (now >= this.player.reviveAt) {
         this.player.dead = false;
         this.player.hp = Math.round(this.stats.hpMax * 0.5);
+        // v3.8: 부활 직후 잠깐의 가호 — 흩어진 무리가 다시 몰리기 전에 숨을 돌린다
+        this.player.graceUntil = now + 3500;
         this.emit({ t: 'revive' });
+        this.spawnInitial(now);
       }
       return;
     }
@@ -205,35 +232,66 @@ export class Battle {
   }
 
   regen(dt) {
-    const perSec = this.stats.hpMax * 0.012;
+    // v3.8: 자연 회복량은 스탯(기본 1.2%/s + 환생 '생명' 특성)에서 온다.
+    const perSec = this.stats.hpMax * (this.stats.hpRegen || 0.012);
     if (this.player.hp < this.stats.hpMax) {
       this.player.hp = Math.min(this.stats.hpMax, this.player.hp + (perSec * dt) / 1000);
     }
   }
 
-  updateMonsters(dt, now) {
+  /* ───────────── 다굴: 슬롯 배정 ─────────────
+   * 살아 있는 몬스터를 도착 순서대로 근접/원거리 슬롯에 배정한다.
+   *  - 근접: 캐릭터 앞 부채꼴(앞뒤 레인 포함)을 차지하고 동시에 달려든다.
+   *  - 원거리: 뒤쪽 슬롯에서 투사체를 쏜다. 근접이 모두 쓰러지면 앞으로 나온다.
+   */
+  assignSlots() {
     const p = this.player;
-    // 앞에서부터 줄을 세운다: 가장 앞 몬스터만 캐릭터 옆에 붙고, 나머지는 뒤에 대기
     const alive = this.monsters
       .filter((m) => !m.dead && !m.dying)
-      .sort((a, b) => (b.isBoss ? 1 : 0) - (a.isBoss ? 1 : 0) || a.x - b.x);
-    let ahead = p.x + ATTACK_STOP_GAP;
+      .sort((a, b) => (a.born || 0) - (b.born || 0) || a.id - b.id);
+    let meleeCount = 0;
+    for (const m of alive) if (!m.isBoss && m.atkKind !== 'ranged') meleeCount += 1;
+    let mi = 0;
+    let ri = 0;
+    for (const m of alive) {
+      if (m.isBoss) {
+        m.slotX = p.x + ATTACK_STOP_GAP;
+        m.lane = 0;
+        continue;
+      }
+      const ranged = m.atkKind === 'ranged';
+      const table = ranged && meleeCount > 0 ? RANGED_SLOTS : MELEE_SLOTS;
+      const i = ranged ? ri++ : mi++;
+      const slot = table[i % table.length];
+      m.slotX = p.x + slot.dx;
+      m.lane = slot.lane;
+      m.slotRanged = ranged && meleeCount > 0;
+    }
+    return alive;
+  }
+
+  updateMonsters(dt, now) {
+    const p = this.player;
+    const alive = this.assignSlots();
     for (const m of alive) {
       if (!Number.isFinite(m.x)) m.x = ECON.spawnX;
       if (!Number.isFinite(m.hp)) m.hp = m.maxHp;
-      const standX = ahead + (m.isBoss ? 60 : 0);
-      ahead = standX + QUEUE_GAP * (m.isBoss ? 1.5 : 1);
-      const dist = m.x - p.x;
-      if (m.x > standX + 2) {
-        const speed = m.isBoss ? 62 : 96 + (m.scale - 1) * 40; // 월드단위/초
+      if (!Number.isFinite(m.slotX)) m.slotX = p.x + ATTACK_STOP_GAP;
+      const standX = m.slotX;
+      const dist = Math.abs(m.x - standX);
+      const walking = dist > SLOT_TOL;
+
+      if (walking) {
+        const speed = m.isBoss ? 78 : WALK_SPEED + (m.scale - 1) * 60; // 월드단위/초
         const prevX = m.x;
-        m.x = Math.max(standX, m.x - (speed * dt) / 1000);
+        const step = (speed * dt) / 1000;
+        m.x = m.x > standX ? Math.max(standX, m.x - step) : Math.min(standX, m.x + step);
         // 걸음/도약 위상 — 실제로 이동한 거리만 쌓아 정지하면 모션이 멈추게 한다
         m.walk = (Number.isFinite(m.walk) ? m.walk : 0) + Math.abs(m.x - prevX);
         m.moving = true;
-        // 도착 직전 마지막 걸음에서 전조를 시작한다 → 타격은 도착 순간(기존 타이밍 그대로)
+        // 도착 직전 마지막 걸음에서 전조를 시작한다 → 타격은 도착 순간
         if (!m.windupBase) m.windupBase = windupFor(m);
-        const eta = ((m.x - standX) / speed) * 1000;
+        const eta = (Math.abs(m.x - standX) / speed) * 1000;
         if (!m.windupAt && eta <= m.windupBase + 40) {
           m.windupAt = now;
           m.windupDur = m.windupBase;
@@ -248,43 +306,41 @@ export class Battle {
         }
       } else {
         m.moving = false;
-        if (dist <= ATTACK_STOP_GAP + (m.isBoss ? 100 : 40)) {
-          if (!m.windupBase) m.windupBase = windupFor(m);
-          const heavy = !!m.isBoss && (m.attackSeq || 0) % HEAVY_EVERY === HEAVY_EVERY - 1;
-          const wuTotal = m.windupBase + (heavy ? 170 : 0);
-          const due = (Number.isFinite(m.lastAttack) ? m.lastAttack : now) + ECON.monsterAttackMs;
-          // 1) 전조: 타격 시점 직전부터 움츠리며(원거리는 기를 모으며) 예고한다
-          if (!m.windupAt && now >= due - wuTotal) {
-            m.windupAt = now;
-            m.windupDur = wuTotal;
-            m.windupHeavy = heavy;
-            this.emit({
-              t: 'monsterWindup', id: m.id, ko: m.ko, x: m.x, isBoss: m.isBoss,
-              kind: m.atkKind, move: m.moveKind, proj: m.projKind, color: m.atkColor,
-              dur: wuTotal, heavy,
-            });
-          }
-          // 2) 타격: 기존과 같은 간격 조건(밸런스 불변) — 돌진과 함께 피해가 들어간다
-          if (now - m.lastAttack > ECON.monsterAttackMs) {
-            m.lastAttack = now;
-            m.lunge = 1;
-            m.lungeAt = now;
-            m.strikeAt = now;
-            m.windupAt = 0;
-            m.attackSeq = (m.attackSeq || 0) + 1;
-            const heavyNow = !!m.windupHeavy;
-            this.emit({
-              t: 'monsterAttack', id: m.id, ko: m.ko, x: m.x, isBoss: m.isBoss,
-              kind: m.atkKind, move: m.moveKind, proj: m.projKind, color: m.atkColor, heavy: heavyNow,
-            });
-            const raw = m.atk * (0.88 + this.rng() * 0.24);
-            this.damagePlayer(raw, m, now, {
-              ranged: m.atkKind === 'ranged', move: m.moveKind, proj: m.projKind,
-              color: m.atkColor, heavy: heavyNow,
-            });
-          }
-        } else {
-          m.windupAt = 0; // 사거리 밖으로 밀리면 전조 취소
+        if (!m.windupBase) m.windupBase = windupFor(m);
+        const heavy = !!m.isBoss && (m.attackSeq || 0) % HEAVY_EVERY === HEAVY_EVERY - 1;
+        const wuTotal = m.windupBase + (heavy ? 170 : 0);
+        const due = (Number.isFinite(m.lastAttack) ? m.lastAttack : now) + ECON.monsterAttackMs;
+        // 1) 전조: 타격 시점 직전부터 움츠리며(원거리는 기를 모으며) 예고한다
+        if (!m.windupAt && now >= due - wuTotal) {
+          m.windupAt = now;
+          m.windupDur = wuTotal;
+          m.windupHeavy = heavy;
+          this.emit({
+            t: 'monsterWindup', id: m.id, ko: m.ko, x: m.x, isBoss: m.isBoss,
+            kind: m.atkKind, move: m.moveKind, proj: m.projKind, color: m.atkColor,
+            dur: wuTotal, heavy,
+          });
+        }
+        // 2) 타격: 슬롯에 붙은 몬스터끼리 각자 1500ms 간격으로 때린다 → 다굴
+        // 전조가 시작됐다면 반드시 전조를 마친 뒤에 때린다(슬롯 이동으로 전조가 늦게 시작된 경우 보정)
+        const windupDone = !m.windupAt || now - m.windupAt >= wuTotal;
+        if (now - m.lastAttack > ECON.monsterAttackMs && windupDone) {
+          m.lastAttack = now;
+          m.lunge = 1;
+          m.lungeAt = now;
+          m.strikeAt = now;
+          m.windupAt = 0;
+          m.attackSeq = (m.attackSeq || 0) + 1;
+          const heavyNow = !!m.windupHeavy;
+          this.emit({
+            t: 'monsterAttack', id: m.id, ko: m.ko, x: m.x, isBoss: m.isBoss,
+            kind: m.atkKind, move: m.moveKind, proj: m.projKind, color: m.atkColor, heavy: heavyNow,
+          });
+          const raw = m.atk * (0.88 + this.rng() * 0.24);
+          this.damagePlayer(raw, m, now, {
+            ranged: m.atkKind === 'ranged', move: m.moveKind, proj: m.projKind,
+            color: m.atkColor, heavy: heavyNow,
+          });
         }
       }
     }
@@ -301,10 +357,13 @@ export class Battle {
 
   damagePlayer(raw, from, now, info) {
     if (this.player.dead) return;
-    const dmg = Math.max(1, Math.round(raw));
+    // v3.8: 방어(피해 감소) 스탯 — 갑옷·투구 강화 + 환생 '수호' 특성
+    const reduce = Math.max(0, Math.min(0.95, this.stats.dmgReduce || 0));
+    const grace = this.player.graceUntil && now < this.player.graceUntil ? 0.4 : 1;
+    const dmg = Math.max(1, Math.round(raw * (1 - reduce) * grace));
     this.player.hp -= dmg;
     this.player.hurtAt = now;
-    this.emit({ t: 'playerHurt', dmg, from: from.ko, ...(info || {}) });
+    this.emit({ t: 'playerHurt', dmg, from: from.ko, reduce: Math.round(reduce * 100), ...(info || {}) });
     if (this.player.hp <= 0) {
       this.player.hp = 0;
       this.player.dead = true;
@@ -312,7 +371,21 @@ export class Battle {
       this.emit({ t: 'playerDeath' });
       if (this.boss) this.failBoss(now, 'dead');
       if (this.dungeon) this.endDungeon(now); // 쓰러지면 던전 종료(그때까지의 보상 지급)
+      // v3.8: 쓰러지면 몰려든 무리가 흩어진다 — 부활 직후 바로 다시 눌리는 일 없이 숨을 돌린다
+      else this.scatterMonsters(now);
     }
+  }
+
+  /** 쓰러진 뒤 무리 흩어짐(보상 없음) — 부활하면 다시 소수부터 몰려온다 */
+  scatterMonsters(now) {
+    for (const m of this.monsters) {
+      if (m.dead || m.isBoss) continue;
+      m.windupAt = 0;
+      m.moving = false;
+      m.dying = now;
+      m.hp = 0;
+    }
+    this.lastSpawn = now;
   }
 
   /* ───────────── 공격 ───────────── */
@@ -493,8 +566,9 @@ export class Battle {
   maybeSpawn(now) {
     if (this.boss) return;
     if (this.s.bossReady && this.s.autoBoss) return; // 자동 보스 대기 중엔 스폰 중단(수동 모드는 계속 사냥)
-    if (this.monsters.filter((m) => !m.dead && !m.dying).length >= ECON.maxMonsters) return;
-    if (now - this.lastSpawn < 750) return;
+    const alive = this.monsters.filter((m) => !m.dead && !m.dying).length;
+    if (alive >= ECON.maxMonsters) return; // 상한까지 쌓이면 더 안 나온다(화면이 무리로 가득)
+    if (now - this.lastSpawn < (ECON.spawnMs || 700)) return;
     this.lastSpawn = now;
     this.spawnNormal(now);
   }
@@ -513,6 +587,8 @@ export class Battle {
   startBoss(now = Date.now()) {
     if (this.boss || !this.s.bossReady || this.player.dead) return false;
     const boss = this.makeMonster(this._def.boss, true, now);
+    // v3.8: 보스전은 1:1 결투 — 잡몹 무리는 물러나 보스와 정면으로 붙는다
+    this.monsters = this.monsters.filter((m) => m.dying);
     this.boss = boss;
     this.monsters.push(boss);
     this.bossEnds = now + ECON.bossTimeLimitMs;

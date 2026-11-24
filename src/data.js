@@ -2,7 +2,7 @@
 // 밸런스·몬스터·장비·스킬 정의. DOM 의존 없음(헤드리스 테스트 가능).
 // v3: 게스트 전용 통합 경제 — 골드 하나로 사냥과 부동산을 함께 굴린다.
 
-export const APP_VERSION = '3.7.0';
+export const APP_VERSION = '3.8.0';
 export const SAVE_KEY = 'land_rpg_unified_v3';
 export const SAVE_VERSION = 3;
 
@@ -17,10 +17,11 @@ export const ECON = {
 
   // 전투
   playerAttackMs: 620, // 기본 공격 간격
-  playerRange: 340, // 공격 사거리(월드 단위) — 줄 서는 몬스터까지 닿게
+  playerRange: 400, // 공격 사거리(월드 단위) — 앞줄에 붙은 몬스터 무리까지 닿게
   playerX: 250, // 플레이어 고정 x
-  spawnX: 900, // 몬스터 등장 x
-  maxMonsters: 2,
+  spawnX: 1000, // 몬스터 등장 x
+  maxMonsters: 6, // v3.8: 화면에 쌓이는 최대 수(다굴)
+  spawnMs: 900, // v3.8: 계속 몰려오는 스폰 주기
   reviveMs: 3000, // 사망 후 부활 대기
   bossTimeLimitMs: 60000,
 
@@ -31,19 +32,21 @@ export const ECON = {
 
   // 몬스터 성장 (v3 리밸런싱: 초반 완만, 10스테이지부터 가팔라짐)
   monsterHpBase: 52,
-  monsterHpGrowth: 1.245,
-  monsterHpLateBoost: 0.05, // 10스테이지 이후 추가 성장(장비·건물주 버프 요구)
+  monsterHpGrowth: 1.17, // v3.8: 다굴 — 한 마리 처치는 빠르게, 대신 계속 몰려온다
+  monsterHpLateBoost: 0.03, // 10스테이지 이후 추가 성장(장비·건물주 버프 요구)
   monsterAtkBase: 4,
   monsterAtkGrowth: 1.135,
+  monsterAtkLateBoost: 0.08, // v3.8: S14부터 스테이지당 +8% 추가 — 다굴 피해가 실제로 아프게
+  monsterAtkLateFrom: 14,
   monsterAttackMs: 1500,
 
   // 보상
   goldBase: 7,
-  goldGrowth: 1.2,
+  goldGrowth: 1.15,
   expBase: 11,
-  expGrowth: 1.15,
-  bossHpMul: 3.6,
-  bossAtkMul: 1.15,
+  expGrowth: 1.135,
+  bossHpMul: 4.2,
+  bossAtkMul: 1.12,
   bossGoldMul: 6,
   bossExpMul: 5,
   bossShardBase: 3,
@@ -93,11 +96,14 @@ export function monsterBaseHp(stage) {
   return monsterBaseHp(INFINITE.baseStage) * Math.pow(INFINITE.hpGrowth, s - INFINITE.baseStage);
 }
 
-/** 일반 몬스터 1마리 기준 공격력(보스 배율 제외) */
+/** 일반 몬스터 1마리 기준 공격력(보스 배율 제외)
+ *  v3.8: S14부터 스테이지당 +8% 추가 — 여러 마리가 동시에 때리는 다굴에서 방어/체력이 필요해진다.
+ *  (S1~13은 기존 곡선 그대로 → 초반 진행이 막히지 않는다) */
 export function monsterBaseAtk(stage) {
   const s = Math.max(1, Math.floor(Number(stage) || 1));
   if (s <= INFINITE.baseStage) {
-    return ECON.monsterAtkBase * Math.pow(ECON.monsterAtkGrowth, s - 1);
+    const late = 1 + Math.min(ECON.monsterAtkLateBoost * Math.max(0, s - ECON.monsterAtkLateFrom), 1.6);
+    return ECON.monsterAtkBase * Math.pow(ECON.monsterAtkGrowth, s - 1) * late;
   }
   return monsterBaseAtk(INFINITE.baseStage) * Math.pow(INFINITE.atkGrowth, s - INFINITE.baseStage);
 }
@@ -133,20 +139,40 @@ export const THEMES = [
  *   일반: assets/sprites/monster/<Name>.png    보스: assets/sprites/boss/<Name>.png
  */
 export const MONSTERS = {
-  // 일반 몬스터 12종
+  // 일반 몬스터 23종
+  //  · 초원
   Slime: { ko: '슬라임', boss: false },
   Goblin: { ko: '고블린', boss: false },
   Kobold: { ko: '코볼트', boss: false },
+  //  · 고목림
   Orc: { ko: '오크', boss: false },
-  Skeleton: { ko: '스켈레톤', boss: false },
-  Zombie: { ko: '좀비', boss: false },
   Werewolf: { ko: '웨어울프', boss: false },
   Harpy: { ko: '하피', boss: false },
+  //  · 폐허
+  Skeleton: { ko: '스켈레톤', boss: false },
+  Zombie: { ko: '좀비', boss: false },
+  //  · 공통 대형
   Cyclops: { ko: '사이클롭스', boss: false },
   Minotaur: { ko: '미노타우로스', boss: false },
   Golem: { ko: '골렘', boss: false },
   Drake: { ko: '드레이크', boss: false },
-  // 보스 7종
+  //  · 모래벌 (v3.8 신규)
+  Scorpion: { ko: '스콜피온', boss: false },
+  Mummy: { ko: '미라', boss: false },
+  Sandworm: { ko: '샌드웜', boss: false },
+  //  · 지하 동굴 (v3.8 신규)
+  Batling: { ko: '동굴 박쥐', boss: false },
+  CaveSpider: { ko: '거대 거미', boss: false },
+  //  · 용암 지대 (v3.8 신규)
+  FireImp: { ko: '파이어 임프', boss: false },
+  MagmaGolem: { ko: '용암 골렘', boss: false },
+  //  · 빙원 (v3.8 신규)
+  IceWolf: { ko: '아이스 울프', boss: false },
+  FrostWisp: { ko: '서리 정령', boss: false },
+  //  · 심연 (v3.8 신규)
+  ShadowWraith: { ko: '그림자 망령', boss: false },
+  AbyssEye: { ko: '심연의 눈', boss: false },
+  // 보스 12종 (v3.8: 5종 신규)
   SlimeKing: { ko: '슬라임 킹', boss: true },
   Troll: { ko: '트롤', boss: true },
   Cerberus: { ko: '케르베로스', boss: true },
@@ -154,6 +180,11 @@ export const MONSTERS = {
   RedDragon: { ko: '레드드래곤', boss: true },
   VoidWalker: { ko: '보이드 워커', boss: true },
   Seraphim: { ko: '세라핌', boss: true },
+  Anubis: { ko: '아누비스', boss: true },
+  CaveTroll: { ko: '동굴 트롤', boss: true },
+  Ifrit: { ko: '이프리트', boss: true },
+  IceGiant: { ko: '아이스 자이언트', boss: true },
+  AbyssLord: { ko: '아비스 로드', boss: true },
 };
 
 /* ────────────────────────────── 몬스터 모션 (v3.7) ──────────────────────────────
@@ -166,12 +197,20 @@ export const MONSTER_MOTION = {
   // 슬라임류
   Slime: 'slime',
   SlimeKing: 'slime',
+  // ・사구에서 기어나와 덮치는 샌드웜
+  Sandworm: 'slime',
   // 비행 · 부유형
   Harpy: 'flyer',
   Drake: 'flyer',
   RedDragon: 'flyer',
   Seraphim: 'flyer',
   VoidWalker: 'flyer',
+  Batling: 'flyer',
+  FrostWisp: 'flyer',
+  FireImp: 'flyer',
+  ShadowWraith: 'flyer',
+  AbyssEye: 'flyer',
+  Ifrit: 'flyer',
   // 보행 · 돌격형
   Goblin: 'walker',
   Kobold: 'walker',
@@ -185,6 +224,15 @@ export const MONSTER_MOTION = {
   Troll: 'walker',
   Cerberus: 'walker',
   DeathLord: 'walker',
+  Scorpion: 'walker',
+  Mummy: 'walker',
+  CaveSpider: 'walker',
+  MagmaGolem: 'walker',
+  IceWolf: 'walker',
+  Anubis: 'walker',
+  CaveTroll: 'walker',
+  IceGiant: 'walker',
+  AbyssLord: 'walker',
 };
 
 /** 몬스터 이름 → 모션 아키타입(모르면 보행형) */
@@ -215,6 +263,23 @@ export const MONSTER_ATTACKS = {
   RedDragon: { kind: 'ranged', move: 'fire', proj: 'fire', color: '#ff6a3d' },
   VoidWalker: { kind: 'ranged', move: 'dark', proj: 'dark', color: '#c78fff' },
   Seraphim: { kind: 'ranged', move: 'holy', proj: 'holy', color: '#ffe9a8' },
+  // v3.8 신규
+  Scorpion: { kind: 'melee', move: 'claw', color: '#f0a24a' },
+  Mummy: { kind: 'melee', move: 'slam', color: '#e8d3a8' },
+  Sandworm: { kind: 'melee', move: 'bite', color: '#e6b06a' },
+  Batling: { kind: 'ranged', move: 'sonic', proj: 'sonic', color: '#9fb4ff' },
+  CaveSpider: { kind: 'melee', move: 'bite', color: '#b99bff' },
+  FireImp: { kind: 'ranged', move: 'fire', proj: 'fire', color: '#ff8a3d' },
+  MagmaGolem: { kind: 'melee', move: 'slam', color: '#ff6a2a' },
+  IceWolf: { kind: 'melee', move: 'bite', color: '#a8e6ff' },
+  FrostWisp: { kind: 'ranged', move: 'ice', proj: 'ice', color: '#bfeaff' },
+  ShadowWraith: { kind: 'ranged', move: 'dark', proj: 'dark', color: '#b98bff' },
+  AbyssEye: { kind: 'ranged', move: 'dark', proj: 'dark', color: '#c78fff' },
+  Anubis: { kind: 'melee', move: 'claw', color: '#f0c883' },
+  CaveTroll: { kind: 'melee', move: 'slam', color: '#9fd17f' },
+  Ifrit: { kind: 'ranged', move: 'fire', proj: 'fire', color: '#ff7a2a' },
+  IceGiant: { kind: 'melee', move: 'slam', color: '#a8e6ff' },
+  AbyssLord: { kind: 'ranged', move: 'dark', proj: 'dark', color: '#c78fff' },
 };
 
 /** 몬스터 이름 → 공격 정의(모르면 근접 할퀴기) */
@@ -229,29 +294,60 @@ export const HERO_FRAMES = {
   skill: 'hero_skill',
 };
 
-/* ────────────────────────────── 스테이지 ────────────────────────────── */
+/* ────────────────────────────── 스테이지 ──────────────────────────────
+ * v3.8: 8개 테마 × 3스테이지 = 24스테이지로 확장. THEMES 길이(8)와 나뉘어떨어져
+ *       (24 % 8 = 0) 스테이지를 계속 돌아도 배경 테마와 몬스터 구성이 어긋나지 않는다.
+ *       (이전에는 20스테이지 × 8테마가 어긋나 S21부터 배경과 몹이 따로 놀았다)
+ */
 export const STAGES = [
+  // ・초원
   { normals: ['Slime', 'Goblin', 'Kobold'], boss: 'SlimeKing' },
-  { normals: ['Goblin', 'Kobold', 'Orc'], boss: 'Troll' },
-  { normals: ['Kobold', 'Orc', 'Skeleton'], boss: 'Cerberus' },
-  { normals: ['Orc', 'Skeleton', 'Zombie'], boss: 'DeathLord' },
-  { normals: ['Skeleton', 'Zombie', 'Werewolf'], boss: 'RedDragon' },
-  { normals: ['Zombie', 'Werewolf', 'Harpy'], boss: 'VoidWalker' },
-  { normals: ['Werewolf', 'Harpy', 'Cyclops'], boss: 'Seraphim' },
-  { normals: ['Harpy', 'Cyclops', 'Minotaur'], boss: 'SlimeKing' },
-  { normals: ['Cyclops', 'Minotaur', 'Golem'], boss: 'Troll' },
-  { normals: ['Minotaur', 'Golem', 'Drake'], boss: 'Cerberus' },
-  { normals: ['Golem', 'Drake', 'Slime'], boss: 'DeathLord' },
-  { normals: ['Drake', 'Slime', 'Goblin'], boss: 'RedDragon' },
-  { normals: ['Slime', 'Kobold', 'Werewolf'], boss: 'VoidWalker' },
-  { normals: ['Goblin', 'Orc', 'Harpy'], boss: 'Seraphim' },
-  { normals: ['Kobold', 'Skeleton', 'Cyclops'], boss: 'SlimeKing' },
-  { normals: ['Orc', 'Zombie', 'Minotaur'], boss: 'Troll' },
-  { normals: ['Skeleton', 'Werewolf', 'Golem'], boss: 'Cerberus' },
-  { normals: ['Zombie', 'Harpy', 'Drake'], boss: 'DeathLord' },
-  { normals: ['Werewolf', 'Cyclops', 'Slime'], boss: 'RedDragon' },
-  { normals: ['Harpy', 'Minotaur', 'Goblin'], boss: 'VoidWalker' },
-  { normals: ['Cyclops', 'Golem', 'Kobold'], boss: 'Seraphim' },
+  // ・고목림
+  { normals: ['Kobold', 'Werewolf', 'Harpy'], boss: 'Troll' },
+  // ・폐허
+  { normals: ['Skeleton', 'Zombie', 'Orc'], boss: 'Cerberus' },
+  // ・모래벌
+  { normals: ['Scorpion', 'Mummy', 'Sandworm'], boss: 'Anubis' },
+  // ・지하 동굴
+  { normals: ['Batling', 'CaveSpider', 'Goblin'], boss: 'CaveTroll' },
+  // ・용암 지대
+  { normals: ['FireImp', 'MagmaGolem', 'Drake'], boss: 'Ifrit' },
+  // ・빙원
+  { normals: ['IceWolf', 'FrostWisp', 'Werewolf'], boss: 'IceGiant' },
+  // ・심연
+  { normals: ['ShadowWraith', 'AbyssEye', 'Skeleton'], boss: 'AbyssLord' },
+  // ・초원
+  { normals: ['Slime', 'Kobold', 'Cyclops'], boss: 'SlimeKing' },
+  // ・고목림
+  { normals: ['Werewolf', 'Orc', 'Harpy'], boss: 'Troll' },
+  // ・폐허
+  { normals: ['Skeleton', 'Zombie', 'Minotaur'], boss: 'DeathLord' },
+  // ・모래벌
+  { normals: ['Scorpion', 'Sandworm', 'Mummy'], boss: 'Anubis' },
+  // ・지하 동굴
+  { normals: ['Batling', 'CaveSpider', 'Golem'], boss: 'CaveTroll' },
+  // ・용암 지대
+  { normals: ['FireImp', 'MagmaGolem', 'Drake'], boss: 'RedDragon' },
+  // ・빙원
+  { normals: ['IceWolf', 'FrostWisp', 'Cyclops'], boss: 'IceGiant' },
+  // ・심연
+  { normals: ['ShadowWraith', 'AbyssEye', 'Minotaur'], boss: 'VoidWalker' },
+  // ・초원
+  { normals: ['Slime', 'Goblin', 'Cyclops'], boss: 'SlimeKing' },
+  // ・고목림
+  { normals: ['Werewolf', 'Golem', 'Harpy'], boss: 'Troll' },
+  // ・폐허
+  { normals: ['Skeleton', 'Orc', 'Minotaur'], boss: 'Seraphim' },
+  // ・모래벌
+  { normals: ['Mummy', 'Scorpion', 'Sandworm'], boss: 'Anubis' },
+  // ・지하 동굴
+  { normals: ['CaveSpider', 'Batling', 'Golem'], boss: 'CaveTroll' },
+  // ・용암 지대
+  { normals: ['Drake', 'FireImp', 'MagmaGolem'], boss: 'Ifrit' },
+  // ・빙원
+  { normals: ['FrostWisp', 'IceWolf', 'Golem'], boss: 'IceGiant' },
+  // ・심연
+  { normals: ['AbyssEye', 'ShadowWraith', 'Zombie'], boss: 'AbyssLord' },
 ];
 
 /** 스테이지 번호(1부터) → 스테이지 정의. 21스테이지 이후는 순환하며 난이도만 계속 오른다. */
@@ -269,7 +365,7 @@ export function stageDef(stage) {
     themeName: theme.name + (loop > 0 ? ` ${loop + 1}` : '') + (infinite ? ' ∞' : ''),
     loop,
     infinite,
-    tier: s <= 20 ? 'normal' : s < INFINITE.startStage ? 'loop' : 'infinity',
+    tier: s <= STAGES.length ? 'normal' : s < INFINITE.startStage ? 'loop' : 'infinity',
   };
 }
 
@@ -290,14 +386,26 @@ export function monsterKo(name) {
   return (MONSTERS[name] || {}).ko || name;
 }
 
+/* ────────────────────────────── 방어 · 회복 (v3.8) ──────────────────────────────
+ * 다굴 전투에서 '버티는 힘'을 만드는 스탯.
+ *  - 방어(피해 감소): 갑옷·투구 강화에서 나온다(등급 환산 레벨 포함). 최대 80%.
+ *  - 회복: 초당 최대 체력의 1.2% 자연 회복. 환생 특성 '생명'으로 더 올린다.
+ */
+export const DEF = {
+  armorPer: 0.35, // 갑옷 강화 1당 피해 감소 +0.35%
+  helmetPer: 0.22, // 투구 강화 1당 +0.22%
+  cap: 0.8, // 피해 감소 상한 80%
+  regenBase: 0.012, // 초당 최대 체력 대뱄 자연 회복
+};
+
 /* ────────────────────────────── 장비 5부위 ────────────────────────────── */
 export const EQUIP_SLOTS = ['weapon', 'armor', 'helmet', 'ring', 'amulet'];
 export const EQUIP_MAX_LV = 100;
 
 export const EQUIP = {
   weapon: { name: '무기', icon: '⚔️', stat: '공격력', per: 3.2, unit: '', desc: '강화 1당 공격력 +3.2' },
-  armor: { name: '갑옷', icon: '🛡️', stat: '체력', per: 55, unit: '', desc: '강화 1당 최대 체력 +55' },
-  helmet: { name: '투구', icon: '🪖', stat: '체력', per: 36, unit: '', desc: '강화 1당 최대 체력 +36' },
+  armor: { name: '갑옷', icon: '🛡️', stat: '체력·방어', per: 55, defPer: 0.35, unit: '', desc: '강화 1당 최대 체력 +55 · 피해 감소 +0.35%' },
+  helmet: { name: '투구', icon: '🪖', stat: '체력·방어', per: 36, defPer: 0.22, unit: '', desc: '강화 1당 최대 체력 +36 · 피해 감소 +0.22%' },
   ring: { name: '반지', icon: '💍', stat: '치명타', per: 0.5, unit: '%', desc: '강화 1당 치명타 확률 +0.5%' },
   amulet: { name: '부적', icon: '🧿', stat: '골드 획득', per: 2, unit: '%', desc: '강화 1당 골드 획득 +2%' },
 };
