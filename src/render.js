@@ -2,7 +2,7 @@
 // 상단 Canvas 자동사냥 뷰 렌더러. 전투 로직은 combat.js, 여기서는 그리기만 한다.
 // v2: 새 스프라이트(대기/공격/스킬 3프레임) + 검기 아크·타격 스파크·스킬 이펙트.
 //     배경은 오프스크린 캔버스에 한 번만 그려 매 프레임 비용을 줄인다(모바일 발열/멈춤 방지).
-import { ECON, THEMES, spriteSrc, RARITIES, RARITY_INDEX, monsterMotion, monsterAttack } from './data.js';
+import { ECON, THEMES, spriteSrc, bgSrc, RARITIES, RARITY_INDEX, monsterMotion, monsterAttack } from './data.js';
 import { equippedItem } from './gear.js';
 
 const rnd = (seed) => {
@@ -83,6 +83,12 @@ export class Renderer {
     this.effects = true;
     this.bg = null;
     this.bgKey = '';
+    // v4.1 테마 배경 일러스트 (assets/bg/<id>.webp)
+    this.bgImages = new Map(); // id -> Image (로딩 완료분만)
+    this.bgRequested = Object.create(null); // 중복 요청 방지
+    this.bgPhoto = null; // 테마 사진을 합성한 오프스크린 캔버스
+    this.bgPhotoKey = '';
+    this.bgFade = 1; // 사진 레이어 페이드인 (0→1)
     this.resize();
     this.initAmbient();
   }
@@ -100,6 +106,7 @@ export class Renderer {
       this.bgSeed = Math.max(1, THEMES.indexOf(t) + 1);
       this.initAmbient();
       this.bgKey = '';
+      this.bgPhotoKey = '';
     } else if (t) {
       this.theme = t;
     }
@@ -123,6 +130,39 @@ export class Renderer {
     }
     this._lastW = w;
     this.bgKey = '';
+    this.bgPhotoKey = '';
+  }
+
+  /* ─────────── v4.1 테마 배경 이미지 ─────────── */
+  /** 테마 배경 1장을 요청(비동기). 로드되면 다음 프레임에 사진 레이어를 다시 만든다. */
+  loadThemeBg(id) {
+    if (!id || this.bgImages.has(id) || this.bgRequested[id]) return;
+    this.bgRequested[id] = true;
+    try {
+      const img = new Image();
+      img.decoding = 'async';
+      img.onload = () => {
+        this.bgImages.set(id, img);
+        if (this.theme && this.theme.id === id) {
+          this.bgKey = '';
+          this.bgPhotoKey = '';
+          this.bgFade = 0;
+        }
+      };
+      img.onerror = () => { this.bgRequested[id] = false; }; // 다음 기회에 재시도
+      img.src = bgSrc(id);
+    } catch (e) {
+      this.bgRequested[id] = false;
+    }
+  }
+
+  /** 현재 테마는 바로, 나머지는 한가할 때 미리 받아 둔다(테마 전환 시 깜빡임 방지) */
+  preloadBackgrounds() {
+    if (!this.theme) return;
+    this.loadThemeBg(this.theme.id);
+    const rest = THEMES.map((t) => t.id).filter((id) => id !== this.theme.id);
+    const idle = (fn) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(fn, { timeout: 4000 }) : setTimeout(fn, 900));
+    idle(() => rest.forEach((id) => this.loadThemeBg(id)));
   }
 
   initAmbient() {
@@ -742,6 +782,8 @@ export class Renderer {
     }
     if (this.bg) ctx.drawImage(this.bg, 0, 0, W, H);
     else this.paintBackground(ctx, W, H);
+    // v4.1 테마 배경 일러스트 — 그라데이션 폴백 위로 부드럽게 올린다
+    this.drawThemeBg(ctx, dt, W, H);
     this.drawAmbient(ctx, dt, W, H);
 
     if (this.battle) {
@@ -816,6 +858,65 @@ export class Renderer {
       this.bg = null;
       this.bgKey = `${W}x${H}|${dpr}|${this.theme.id}`;
     }
+    this.buildThemeBg();
+  }
+
+  /** v4.1: 테마 사진 레이어 — 캐벼스 비율에 맞춰 비율 유지(cover)로 잘라 합성한다. */
+  buildThemeBg() {
+    const W = this.W;
+    const H = this.H;
+    const dpr = this.dpr;
+    const id = (this.theme && this.theme.id) || 'meadow';
+    const key = `${W}x${H}|${dpr}|${id}`;
+    if (this.bgPhotoKey === key) return;
+    this.bgPhotoKey = key;
+    this.bgPhoto = null;
+    const img = this.bgImages.get(id);
+    if (!img || !img.naturalWidth) {
+      this.loadThemeBg(id); // 아직 없으면 요청만 해 두고 다음 프레임에 다시 시도한다
+      return;
+    }
+    try {
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.round(W * dpr));
+      cv.height = Math.max(1, Math.round(H * dpr));
+      const c = cv.getContext('2d');
+      c.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const iw = img.naturalWidth || img.width;
+      const ih = img.naturalHeight || img.height;
+      // cover: 짧은 쪽을 꽉 차게 → 넘치는 쪽만 잘린다. 지면선(세로)은 그대로 유지된다.
+      const k = Math.max(W / iw, H / ih);
+      const dw = iw * k;
+      const dh = ih * k;
+      const dx = (W - dw) / 2;
+      const dy = (H - dh) / 2;
+      c.imageSmoothingEnabled = true;
+      c.drawImage(img, dx, dy, dw, dh);
+      // 글레이딩: 상단·하단을 살짝 더 눌러 HUD·데미지 숫자·캐릭터가 묻히지 않게 한다
+      const top = c.createLinearGradient(0, 0, 0, H * 0.26);
+      top.addColorStop(0, 'rgba(5,8,14,0.34)');
+      top.addColorStop(1, 'rgba(5,8,14,0)');
+      c.fillStyle = top;
+      c.fillRect(0, 0, W, H * 0.26);
+      const bot = c.createLinearGradient(0, H * 0.58, 0, H);
+      bot.addColorStop(0, 'rgba(4,7,12,0)');
+      bot.addColorStop(1, 'rgba(4,7,12,0.42)');
+      c.fillStyle = bot;
+      c.fillRect(0, H * 0.58, W, H * 0.42);
+      this.bgPhoto = cv;
+    } catch (e) {
+      this.bgPhoto = null;
+    }
+  }
+
+  /** 사진 레이어 페이드인 — 로딩 전 그라데이션 폴백에서 자연스럽게 넘어간다. */
+  drawThemeBg(ctx, dt, W, H) {
+    if (!this.bgPhoto) return;
+    if (this.bgFade < 1) this.bgFade = Math.min(1, this.bgFade + (dt || 16) / 420);
+    ctx.save();
+    ctx.globalAlpha = this.bgFade;
+    ctx.drawImage(this.bgPhoto, 0, 0, W, H);
+    ctx.restore();
   }
 
   paintBackground(ctx, W, H) {

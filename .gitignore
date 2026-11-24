@@ -12,3 +12,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.log
+
+# v4.1 배경 원본(1536×1024 PNG, 생성 이미지) — 배포물 아님 · tools/prepare_bg.py 로 WebP 재생성
+assets/bg/*_raw.png

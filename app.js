@@ -34,6 +34,7 @@ import {
   REBIRTH, REBIRTH_TRAITS, rebirthStatus, rebirthBonus, rebirthStartGold, rebirthPointsFor,
   doRebirth as doRebirthState, upgradeTrait as upgradeRebirthTraitState,
   traitLevel, traitCost, traitSummary,
+  rebirthStartOptions, rebirthJumpCap, rebirthPrevBest, rebirthJumpBonus, rebirthJumpStage,
 } from './src/rebirth.js';
 
 // 구형 Safari / 삼성 인터넷 대비 CanvasRenderingContext2D.roundRect 폴리필
@@ -107,6 +108,8 @@ class App {
   async boot() {
     this.ui.init();
     this.initInstall();
+    // v4.1: 지금 테마 배경은 바로, 나머지 7종은 한가할 때 미리 받아 둔다
+    this.renderer.preloadBackgrounds();
     this.renderer
       .preload(['hero_idle', 'hero_attack', 'hero_skill', 'fx_claw', 'fx_burst', ...PET_SPRITES, ...this.stageMonsterNames(this.s.stage)])
       .then(() => this.renderer.resize())
@@ -849,6 +852,7 @@ class App {
 
       /* ── v3.5: ♾️ 환생(초월) · 영구 특성 ── */
       rebirth: () => this.openRebirthConfirm(),
+      pickRebirthStart: (v) => this.pickRebirthStart(v),
       openRebirthTraits: () => this.showRebirthTraits(),
       upgradeRebirthTrait: (id) => this.doUpgradeRebirthTrait(id),
 
@@ -1385,6 +1389,16 @@ class App {
   }
 
   /* ───────────── ♾️ 환생(초월) 모달 ───────────── */
+  /** v4.1: 시작 스테이지 선택지를 고른 뒤 모달을 다시 그린다(선택만 바뀌고 환생은 아직 아니다) */
+  pickRebirthStart(v) {
+    this.sound.unlock();
+    const st = rebirthStatus(this.s);
+    if (!st.can) return;
+    const picked = rebirthJumpStage(this.s, Number(v));
+    this._rbStart = picked;
+    this.openRebirthConfirm();
+  }
+
   openRebirthConfirm() {
     this.sound.unlock();
     if (this.battle && this.battle.dungeon) {
@@ -1392,10 +1406,18 @@ class App {
       return;
     }
     const st = rebirthStatus(this.s);
-    const startGold = rebirthStartGold(this.s);
+    // v4.1: 시작 스테이지 — 직전 최고의 55%(rebirthJumpCap)까지만 고를 수 있다
+    const opts = rebirthStartOptions(this.s);
+    const cap = rebirthJumpCap(this.s);
+    const prevBest = rebirthPrevBest(this.s);
+    const picked = opts.some((o) => o.stage === this._rbStart) ? this._rbStart : 1;
+    this._rbStart = picked;
+    const jump = rebirthJumpBonus(picked);
+    const jumpTheme = picked > 1 ? stageDef(picked).theme.name : '초원';
+    const startGold = rebirthStartGold(this.s) + jump.gold;
     const reset = [
-      `캐릭터 레벨 → <b>Lv.1</b> (현재 Lv.${this.s.level})`,
-      `현재·최고 스테이지 → <b>S1</b> (이번 회차 최고 S${st.stage})`,
+      `캐릭터 레벨 → <b>Lv.${jump.level}</b> (현재 Lv.${this.s.level})`,
+      `현재·최고 스테이지 → <b>S${picked}</b> (이번 회차 최고 S${st.stage})`,
       `보유 골드 → <b>💰${startGold.toLocaleString()}</b> (현재 💰${this.s.gold.toLocaleString()})`,
       `장비 강화 레벨 → <b>0강</b> (무기 +${this.s.equip.weapon}강 등)`,
       `전직 단계 → <b>🗡️ 견습 기사</b>`,
@@ -1410,13 +1432,31 @@ class App {
     ];
     const list = (cls, title, items) =>
       `<div class="rb-list ${cls}"><h4>${title}</h4><ul>${items.map((i) => `<li>${i}</li>`).join('')}</ul></div>`;
+    const chips = opts
+      .map(
+        (o) => `<button class="jump-chip ${o.stage === picked ? 'on' : ''}" type="button" data-action="rebirth-start" data-value="${o.stage}">
+          <b>${o.label}</b><span>${o.stage > 1 ? esc(stageDef(o.stage).theme.name) : '처음부터'}</span>
+        </button>`,
+      )
+      .join('');
+    const jumpBox = st.can
+      ? `<div class="rb-jump">
+          <div class="rb-jump-head"><b>🏁 시작 스테이지</b><span>직전 최고 <b>S${prevBest}</b>의 55%인 <b>S${cap}</b>까지만 고를 수 있습니다</span></div>
+          <div class="rb-jump-opts">${chips}</div>
+          <div class="rb-jump-pick">${picked > 1
+            ? `<b>S${picked} · ${esc(jumpTheme)}</b> 에서 시작 · Lv.${jump.level} · 💰${(rebirthStartGold(this.s) + jump.gold).toLocaleString()}`
+            : 'S1부터 천천히 다시 시작합니다.'}<br>
+            <span class="dim">직전 최고까지 한 번에 건너뛰는 것은 막혀 있습니다. 점프한 만큼만 레벨·골드를 최소 보정합니다.</span></div>
+        </div>`
+      : '';
     const body = `
       <div class="rebirth-sum">
         <div><span>이번 회차 최고</span><b>S${st.stage}</b></div>
         <div><span>획득 초월석</span><b style="color:var(--gold)">+${st.gain}P</b></div>
-        <div><span>환생 후 시작 골드</span><b>💰${startGold.toLocaleString()}</b></div>
+        <div><span>시작 스테이지</span><b style="color:var(--accent,#8fe3a8)">S${picked}</b></div>
         <div><span>환생 횟수</span><b>${st.count} → ${st.count + 1}회</b></div>
       </div>
+      ${jumpBox}
       <div class="rb-lists">
         ${list('reset', '↺ 초기화', reset)}
         ${list('keep', '🔒 유지', keep)}
@@ -1426,12 +1466,12 @@ class App {
         : `<b>${esc(st.reason)}</b> — 조건을 채우면 초월석을 받고 환생할 수 있습니다.`}</div>`;
     this.ui.modal({
       title: '♾️ 환생 (초월)',
-      sub: st.can ? `S${st.stage} 도달 · 초월석 +${st.gain}P` : st.reason,
+      sub: st.can ? `S${st.stage} 도달 · 초월석 +${st.gain}P · S${picked}부터` : st.reason,
       body,
       actions: st.can
         ? [
             { label: '취소', onClick: () => {} },
-            { label: `♾️ 환생 · +${st.gain}P`, style: 'primary', onClick: () => this.doRebirth() },
+            { label: `♾️ 환생 · +${st.gain}P · S${picked}부터`, style: 'primary', onClick: () => this.doRebirth(picked) },
           ]
         : [
             { label: '닫기', onClick: () => {} },
@@ -1440,13 +1480,15 @@ class App {
     });
   }
 
-  doRebirth() {
+  doRebirth(startStage = 1) {
     this.sound.unlock();
-    const r = doRebirthState(this.s, Date.now());
+    const start = rebirthJumpStage(this.s, startStage);
+    const r = doRebirthState(this.s, Date.now(), { startStage: start });
     if (!r.ok) {
       this.ui.toast(r.reason || '환생할 수 없습니다', 'red');
       return;
     }
+    this._rbStart = 1;
     // 사냥 회차가 초기화되므로 전투 인스턴스를 새로 만든다(부동산 버프·펫은 유지).
     this.buffs = computeBuffs(this.s);
     this.battle = new Battle(this.s, () => this.buffs);
@@ -1458,7 +1500,8 @@ class App {
       [{ t: 'promote', job: '환생 · 초월', tier: 0, badge: '♾️', color: '#b98bff' }],
       Date.now(),
     );
-    this.ui.addLog(`♾️ <b>환생 ${r.count}회차</b> · 초월석 +${r.points}P · Lv.1 · S1 새 회차 시작`);
+    const where = r.start > 1 ? `S${r.start} · ${stageDef(r.start).themeName}` : 'S1';
+    this.ui.addLog(`♾️ <b>환생 ${r.count}회차</b> · 초월석 +${r.points}P · Lv.${r.level} · ${where} 새 회차 시작`);
     const kept = `부동산 ${Object.keys(this.s.land.owned || {}).length}곳 · 펫 ${(this.s.pet.unlocked || []).length}종 · 장비 등급 유지`;
     this.ui.modal({
       title: '♾️ 환생 완료',
@@ -1468,7 +1511,9 @@ class App {
                <div class="rw"><div class="e">✨</div><div class="v">+${r.points}P</div><div class="k">초월석</div></div>
                <div class="rw"><div class="e">💰</div><div class="v">${r.startGold.toLocaleString()}</div><div class="k">시작 골드</div></div>
              </div>
-             <div class="note" style="margin-top:9px">Lv.1 · S1 에서 새 회차를 시작합니다. ${kept}.<br>
+             <div class="note" style="margin-top:9px">Lv.${r.level} · <b>${where}</b> 에서 새 회차를 시작합니다. ${kept}.${r.start > 1
+               ? `<br>🏁 직전 최고의 55% 상한 안에서 고른 점프입니다 — 장비 강화는 0강이니 초반 몇 판으로 다시 맞추면 됩니다.`
+               : ''}<br>
              ✨ <b>영구 특성</b>을 올리면 다음 회차가 훨씬 빨라집니다.</div>`,
       actions: [
         { label: '닫기', onClick: () => {} },

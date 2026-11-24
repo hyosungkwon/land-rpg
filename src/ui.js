@@ -174,6 +174,7 @@ export class UI {
       case 'save-undo': actions.saveUndo(); break;
       case 'promote': actions.promoteJob(); break;
       case 'rebirth': actions.rebirth(); break;
+      case 'rebirth-start': actions.pickRebirthStart(v); break;
       case 'rebirth-traits': actions.openRebirthTraits(); break;
       case 'rebirth-trait': actions.upgradeRebirthTrait(v); break;
       case 'pet-equip': actions.equipPet(v); break;

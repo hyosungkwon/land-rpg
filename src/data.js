@@ -2,7 +2,7 @@
 // 밸런스·몬스터·장비·스킬 정의. DOM 의존 없음(헤드리스 테스트 가능).
 // v3: 게스트 전용 통합 경제 — 골드 하나로 사냥과 부동산을 함께 굴린다.
 
-export const APP_VERSION = '4.0.0';
+export const APP_VERSION = '4.1.0';
 export const SAVE_KEY = 'land_rpg_unified_v3';
 export const SAVE_VERSION = 3;
 
@@ -378,6 +378,18 @@ export function spriteSrc(name) {
   if (name === 'hero_skill') return 'assets/sprites/hero_skill.png';
   const m = MONSTERS[name];
   return m && m.boss ? `assets/sprites/boss/${name}.png` : `assets/sprites/monster/${name}.png`;
+}
+
+/* ────────────────────────────── 전투 배경 (v4.1) ──────────────────────────────
+ * 테마 8종마다 SD 2D 판타지 횡스크롤 배경 일러스트를 assets/bg/<id>.webp 로 둔다.
+ *  · 960×640 WebP(장당 30~90KB) — 모바일 캐시 부담을 줄인 크기.
+ *  · 렌더러는 '비율 유지 + 넘치는 쪽 잘라내기(cover)'로 그린다 → 캔버스 비율이 달라도
+ *    지면선이 캐릭터 발밑(groundY)에 그대로 맞는다.
+ *  · 파일이 없거나 로딩 전이면 기존 그라데이션 배경이 그대로 폴백으로 쓰인다.
+ */
+export const BG_DIR = 'assets/bg';
+export function bgSrc(themeId) {
+  return `${BG_DIR}/${themeId}.webp`;
 }
 
 /** 하위 호환용 별칭 */

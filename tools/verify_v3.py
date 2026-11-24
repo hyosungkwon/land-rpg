@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""land-rpg v4.0.0 검증 (QuickJS + 정적 검사)
+"""land-rpg v4.1.0 검증 (QuickJS + 정적 검사)
 
 1) 모든 JS 파일 문법(파싱) 검사
 2) 정적 검사 (Firebase/로그인 흔적 0, 저장 키 v3, sw 캐시 v3.5)
@@ -12,6 +12,7 @@
 9) 🏃 몬스터 이동·공격·피격·사망 모션 · 투사체 · 이펙트 (v3.7)
 10) ⚔️ 다굴 전투 · 방어/회복 스탯 · 신규 몬스터 16종 · 테마 정렬 스테이지 (v3.8)
 11) ⚔️ v4.0 장비 종류·옵션·장착 인벤토리 (카탈로그 35종·드랍·비교·분해·세이브 마이그레이션)
+12) 🖼️ v4.1 테마 전투 배경 8종(에셋·프리캐시·렌더러) · ♾️ 환생 후 중간 스테이지 선택 점프
 
 사용: python3 tools/verify_v3.py
 """
@@ -93,8 +94,8 @@ def main():
     for bad in ["firebase", "signInWithPopup", "Google 로그인", "gstatic", "firebaseio", "googleapis"]:
         ok(bad.lower() not in text_all.lower(), f"Firebase/로그인 흔적 없음: {bad}")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v4.0.0" in read("sw.js"), "SW 캐시 버전 v4.0.0")
-    ok("APP_VERSION = '4.0.0'" in read("src/data.js"), "앱 버전 v4.0.0")
+    ok("land-rpg-v4.1.0" in read("sw.js"), "SW 캐시 버전 v4.1.0")
+    ok("APP_VERSION = '4.1.0'" in read("src/data.js"), "앱 버전 v4.1.0")
     ok(os.path.exists(os.path.join(ROOT, "src/savecode.js")), "src/savecode.js 존재")
     ok("'./src/savecode.js'" in read("sw.js"), "sw.js 프리캐시에 savecode.js 포함")
     ok("'./src/gear.js'" in read("sw.js"), "sw.js 프리캐시에 gear.js 포함")
@@ -2305,7 +2306,102 @@ def main():
     ok(all(x in read("src/state.js") for x in ["gearMods", "normalizeGear", "syncGearRarity", "compareGear"]), "상태에 장비 옵션·마이그레이션·비교 반영(state.js)")
     css4 = read("style.css")
     ok(all(x in css4 for x in [".gear-slots", ".gslot", ".inv-grid", ".inv-card", ".cmp-vs", ".cmp-opts", ".cmp-stats", ".iv-eq", ".gsvg"]), "v4 장비 UI CSS(슬롯·그리드·비교 모달)")
-    ok("장비 시스템" in read("README.md") and "4.0.0" in read("README.md"), "README v4.0.0 반영")
+    ok("장비 시스템" in read("README.md") and "4.1.0" in read("README.md"), "README v4.1.0 반영")
+
+    # ══════════════════════════════════════════════════════════════════════
+    section("[17] 🖼️ v4.1 테마 배경 · ♾️ 환생 중간 스테이지 점프")
+    themes = js(ctx, "return THEMES.map(t => ({ id: t.id, name: t.name }))")
+    ok(len(themes) == 8 and [t["id"] for t in themes] == ["meadow", "forest", "ruins", "desert", "cave", "volcano", "ice", "abyss"], "테마 8종 정의", json.dumps([t["id"] for t in themes]))
+
+    # 1) 배경 에셋 — 파일 존재 · WebP 시그니처 · 크기(20~200KB) · sw 프리캐시
+    bg_rows = []
+    for t in themes:
+        p = os.path.join(ROOT, "assets", "bg", t["id"] + ".webp")
+        exists = os.path.exists(p)
+        head = open(p, "rb").read(12) if exists else b""
+        kb = round(os.path.getsize(p) / 1024, 1) if exists else 0
+        bg_rows.append({"id": t["id"], "exists": exists, "webp": head[:4] == b"RIFF" and head[8:12] == b"WEBP", "kb": kb})
+    ok(all(r["exists"] for r in bg_rows), "배경 8종 에셋 존재", json.dumps([r["id"] for r in bg_rows if not r["exists"]]))
+    ok(all(r["webp"] for r in bg_rows), "배경 8종 WebP 형식", "")
+    ok(all(20 <= r["kb"] <= 200 for r in bg_rows), "배경 용량 20~200KB(모바일 캐시 부담 최소)", json.dumps([r["kb"] for r in bg_rows]))
+    oksize = 0
+    for r in bg_rows:
+        p = os.path.join(ROOT, "assets", "bg", r["id"] + ".webp")
+        data = open(p, "rb").read(30)
+        # VP8X / VP8 可変 헤더에서 가로 크기 추출(간단 파싱)
+        w = 0
+        if data[12:16] == b"VP8X":
+            w = (data[24] | (data[25] << 8) | (data[26] << 16)) + 1
+        elif data[12:16] == b"VP8 ":
+            w = (((data[27] << 8) | data[26])) & 0x3FFF
+        if w == 960:
+            oksize += 1
+    ok(oksize == 8, "배경 8종 가로 960px(모바일 리사이즈 기준)", str(oksize))
+    swsrc = read("sw.js")
+    ok(all(f"'./assets/bg/{t['id']}.webp'" in swsrc for t in themes), "sw.js 프리캐시에 배경 8종 포함", "")
+    rjs = read("src/render.js")
+    ok("bgSrc" in rjs and "buildThemeBg" in rjs and "drawThemeBg" in rjs and "preloadBackgrounds" in rjs, "렌더러 — 배경 로드·합성·페이드인 구현", "")
+    ok("Math.max(W / iw, H / ih)" in rjs or "cover" in rjs, "렌더러 — 비율 유지 cover 크롭(찌그러짐 없음)", "")
+    ok("paintBackground" in rjs and "그라데이션" in rjs, "배경 로딩 전 그라데이션 폴백 유지", "")
+    ok('bgSrc(themeId)' in read("src/data.js") or "export function bgSrc" in read("src/data.js"), "data.js — 테마 배경 경로 헬퍼", "")
+
+    # 2) 환생 점프 — 상한·선택지·실행
+    jmp = js(ctx, """
+      const mk = (maxStage, best) => { const s = defaultState(0); s.maxStage = maxStage; s.stage = maxStage; s.level = 40; s.gold = 900000; s.rebirth.bestStage = best; return s; };
+      const a = mk(34, 1);
+      const capA = rebirthJumpCap(a);
+      const optsA = rebirthStartOptions(a).map(o => o.stage);
+      const pick = {};
+      for (const o of rebirthStartOptions(a)) pick[o.stage] = o.label;
+      // 실행 — S15 점프
+      const s = mk(34, 1);
+      const r = doRebirth(s, 1000, { startStage: 15 });
+      const b1 = new Battle(s, () => ({}), (function(seed){let x=seed;return function(){x=(x*1664525+1013904223)>>>0;return x/4294967296;};})(3), 0);
+      // 상한 초과 요청·쓰레기 값
+      const over = mk(34, 1); const rOver = doRebirth(over, 1000, { startStage: 999 });
+      const junk = mk(34, 1); const rJunk = doRebirth(junk, 1000, { startStage: 'abc' });
+      const zero = mk(34, 1); const rZero = doRebirth(zero, 1000, { startStage: 0 });
+      // 기본 호출(인자 생략) = 기존 동작
+      const plain = mk(25, 1); const rPlain = doRebirth(plain, 1000);
+      // 직전 최고가 낮을 때(첫 환생 S20) — 상한 11
+      const low = mk(20, 1); const capLow = rebirthJumpCap(low); const optsLow = rebirthStartOptions(low).map(o => o.stage);
+      // 점프 시작 상태
+      return {
+        capA, optsA, pick,
+        ok: r.ok, stage: s.stage, maxStage: s.maxStage, level: s.level, gold: s.gold, startGold: r.startGold,
+        start: r.start, jumpLevel: r.jump.level, jumpGold: r.jump.gold, kills: s.killsInStage, bossReady: s.bossReady,
+        exp: s.exp, equip0: s.equip.weapon, peak: s.peakStage, best: s.rebirth.bestStage, count: s.rebirth.count,
+        theme: b1.def.theme.id, themeName: b1.def.themeName, monsters: b1.monsters.map(m => m.name), num: b1.def.num,
+        overStart: rOver.start, junkStart: rJunk.start, zeroStart: rZero.start,
+        plainStage: plain.stage, plainLevel: plain.level, plainGold: plain.gold, plainStart: rPlain.start,
+        capLow, optsLow, prevBest: rebirthPrevBest(mk(34, 1)),
+        bonus1: rebirthJumpBonus(1), bonus13: rebirthJumpBonus(13),
+        cap20: rebirthJumpCap(mk(20, 1)), cap50: rebirthJumpCap(mk(50, 1)), cap100: rebirthJumpCap(mk(100, 1)),
+      };
+    """)
+    ok(jmp["prevBest"] == 34 and jmp["capA"] == 18, "점프 상한 = 직전 최고 × 0.55 (S34 → S18)", json.dumps({"best": jmp["prevBest"], "cap": jmp["capA"]}))
+    ok(jmp["optsA"] == [1, 5, 10, 15, 18], "선택지 = S1 + 5단위 + 상한", json.dumps(jmp["optsA"]))
+    ok(jmp["optsLow"] == [1, 5, 10, 11] and jmp["capLow"] == 11, "S20 첫 환생 — S11까지만(S1 초과 상한 준수)", json.dumps(jmp["optsLow"]))
+    ok(jmp["cap20"] == 11 and jmp["cap50"] == 27 and jmp["cap100"] == 55, "상한 비례(20→11 · 50→27 · 100→55)", json.dumps([jmp["cap20"], jmp["cap50"], jmp["cap100"]]))
+    ok(max(jmp["optsA"]) < jmp["prevBest"] and all(1 <= s <= jmp["capA"] for s in jmp["optsA"]), "직전 최고까지 한 번에 가는 선택지는 없음", json.dumps({"max": max(jmp["optsA"]), "best": jmp["prevBest"]}))
+    ok(jmp["ok"] is True and jmp["start"] == 15 and jmp["stage"] == 15 and jmp["maxStage"] == 15, "S15 점프 — 현재·최고 스테이지가 S15로 시작", json.dumps({k: jmp[k] for k in ["start", "stage", "maxStage"]}))
+    ok(jmp["level"] == 22 and jmp["gold"] == 2180 and jmp["jumpLevel"] == 22 and jmp["jumpGold"] == 1680, "점프 보정 — Lv.22 · 💰2,180 (레벨 1.5/스테이지 · 골드 120/스테이지)", json.dumps({"lv": jmp["level"], "gold": jmp["gold"]}))
+    ok(jmp["exp"] == 0 and jmp["kills"] == 0 and jmp["bossReady"] is False and jmp["equip0"] == 0, "점프 시작 웨이브·강화 상태 초기화(보스 게이지 꼬임 없음)", json.dumps({k: jmp[k] for k in ["exp", "kills", "bossReady", "equip0"]}))
+    ok(jmp["num"] == 15 and jmp["theme"] == "ice" and "빙원" in jmp["themeName"] and "IceWolf" in jmp["monsters"], "S15 테마·몬스터가 바로 등장(빙원)", json.dumps({"theme": jmp["theme"], "mon": jmp["monsters"]}))
+    ok(jmp["overStart"] == jmp["capA"] and jmp["junkStart"] == 1 and jmp["zeroStart"] == 1, "상한 초과 요청은 상한으로 깎고, 숫자가 아니면 S1", json.dumps({k: jmp[k] for k in ["overStart", "junkStart", "zeroStart"]}))
+    ok(jmp["plainStage"] == 1 and jmp["plainLevel"] == 1 and jmp["plainGold"] == 500 and jmp["plainStart"] == 1, "인자 생략 시 기존 동작(S1·Lv.1·💰500) 유지", json.dumps({k: jmp[k] for k in ["plainStage", "plainLevel", "plainGold"]}))
+    ok(jmp["bonus1"] == {"level": 1, "gold": 0} and jmp["bonus13"] == {"level": 19, "gold": 1440}, "점프 보정식 — S1은 보정 0 · S13은 Lv.19/💰1,440", json.dumps({"b1": jmp["bonus1"], "b13": jmp["bonus13"]}))
+    ok(jmp["peak"] == 34 and jmp["best"] == 34 and jmp["count"] == 1, "점프해도 역대 기록·환생 횟수는 유지", json.dumps({k: jmp[k] for k in ["peak", "best", "count"]}))
+
+    appsrc6 = read("app.js")
+    uisrc6 = read("src/ui.js")
+    css6 = read("style.css")
+    ok(all(x in appsrc6 for x in ["pickRebirthStart", "rebirthStartOptions", "rebirthJumpCap", "rebirthPrevBest", "rebirthJumpBonus", "rebirthJumpStage"]), "환생 모달 — 시작 스테이지 선택·상한 안내(app.js)", "")
+    ok("data-action=\"rebirth-start\"" in appsrc6 and "jump-chip" in appsrc6, "시작 스테이지 선택 칩 UI", "")
+    ok("case 'rebirth-start'" in uisrc6, "rebirth-start 액션 연결(ui.js)", "")
+    ok(all(x in css6 for x in [".rb-jump", ".jump-chip", ".rb-jump-opts", ".rb-jump-pick"]), "v4.1 환생 점프 CSS", "")
+    ok(all(x in read("src/rebirth.js") for x in ["REBIRTH_JUMP", "rebirthJumpCap", "rebirthStartOptions", "rebirthJumpStage", "rebirthJumpBonus", "rebirthPrevBest"]), "rebirth.js — 점프 규칙 모듈", "")
+    ok("preloadBackgrounds" in appsrc6, "app.js — 부팅 시 테마 배경 프리로드", "")
 
 
     print(f"\n통과 {passed} / 실패 {failed}")

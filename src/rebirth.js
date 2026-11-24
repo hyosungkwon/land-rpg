@@ -18,6 +18,19 @@ export const REBIRTH = {
   minPoints: 3, // S20 최소 지급
 };
 
+/* ────────────────────── 환생 후 중간 스테이지 점프 (v4.1) ──────────────────────
+ * “직전까지 한 번에”는 막고, 직전 최고 스테이지의 일부 구간까지만 골라 시작한다.
+ *  - 상한 = floor(직전 최고 × 0.55)  → 최고의 50~60% 선
+ *  - 선택지 = S1 + 5스테이지 단위 + 상한 자체(5단위로 안 멁어지면 마지막에 붙인다)
+ *  - 점프 시작은 최소한의 레벨·골드만 보정한다(장비 등급·특성은 원래 유지된다)
+ */
+export const REBIRTH_JUMP = {
+  ratio: 0.55, // 직전 최고 대비 상한 비율
+  step: 5, // 선택지 스테이지 간격
+  levelPerStage: 1.5, // 점프 1스테이지당 시작 레벨 보정
+  goldPerStage: 120, // 점프 1스테이지당 시작 골드 보정
+};
+
 /** 도달 스테이지 → 이번 환생으로 받는 초월석 */
 export function rebirthPointsFor(stage) {
   const s = Math.max(0, Math.floor(num(stage, 0)));
@@ -163,9 +176,58 @@ export function rebirthStartGold(state) {
   return Math.max(0, Math.floor(ECON.startGold + rebirthBonus(state).startGold));
 }
 
-/** 환생 가능 여부·예정 포인트·진행도 */
-export function rebirthStatus(state) {
+/* ──────────────────────── 환생 점프 시작 스테이지 ──────────────────────── */
+
+/** 직전 회차 최고 스테이지 — 이번 회차 maxStage 와 역대 bestStage 중 큰 쪽
+ *  (peakStage 는 미션·업적용 누적 기록이라 점프 상한 계산에 쓰지 않는다 — 한 번 찍은
+ *   최고 기록으로 다음 회차를 통째로 건너뛰지 못하게 하려는 의도다.) */
+export function rebirthPrevBest(state) {
   const s = state && typeof state === 'object' ? state : {};
+  const rb = birthState(s);
+  return Math.max(
+    1,
+    Math.floor(num(s.maxStage, 1)),
+    Math.floor(num(rb.bestStage, 1)),
+  );
+}
+
+/** 선택할 수 있는 최대 시작 스테이지 — 직전 최고의 55%(최소 1) */
+export function rebirthJumpCap(state) {
+  return Math.max(1, Math.floor(rebirthPrevBest(state) * REBIRTH_JUMP.ratio));
+}
+
+/** 시작 스테이지 선택지: S1 + 5단위 + 상한. 상한을 넘는 값은 절대 나오지 않는다. */
+export function rebirthStartOptions(state) {
+  const cap = rebirthJumpCap(state);
+  const out = [{ stage: 1, label: 'S1', note: '처음부터' }];
+  for (let s = REBIRTH_JUMP.step; s <= cap; s += REBIRTH_JUMP.step) {
+    out.push({ stage: s, label: `S${s}`, note: '건너뛰기' });
+  }
+  const last = out[out.length - 1].stage;
+  if (cap > 1 && cap > last) out.push({ stage: cap, label: `S${cap}`, note: '상한' });
+  return out;
+}
+
+/** 요청 스테이지를 규칙 안으로 정규화 — 숫자가 아니면 S1, 상한 초과는 상한으로 깎는다. */
+export function rebirthJumpStage(state, want) {
+  const cap = rebirthJumpCap(state);
+  const v = Math.floor(num(want, 1));
+  if (!isFinite(v) || v <= 1) return 1;
+  return Math.min(v, cap);
+}
+
+/** 점프 시작 보정 — 레벨·골드만 최소한으로 올린다 */
+export function rebirthJumpBonus(startStage) {
+  const s = Math.max(1, Math.floor(num(startStage, 1)));
+  if (s <= 1) return { level: 1, gold: 0 };
+  return {
+    level: 1 + Math.floor((s - 1) * REBIRTH_JUMP.levelPerStage),
+    gold: Math.floor((s - 1) * REBIRTH_JUMP.goldPerStage),
+  };
+}
+
+/** 환생 가능 여부·예정 포인트·진행도 */
+export function rebirthStatus(state) {  const s = state && typeof state === 'object' ? state : {};
   const rb = birthState(s);
   const stage = Math.max(1, Math.floor(num(s.maxStage, 1)));
   const need = REBIRTH.stageReq;
@@ -190,13 +252,19 @@ export function rebirthStatus(state) {
 
 /**
  * 환생 실행. 조건 미달이면 아무것도 바꾸지 않고 거부한다.
- * @returns {{ok:boolean, reason?:string, points?:number, from?:object, startGold?:number, count?:number, stage?:number, level?:number}}
+ * @param {object} state 저장 상태
+ * @param {number} now 시각
+ * @param {{startStage?:number}} [opts] v4.1: 중간 스테이지 시작(생략하면 S1 — 기존 동작 그대로)
+ * @returns {{ok:boolean, reason?:string, points?:number, from?:object, startGold?:number, count?:number, stage?:number, level?:number, start?:number, jump?:object}}
  */
-export function doRebirth(state, now = Date.now()) {
+export function doRebirth(state, now = Date.now(), opts = {}) {
   if (!state || typeof state !== 'object') return { ok: false, reason: '저장 상태가 없습니다.' };
   const st = rebirthStatus(state);
   if (!st.can) return { ok: false, reason: st.reason };
   const rb = birthState(state);
+  // v4.1: 시작 스테이지 — 규칙(직전 최고의 55%) 안으로 정규화된다. 생략하면 S1.
+  const start = rebirthJumpStage(state, opts && opts.startStage);
+  const jump = rebirthJumpBonus(start);
   const from = {
     level: Math.max(1, Math.floor(num(state.level, 1))),
     stage: Math.max(1, Math.floor(num(state.stage, 1))),
@@ -220,10 +288,10 @@ export function doRebirth(state, now = Date.now()) {
   );
 
   // 2) 초기화 — 사냥 회차만
-  state.level = 1;
+  state.level = jump.level;
   state.exp = 0;
-  state.stage = 1;
-  state.maxStage = 1;
+  state.stage = start;
+  state.maxStage = start;
   state.killsInStage = 0;
   state.bossReady = false;
   state.jobTier = 0;
@@ -232,7 +300,7 @@ export function doRebirth(state, now = Date.now()) {
   if (state.equip && typeof state.equip === 'object') {
     for (const k of Object.keys(state.equip)) state.equip[k] = 0;
   }
-  state.gold = rebirthStartGold(state);
+  state.gold = rebirthStartGold(state) + jump.gold;
   if (state.skills && typeof state.skills === 'object') {
     for (const k of Object.keys(state.skills)) {
       if (state.skills[k] && typeof state.skills[k] === 'object') state.skills[k].last = 0;
@@ -247,6 +315,8 @@ export function doRebirth(state, now = Date.now()) {
     count: rb.count,
     stage: state.stage,
     level: state.level,
+    start,
+    jump,
   };
 }
 
