@@ -89,6 +89,7 @@ class App {
     this.renderer = new Renderer(document.getElementById('battle'));
     this.renderer.setBattle(this.battle);
     this.renderer.effects = this.s.effects !== false;
+    this.renderer.shakeOn = this.s.screenShake !== false; // v4.3 화면 흔들림 설정
     this.sound = new GameSound(this.s.soundOn !== false);
     this.renderer.onLoot = (kind) => this.sound.coin(kind);
     this.ui = new UI(this);
@@ -142,6 +143,14 @@ class App {
     this.ui.render();
     this.checkNews(now);
     this.bindAudioUnlock();
+    // PWA 바로가기(?tab=land&sub=buff) — 부동산 서브 탭까지 바로 열기
+    try {
+      const qs = new URLSearchParams((typeof location !== 'undefined' && location.search) || '');
+      const landSub = qs.get('sub');
+      if (qs.get('tab') === 'land' && landSub && ['home', 'market', 'buff'].includes(landSub)) {
+        this.s.land.sub = landSub;
+      }
+    } catch (e) { /* ignore */ }
     // PWA 바로가기(?tab=land) 지원
     try {
       const tabParam = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('tab');
@@ -647,6 +656,15 @@ class App {
         this.renderer.effects = this.s.effects;
         this.save();
         this.ui.render();
+      },
+      // v4.3: 화면 흔들림만 따로 끄기(이펙트는 그대로)
+      toggleShake: () => {
+        this.s.screenShake = this.s.screenShake === false;
+        this.renderer.shakeOn = this.s.screenShake;
+        this.renderer.shake = 0;
+        this.save();
+        this.ui.render();
+        this.ui.toast(this.s.screenShake ? '📳 화면 흔들림 켜짐' : '화면 흔들림 꺼짐');
       },
       toggleSound: () => {
         this.s.soundOn = this.s.soundOn === false;
@@ -1466,7 +1484,10 @@ class App {
     this.buffs = computeBuffs(this.s);
     this.battle = new Battle(this.s, () => this.buffs);
     if (this.renderer && typeof this.renderer.setBattle === 'function') this.renderer.setBattle(this.battle);
-    if (this.renderer) this.renderer.effects = this.s.effects !== false;
+    if (this.renderer) {
+      this.renderer.effects = this.s.effects !== false;
+      this.renderer.shakeOn = this.s.screenShake !== false;
+    }
     try { this.sound.setEnabled(this.s.soundOn !== false); } catch (e) { /* ignore */ }
     this._newsKey = undefined;
     this.lastSave = Date.now();

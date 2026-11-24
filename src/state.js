@@ -55,6 +55,7 @@ export function defaultState(now = nowMs()) {
     maxStage: 1,
     autoBoss: true,
     effects: true,
+    screenShake: true, // v4.3 화면 흔들림(타격감) — 설정에서 끌 수 있다
     // v3.2 메타 성장: 펫 동료 · 전직 단계 · 황금 던전 쿨타임
     jobTier: 0,
     jobAt: 0,
@@ -104,6 +105,7 @@ export function normalizeState(raw, now = nowMs()) {
   if (!RARITY_IDS.includes(s.gacha.best)) s.gacha.best = 'common';
   if (s.gacha.cur !== 'shards') s.gacha.cur = 'gold';
   s.soundOn = s.soundOn !== false;
+  s.screenShake = s.screenShake !== false; // v4.3 이전 저장본은 켜짐으로 시작
   s.land = { ...d.land, ...(raw.land || {}) };
   s.land.owned = sanitizeOwned(s.land.owned);
   s.land.totalCost = sanitizeOwned(s.land.totalCost);

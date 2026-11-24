@@ -2041,3 +2041,54 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .pet-thumb.s2 { filter: drop-shadow(0 0 8px rgba(255, 215, 120, 0.7)); }
 .pet-evo-burst { display: flex; justify-content: center; padding: 2px 0 10px; }
 .pet-evo-burst img { width: 104px; height: 104px; object-fit: contain; filter: drop-shadow(0 0 16px rgba(255, 215, 120, 0.6)); }
+
+/* ─────────════════════════════ v4.3 ─ 🏢 부동산 서브 탭 · 요약 바 · 압축 뉴스 ─────────════════════════════ */
+/* 상단 요약 바 — 모든 서브 탭 맨 위. 미수령이 쌓이면 테두리가 초록으로 바뀐다 */
+.land-sum {
+  padding: 9px 11px 10px;
+  background: linear-gradient(165deg, rgba(255, 207, 92, 0.13), rgba(16, 23, 38, 0.94) 62%);
+  border-color: rgba(255, 207, 92, 0.26);
+}
+.land-sum.ready { border-color: rgba(94, 225, 163, 0.42); }
+.ls-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.ls-asset { font-size: 17px; font-weight: 900; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+.ls-meta { font-size: 10.5px; color: var(--sub); font-weight: 700; white-space: nowrap; }
+.ls-meta b { color: var(--txt); font-variant-numeric: tabular-nums; }
+.ls-mid { display: flex; align-items: center; gap: 6px; margin-top: 4px; min-width: 0; }
+.ls-k { font-size: 10px; color: var(--dim); font-weight: 700; white-space: nowrap; }
+.ls-v { font-size: 15px; font-weight: 900; color: var(--green); font-variant-numeric: tabular-nums; letter-spacing: -0.3px; }
+.ls-inc { font-size: 9.5px; color: var(--dim); margin-left: auto; white-space: nowrap; }
+.ls-inc b { color: var(--gold); font-weight: 800; }
+.ls-info { flex: 0 0 auto; min-width: 36px; height: 21px; font-size: 9.5px; padding: 0 6px; }
+.ls-claim { margin-top: 7px; min-height: 34px; font-size: 12px; }
+
+/* 부동산 서브 탭 — 사냥 탭과 같은 sticky 바, 라벨이 길어 살짝 작게 */
+.land-subbar { margin-bottom: 8px; }
+.land-subbar .subtab { font-size: 10.5px; letter-spacing: -0.45px; padding: 0 2px; }
+
+/* 압축 뉴스 — 매물·버프 탭 상단 한 줄 */
+.news-slim {
+  padding: 7px 10px 8px;
+  margin-bottom: 8px;
+  border-radius: 11px;
+  background: linear-gradient(120deg, rgba(255, 207, 92, 0.12), rgba(18, 26, 42, 0.86) 70%);
+  border: 1px solid rgba(255, 207, 92, 0.24);
+}
+.ns-top { display: flex; align-items: center; gap: 6px; font-size: 9px; font-weight: 800; }
+.ns-kicker { color: var(--gold); }
+.ns-clock { margin-left: auto; color: var(--sub); font-variant-numeric: tabular-nums; font-size: 9.5px; }
+.ns-title { font-size: 11.5px; font-weight: 800; margin-top: 2px; letter-spacing: -0.2px; }
+.ns-fx { font-size: 9.5px; color: var(--dim); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ns-fx .up { color: #ff9a8a; font-weight: 800; }
+
+/* 보유 매물·거래 기록 카드 */
+.hold-card .card-title small { margin-left: 2px; }
+.land-rec .stat-grid.four { margin-top: 1px; }
+.land-rec .stat .v { color: var(--txt); }
+
+/* 건물주 버프 — 높이를 줄인 요약 행 + 수치 그리드 */
+.buff-card .buff-row { padding: 6px 0; }
+.buff-card .buff-head b { font-size: 11px; }
+.buff-card .buff-head span { font-size: 11.5px; }
+.buff-card .buff-next { font-size: 9px; margin-top: 2px; }
+.buff-now .stat-grid.four { margin-top: 2px; }

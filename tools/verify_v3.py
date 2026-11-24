@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""land-rpg v4.1.0 검증 (QuickJS + 정적 검사)
+"""land-rpg v4.3.0 검증 (QuickJS + 정적 검사)
 
 1) 모든 JS 파일 문법(파싱) 검사
 2) 정적 검사 (Firebase/로그인 흔적 0, 저장 키 v3, sw 캐시 v3.5)
@@ -94,8 +94,8 @@ def main():
     for bad in ["firebase", "signInWithPopup", "Google 로그인", "gstatic", "firebaseio", "googleapis"]:
         ok(bad.lower() not in text_all.lower(), f"Firebase/로그인 흔적 없음: {bad}")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v4.2.0" in read("sw.js"), "SW 캐시 버전 v4.2.0")
-    ok("APP_VERSION = '4.2.0'" in read("src/data.js"), "앱 버전 v4.2.0")
+    ok("land-rpg-v4.3.0" in read("sw.js"), "SW 캐시 버전 v4.3.0")
+    ok("APP_VERSION = '4.3.0'" in read("src/data.js"), "앱 버전 v4.3.0")
     ok(os.path.exists(os.path.join(ROOT, "src/savecode.js")), "src/savecode.js 존재")
     ok("'./src/savecode.js'" in read("sw.js"), "sw.js 프리캐시에 savecode.js 포함")
     ok("'./src/gear.js'" in read("sw.js"), "sw.js 프리캐시에 gear.js 포함")
@@ -240,6 +240,10 @@ def main():
             "exports.__huntSub = (ui, sub) => { ui.huntSub = sub; return tplHunt(ui); };"
             "exports.__huntAll = (ui) => __HUNT_SUBS.map((k) => __huntSub(ui, k)).join('');"
             "exports.__badges = (ui) => huntBadges(ui);"
+            "exports.__LAND_SUBS = LAND_SUBS.map(([k]) => k);"
+            "exports.__LAND_LABELS = LAND_SUBS.map(([k, i, l]) => i + ' ' + l);"
+            "exports.__landSub = (ui, sub) => { ui.s.land.sub = sub; return tplLand(ui); };"
+            "exports.__lbadges = (ui) => landBadges(ui);"
         )
     }
     ctx2 = quickjs.Context()
@@ -2306,7 +2310,7 @@ def main():
     ok(all(x in read("src/state.js") for x in ["gearMods", "normalizeGear", "syncGearRarity", "compareGear"]), "상태에 장비 옵션·마이그레이션·비교 반영(state.js)")
     css4 = read("style.css")
     ok(all(x in css4 for x in [".gear-slots", ".gslot", ".inv-grid", ".inv-card", ".cmp-vs", ".cmp-opts", ".cmp-stats", ".iv-eq", ".gsvg"]), "v4 장비 UI CSS(슬롯·그리드·비교 모달)")
-    ok("장비 시스템" in read("README.md") and "4.2.0" in read("README.md"), "README v4.2.0 반영")
+    ok("장비 시스템" in read("README.md") and "4.3.0" in read("README.md"), "README v4.3.0 반영")
 
     # ══════════════════════════════════════════════════════════════════════
     section("[17] 🖼️ v4.1 테마 배경 · ♾️ 환생 중간 스테이지 점프")
@@ -2795,9 +2799,9 @@ def main():
     ok(all(x in asrc42 for x in ["enterTower", "openTowerFloors", "evolvePet", "showTowerResult", "showTowerFloors"]), "app.js — 탑 입장/층 선택/결과·펫 진화 액션", "")
     ok('assets/sprites/pet/${info.sprite}.png' in asrc42, "진화 결과 모달 — 진화 스프라이트 경로(.png)", "")
     ok(all(x in css42 for x in [".tower-card", ".tower-tiles", ".tower-floor", ".pet-evo", ".mini.evo"]), "style.css — v4.2 스타일", "")
-    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.2.0" in read("sw.js") and "APP_VERSION = '4.2.0'" in read("src/data.js"), "버전·서비스워커(4.2.0 · tower.js 프리캐시)", "")
-    pkg_ok = os.path.exists(os.path.join(ROOT, "package.json")) and '"version": "4.2.0"' in read("package.json")
-    ok(pkg_ok, "package.json 버전 4.2.0(로컬 검증용)", "")
+    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.3.0" in read("sw.js") and "APP_VERSION = '4.3.0'" in read("src/data.js"), "버전·서비스워커(4.3.0 · tower.js 프리캐시)", "")
+    pkg_ok = os.path.exists(os.path.join(ROOT, "package.json")) and '"version": "4.3.0"' in read("package.json")
+    ok(pkg_ok, "package.json 버전 4.3.0(로컬 검증용)", "")
     evo_files = [f"assets/sprites/pet/pet_{n}_{s}.png" for n in ("wolf", "fox", "owl", "dragon") for s in ("awaken", "divine")]
     ok(all(os.path.exists(os.path.join(ROOT, f)) for f in evo_files), "펫 진화 스프라이트 8종 파일", ", ".join(f for f in evo_files if not os.path.exists(os.path.join(ROOT, f))))
     ok(all(f"'./{f}'" in read("sw.js") for f in evo_files), "sw.js 프리캐시에 진화 스프라이트 포함", "")
@@ -2808,6 +2812,139 @@ def main():
         ok(all(sz == (256, 256) for sz in sizes) and all(a == 0 for a in alphas), "진화 스프라이트 256px 투명 PNG", json.dumps({"sizes": sizes, "min_alpha": alphas}))
     except Exception as e:  # noqa: BLE001
         ok(False, "진화 스프라이트 검사", str(e))
+
+    section("[19] 🏢 v4.3 부동산 서브 탭 정리 · ⚔️ 전투 연출 마감")
+
+    # ── 1) 부동산 탭: 서브 탭 3종 + 모든 서브 탭 최상단 요약 바 ──
+    land43 = js(ctx2, """
+      const s = defaultState(0);
+      s.gold = 400000; s.level = 18; s.stage = 9; s.maxStage = 10; s.shards = 900;
+      const cs = CITIES.filter(c => c.base <= 6000).slice(0, 12);
+      cs.forEach((c, i) => { s.land.owned[c.key] = 6 + i; });
+      s.land.accruedRent = 5000;
+      s.land.tradeCount = 7; s.land.taxPaid = 210; s.land.totalRentClaimed = 12345; s.land.bestAsset = 999999;
+      s.pet = { equipped: 'wolf', unlocked: ['wolf', 'fox'], chosen: true, levels: { wolf: 10, fox: 3 }, evo: {} };
+      const buffs = computeBuffs(s, 0);
+      const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(9), boss: null, dungeon: null, tower: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'land', el: {}, install: { hidden: true }, landHoldAll: false };
+      const out = { keys: __LAND_SUBS, labels: __LAND_LABELS };
+      for (const k of __LAND_SUBS) out[k] = __landSub(ui, k);
+      out.fallback = __landSub(ui, 'bogus');
+      out.badges = __lbadges(ui);
+      out.all = __LAND_SUBS.map(k => out[k]).join('');
+      out.shown = (out.home.match(/class="hold/g) || []).length;
+      out.lens = Object.fromEntries(__LAND_SUBS.map(k => [k, out[k].length]));
+      out.order = { sum: out.market.indexOf('land-sum'), bar: out.market.indexOf('land-subbar'), news: out.market.indexOf('news-slim'), list: out.market.indexOf('landList') };
+      ui.landHoldAll = true;
+      const all_open = __landSub(ui, 'home');
+      out.open = (all_open.match(/class="hold/g) || []).length;
+      out.bad = /undefined|NaN|\[object Object\]/.test(out.all + out.fallback + all_open);
+      return out;
+    """)
+    ok(land43["keys"] == ["home", "market", "buff"], "부동산 서브 탭 3종 키 유지(저장 호환 home/market/buff)", json.dumps(land43["keys"]))
+    ok(all(x in land43["home"] for x in ["내 부동산·수령", "매물 투자", "버프·세트·펫", 'data-action="land-sub"']), "서브 탭 라벨 — 내 부동산·수령 / 매물 투자 / 버프·세트·펫")
+    ok(land43["home"].count('data-action="land-sub"') >= 3 and 'class="subtabs hunt-subbar land-subbar"' in land43["home"], "서브 탭 버튼 3개 + 사냥 탭과 같은 sticky 바")
+    ok(all(('data-lbadge="%s"' % k) in land43["home"] for k in ["home", "market", "buff"]), "세 서브 탭 모두 알림 배지 자리")
+    ok(all(all(x in land43[k] for x in ["land-sum", "미수령", "일괄 수령", 'data-action="claim-rent"', 'data-action="rent-info"']) for k in ["home", "market", "buff"]), "모든 서브 탭 최상단 요약 바(보유 평수·시간당 임대·미수령·일괄 수령)")
+    ok(all(land43[k].count('data-action="claim-rent"') == 1 for k in ["home", "market", "buff"]), "일괄 수령 버튼은 탭당 하나(중복 카드 제거)", json.dumps({k: land43[k].count('data-action="claim-rent"') for k in ["home", "market", "buff"]}))
+    ok(0 <= land43["order"]["sum"] < land43["order"]["bar"] < land43["order"]["news"] < land43["order"]["list"], "요약 바 → 서브 탭 → 압축 뉴스 → 매물 목록 순서", json.dumps(land43["order"]))
+    ok("land-hero" not in land43["all"] and "rent-card" not in land43["all"] and "lh-total" not in land43["all"], "중복 대형 카드(총자산 히어로·미수령 카드) 제거 — 스크롤 절약")
+    ok(all(x in land43["home"] for x in ["보유 매물", "거래 기록", "권역 세트", "stat-grid four"]), "내 부동산 탭 — 보유 매물·권역 세트 요약·거래 기록")
+    ok('data-action="land-hold-all"' in land43["home"] and land43["shown"] == 6 and land43["open"] == 12, "보유 12곳 중 6곳만 보이고 펼치기 토글로 전체", json.dumps({"shown": land43["shown"], "open": land43["open"]}))
+    ok(all(x in land43["market"] for x in ['id="landSearch"', 'data-action="land-tier"', 'data-action="land-sort"', "229", "landList"]), "매물 투자 탭 — 229개 지역 검색·필터·정렬 목록")
+    ok(all(x in land43["buff"] for x in ["건물주 버프", "내 동료 펫", "권역 세트", "랜드마크", "현재 적용 수치", 'data-action="pet-evolve"']), "버프·세트·펫 탭 — 버프·펫·세트·랜드마크·적용 수치")
+    ok('class="subtab active" type="button" role="tab" aria-selected="true" data-action="land-sub" data-value="home"' in land43["fallback"], "잘못된 서브 값은 내 부동산으로 복구")
+    ok(land43["bad"] is False, "v4.3 부동산 템플릿에 undefined/NaN 누출 없음")
+    ok(land43["badges"]["home"] == 1 and land43["badges"]["buff"] >= 1 and land43["badges"]["market"] == 0, "미수령 임대수익 → 내 부동산 배지 · 진화 가능 펫 → 버프 배지", json.dumps(land43["badges"]))
+
+    landbadge = js(ctx2, """
+      const fresh = defaultState(0);
+      const mk = (s) => ({ s, battle: { stats: calcStats(s, {}), def: stageDef(1), boss: null, player: { hp: 1 } }, app: { buffs: computeBuffs(s, 0) }, logs: [], tab: 'land', el: {}, install: { hidden: true } });
+      const zero = __lbadges(mk(fresh));
+      const s2 = defaultState(0);
+      const cheap = CITIES.slice().sort((a, b) => a.base - b.base)[0];
+      s2.land.owned[cheap.key] = 3;
+      s2.land.accruedRent = 1; // 2분치에 한참 못 미치는 금액
+      const tiny = __lbadges(mk(s2));
+      s2.land.accruedRent = 5000;
+      const ready = __lbadges(mk(s2));
+      return { zero, tiny, ready };
+    """)
+    ok(landbadge["zero"] == {"home": 0, "market": 0, "buff": 0}, "새 게임: 부동산 배지 없음", json.dumps(landbadge["zero"]))
+    ok(landbadge["tiny"]["home"] == 0 and landbadge["ready"]["home"] == 1, "2분치 미만은 점등하지 않는다(상시 점등 방지)", json.dumps(landbadge))
+
+    # ── 2) 부동산 서브 탭 상태·배지 배선 ──
+    usrc43 = read("src/ui.js")
+    asrc43 = read("app.js")
+    stsrc43 = read("src/state.js")
+    idxsrc43 = read("index.html")
+    ok(all(x in usrc43 for x in ["LAND_SUBS", "landSubOf", "landBadges", "landSummaryBar", "newsSlim", "syncLandBadges", "case 'land-hold-all'"]), "ui.js — 부동산 서브 탭·요약 바·배지 구현")
+    ok("this.s.land.sub = ok.includes(sub) ? sub : 'home'" in usrc43 and "const ok = LAND_SUBS.map(([k]) => k)" in usrc43, "서브 탭 전환은 기존 저장 필드(land.sub)만 쓴다")
+    ok('id="landTabDot"' in idxsrc43 and 'data-tab="land"' in idxsrc43, "하단 부동산 탭 알림 점 요소")
+    ok("['home', 'market', 'buff'].includes(landSub)" in asrc43 and "qs.get('tab') === 'land'" in asrc43, "?tab=land&sub=market 바로가기 지원")
+    ok(all(x in stsrc43 for x in ["screenShake: true", "s.screenShake = s.screenShake !== false"]), "state.js — 화면 흔들림 설정 기본값·정규화")
+    shake_nv = js(ctx, """
+      return {
+        def: defaultState(0).screenShake,
+        off: normalizeState({ screenShake: false }).screenShake,
+        on: normalizeState({ screenShake: true }).screenShake,
+        junk: normalizeState({ screenShake: 'no' }).screenShake,
+      };
+    """)
+    ok(shake_nv["def"] is True and shake_nv["off"] is False and shake_nv["on"] is True and shake_nv["junk"] is True, "화면 흔들림 저장 호환(끈 상태 유지·손상 값은 켜짐)", json.dumps(shake_nv))
+
+    # ── 3) 부활 가호 — 3.5초 · 피해 60% 경감 (실제 전투) ──
+    grace = js(ctx, """
+      const s = defaultState(0);
+      s.level = 30; s.stage = 10; s.maxStage = 10; s.equip = { weapon: 0, armor: 0, helmet: 0, ring: 0, amulet: 0 };
+      const b = new Battle(s, () => ({}), () => 0.5, 0);
+      b.player.hp = 10;
+      b.damagePlayer(9999, { ko: '테스트' }, 0, {});
+      const reviveAt = b.player.reviveAt;
+      const deadHp = b.player.hp;
+      b.player.reviveAt = 0;
+      b.tick(16, 1);
+      const evs = b.drainEvents().filter((e) => e.t === 'revive');
+      const graceMs = b.player.graceUntil - 1;
+      const hpAtRevive = b.player.hp;
+      const before = b.player.hp;
+      b.damagePlayer(100, { ko: '테스트' }, 2, {});
+      const dmgGrace = before - b.player.hp;
+      b.player.graceUntil = 0;
+      const hp2 = b.player.hp;
+      b.damagePlayer(100, { ko: '테스트' }, 999999, {});
+      const dmgPlain = hp2 - b.player.hp;
+      return { constMs: ECON.reviveGraceMs, reduce: ECON.reviveGraceReduce, reviveMs: reviveAt, graceMs, deadHp,
+               hpAtRevive, maxHp: Math.round(b.stats.hpMax), dmgGrace, dmgPlain,
+               ev: evs[0] || null, evCount: evs.length };
+    """)
+    ok(grace["constMs"] == 3500 and grace["reduce"] == 0.4 and grace["reviveMs"] == 3000, "부활 대기 3초 · 가호 3.5초 · 경감 60% 상수", json.dumps({k: grace[k] for k in ["constMs", "reduce", "reviveMs"]}))
+    ok(grace["graceMs"] == 3500 and grace["evCount"] == 1 and grace["ev"]["graceMs"] == 3500 and grace["ev"]["reducePct"] == 60, "부활 시 3.5초 가호 + 이벤트에 지속·경감률 전달", json.dumps(grace["ev"]))
+    ok(grace["hpAtRevive"] == grace["maxHp"] // 2 and grace["dmgGrace"] * 2.5 == grace["dmgPlain"], "가호 중 피해가 정확히 40%(100 → 40) — 화면 표시와 실제 피해 일치", json.dumps({"grace": grace["dmgGrace"], "plain": grace["dmgPlain"], "hp": grace["hpAtRevive"]}))
+
+    # ── 4) 전투 연출 — 보스 등장 · 가호 표시 · 타격감 ──
+    rsrc43 = read("src/render.js")
+    csrc43 = read("src/combat.js")
+    ok(all(x in csrc43 for x in ["ECON.reviveGraceMs", "ECON.reviveGraceReduce"]), "combat.js — 가호 상수를 ECON 에서 읽는다(연출·검증과 한 곳)")
+    ok(all(x in rsrc43 for x in ["drawGrace", "drawGraceBanner", "drawImpacts", "addImpact", "ECON.reviveGraceMs", "ECON.reviveGraceReduce"]), "render.js — 가호 보호막·빛 고리·상단 배너·타격 임팩트")
+    boss_alert = rsrc43[rsrc43.index("BOSS APPEAR"):rsrc43.index("drawAura(ctx, px, gy, h, sc, now)")]
+    ok(all(x in boss_alert for x in ["const DUR = 2400", "bossName", "⏱", "제한", "rgba(180,0,20", "26)"]), "보스 등장 배너 — 경고 띠·비네트·보스 이름·제한 시간(2.4초)", str(len(boss_alert)))
+    ok("this.bossAlert = now" in rsrc43 and "this.bossRoar" in rsrc43 and "this.redFlash = Math.max(this.redFlash, 0.3)" in rsrc43, "보스 등장 시 붉은 플래시·충격파·포효 연출", "")
+    ok(all(x in rsrc43 for x in ["if (this.shake > 0.15 && this.shakeOn)", "ECON.shakeMax", "ECON.shakeTrim"]), "화면 흔들림 상한·감쇠 + 설정(shakOn) 반영")
+    ok("this.impacts.length > 16" in rsrc43 and "globalCompositeOperation = 'lighter'" in rsrc43, "타격 임팩트는 최대 16개(가벼운 렌더) · 가산 합성")
+    ok("bossHit ? 1.28 : 1" in rsrc43 and "addFloater(ev.x, ev.dmg, ev.crit, ev.kind, null, bossHit ? 1.28 : 1)" in rsrc43, "보스 타격 — 피해 숫자 1.28배 강조")
+    ok(all(x in rsrc43 for x in ["this.shake = Math.max(this.shake, bossHit ? 2.2 : 1.2)", "bossHit ? 7 : 5.4"]), "일반 타격 흔들림 완화 · 치명타·보스만 강하게(과하지 않게)")
+    ok("this.impacts = [];" in rsrc43 and "this.drawImpacts(ctx, t)" in rsrc43 and "this.drawGraceBanner(ctx, W, t)" in rsrc43, "프레임 루프에 임팩트·가호 배너 연결", "")
+    ok(all(x in rsrc43 for x in ["🛡 부활 가호 · 피해", "경감", "toFixed(1)}초"]), "가호 상단 배너 문구(피해 경감률·남은 초)", "")
+    ok("const DUR = 2400" in rsrc43 and "this.bossAlert = 0" in rsrc43, "보스 배너 종료 시 상태 정리", "")
+
+    stsrc43x = read("src/state.js")
+    ok("screenShake" in stsrc43x and "effects: true" in stsrc43x, "설정 기본값(이펙트·흔들림)", "")
+    ok("toggleShake" in asrc43 and "renderer.shakeOn" in asrc43 and "case 'toggle-shake'" in usrc43, "설정 토글 — 화면 흔들림만 끄기(app.js·ui.js)")
+    ok("화면 흔들림" in usrc43 and 'data-action="toggle-shake"' in usrc43, "설정 탭에 화면 흔들림 스위치", "")
+
+    css43 = read("style.css")
+    ok(all(x in css43 for x in [".land-sum", ".ls-v", ".ls-claim", ".news-slim", ".ns-title", ".land-subbar", ".land-rec", ".buff-now"]), "style.css — v4.3 부동산 요약 바·압축 뉴스·서브 탭", "")
+    ok("land-rpg-v4.3.0" in read("sw.js") and "'4.3.0'" in read("src/data.js"), "버전·캐시 v4.3.0", "")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

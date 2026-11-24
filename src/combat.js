@@ -232,8 +232,8 @@ export class Battle {
         this.player.dead = false;
         this.player.hp = Math.round(this.stats.hpMax * 0.5);
         // v3.8: 부활 직후 잠깐의 가호 — 흩어진 무리가 다시 몰리기 전에 숨을 돌린다
-        this.player.graceUntil = now + 3500;
-        this.emit({ t: 'revive' });
+        this.player.graceUntil = now + ECON.reviveGraceMs;
+        this.emit({ t: 'revive', graceMs: ECON.reviveGraceMs, reducePct: Math.round((1 - ECON.reviveGraceReduce) * 100) });
         this.spawnInitial(now);
       }
       return;
@@ -389,7 +389,7 @@ export class Battle {
     if (this.player.dead) return;
     // v3.8: 방어(피해 감소) 스탯 — 갑옷·투구 강화 + 환생 '수호' 특성
     const reduce = Math.max(0, Math.min(0.95, this.stats.dmgReduce || 0));
-    const grace = this.player.graceUntil && now < this.player.graceUntil ? 0.4 : 1;
+    const grace = this.player.graceUntil && now < this.player.graceUntil ? ECON.reviveGraceReduce : 1;
     const dmg = Math.max(1, Math.round(raw * (1 - reduce) * grace));
     this.player.hp -= dmg;
     this.player.hurtAt = now;

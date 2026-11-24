@@ -2,7 +2,7 @@
 // 밸런스·몬스터·장비·스킬 정의. DOM 의존 없음(헤드리스 테스트 가능).
 // v3: 게스트 전용 통합 경제 — 골드 하나로 사냥과 부동산을 함께 굴린다.
 
-export const APP_VERSION = '4.2.0';
+export const APP_VERSION = '4.3.0';
 export const SAVE_KEY = 'land_rpg_unified_v3';
 export const SAVE_VERSION = 3;
 
@@ -23,6 +23,11 @@ export const ECON = {
   maxMonsters: 6, // v3.8: 화면에 쌓이는 최대 수(다굴)
   spawnMs: 900, // v3.8: 계속 몰려오는 스폰 주기
   reviveMs: 3000, // 사망 후 부활 대기
+  // v4.3 부활 가호 — 부활 직후 잠깐 받는 피해를 크게 줄여 무리에 다시 눌리지 않게 한다.
+  reviveGraceMs: 3500, // 가호 지속(ms) — 상단 배너에 남은 시간이 표시된다
+  reviveGraceReduce: 0.4, // 가호 중 받는 피해 배율(0.4 = 60% 경감)
+  shakeMax: 12, // 화면 흔들림 상한 — 과하지 않게
+  shakeTrim: 0.87, // 흔들림 감쇠
   bossTimeLimitMs: 60000,
 
   // 웨이브 / 보스
