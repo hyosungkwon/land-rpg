@@ -1050,15 +1050,15 @@ export class Renderer {
     if (!j || !j.tier) return; // 견습 기사는 오라 없음(장비 오라만)
     const col = j.color;
     const pulse = 0.5 + 0.5 * Math.sin(now / (j.upper ? 300 : 460));
-    const k = Math.min(1, 0.34 + j.tier * 0.13);
+    const k = Math.min(1, 0.5 + j.tier * 0.1);
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    // 1) 바닥 문양 — 회전하는 점선 고리
+    // 1) 바닥 점선 고리 — 장비 오라(반지름 0.31~0.42h)보다 넓게 깔아 두 층이 겹쳐 보이지 않게
     const rings = j.tier >= 3 ? 2 : 1;
     for (let i = 0; i < rings; i++) {
-      const rr = h * (0.5 + j.tier * 0.012) * (1 + i * 0.26);
-      ctx.strokeStyle = hexA(col, (0.14 + 0.12 * pulse) * k);
-      ctx.lineWidth = (1.1 + j.tier * 0.22) * sc;
+      const rr = h * (0.54 + j.tier * 0.012) * (1 + i * 0.22);
+      ctx.strokeStyle = hexA(col, (0.2 + 0.14 * pulse) * k);
+      ctx.lineWidth = (1.2 + j.tier * 0.24) * sc;
       ctx.setLineDash([6 * sc, 7 * sc]);
       ctx.lineDashOffset = ((i % 2 ? -1 : 1) * (now / 26)) % 60;
       ctx.beginPath();
@@ -1066,31 +1066,51 @@ export class Renderer {
       ctx.stroke();
     }
     ctx.setLineDash([]);
-    // 2) 상위 전직(5단계~): 세로 빛기둥
-    if (j.upper) {
-      const g = ctx.createLinearGradient(px, gy - h * 1.35, px, gy);
-      g.addColorStop(0, hexA(col, 0));
-      g.addColorStop(0.55, hexA(col, 0.06 + 0.05 * pulse));
-      g.addColorStop(1, hexA(col, 0.15 + 0.06 * pulse));
-      ctx.fillStyle = g;
-      ctx.fillRect(px - h * 0.22, gy - h * 1.35, h * 0.44, h * 1.35);
-    }
-    // 3) 떠도는 불티 — 단계가 높을수록 많다
-    const sparks = j.tier >= 5 ? 6 : j.tier >= 4 ? 4 : j.tier >= 2 ? 2 : 0;
-    for (let i = 0; i < sparks; i++) {
-      const a = now / (900 + i * 130) + (i * Math.PI * 2) / Math.max(1, sparks);
-      const rr = h * (0.56 + 0.05 * Math.sin(a * 1.7));
-      const x = px + Math.cos(a) * rr;
-      const y = gy - h * 0.46 + Math.sin(a) * h * 0.24;
-      const sr = Math.max(0.6, (1.3 + 1.1 * Math.sin(now / 260 + i)) * sc);
-      ctx.fillStyle = hexA(col, 0.5 + 0.35 * pulse);
+    // 2) 몸 뒤 마법진(기울어진 타원) — 장비 오라에는 없는 '전직' 표식
+    const cy = gy - h * 0.46;
+    const spin = now / (j.upper ? 1100 : 1600);
+    for (let i = 0; i < (j.upper ? 2 : 1); i++) {
+      ctx.strokeStyle = hexA(col, (0.18 + 0.14 * pulse) * k);
+      ctx.lineWidth = (1.1 + j.tier * 0.18) * sc;
+      ctx.setLineDash([4 * sc, 6 * sc]);
+      ctx.lineDashOffset = (i ? 1 : -1) * spin * 40;
       ctx.beginPath();
-      ctx.arc(x, y, sr, 0, Math.PI * 2);
+      ctx.ellipse(px, cy + i * h * 0.06, h * (0.46 - i * 0.09), h * (0.15 - i * 0.03), -0.14, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+    // 3) 상위 전직(5단계~): 세로 빛기둥(안쪽 밝은 심 + 바깥 번짐)
+    if (j.upper) {
+      const top = gy - h * 1.5;
+      const g = ctx.createLinearGradient(px, top, px, gy);
+      g.addColorStop(0, hexA(col, 0));
+      g.addColorStop(0.5, hexA(col, 0.07 + 0.06 * pulse));
+      g.addColorStop(1, hexA(col, 0.2 + 0.08 * pulse));
+      ctx.fillStyle = g;
+      ctx.fillRect(px - h * 0.3, top, h * 0.6, gy - top);
+      const core = ctx.createLinearGradient(px, top, px, gy);
+      core.addColorStop(0, hexA('#ffffff', 0));
+      core.addColorStop(1, hexA('#ffffff', 0.1 + 0.06 * pulse));
+      ctx.fillStyle = core;
+      ctx.fillRect(px - h * 0.06, top, h * 0.12, gy - top);
+    }
+    // 4) 위로 떠오르는 불티 — 단계가 높을수록 많고 길게
+    const sparks = 2 + j.tier * 2;
+    const rise = j.upper ? 1.25 : 0.95;
+    for (let i = 0; i < sparks; i++) {
+      const ph = (now / (1700 - j.tier * 90) + i / sparks) % 1;
+      const sway = Math.sin(ph * 6.28 + i * 2.1) * h * 0.18;
+      const x = px + sway + (i - sparks / 2) * h * 0.045;
+      const y = gy - ph * h * rise;
+      const a = (1 - ph) * (0.5 + 0.35 * pulse) * k;
+      ctx.fillStyle = hexA(col, Math.max(0, a));
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(0.7, (1.6 - ph * 0.9) * sc), 0, Math.PI * 2);
       ctx.fill();
     }
-    // 4) 머리 위 후광 — 4단계는 금고리, 5단계는 2겹 + 회전 광선
+    // 5) 머리 위 후광 — 4단계는 금고리, 5단계는 2겹 + 회전 광선
     if (j.upper) {
-      const hy = gy - h * 1.02;
+      const hy = gy - h * 1.04;
       ctx.strokeStyle = hexA(col, 0.45 + 0.3 * pulse);
       ctx.lineWidth = (1.6 + (j.tier - 4) * 0.8) * sc;
       ctx.beginPath();
