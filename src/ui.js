@@ -40,7 +40,7 @@ import {
   achievementStatus, claimedAchievementCount, dailyQuestStatus,
 } from './quests.js';
 import {
-  GEAR_ITEMS, GEAR_FILTERS, GEAR_OPTS, GEAR_DROP,
+  GEAR_ITEMS, GEAR_FILTERS, GEAR_SET_FILTERS, GEAR_OPTS, GEAR_DROP,
   gearIcon, gearItem, gearList, gearOwned, gearOptionList, gearOptionSummary,
   equippedItem, equippedRarity, gearCollection, gearSlotCounts, dismantleValue,
   dismantleTargets, AUTO_DISMANTLE_MODES, autoDismantleIdx, autoDismantleLabel, normalizeAutoMode,
@@ -59,6 +59,8 @@ export class UI {
     this.app = app; // { s, battle, buffs, actions ... }
     this.tab = 'hunt';
     this.huntSub = 'skill'; // 사냥 탭 서브 탭 (세션 동안 유지·저장 안 함)
+    this.growthFilter = 'all'; // v5.5 전직·환생 탭 영역 필터('all' | 'challenge' | 'growth')
+    this.gearSub = 'enhance'; // v5.5 장비 탭 서브 탭('enhance' | 'bag' | 'gacha')
     this.landHoldAll = false; // v4.3 부동산 탭 보유 매물 펼치기(기본은 6곳까지)
     this.el = {
       hud: document.getElementById('hud'),
@@ -69,6 +71,7 @@ export class UI {
       assetBadge: document.getElementById('assetBadge'),
       stageNum: document.getElementById('stageNum'),
       themeName: document.getElementById('themeName'),
+      stageSpeedBtn: document.getElementById('stageSpeedBtn'),
       bossBtn: document.getElementById('bossBtn'),
       bossCount: document.getElementById('bossCount'),
       killDots: document.getElementById('killDots'),
@@ -91,6 +94,7 @@ export class UI {
       settingsTabDot: document.getElementById('settingsTabDot'),
       installBtn: document.getElementById('installBtn'),
       huntTabDot: document.getElementById('huntTabDot'),
+      gearTabDot: document.getElementById('gearTabDot'),
       landTabDot: document.getElementById('landTabDot'),
     };
     this.logs = [];
@@ -172,7 +176,10 @@ export class UI {
       case 'enhancemax': actions.enhance(btn.dataset.slot, 'max'); break;
       case 'buy-shards': actions.buyShards(v); break;
       case 'hunt-sub': this.setHuntSub(v); break;
+      case 'growth-filter': this.setGrowthFilter(v); break;
+      case 'gear-sub': this.setGearSub(v); break;
       case 'gear-filter': this.setGearFilter(v); break;
+      case 'gear-set-filter': this.setGearSetFilter(v); break;
       case 'gear-item': actions.openGearItem(Number(v)); break;
       case 'gear-result-item': actions.openGearByItemId(v); break;
       case 'gear-equip': actions.equipGearItem(Number(v)); break;
@@ -270,6 +277,46 @@ export class UI {
     if (!this.s.gear) return;
     this.s.gear.filter = GEAR_FILTERS.includes(f) ? f : 'all';
     this.render();
+  }
+
+  /** v5.5 장비 인벤토리 테마 세트 필터 */
+  setGearSetFilter(f) {
+    if (!this.s.gear) return;
+    this.s.gear.setFilter = GEAR_SET_FILTERS.includes(f) ? f : 'all';
+    this.render();
+  }
+
+  /** v5.5 장비 탭 서브 탭 전환 */
+  setGearSub(sub) {
+    const ok = GEAR_SUBS.map(([k]) => k);
+    this.gearSub = ok.includes(sub) ? sub : 'enhance';
+    this.el.panel.scrollTop = 0;
+    this.render();
+  }
+
+  /** v5.5 전직·환생 탭 영역 필터(전체 / 도전 / 성장) */
+  setGrowthFilter(f) {
+    this.growthFilter = ['all', 'challenge', 'growth'].includes(f) ? f : 'all';
+    this.render();
+  }
+
+  /** v5.5 장비 탭 서브 배지 · 하단 장비 탭 알림 점 동기화 */
+  syncGearBadges() {
+    let b;
+    try {
+      b = gearBadges(this);
+    } catch (e) {
+      return;
+    }
+    document.querySelectorAll('[data-gbadge]').forEach((el) => {
+      const v = b[el.dataset.gbadge] || 0;
+      el.classList.toggle('on', v > 0);
+      const txt = v > 9 ? '9+' : String(v || '');
+      if (el.textContent !== txt) el.textContent = txt;
+    });
+    if (this.el.gearTabDot) {
+      this.el.gearTabDot.classList.toggle('hidden', !(b.enhance + b.bag));
+    }
   }
 
   /** 서브 탭 배지·하단 사냥 탭 알림 점을 현재 상태로 맞춘다 */
@@ -400,6 +447,7 @@ export class UI {
       if (now - (this._badgeAt || 0) > 900) {
         this._badgeAt = now;
         this.syncHuntBadges();
+        this.syncGearBadges();
         this.syncLandBadges();
       }
     }
@@ -415,6 +463,15 @@ export class UI {
     if (this.el.soundBtn) {
       this.el.soundBtn.classList.toggle('off', !on);
       this.el.soundBtn.setAttribute('aria-label', on ? '효과음 끄기' : '효과음 켜기');
+    }
+    // v5.5 캔버스 상단 전투 배속 미니 칩 — 환생 1회 해금 이후 어느 탭에서든 원탭 전환
+    if (this.el.stageSpeedBtn) {
+      const unl = battleSpeedUnlocked(this.s);
+      const spd = effectiveBattleSpeed(this.s);
+      this.el.stageSpeedBtn.classList.toggle('hidden', !unl);
+      this.el.stageSpeedBtn.classList.toggle('on', unl && spd > 1);
+      const txt = `⚡×${spd}`;
+      if (this.el.stageSpeedBtn.textContent !== txt) this.el.stageSpeedBtn.textContent = txt;
     }
   }
 
@@ -1415,7 +1472,17 @@ function petLine(ui) {
 }
 
 function tplHuntGrowth(ui) {
-  return `${jobCard(ui)}${rebirthCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}${petLine(ui)}`;
+  const f = ['all', 'challenge', 'growth'].includes(ui && ui.growthFilter) ? ui.growthFilter : 'all';
+  const bar = `<div class="chips growth-filter" role="tablist" aria-label="전직·도전 보기">
+    <button class="chip${f === 'all' ? ' on' : ''}" type="button" data-action="growth-filter" data-value="all">전체 보기</button>
+    <button class="chip${f === 'challenge' ? ' on' : ''}" type="button" data-action="growth-filter" data-value="challenge">⚔️ 도전 (던전·탑·보스)</button>
+    <button class="chip${f === 'growth' ? ' on' : ''}" type="button" data-action="growth-filter" data-value="growth">✨ 성장 (전직·환생·펫)</button>
+  </div>`;
+  const growthCards = `${jobCard(ui)}${rebirthCard(ui)}${petLine(ui)}`;
+  const challengeCards = `${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}`;
+  if (f === 'challenge') return `${bar}${challengeCards}`;
+  if (f === 'growth') return `${bar}${growthCards}`;
+  return `${bar}${jobCard(ui)}${rebirthCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}${petLine(ui)}`;
 }
 
 /* ───────────── 📅 일일 퀘스트 (v4.9.0 · KST 자정 리셋) ───────────── */
@@ -1526,13 +1593,53 @@ function tplHunt(ui) {
   return `${huntSubBar(ui)}${body}`;
 }
 
-/* ══════════════════════════ 장비/강화 (v5.0 모듈화: ui-gear.js) ══════════════════════════
- * 위→아래: 🎁 뽑기(gachaCard) → ⚔️ 장착 5부위+프리셋(gearSlotCards) → 🎒 인벤토리(gearInventory) → 🔨 부위 강화/각성
+/* ══════════════════════════ 장비/강화 (v5.0 모듈화 · v5.5 서브 탭 개편) ══════════════════════════
+ * 모바일 스크롤을 줄이기 위해 [🔨 강화·장착 | 🎒 인벤토리 | 🎁 뽑기] 3서브 탭으로 나눈다.
  */
+const GEAR_SUBS = [
+  ['enhance', '🔨', '강화·장착'],
+  ['bag', '🎒', '인벤토리'],
+  ['gacha', '🎁', '뽑기'],
+];
+
+function gearSubOf(ui) {
+  if (!ui || ui.gearSub === undefined) return 'all'; // 레거시 헤드리스 호출 호환
+  return GEAR_SUBS.some(([k]) => k === ui.gearSub) ? ui.gearSub : 'enhance';
+}
+
+function gearBadges(ui) {
+  const s = ui.s;
+  const canEnhance = EQUIP_SLOTS.some((slot) => {
+    const lv = s.equip[slot] || 0;
+    if (lv < EQUIP_MAX_LV) return s.shards >= enhanceCost(lv);
+    const ac = awakenCost(awakenLevel(s, slot));
+    return !!(ac && s.shards >= ac.shards && s.gold >= ac.gold);
+  });
+  const canBulk = dismantleTargets(s, 'low').length > 0;
+  const g = s.gacha || { cur: 'gold' };
+  const cur = g.cur === 'shards' ? 'shards' : 'gold';
+  const canPull10 = (s[cur] || 0) >= gachaCost(cur, 10).amount;
+  return {
+    enhance: canEnhance ? 1 : 0,
+    bag: canBulk ? dismantleTargets(s, 'low').length : 0,
+    gacha: canPull10 ? 1 : 0,
+  };
+}
+
+function gearSubBar(ui) {
+  const sub = gearSubOf(ui);
+  const active = sub === 'all' ? 'enhance' : sub;
+  const b = gearBadges(ui);
+  return `<div class="subtabs hunt-subbar gear-subbar" role="tablist" aria-label="장비 서브 탭">${GEAR_SUBS.map(
+    ([k, ico, label]) => `
+    <button class="subtab ${active === k ? 'active' : ''}" type="button" role="tab" aria-selected="${active === k}" data-action="gear-sub" data-value="${k}">${ico} ${label}<i class="nb ${b[k] ? 'on' : ''}" data-gbadge="${k}">${b[k] > 9 ? '9+' : b[k] || ''}</i></button>`,
+  ).join('')}</div>`;
+}
 
 function tplGear(ui) {
   const s = ui.s;
   const st = ui.battle.stats;
+  const sub = gearSubOf(ui);
   const total = Object.values(s.equip).reduce((a, b) => a + b, 0);
   const price = shardPrice(s);
   const maxShards = maxShardsBuy(s);
@@ -1592,11 +1699,7 @@ function tplGear(ui) {
     })
     .join('');
 
-  return `
-  ${gachaCard(ui)}
-  ${gearSlotCards(s)}
-  ${gearInventory(s)}
-
+  const enhanceCard = `
   <div class="card">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🔨</span>장비 강화 <small>부위 공유</small></div>
@@ -1618,8 +1721,9 @@ function tplGear(ui) {
       <b>+5 · +10 · 최대</b>는 강화석이 닿는 만큼 한 번에 올립니다(모자라면 가능한 만큼만).
       ${s.equip.ring === 0 ? '<br>반지는 치명타 확률, 부적은 골드 획득량을 올립니다.' : ''}
     </div>
-  </div>
+  </div>`;
 
+  const infoCard = `
   <div class="card">
     <div class="card-head"><div class="card-title"><span class="t-ico">📈</span>부위별 효과</div><span class="tiny dim">등급 보정 포함</span></div>
     <div class="kv"><span class="k">⚔️ 무기</span><span class="v">공격력 +${EQUIP.weapon.per}/강화</span></div>
@@ -1630,8 +1734,9 @@ function tplGear(ui) {
     <div class="kv"><span class="k">🏅 등급 보정</span><span class="v">일반 +0 · 고급 +4 · 레어 +9 · 영웅 +16 · 전설 +25강</span></div>
     <div class="kv"><span class="k">🎯 장비 옵션</span><span class="v">흡혈 · 공속 · 보스 추뎀 · 치명타 · 피해 감소 · 회복 · 골드/드랍 · 범위 베기 — 모두 실제 전투에 반영</span></div>
     <div class="kv"><span class="k">🎒 사냥 드랍</span><span class="v">몬스터 ${(GEAR_DROP.normalChance * 100).toFixed(1)}% · 보스 ${(GEAR_DROP.bossChance * 100).toFixed(0)}% (스테이지가 높을수록 고등급)</span></div>
-  </div>
+  </div>`;
 
+  const shardCard = `
   <div class="card">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">💱</span>강화석 구매 <small>골드 → 💎</small></div>
@@ -1652,8 +1757,9 @@ function tplGear(ui) {
       <b>×100 · 최대</b>로 펫 ★★진화(한 마리 400~800개)에 필요한 강화석을 한 번에 마련하세요.
       시세는 <b>현재 스테이지 사냥 기대값</b>을 따라 오르내립니다.
     </div>
-  </div>
+  </div>`;
 
+  const landTipCard = `
   <div class="card">
     <div class="card-head"><div class="card-title"><span class="t-ico">🏢</span>골드 쓰는 곳</div><span class="tiny dim">통합 경제</span></div>
     <div class="tiny muted" style="line-height:1.7">
@@ -1662,6 +1768,12 @@ function tplGear(ui) {
     </div>
     <button class="btn green block" style="margin-top:10px" data-action="tab" data-value="land">🏢 부동산 보러 가기</button>
   </div>`;
+
+  const bar = gearSubBar(ui);
+  if (sub === 'enhance') return `${bar}${gearSlotCards(s)}${enhanceCard}${shardCard}`;
+  if (sub === 'bag') return `${bar}${gearInventory(s)}${infoCard}`;
+  if (sub === 'gacha') return `${bar}${gachaCard(ui)}${gearSlotCards(s)}${landTipCard}`;
+  return `${bar}${gachaCard(ui)}${gearSlotCards(s)}${gearInventory(s)}${enhanceCard}${infoCard}${shardCard}${landTipCard}`;
 }
 
 /* ══════════════════════════ 부동산 ══════════════════════════ */

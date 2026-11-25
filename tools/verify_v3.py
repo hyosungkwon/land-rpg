@@ -187,8 +187,8 @@ def main():
     ok("startCloudResume" in app_src and "if (!this.cloudEnabled() && !this.cloud.hasPendingRedirect()) return;" in app_src, "세션 복원도 클라우드를 켓을 때만")
     ok("setInterval(() => this.cloudTick(), 15000)" in app_src, "주기 저장은 조건 검사형 타이머")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v5.4.0" in read("sw.js"), "SW 캐시 버전 v5.4.0")
-    ok("APP_VERSION = '5.4.0'" in read("src/data.js"), "앱 버전 v5.4.0")
+    ok("land-rpg-v5.5.0" in read("sw.js"), "SW 캐시 버전 v5.5.0")
+    ok("APP_VERSION = '5.5.0'" in read("src/data.js"), "앱 버전 v5.5.0")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
     ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
@@ -334,6 +334,8 @@ def main():
             "exports.__tpls = { hunt: tplHunt, gear: tplGear, land: tplLand, settings: tplSettings, market: buildMarketList };"
             "exports.__HUNT_SUBS = HUNT_SUBS.map(([k]) => k);"
             "exports.__huntSub = (ui, sub) => { ui.huntSub = sub; return tplHunt(ui); };"
+            "exports.__gearSub = (ui, sub) => { ui.gearSub = sub; return tplGear(ui); };"
+            "exports.__gearBadges = (ui) => gearBadges(ui);"
             "exports.__huntAll = (ui) => __HUNT_SUBS.map((k) => __huntSub(ui, k)).join('');"
             "exports.__badges = (ui) => huntBadges(ui);"
             "exports.__LAND_SUBS = LAND_SUBS.map(([k]) => k);"
@@ -2935,7 +2937,7 @@ def main():
     ok(all(x in asrc42 for x in ["enterTower", "openTowerFloors", "evolvePet", "showTowerResult", "showTowerFloors"]), "app.js — 탑 입장/층 선택/결과·펫 진화 액션", "")
     ok('assets/sprites/pet/${info.sprite}.png' in asrc42, "진화 결과 모달 — 진화 스프라이트 경로(.png)", "")
     ok(all(x in css42 for x in [".tower-card", ".tower-tiles", ".tower-floor", ".pet-evo", ".mini.evo"]), "style.css — v4.2 스타일", "")
-    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v5.4.0" in read("sw.js") and "APP_VERSION = '5.4.0'" in read("src/data.js"), "버전·서비스워커(5.4.0 · cloud 프리캐시)", "")
+    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v5.5.0" in read("sw.js") and "APP_VERSION = '5.5.0'" in read("src/data.js"), "버전·서비스워커(5.5.0 · cloud 프리캐시)", "")
     pkg_ok = (not os.path.exists(os.path.join(ROOT, "package.json"))) or ('"version": "' in read("package.json"))
     ok(pkg_ok, "package.json 버전 확인(없으면 클론 환경으로 통과)", "")
     evo_files = [f"assets/sprites/pet/pet_{n}_{s}.png" for n in ("wolf", "fox", "owl", "dragon") for s in ("awaken", "divine")]
@@ -3086,7 +3088,7 @@ def main():
 
     css43 = read("style.css")
     ok(all(x in css43 for x in [".land-sum", ".ls-v", ".ls-claim", ".news-slim", ".ns-title", ".land-subbar", ".land-rec", ".buff-now"]), "style.css — v4.3 부동산 요약 바·압축 뉴스·서브 탭", "")
-    ok("land-rpg-v5.4.0" in read("sw.js") and "'5.4.0'" in read("src/data.js"), "버전·캐시 v5.4.0", "")
+    ok("land-rpg-v5.5.0" in read("sw.js") and "'5.5.0'" in read("src/data.js"), "버전·캐시 v5.5.0", "")
 
     section("[20] ⚔️ v4.4 S31+ 무한 구간 리밸런싱 · 강화석 대량 교환 · 상위 전직")
 
@@ -3963,7 +3965,7 @@ def main():
     section("[23] ♻️ v4.7 장비 자동분해 · 🐉 상위 전직 궁극기 · 방치 편의")
 
     # ── 1) 버전·정적 배선 ──
-    ok("APP_VERSION = '5.4.0'" in read("src/data.js") and "land-rpg-v5.4.0" in read("sw.js"), "v5.4.0 버전·서비스워커 캐시 갱신", "")
+    ok("APP_VERSION = '5.5.0'" in read("src/data.js") and "land-rpg-v5.5.0" in read("sw.js"), "v5.5.0 버전·서비스워커 캐시 갱신", "")
     idx47 = read("index.html")
     ok(all(f'data-skill="{k}"' in idx47 for k in ["strike", "whirl", "berserk", "heal"]), "기존 4개 퀵슬롯 레이아웃 유지", "")
     ok('data-skill="ultimate"' in idx47 and 'class="q ult hidden"' in idx47, "다섯 번째 퀵슬롯(궁극기) — 해금 전 숨김", "")
@@ -4205,7 +4207,7 @@ def main():
     ok(cl_a["clean"][0] == "효성 왕" and cl_a["clean"][3] == 12 and not cl_a["html"], "닉네임 정리 — 공백 접기·12자 제한·HTML 문자 제거", json.dumps(cl_a["clean"], ensure_ascii=False))
     ok(cl_a["clean"][1] == "용사" and cl_a["clean"][2] == "용사", "1자·빈 닉네임은 기본 이름으로 대체", json.dumps(cl_a["clean"][:3], ensure_ascii=False))
     ok(cl_a["sum"] == [42, 21, 2, 5000, True], "세이브 요약 — 역대 최고 스테이지·보유 지역·총자산", json.dumps(cl_a["sum"]))
-    ok(cl_a["doc"][:6] == ["land_rpg_save", "5.4.0", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
+    ok(cl_a["doc"][:6] == ["land_rpg_save", "5.5.0", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
     ok(0 < cl_a["size"] < 200000, "클라우드 문서 크기 RTDB 한도 안(200KB 미만)", str(cl_a["size"]))
 
     # ── 2) 문서 해석(신형·v2 옛 페이로드·손상) ──
@@ -4309,7 +4311,7 @@ def main():
     ok(cl_e["errs"][0].startswith("이 주소가") and "응답이 없습니다" in cl_e["errs"][1] and cl_e["errs"][3].startswith("권한") and "시간 초과" in cl_e["errs"][4] and "라이브러리" in cl_e["errs"][5], "오류 문구 — 승인 도메인/시간 초과/권한/라이브러리", json.dumps(cl_e["errs"], ensure_ascii=False))
     ok(cl_e["strip"] == '{"a":1,"d":1,"e":{"x":2},"f":[1,3]}', "RTDB 전송 전 undefined·NaN 제거", cl_e["strip"])
     ok(cl_e["metrics"] == ["최고 스테이지", "총자산"], "랭킹 지표 이름", json.dumps(cl_e["metrics"], ensure_ascii=False))
-    ok(cl_e["entry"] == ["용사", 9, 12, 777, "5.4.0", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
+    ok(cl_e["entry"] == ["용사", 9, 12, 777, "5.5.0", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
 
     # ── 6) 세이브 호환 · 마이그레이션 ──
     mig48 = js(ctx, """
@@ -5036,6 +5038,39 @@ def main():
       };
     """)
     ok(ui54["hasAtt"] and ui54["hasWb"] and not ui54["bad"], "미션·도감 탭 출석 카드 · 일일 보스 주간 챌린지 UI 렌더", json.dumps(ui54))
+
+    # ── 19) v5.5.0 모바일 UI 개편 (장비 3서브 탭 · 테마 필터 · 도전 필터 · 캔버스 배속 칩) ──
+    section("v5.5.0 모바일 UI 개편")
+    ui55 = js(ctx2, """
+      const s = defaultState(1000); s.shards = 200; s.gold = 100000;
+      acquireGear(s, 'w_dragon', { autoEquip: true });
+      acquireGear(s, 'a_abyss', { autoEquip: true });
+      acquireGear(s, 'w_iron', { autoEquip: false });
+      const b = new Battle(s, () => ({}), () => 0.5, 1000);
+      const ui = { s, battle: b, app: { buffs: {} }, logs: [], tab: 'gear', gearSub: 'enhance', growthFilter: 'all', el: {}, install: { hidden: true } };
+      const gEnh = __gearSub(ui, 'enhance');
+      const gBag = __gearSub(ui, 'bag');
+      const gGac = __gearSub(ui, 'gacha');
+      s.gear.setFilter = 'dragon';
+      const dragOnly = gearList(s, 'all', 'dragon');
+      const gb = __gearBadges(ui);
+      ui.growthFilter = 'challenge';
+      const hChal = __huntSub(ui, 'growth');
+      return {
+        enhOk: gEnh.includes('gear-subbar') && gEnh.includes('장비 강화') && !gEnh.includes('inv-grid'),
+        bagOk: gBag.includes('inv-grid') && gBag.includes('data-action="gear-set-filter"') && !gBag.includes('gacha-card'),
+        gacOk: gGac.includes('gacha-card') && !gGac.includes('inv-grid'),
+        dragOnlyLen: dragOnly.length,
+        dragOnlyId: dragOnly[0] ? dragOnly[0].def.id : '',
+        gb,
+        chalOk: hChal.includes('황금 던전') && hChal.includes('도전의 탑') && !hChal.includes('전직 단계'),
+        bad: /undefined|NaN|\\[object Object\\]/.test(gEnh + gBag + gGac + hChal),
+      };
+    """)
+    idx55 = read("index.html")
+    ok(ui55["enhOk"] and ui55["bagOk"] and ui55["gacOk"] and not ui55["bad"], "장비 3서브 탭(강화·장착 / 인벤토리 / 뽑기) 분리 렌더", json.dumps(ui55))
+    ok(ui55["dragOnlyLen"] == 1 and ui55["dragOnlyId"] == "w_dragon" and ui55["gb"]["enhance"] == 1 and ui55["chalOk"], "인벤토리 테마 세트 필터 · 장비 알림 배지 · 사냥 도전 영역 필터", json.dumps(ui55))
+    ok('id="stageSpeedBtn"' in idx55 and 'id="gearTabDot"' in idx55, "index.html 캔버스 배속 칩 · 장비 탭 알림 점 추가")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

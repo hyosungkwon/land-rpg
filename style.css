@@ -2569,5 +2569,21 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .wb-r { font-size: 9.5px; color: var(--dim); line-height: 1.3; }
 .wb-ms.ready .wb-r { color: var(--gold); font-weight: 800; }
 
+/* ══════════════ v5.5.0 모바일 UI 개편 (장비 서브 탭 · 캔버스 배속 칩 · 테마 필터) ══════════════ */
+.stage-top-r { display: flex; align-items: center; gap: 6px; pointer-events: auto; }
+.stage-spd {
+  min-height: 32px; padding: 4px 9px; border-radius: 10px;
+  background: rgba(7, 10, 18, 0.72); border: 1px solid var(--line-2);
+  color: var(--sub); font-size: 11px; font-weight: 900; font-variant-numeric: tabular-nums;
+  backdrop-filter: blur(6px); cursor: pointer;
+}
+.stage-spd.on {
+  color: #161004; background: linear-gradient(135deg, #ffd76a, #ff9a3d);
+  border-color: rgba(255, 224, 140, 0.85);
+}
+.growth-filter { margin-bottom: 8px; }
+.gear-set-filters { margin-top: 5px; gap: 4px; }
+.chip.gs { padding: 3px 7px; font-size: 10px; }
+
 
 

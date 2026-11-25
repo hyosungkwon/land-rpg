@@ -6,7 +6,7 @@ import {
   equippedItem, equippedRarity, gearCollection, gearSlotCounts, dismantleValue,
   dismantleTargets, AUTO_DISMANTLE_MODES, autoDismantleLabel, normalizeAutoMode,
   GEAR_PRESET_NAMES, GEAR_AWAKEN_BONUS_LV, awakenLevel, gearPresetSummary,
-  gearSetOf, gearSetStatus, gearSetBonusText,
+  GEAR_SETS, GEAR_SET_FILTERS, gearSetOf, gearSetStatus, gearSetBonusText,
 } from './gear.js';
 import { esc, fmt } from './ui-fmt.js';
 
@@ -94,8 +94,9 @@ export function gearSlotCards(s) {
 export function gearInventory(s) {
   const g = s.gear || {};
   const filter = GEAR_FILTERS.includes(g.filter) ? g.filter : 'all';
+  const setFilter = GEAR_SET_FILTERS.includes(g.setFilter) ? g.setFilter : 'all';
   const owned = gearOwned(s);
-  const list = gearList(s, filter);
+  const list = gearList(s, filter, setFilter);
   const col = gearCollection(s);
   const counts = gearSlotCounts(s);
   const lowTargets = dismantleTargets(s, 'low');
@@ -110,6 +111,14 @@ export function gearInventory(s) {
     const n = f === 'all' ? owned.length : owned.filter((r) => r.def.slot === f).length;
     return `<button class="chip${f === filter ? ' on' : ''}" type="button" data-action="gear-filter" data-value="${f}" aria-pressed="${f === filter}">${label} ${n}</button>`;
   }).join('');
+
+  const setChips = [
+    `<button class="chip gs${setFilter === 'all' ? ' on' : ''}" type="button" data-action="gear-set-filter" data-value="all" aria-pressed="${setFilter === 'all'}">테마 전체</button>`,
+    ...GEAR_SETS.map((st) => {
+      const n = owned.filter((r) => r.def.set === st.id).length;
+      return `<button class="chip gs${setFilter === st.id ? ' on' : ''}" type="button" data-action="gear-set-filter" data-value="${st.id}" aria-pressed="${setFilter === st.id}">${st.icon}${st.name} ${n}</button>`;
+    }),
+  ].join('');
 
   const autoChips = AUTO_DISMANTLE_MODES.map((m) =>
     `<button class="chip ga${autoMode === m.id ? ' on' : ''}" type="button" data-action="gear-auto" data-value="${m.id}" aria-pressed="${autoMode === m.id}">${m.label}</button>`,
@@ -160,6 +169,7 @@ export function gearInventory(s) {
     </div>
     ${autoBox}
     <div class="chips gear-filters">${filterChips}</div>
+    <div class="chips gear-set-filters">${setChips}</div>
     <div class="inv-grid">${cards}</div>
     ${(bulkAuto || bulkLow || bulkCommon)
       ? `<div class="gear-tools">${bulkAuto}${bulkLow}${bulkCommon}</div>`

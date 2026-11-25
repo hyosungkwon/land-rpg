@@ -48,11 +48,14 @@
         <span class="s-label" id="stageNum">스테이지 1</span>
         <span class="s-theme" id="themeName">초원</span>
       </div>
-      <button class="boss-btn" id="bossBtn" type="button">
-        <span class="b-ico">👑</span>
-        <span class="b-txt">보스</span>
-        <span class="b-count" id="bossCount">3</span>
-      </button>
+      <div class="stage-top-r">
+        <button class="stage-spd hidden" id="stageSpeedBtn" type="button" data-action="cycle-speed" aria-label="전투 배속 전환">⚡×1</button>
+        <button class="boss-btn" id="bossBtn" type="button">
+          <span class="b-ico">👑</span>
+          <span class="b-txt">보스</span>
+          <span class="b-count" id="bossCount">3</span>
+        </button>
+      </div>
     </div>
 
     <div class="stage-bottom">
@@ -82,7 +85,7 @@
 
   <nav class="tabbar" id="tabbar">
     <button class="tab active" data-tab="hunt" type="button"><span>⚔️</span><b>사냥/스킬</b><i class="tab-dot hidden" id="huntTabDot" aria-hidden="true"></i></button>
-    <button class="tab" data-tab="gear" type="button"><span>🎒</span><b>장비/강화</b></button>
+    <button class="tab" data-tab="gear" type="button"><span>🎒</span><b>장비/강화</b><i class="tab-dot hidden" id="gearTabDot" aria-hidden="true"></i></button>
     <button class="tab" data-tab="land" type="button"><span>🏢</span><b>부동산</b><i class="tab-dot hidden" id="landTabDot" aria-hidden="true"></i></button>
     <button class="tab" data-tab="settings" type="button"><span>⚙️</span><b>설정</b><i class="tab-dot hidden" id="settingsTabDot" aria-hidden="true"></i></button>
   </nav>

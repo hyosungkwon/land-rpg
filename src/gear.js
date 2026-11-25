@@ -316,6 +316,7 @@ export const GEAR_SETS = [
   },
 ];
 export const GEAR_SET_BY_ID = GEAR_SETS.reduce((m, st) => { m[st.id] = st; return m; }, {});
+export const GEAR_SET_FILTERS = ['all', ...GEAR_SETS.map((st) => st.id)];
 
 /** 아이템이 속한 테마 세트 정의(없으면 null) */
 export function gearSetOf(item) {
@@ -585,11 +586,12 @@ export function gearOwned(s) {
   }).filter(Boolean);
 }
 
-/** 인벤토리 표시용 정렬 — 장착 → 등급 높은 순 → 부위 순 → 이름 */
-export function gearList(s, filter = 'all') {
+/** 인벤토리 표시용 정렬 — 장착 → 등급 높은 순 → 부위 순 → 이름 (v5.5 테마 필터 지원) */
+export function gearList(s, filter = 'all', setFilter = 'all') {
   const slotOrder = (slot) => EQUIP_SLOTS.indexOf(slot);
+  const sf = GEAR_SET_FILTERS.includes(setFilter) ? setFilter : 'all';
   return gearOwned(s)
-    .filter((row) => filter === 'all' || row.def.slot === filter)
+    .filter((row) => (filter === 'all' || row.def.slot === filter) && (sf === 'all' || row.def.set === sf))
     .sort((a, b) => {
       if (a.equipped !== b.equipped) return a.equipped ? -1 : 1;
       const d = itemScore(b.def) - itemScore(a.def);
