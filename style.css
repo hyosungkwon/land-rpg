@@ -304,6 +304,93 @@ button {
 }
 .q.ready { border-color: rgba(255, 207, 92, 0.55); box-shadow: 0 0 10px rgba(255, 207, 92, 0.18); }
 
+/* 🐉 v4.7 상위 전직 궁극기 — 4개 퀵슬롯 옆에 붙는 다섯 번째 필살기 버튼 */
+.q.ult {
+  position: absolute;
+  right: 48px;
+  bottom: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 200, 110, 0.6);
+  background: radial-gradient(circle at 50% 38%, rgba(255, 140, 90, 0.4), rgba(20, 12, 22, 0.92));
+  box-shadow: 0 0 14px rgba(255, 120, 80, 0.26);
+}
+.q.ult .q-ico { font-size: 21px; }
+.q.ult.ready {
+  border-color: #ffe08a;
+  box-shadow: 0 0 16px rgba(255, 200, 90, 0.5), inset 0 0 10px rgba(255, 200, 120, 0.22);
+  animation: ultGlow 1.6s ease-in-out infinite;
+}
+@keyframes ultGlow {
+  0%, 100% { box-shadow: 0 0 12px rgba(255, 200, 90, 0.34), inset 0 0 8px rgba(255, 200, 120, 0.16); }
+  50% { box-shadow: 0 0 20px rgba(255, 190, 80, 0.62), inset 0 0 12px rgba(255, 200, 120, 0.3); }
+}
+
+/* ♻️ v4.7 장비 자동분해 기준 */
+.gear-auto {
+  margin-top: 8px;
+  padding: 8px 9px;
+  border-radius: 11px;
+  background: linear-gradient(150deg, rgba(94, 225, 163, 0.09), rgba(18, 26, 42, 0.55) 70%);
+  border: 1px solid rgba(94, 225, 163, 0.26);
+}
+.gear-auto.off {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: var(--line);
+}
+.gear-auto .ga-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.gear-auto .ga-title { font-size: 11.5px; font-weight: 800; color: var(--txt); }
+.gear-auto .ga-title b { color: var(--green); margin-left: 3px; }
+.gear-auto.off .ga-title b { color: var(--dim); }
+.gear-auto .ga-chips { margin: 7px 0 0; gap: 5px; }
+.gear-auto .ga-chips .chip { padding: 4px 8px; font-size: 10.5px; min-height: 26px; }
+.gear-auto .ga-chips .chip.ga.on {
+  color: #bff7d8;
+  background: rgba(94, 225, 163, 0.18);
+  border-color: rgba(94, 225, 163, 0.55);
+  font-weight: 800;
+}
+.gear-auto .ga-note { margin-top: 6px; line-height: 1.45; }
+
+/* 🐉 v4.7 궁극기 카드 (사냥 → 스킬 서브 탭) */
+.ult-card {
+  margin-top: 9px;
+  padding: 9px 10px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--uc, #ffe9a8);
+  background: linear-gradient(150deg, rgba(255, 176, 120, 0.14), rgba(14, 18, 30, 0.74) 65%);
+}
+.ult-card.locked {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.03);
+}
+.ult-card .ult-head { display: flex; align-items: center; gap: 7px; }
+.ult-card .ult-ico {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 17px;
+  background: rgba(255, 233, 168, 0.16);
+  border: 1px solid var(--uc, #ffe9a8);
+}
+.ult-card .ult-name { flex: 1 1 auto; min-width: 0; font-size: 12px; font-weight: 800; color: var(--sub); }
+.ult-card .ult-name b { color: var(--txt); margin-left: 3px; }
+.ult-card .ult-name .lv { margin-left: 5px; font-size: 9.5px; font-weight: 700; color: var(--uc, var(--gold)); }
+.ult-card .ult-cast { flex: 0 0 auto; min-width: 52px; }
+.ult-card .ult-desc { margin-top: 6px; font-size: 10.5px; line-height: 1.5; color: var(--sub); }
+.ult-card .ult-desc.dim { color: var(--dim); }
+.ult-card .cd-bar { display: block; margin-top: 7px; }
+.ult-card .ult-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; gap: 6px; }
+
+@media (max-height: 620px) {
+  .q.ult { width: 40px; height: 40px; right: 42px; }
+  .q.ult .q-ico { font-size: 18px; }
+}
+
 .offline-pill {
   position: absolute;
   top: 50%;

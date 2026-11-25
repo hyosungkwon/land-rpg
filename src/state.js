@@ -58,6 +58,11 @@ export function defaultState(now = nowMs()) {
     autoBoss: true,
     effects: true,
     screenShake: true, // v4.3 화면 흔들림(타격감) — 설정에서 끌 수 있다
+    // v4.7 방치 편의 — 스킬 자동 시전 · 상위 전직 궁극기 자동 발동
+    autoSkill: true,
+    autoUlt: true,
+    // v4.7 궁극기 상태(마지막 발동 시각 · 누적 발동 횟수). 해금 전에는 그냥 0 으로 남는다.
+    ult: { last: 0, casts: 0 },
     // v3.2 메타 성장: 펫 동료 · 전직 단계 · 황금 던전 쿨타임
     jobTier: 0,
     jobAt: 0,
@@ -110,6 +115,14 @@ export function normalizeState(raw, now = nowMs()) {
   if (s.gacha.cur !== 'shards') s.gacha.cur = 'gold';
   s.soundOn = s.soundOn !== false;
   s.screenShake = s.screenShake !== false; // v4.3 이전 저장본은 켜짐으로 시작
+  // v4.7: 편의 토글·궁극기 상태 — 없는 저장본은 켜짐/0 으로 안전하게 마이그레이션
+  s.autoSkill = s.autoSkill !== false;
+  s.autoUlt = s.autoUlt !== false;
+  const rawUlt = raw.ult && typeof raw.ult === 'object' ? raw.ult : {};
+  s.ult = {
+    last: Math.max(0, num(rawUlt.last, 0)),
+    casts: Math.max(0, Math.floor(num(rawUlt.casts, 0))),
+  };
   s.land = { ...d.land, ...(raw.land || {}) };
   s.land.owned = sanitizeOwned(s.land.owned);
   s.land.totalCost = sanitizeOwned(s.land.totalCost);
@@ -600,6 +613,7 @@ export function pullGear(s, times = 1, rng = Math.random, now = nowMs()) {
       itemName: item.name,
       equipped: equip,
       duplicate: !!acq.duplicate,
+      auto: !!acq.auto,          // v4.7 자동분해 기준 이하 → 강화석
       replaced,
       shards,
     });

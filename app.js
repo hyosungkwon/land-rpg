@@ -9,6 +9,7 @@ import {
 import {
   gearItem, gearIcon, gearOptionList, equippedItem, equippedRarity, gearOwned, gearOptionSummary,
   equipGear, dismantleGear, bulkDismantle, dismantleTargets, dismantleValue, itemScore, GEAR_OPTS,
+  normalizeAutoMode, autoDismantleLabel,
 } from './src/gear.js';
 
 const GEAR_OPT_LABEL = (k) => (GEAR_OPTS[k] ? `${GEAR_OPTS[k].icon} ${GEAR_OPTS[k].name}` : k);
@@ -332,7 +333,19 @@ class App {
       } else if (ev.t === 'gearDrop') {
         // 🎒 v4.0 장비 드랍 — 인벤토리/자동 장착
         const rar = RARITIES[RARITY_INDEX[ev.rarity] || 0];
-        if (ev.duplicate) {
+        if (ev.auto) {
+          // ♻️ v4.7 자동분해 — 토스트는 5초에 한 번만 묶어서 알린다(드랍이 몰려도 화면을 가리지 않게)
+          this.ui.addLog(`♻️ <b>${esc(ev.ko)}</b> 자동분해 → 💎${ev.shards}`);
+          this._autoDust = (this._autoDust || 0) + (ev.shards || 0);
+          this._autoN = (this._autoN || 0) + 1;
+          if (!this._autoToastAt || now - this._autoToastAt > 5000) {
+            this._autoToastAt = now;
+            this.ui.toast(`♻️ 장비 ${this._autoN}개 자동분해 · 💎+${this._autoDust}`, 'green');
+            this._autoN = 0;
+            this._autoDust = 0;
+          }
+          this.ui.renderIfNeeded();
+        } else if (ev.duplicate) {
           this.ui.addLog(`🎒 <b>${esc(ev.ko)}</b> 중복 획득 → 💎${ev.shards}`);
         } else {
           this.ui.addLog(`🎒 <b>${esc(ev.ko)}</b> 획득 (${rar.name})${ev.equipped ? ' · 자동 장착' : ' · 인벤토리 보관'}`);
@@ -342,6 +355,13 @@ class App {
           this.sound.gacha(rar.id);
           this.ui.renderIfNeeded();
         }
+      } else if (ev.t === 'ultimate') {
+        // 🐉 v4.7 상위 전직 궁극기 — 로그·토스트·스크린리더 안내
+        this.ui.addLog(`🐉 <b>${esc(ev.ko)}</b> 발동! ${ev.hits}명 · ⚔️${(ev.dmg || 0).toLocaleString()}`);
+        this.ui.toast(`🐉 궁극기 ${esc(ev.ko)}! ${ev.hits}명에게 ${(ev.dmg || 0).toLocaleString()} 피해`, 'gold');
+        this.ui.announce(`궁극기 ${ev.ko} 발동 — ${ev.hits}명`);
+        this.sound.gacha('legend');
+        this.ui.renderIfNeeded();
       } else if (ev.t === 'levelUp') {
         this.ui.toast(`⬆️ 레벨 업! Lv.${ev.level}`, 'green');
         this.ui.addLog(`<b>레벨 업</b> Lv.${ev.level} · 체력 완충`);
@@ -797,6 +817,44 @@ class App {
       },
       dismantleGearItem: (uid) => this.confirmDismantleGear(uid),
       bulkDismantleGear: (mode) => this.confirmBulkDismantle(mode),
+
+      /* ── ♻️ v4.7 장비 자동분해 기준 ── */
+      setGearAuto: (mode) => {
+        if (!this.s.gear) return;
+        const m = normalizeAutoMode(mode);
+        if (this.s.gear.autoDismantle === m) return;
+        this.s.gear.autoDismantle = m;
+        this.save(true);
+        this.sound.ui();
+        this.ui.toast(
+          m === 'off' ? '♻️ 자동분해 꺼짐 — 새 장비는 모두 보관됩니다' : `♻️ 자동분해 — ${autoDismantleLabel(this.s)} 장비는 즉시 💎`,
+          m === 'off' ? '' : 'green',
+        );
+        this.ui.render();
+      },
+
+      /* ── 🐉 v4.7 상위 전직 궁극기 · 자동 시전 토글 ── */
+      castUltimate: () => {
+        this.sound.unlock();
+        const r = this.battle.castUltimate(Date.now());
+        if (!r.ok) {
+          this.ui.toast(r.reason || '궁극기를 시전할 수 없습니다');
+          return;
+        }
+        this.ui.renderIfNeeded();
+      },
+      toggleAutoUlt: () => {
+        this.s.autoUlt = this.s.autoUlt === false;
+        this.save();
+        this.ui.toast(this.s.autoUlt ? '🐉 궁극기 자동 발동 켜짐' : '궁극기 자동 발동 꺼짐 — 직접 시전만');
+        this.ui.render();
+      },
+      toggleAutoSkill: () => {
+        this.s.autoSkill = this.s.autoSkill === false;
+        this.save();
+        this.ui.toast(this.s.autoSkill ? '✨ 스킬 자동 시전 켜짐' : '스킬 자동 시전 꺼짐 — 터치로만 시전');
+        this.ui.render();
+      },
 
       /* ── 부동산 ── */
       landTrade: (key, side) => this.openLandTrade(key, side),
@@ -1939,9 +1997,11 @@ class App {
         const def = gearItem(item.itemId);
         const tag = item.equipped
           ? (item.replaced && item.shards ? `교체 장착 · 이전 분해 +💎${item.shards}` : 'NEW 자동 장착')
-          : item.duplicate
-            ? `중복 분해 +💎${item.shards}`
-            : '인벤토리 보관 · 비교 후 장착';
+          : item.auto
+            ? `♻️ 자동분해 +💎${item.shards}`
+            : item.duplicate
+              ? `중복 분해 +💎${item.shards}`
+              : '인벤토리 보관 · 비교 후 장착';
         return `<div class="gr-row ${item.equipped ? '' : 'dust'}" ${def ? `data-action="gear-result-item" data-value="${def.id}"` : ''}>
           <span class="ico">${def ? gearIcon(def, 26) : '🎒'}</span>
           <span class="nm">${def ? esc(def.name) : esc(item.itemName || '')}</span>
@@ -2215,15 +2275,26 @@ class App {
     const h = Math.floor(summary.sec / 3600);
     const m = Math.floor((summary.sec % 3600) / 60);
     const away = h > 0 ? `${h}시간 ${m}분` : `${m}분`;
+    // v4.7: 얼마나 쉬었고 시간당 얼마나 벌었는지 한눈에 — 보상 카드 위에 요약 줄을 둔다
+    const hours = Math.max(summary.sec / 3600, 1 / 60);
+    const perHour = Math.round(summary.gold / hours);
+    const capLeft = Math.max(0, ECON.offlineCapHours * 3600 - summary.sec);
+    const capLine = summary.capped
+      ? `최대 <b>${ECON.offlineCapHours}시간</b>까지만 정산됩니다 — 더 긴 방치는 이만큼씩만 쌓입니다.`
+      : `계속 자리를 비우면 <b>${Math.floor(capLeft / 3600)}시간 ${Math.floor((capLeft % 3600) / 60)}분</b> 더 쌓입니다 (최대 ${ECON.offlineCapHours}시간).`;
     this.ui.modal({
       title: '🌙 방치 보상',
-      sub: `${away} 동안 사냥을 계속했습니다.${summary.capped ? ` (최대 ${ECON.offlineCapHours}시간까지만 정산)` : ''}`,
-      body: `<div class="modal-rewards">
+      sub: `${away} 동안 사냥을 계속했습니다 · 시간당 💰${perHour.toLocaleString()}${summary.capped ? ` (최대 ${ECON.offlineCapHours}시간 정산)` : ''}`,
+      body: `<div class="kv"><span class="k">자리 비운 시간</span><span class="v">${away}</span></div>
+             <div class="kv"><span class="k">시간당 골드</span><span class="v">💰${perHour.toLocaleString()}/h</span></div>
+             <div class="kv"><span class="k">정산 비율</span><span class="v">접속 중 사냥의 ${Math.round(ECON.offlineRate * 100)}%</span></div>
+             <div class="modal-rewards">
                <div class="rw"><div class="e">💰</div><div class="v">${summary.gold.toLocaleString()}</div><div class="k">골드</div></div>
                <div class="rw"><div class="e">✨</div><div class="v">${summary.exp.toLocaleString()}</div><div class="k">경험치</div></div>
                <div class="rw"><div class="e">💎</div><div class="v">${summary.shards.toLocaleString()}</div><div class="k">강화석</div></div>
              </div>
-             ${levelUps > 0 ? `<div class="note">레벨 업 +${levelUps} · 스탯이 상승했습니다.</div>` : `<div class="note">보상은 이미 반영되었습니다.</div>`}`,
+             ${levelUps > 0 ? `<div class="note" style="color:var(--green)">⬆️ 레벨 업 +${levelUps} · 스탯이 상승했습니다.</div>` : ''}
+             <div class="note">보상은 이미 반영되었습니다. ${capLine}</div>`,
       actions: [{ label: '확인', style: 'primary', onClick: () => {} }],
     });
   }

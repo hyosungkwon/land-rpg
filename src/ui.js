@@ -4,6 +4,7 @@
 import {
   APP_VERSION, ECON, EQUIP, EQUIP_SLOTS, EQUIP_MAX_LV, SKILLS, SKILL_UPGRADE_MAX, skillCost, enhanceCost,
   RARITIES, RARITY_INDEX, GACHA, gachaCost, rarityBonusLv,
+  ULTIMATES, ULT_MIN_TIER, ultimateOf, ultCdOf, ultLeftMs,
 } from './data.js';
 import { expNeed, skillEffect, shardPrice, enhanceMaxCount, maxShardsBuy, SHARD_BULK, skillCdOf } from './state.js';
 import {
@@ -39,7 +40,7 @@ import {
   GEAR_ITEMS, GEAR_FILTERS, GEAR_OPTS, GEAR_DROP,
   gearIcon, gearItem, gearList, gearOwned, gearOptionList, gearOptionSummary,
   equippedItem, equippedRarity, gearCollection, gearSlotCounts, dismantleValue,
-  dismantleTargets,
+  dismantleTargets, AUTO_DISMANTLE_MODES, autoDismantleIdx, autoDismantleLabel, normalizeAutoMode,
 } from './gear.js';
 import {
   REBIRTH, REBIRTH_TRAITS, rebirthStatus, rebirthBonus, traitLevel, traitCost, traitSummary,
@@ -135,7 +136,9 @@ export class UI {
     this.el.quick.addEventListener('click', (e) => {
       const b = e.target.closest('.q');
       if (!b) return;
-      this.app.actions.castSkill(b.dataset.skill);
+      // v4.7: 다섯 번째 슬롯은 상위 전직 궁극기
+      if (b.dataset.skill === 'ultimate') this.app.actions.castUltimate();
+      else this.app.actions.castSkill(b.dataset.skill);
     });
 
     this.el.bossBtn.addEventListener('click', () => this.app.actions.challengeBoss());
@@ -177,6 +180,10 @@ export class UI {
       case 'gear-equip': actions.equipGearItem(Number(v)); break;
       case 'gear-dismantle': actions.dismantleGearItem(Number(v)); break;
       case 'gear-bulk': actions.bulkDismantleGear(v); break;
+      case 'gear-auto': actions.setGearAuto(v); break;
+      case 'cast-ult': actions.castUltimate(); break;
+      case 'toggle-auto-skill': actions.toggleAutoSkill(); break;
+      case 'toggle-auto-ult': actions.toggleAutoUlt(); break;
       case 'open-log': this.showLog(); break;
       case 'open-pets': this.s.land.sub = 'buff'; this.setTab('land'); break;
       case 'land-sub': this.setLandSub(v); break;
@@ -341,9 +348,22 @@ export class UI {
     const remainKills = Math.max(0, ECON.normalKillsPerStage - s.killsInStage);
     setT(this.el.bossCount, b.boss ? '전투' : ready ? '도전' : String(remainKills));
 
-    // 퀵 스킬 쿨타임
+    // 퀵 스킬 쿨타임 (v4.7: 다섯 번째 = 상위 전직 궁극기)
+    const ultDef = ultimateOf(s);
     [...this.el.quick.querySelectorAll('.q')].forEach((q) => {
       const key = q.dataset.skill;
+      if (key === 'ultimate') {
+        q.classList.toggle('hidden', !ultDef);
+        if (!ultDef) return;
+        const ucd = ultCdOf(s, this.app.buffs);
+        const uleft = ultLeftMs(s, this.app.buffs, now);
+        q.querySelector('.q-cd').style.height = `${ucd ? Math.min(100, (uleft / ucd) * 100) : 0}%`;
+        q.classList.toggle('ready', uleft <= 0);
+        const ico = q.querySelector('.q-ico');
+        if (ico && ico.textContent !== ultDef.icon) ico.textContent = ultDef.icon;
+        q.setAttribute('aria-label', `${ultDef.name} 시전`);
+        return;
+      }
       const cd = skillCdOf(key, this.app.buffs) || SKILLS[key].cd;
       const sk = s.skills[key];
       const left = Math.max(0, (sk.last + cd) - now);
@@ -434,15 +454,28 @@ export class UI {
       else if (k === 'kill') el.textContent = String(Math.min(ECON.normalKillsPerStage, s.killsInStage));
       else if (k.startsWith('cd-')) {
         const key = k.slice(3);
-        const cd = skillCdOf(key, this.app.buffs) || SKILLS[key].cd;
-        const left = Math.max(0, s.skills[key].last + cd - now);
-        el.style.width = `${(left / cd) * 100}%`;
+        if (key === 'ultimate') {
+          // v4.7 궁극기 — 해금 전에는 0, 해금 뒤에는 실효 쿨타임 기준
+          const ucd = ultCdOf(s, this.app.buffs);
+          const uleft = ultLeftMs(s, this.app.buffs, now);
+          el.style.width = ucd ? `${Math.min(100, (uleft / ucd) * 100)}%` : '0%';
+        } else {
+          const cd = skillCdOf(key, this.app.buffs) || SKILLS[key].cd;
+          const left = Math.max(0, s.skills[key].last + cd - now);
+          el.style.width = `${(left / cd) * 100}%`;
+        }
       } else if (k.startsWith('cast-')) {
         const key = k.slice(5);
-        const cd = skillCdOf(key, this.app.buffs) || SKILLS[key].cd;
-        const left = Math.max(0, s.skills[key].last + cd - now);
-        el.textContent = left > 0 ? `${(left / 1000).toFixed(1)}초` : '시전';
-        el.disabled = left > 0;
+        if (key === 'ultimate') {
+          const uleft = ultLeftMs(s, this.app.buffs, now);
+          el.textContent = uleft > 0 ? `${(uleft / 1000).toFixed(1)}초` : '시전';
+          el.disabled = uleft > 0;
+        } else {
+          const cd = skillCdOf(key, this.app.buffs) || SKILLS[key].cd;
+          const left = Math.max(0, s.skills[key].last + cd - now);
+          el.textContent = left > 0 ? `${(left / 1000).toFixed(1)}초` : '시전';
+          el.disabled = left > 0;
+        }
       } else if (k === 'dps') {
         el.textContent = fmt(b ? b.stats.dps : 0);
       } else if (k === 'dungeon-cd') {
@@ -729,6 +762,7 @@ function jobCard(ui) {
       <span class="job-badge${curTop ? ' hi' : ''}" style="--jc:${cur.color}">${jobBonusText(cur)}</span>
     </div>
     <div class="tiny muted" style="margin-top:2px">전직 완료 — 영구 <b>공격 +${cur.atkPct}% · 체력 +${cur.hpPct}%</b> 적용 중</div>
+    ${ultimateOf(s) ? `<div class="tiny" style="margin-top:3px;color:${ultimateOf(s).color}">${ultimateOf(s).icon} 궁극기 <b>${esc(ultimateOf(s).name)}</b> 사용 가능 · 사냥 탭에서 시전</div>` : ''}
   </div>`;
   }
 
@@ -747,6 +781,7 @@ function jobCard(ui) {
     ${pr.canPromote
       ? `<button class="btn primary block promote-btn${nextTop ? ' upper' : ''}" data-action="promote" style="margin-top:7px;min-height:34px" data-live="promote">✨ 전직 가능! ${n.badge} ${esc(n.name)}</button>`
       : `<div class="tiny dim ellip" style="margin-top:5px">${esc(pr.reason)}${nextTop && (pr.lvLeft > 0 || pr.stageLeft > 0) ? ` · 남은 ${pr.lvLeft > 0 ? pr.lvLeft + '레벨' : ''}${pr.lvLeft > 0 && pr.stageLeft > 0 ? ' · ' : ''}${pr.stageLeft > 0 ? pr.stageLeft + '스테이지' : ''}` : ''}</div>`}
+    ${!ultimateOf(s) && n.tier >= ULT_MIN_TIER ? `<div class="tiny" style="margin-top:3px;color:var(--gold)">🐉 이 전직을 마치면 <b>궁극기 ${esc(ULTIMATES[0].name)}</b> 해금</div>` : ''}
   </div>`;
 }
 
@@ -1160,13 +1195,53 @@ function huntSkillCard(ui) {
   return `
   <div class="card skill-card">
     <div class="card-head">
-      <div class="card-title"><span class="t-ico">✨</span>스킬 <small>자동 시전 · 터치하면 즉시</small></div>
+      <div class="card-title"><span class="t-ico">✨</span>스킬 <small>터치하면 즉시 · 자동 시전</small></div>
       <div class="row gap6">
+        <span class="tiny dim">자동</span>
+        <button class="switch sm ${s.autoSkill !== false ? 'on' : ''}" data-action="toggle-auto-skill" aria-label="스킬 자동 시전 전환"></button>
         <span class="tiny dim">💎 <b data-live="shards">${fmt(s.shards)}</b></span>
         <button class="mini log-btn" type="button" data-action="open-log" aria-label="전투 기록 열기">📜</button>
       </div>
     </div>
     <div class="skill-grid">${cells}</div>
+    ${ultPanel(ui)}
+  </div>`;
+}
+
+/** 🐉 v4.7 상위 전직 궁극기 카드 — 해금 전에는 잠금 안내만 */
+function ultPanel(ui) {
+  const s = ui.s;
+  const u = ultimateOf(s);
+  const next = ULTIMATES[0];
+  if (!u) {
+    const pr = jobProgress(s);
+    return `
+    <div class="ult-card locked">
+      <div class="ult-head">
+        <span class="ult-ico">🔒</span>
+        <span class="ult-name">궁극기 <b>${next.name}</b><span class="lv">전직 ${ULT_MIN_TIER + 1}단계</span></span>
+      </div>
+      <div class="ult-desc dim">5단계 <b>🐉 드래곤 로드</b>(Lv.65 · S32)에 오르면 다섯 번째 필살기가 열립니다. 지금 ${pr.next ? `다음 전직까지 ${pr.reason}` : '최종 전직'}</div>
+    </div>`;
+  }
+  const cd = ultCdOf(s, ui.app && ui.app.buffs);
+  const left = ultLeftMs(s, ui.app && ui.app.buffs);
+  const casts = Math.max(0, Math.floor(Number(s.ult && s.ult.casts) || 0));
+  return `
+  <div class="ult-card" style="--uc:${u.color};--ub:${u.burst || u.color}">
+    <div class="ult-head">
+      <span class="ult-ico">${u.icon}</span>
+      <span class="ult-name">궁극기 <b>${esc(u.name)}</b><span class="lv">${esc(jobOf(s).name)}</span></span>
+      <button class="btn small blue ult-cast" type="button" data-action="cast-ult" data-live="cast-ultimate">${left > 0 ? `${(left / 1000).toFixed(1)}초` : '시전'}</button>
+    </div>
+    <div class="ult-desc">${esc(u.desc)}</div>
+    <i class="cd-bar"><i data-live="cd-ultimate"></i></i>
+    <div class="ult-foot">
+      <span class="tiny dim">쿨 ${Math.round(cd / 1000)}초 · 누적 ${fmt(casts)}회</span>
+      <span class="tiny dim" style="display:inline-flex;align-items:center;gap:6px">자동 발동
+        <button class="switch sm ${s.autoUlt !== false ? 'on' : ''}" data-action="toggle-auto-ult" aria-label="궁극기 자동 발동 전환"></button>
+      </span>
+    </div>
   </div>`;
 }
 
@@ -1296,7 +1371,7 @@ function gearSlotCards(s) {
   </div>`;
 }
 
-/** 🎒 보유 장비 인벤토리 — 필터 · 그리드 · 일괄 분해 */
+/** 🎒 보유 장비 인벤토리 — 자동분해 기준 · 필터 · 그리드 · 일괄 분해 */
 function gearInventory(s) {
   const g = s.gear || {};
   const filter = GEAR_FILTERS.includes(g.filter) ? g.filter : 'all';
@@ -1306,6 +1381,9 @@ function gearInventory(s) {
   const counts = gearSlotCounts(s);
   const lowTargets = dismantleTargets(s, 'low');
   const commonTargets = dismantleTargets(s, 'common');
+  const autoMode = normalizeAutoMode(g.autoDismantle);
+  const autoTargets = dismantleTargets(s, 'threshold');
+  const autoStat = g.auto && typeof g.auto === 'object' ? g.auto : { count: 0, shards: 0 };
   const shardsOf = (rows) => rows.reduce((a, r) => a + dismantleValue(r.def), 0);
 
   const filterChips = GEAR_FILTERS.map((f) => {
@@ -1313,6 +1391,22 @@ function gearInventory(s) {
     const n = f === 'all' ? owned.length : owned.filter((r) => r.def.slot === f).length;
     return `<button class="chip${f === filter ? ' on' : ''}" type="button" data-action="gear-filter" data-value="${f}" aria-pressed="${f === filter}">${label} ${n}</button>`;
   }).join('');
+
+  // v4.7 자동분해 기준 — 방치 중에도 인벤토리가 넘치지 않게 등급 이하 장비를 즉시 강화석으로
+  const autoChips = AUTO_DISMANTLE_MODES.map((m) =>
+    `<button class="chip ga${autoMode === m.id ? ' on' : ''}" type="button" data-action="gear-auto" data-value="${m.id}" aria-pressed="${autoMode === m.id}">${m.label}</button>`,
+  ).join('');
+  const autoBox = `
+    <div class="gear-auto${autoMode === 'off' ? ' off' : ''}">
+      <div class="ga-head">
+        <span class="ga-title">♻️ 자동분해 <b>${esc(autoDismantleLabel(s))}</b></span>
+        <span class="tiny dim" data-live="auto-dust">${autoStat.count ? `누적 ${fmt(autoStat.count)}개 · 💎${fmt(autoStat.shards)}` : '기준 이하 장비 → 즉시 강화석'}</span>
+      </div>
+      <div class="chips ga-chips">${autoChips}</div>
+      <div class="tiny dim ga-note">${autoMode === 'off'
+        ? '끔 — 새 장비는 모두 인벤토리에 보관됩니다.'
+        : `사냥·보스·뽑기에서 <b>${esc(autoDismantleLabel(s))}</b> 장비가 나오면 바로 💎로 바뀝니다. <span class="dim">장착 중·자동 장착되는 장비는 제외</span>`}</div>
+    </div>`;
 
   const cards = list.length
     ? list.map((row) => `
@@ -1336,6 +1430,9 @@ function gearInventory(s) {
   const bulkCommon = commonTargets.length
     ? `<button class="chip" type="button" data-action="gear-bulk" data-value="common">일반 등급 일괄 분해 ${commonTargets.length}개 · 💎${fmt(shardsOf(commonTargets))}</button>`
     : '';
+  const bulkAuto = autoMode !== 'off' && autoTargets.length
+    ? `<button class="chip danger" type="button" data-action="gear-bulk" data-value="threshold">♻️ ${esc(autoDismantleLabel(s))} 일괄 분해 ${autoTargets.length}개 · 💎${fmt(shardsOf(autoTargets))}</button>`
+    : '';
 
   return `
   <div class="card">
@@ -1343,10 +1440,11 @@ function gearInventory(s) {
       <div class="card-title"><span class="t-ico">🎒</span>보유 장비 <small>${owned.length}/${GEAR_ITEMS.length}종</small></div>
       <span class="tiny dim">도감 ${col.seen}/${col.total}종</span>
     </div>
+    ${autoBox}
     <div class="chips gear-filters">${filterChips}</div>
     <div class="inv-grid">${cards}</div>
-    ${(bulkLow || bulkCommon)
-      ? `<div class="gear-tools">${bulkLow}${bulkCommon}</div>`
+    ${(bulkAuto || bulkLow || bulkCommon)
+      ? `<div class="gear-tools">${bulkAuto}${bulkLow}${bulkCommon}</div>`
       : '<div class="tiny dim" style="margin-top:8px">분해할 장비가 없습니다 — 장착보다 낮은 등급이 모이면 일괄 분해 버튼이 생깁니다.</div>'}
     <div class="note" style="margin-top:9px">
       카드를 누르면 <b>지금 장착한 장비와 옵션을 나란히 비교</b>하고 그 자리에서 <b>장착</b>하거나 <b>강화석으로 분해</b>할 수 있습니다.
@@ -2279,6 +2377,14 @@ function tplSettings(ui) {
     <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
       <span class="tiny">자동 보스 전환</span>
       <button class="switch ${s.autoBoss ? 'on' : ''}" data-action="toggle-auto"></button>
+    </div>
+    <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
+      <span class="tiny">스킬 자동 시전 <span class="dim">4종 · 터치 시전은 항상</span></span>
+      <button class="switch ${s.autoSkill !== false ? 'on' : ''}" data-action="toggle-auto-skill" aria-label="스킬 자동 시전 전환"></button>
+    </div>
+    <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
+      <span class="tiny">궁극기 자동 발동 <span class="dim">🐉 상위 전직</span></span>
+      <button class="switch ${s.autoUlt !== false ? 'on' : ''}" data-action="toggle-auto-ult" aria-label="궁극기 자동 발동 전환"></button>
     </div>
     <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
       <span class="tiny">화면 이펙트</span>

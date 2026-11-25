@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""land-rpg v4.6.0 검증 (QuickJS + 정적 검사)
+"""land-rpg v4.7.0 검증 (QuickJS + 정적 검사)
 
 1) 모든 JS 파일 문법(파싱) 검사
 2) 정적 검사 (Firebase/로그인 흔적 0, 저장 키 v3, sw 캐시 v3.5)
@@ -95,8 +95,8 @@ def main():
     for bad in ["firebase", "signInWithPopup", "Google 로그인", "gstatic", "firebaseio", "googleapis"]:
         ok(bad.lower() not in text_all.lower(), f"Firebase/로그인 흔적 없음: {bad}")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v4.6.0" in read("sw.js"), "SW 캐시 버전 v4.6.0")
-    ok("APP_VERSION = '4.6.0'" in read("src/data.js"), "앱 버전 v4.6.0")
+    ok("land-rpg-v4.7.0" in read("sw.js"), "SW 캐시 버전 v4.7.0")
+    ok("APP_VERSION = '4.7.0'" in read("src/data.js"), "앱 버전 v4.7.0")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
     ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
     ok(os.path.exists(os.path.join(ROOT, "src/savecode.js")), "src/savecode.js 존재")
@@ -2348,7 +2348,7 @@ def main():
     ok(all(x in read("src/state.js") for x in ["gearMods", "normalizeGear", "syncGearRarity", "compareGear"]), "상태에 장비 옵션·마이그레이션·비교 반영(state.js)")
     css4 = read("style.css")
     ok(all(x in css4 for x in [".gear-slots", ".gslot", ".inv-grid", ".inv-card", ".cmp-vs", ".cmp-opts", ".cmp-stats", ".iv-eq", ".gsvg"]), "v4 장비 UI CSS(슬롯·그리드·비교 모달)")
-    ok("장비 시스템" in read("README.md") and "4.6.0" in read("README.md"), "README v4.6.0 반영")
+    ok("장비 시스템" in read("README.md") and "4.7.0" in read("README.md"), "README 최신 버전 반영")
 
     # ══════════════════════════════════════════════════════════════════════
     section("[17] 🖼️ v4.1 테마 배경 · ♾️ 환생 중간 스테이지 점프")
@@ -2838,9 +2838,9 @@ def main():
     ok(all(x in asrc42 for x in ["enterTower", "openTowerFloors", "evolvePet", "showTowerResult", "showTowerFloors"]), "app.js — 탑 입장/층 선택/결과·펫 진화 액션", "")
     ok('assets/sprites/pet/${info.sprite}.png' in asrc42, "진화 결과 모달 — 진화 스프라이트 경로(.png)", "")
     ok(all(x in css42 for x in [".tower-card", ".tower-tiles", ".tower-floor", ".pet-evo", ".mini.evo"]), "style.css — v4.2 스타일", "")
-    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.6.0" in read("sw.js") and "APP_VERSION = '4.6.0'" in read("src/data.js"), "버전·서비스워커(4.6.0 · tower.js 프리캐시)", "")
-    pkg_ok = os.path.exists(os.path.join(ROOT, "package.json")) and '"version": "4.6.0"' in read("package.json")
-    ok(pkg_ok, "package.json 버전 4.6.0(로컬 검증용)", "")
+    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.7.0" in read("sw.js") and "APP_VERSION = '4.7.0'" in read("src/data.js"), "버전·서비스워커(4.7.0 · gear/auto 프리캐시)", "")
+    pkg_ok = os.path.exists(os.path.join(ROOT, "package.json")) and '"version": "4.7.0"' in read("package.json")
+    ok(pkg_ok, "package.json 버전 4.7.0(로컬 검증용)", "")
     evo_files = [f"assets/sprites/pet/pet_{n}_{s}.png" for n in ("wolf", "fox", "owl", "dragon") for s in ("awaken", "divine")]
     ok(all(os.path.exists(os.path.join(ROOT, f)) for f in evo_files), "펫 진화 스프라이트 8종 파일", ", ".join(f for f in evo_files if not os.path.exists(os.path.join(ROOT, f))))
     ok(all(f"'./{f}'" in read("sw.js") for f in evo_files), "sw.js 프리캐시에 진화 스프라이트 포함", "")
@@ -2989,7 +2989,7 @@ def main():
 
     css43 = read("style.css")
     ok(all(x in css43 for x in [".land-sum", ".ls-v", ".ls-claim", ".news-slim", ".ns-title", ".land-subbar", ".land-rec", ".buff-now"]), "style.css — v4.3 부동산 요약 바·압축 뉴스·서브 탭", "")
-    ok("land-rpg-v4.6.0" in read("sw.js") and "'4.6.0'" in read("src/data.js"), "버전·캐시 v4.6.0", "")
+    ok("land-rpg-v4.7.0" in read("sw.js") and "'4.7.0'" in read("src/data.js"), "버전·캐시 v4.7.0", "")
 
     section("[20] ⚔️ v4.4 S31+ 무한 구간 리밸런싱 · 강화석 대량 교환 · 상위 전직")
 
@@ -3860,8 +3860,221 @@ def main():
     ok(all(x in rgsrc46 for x in ["master:", "masterBuffs", "masterText", "critDmgPct", "bossDmgPct"]) and "cdrPct: 4" in rgsrc46, "region.js — 권역 완성 보너스 정의", "")
 
     readme46 = read("README.md")
-    ok(all(x in readme46 for x in ["v4.6.0", "부동산 전투 시너지", "급매 경매", "특별 임대"]) and "4.6.0" in readme46, "README — v4.6 시너지·경매 반영", "")
+    ok(all(x in readme46 for x in ["v4.6 ", "부동산 전투 시너지", "급매 경매", "특별 임대"]), "README — v4.6 시너지·경매 섹션 유지", "")
 
+
+    section("[23] ♻️ v4.7 장비 자동분해 · 🐉 상위 전직 궁극기 · 방치 편의")
+
+    # ── 1) 버전·정적 배선 ──
+    ok("APP_VERSION = '4.7.0'" in read("src/data.js") and "land-rpg-v4.7.0" in read("sw.js"), "v4.7.0 버전·서비스워커 캐시 갱신", "")
+    idx47 = read("index.html")
+    ok(all(f'data-skill="{k}"' in idx47 for k in ["strike", "whirl", "berserk", "heal"]), "기존 4개 퀵슬롯 레이아웃 유지", "")
+    ok('data-skill="ultimate"' in idx47 and 'class="q ult hidden"' in idx47, "다섯 번째 퀵슬롯(궁극기) — 해금 전 숨김", "")
+    css47 = read("style.css")
+    ok(all(x in css47 for x in [".q.ult", ".q.ult.ready", ".gear-auto", ".gear-auto .ga-chips", ".ult-card", ".ult-card.locked"]), "style.css — 궁극기 버튼·자동분해·궁극기 카드 스타일", "")
+    gsrc47 = read("src/gear.js")
+    ok(all(x in gsrc47 for x in ["AUTO_DISMANTLE_MODES", "autoDismantleIdx", "normalizeAutoMode", "auto: { count: 0, shards: 0 }"]), "gear.js — 자동분해 모드·상태", "")
+    ok("auto: !!acq.auto" in read("src/state.js") and "autoSkill" in read("src/state.js") and "autoUlt" in read("src/state.js"), "state.js — 자동분해 결과·자동 시전 토글 저장", "")
+    ok("auto: !!drop.auto" in read("src/combat.js") and "castUltimate" in read("src/combat.js") and "ultLeftMs" in read("src/combat.js"), "combat.js — 드랍 자동분해 플래그·궁극기 시전", "")
+    ok("ultUntil" in read("src/combat.js") and "ultBonus" in read("src/combat.js"), "combat.js — 궁극기 발동 뒤 공격력 버프", "")
+    ok(all(x in read("src/render.js") for x in ["ev.t === 'ultimate'", "f.key === 'ultimate'", "drawFx"]), "render.js — 궁극기 연출(빛기둥·회전 문양·파동)", "")
+    ok(all(x in read("app.js") for x in ["setGearAuto", "castUltimate", "toggleAutoUlt", "toggleAutoSkill", "시간당 골드", "정산 비율"]), "app.js — 자동분해/궁극기 액션·방치 보상 요약", "")
+
+    # ── 2) 자동분해: 등급별 필터링·제외 규칙 ──
+    au47 = js(ctx, """
+      const FULL = ['w_dragon', 'a_abyss', 'h_abyss', 'r_eye', 'm_grail']; // 전설 5부위 장착
+      const armed = () => { const s = defaultState(0); for (const id of FULL) acquireGear(s, id, { now: 0 }); return s; };
+      const off = defaultState(0);
+      const offRes = acquireGear(off, 'a_leather', { now: 0 }); // 끔(기본) — 빈 갑옷 슬롯이라 자동 장착
+      const offKept = acquireGear(off, 'a_chain', { now: 0 });  // 끔 — 보관
+
+      const s = armed();
+      s.gear.autoDismantle = 'advanced';
+      const items0 = s.gear.items.length, sh0 = s.shards;
+      const lowr = acquireGear(s, 'a_plate', { now: 0 });      // 고급 이하 → 자동분해
+      const keepr = acquireGear(s, 'a_guard', { now: 0 });     // 레어 → 보관
+      const hi = acquireGear(s, 'h_crown', { now: 0 });        // 영웅 → 보관
+      const afterAuto = { items: s.gear.items.length, shards: s.shards, auto: { ...s.gear.auto } };
+
+      // 자동 장착되는 장비는 자동분해하지 않는다 (빈 슬롯 = 일반 이하라도 장착 우선)
+      const s2 = defaultState(0);
+      s2.gear.autoDismantle = 'rare';
+      const eq = acquireGear(s2, 'a_leather', { now: 0 });
+      // 기준보다 높은 등급은 그대로 보관
+      const s3 = armed(); s3.gear.autoDismantle = 'common';
+      const above = acquireGear(s3, 'a_plate', { now: 0 });
+      const onlyCommon = acquireGear(s3, 'h_cloth', { now: 0 });
+      // 영웅 이하 = 전설만 보관
+      const s4 = armed(); s4.gear.autoDismantle = 'hero';
+      const heroDust = acquireGear(s4, 'w_thunder', { now: 0 });
+      const legendKept = acquireGear(s4, 'w_dragon', { now: 0 }); // 중복 → duplicate
+      // 장착 중인 장비는 기준 이하 일괄분해 대상에서 빠진다
+      const s5 = armed();
+      acquireGear(s5, 'm_clover', { now: 0 }); // 고급 — 기준을 켜기 전에 보관
+      acquireGear(s5, 'h_cloth', { now: 0 });  // 일반
+      s5.gear.autoDismantle = 'hero';
+      const thr = dismantleTargets(s5, 'threshold').map((r) => r.def.id).sort();
+      const equippedIds = Object.values(s5.gear.equipped).map((u) => { const row = s5.gear.items.find((x) => x.uid === u); return row ? row.id : ''; });
+      return {
+        offMode: off.gear.autoDismantle, offEquipped: offRes.equipped, offKept: !offKept.auto && offKept.ok,
+        lowAuto: !!lowr.auto, lowShards: lowr.shards, keepAuto: !!keepr.auto, common: !!above.auto,
+        hiAuto: !!hi.auto, afterAuto, dupLike: !!legendKept.duplicate,
+        eqEquipped: eq.equipped, eqAuto: !!eq.auto,
+        commonAuto: !!onlyCommon.auto, heroAuto: !!heroDust.auto, legendKept: !legendKept.auto,
+        thr, equippedIds, items: [s.gear.items.length - items0, s.shards - sh0],
+      };
+    """)
+    ok(au47["offMode"] == "off" and au47["offEquipped"] is True and au47["offKept"] is True, "기본값 '끔' — 기존 저장본처럼 새 장비를 조용히 지우지 않는다", json.dumps({k: au47[k] for k in ["offMode", "offEquipped", "offKept"]}))
+    ok(au47["lowAuto"] is True and au47["lowShards"] == 6 and au47["keepAuto"] is False and au47["hiAuto"] is False, "기준(고급) 이하만 자동분해 — 레어·영웅은 보관", json.dumps({"low": au47["lowShards"], "keep": au47["keepAuto"], "hi": au47["hiAuto"]}))
+    ok(au47["items"] == [2, au47["lowShards"]] and au47["afterAuto"]["auto"]["count"] == 1 and au47["afterAuto"]["auto"]["shards"] == au47["lowShards"], "자동분해 — 인벤토리 미추가·강화석 증가·누적 카운터", json.dumps(au47["afterAuto"]))
+    ok(au47["eqEquipped"] is True and au47["eqAuto"] is False, "빈 슬롯에 자동 장착되는 장비는 분해하지 않는다", json.dumps({"eq": au47["eqEquipped"], "auto": au47["eqAuto"]}))
+    ok(au47["common"] is False and au47["commonAuto"] is True and au47["heroAuto"] is True and au47["legendKept"] is True, "등급 경계 — 일반 기준은 고급 이상 보관 · 영웅 기준은 전설만 보관", json.dumps({k: au47[k] for k in ["common", "commonAuto", "heroAuto", "legendKept"]}))
+    ok(au47["thr"] == ["h_cloth", "m_clover"] and all(x not in au47["thr"] for x in au47["equippedIds"]), "기준 이하 일괄분해 대상 — 장착 중 장비 제외", json.dumps({"thr": au47["thr"], "eq": au47["equippedIds"]}, ensure_ascii=False))
+
+    # ── 3) 자동분해: 사냥 드랍·뽑기 경로 ──
+    drop47 = js(ctx, """
+      const RNG = (seed) => { let x = seed; return function () { x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296; }; };
+      const s = defaultState(0);
+      for (const id of ['w_dragon', 'a_abyss', 'h_abyss', 'r_eye', 'm_grail']) acquireGear(s, id, { now: 0 });
+      s.stage = 40; s.gear.autoDismantle = 'hero';
+      const rng = RNG(99);
+      let drops = 0, autos = 0, items0 = s.gear.items.length;
+      for (let i = 0; i < 400; i++) {
+        const d = tryGearDrop(s, { isBoss: true, stage: 40, buffs: { dropPct: 0 }, rng, now: 0 });
+        if (d) { drops++; if (d.auto) autos++; }
+      }
+      const dropState = { drops, autos, items: s.gear.items.length - items0, auto: { ...s.gear.auto }, shards: s.shards };
+
+      const g = defaultState(0);
+      for (const id of ['w_dragon', 'a_abyss', 'h_abyss', 'r_eye', 'm_grail']) acquireGear(g, id, { now: 0 });
+      g.gear.autoDismantle = 'hero';
+      g.gold = 100000; g.gacha.cur = 'gold';
+      const r = pullGear(g, 10, RNG(5));
+      const autoRows = r.results.filter((x) => x.auto).length;
+      return { dropState, pull: { ok: r.ok, n: r.results.length, autoRows, shards: r.shards,
+        everyTagged: r.results.every((x) => x.auto || x.duplicate || x.equipped), items: g.gear.items.length } };
+    """)
+    ok(drop47["dropState"]["drops"] > 30 and drop47["dropState"]["autos"] > 0, "사냥·보스 드랍 — 자동분해 기준 이하가 실제로 즉시 변환", json.dumps(drop47["dropState"]))
+    ok(drop47["dropState"]["auto"]["count"] == drop47["dropState"]["autos"] and drop47["dropState"]["auto"]["shards"] > 0, "드랍 자동분해 누적 — 건수·강화석이 저장 상태에 남는다", json.dumps(drop47["dropState"]["auto"]))
+    ok(drop47["pull"]["ok"] is True and drop47["pull"]["n"] == 10 and drop47["pull"]["autoRows"] > 0 and drop47["pull"]["everyTagged"], "뽑기 10회 — 자동분해된 결과가 항목별로 표시", json.dumps(drop47["pull"]))
+
+    # ── 4) 궁극기: 해금·발동·피해·쿨타임 ──
+    ult47 = js(ctx, """
+      const RNG = (seed) => { let x = seed; return function () { x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296; }; };
+      const s = defaultState(0); s.jobTier = 4; s.level = 70; s.stage = 33; s.maxStage = 33;
+      const b = new Battle(s, () => ({}), RNG(7), 0);
+      const def = ultimateOf(s), atk = b.stats.atk, hpMax = b.stats.hpMax;
+      const before = b.targets().length;
+      b.player.hp = Math.round(hpMax * 0.5);
+      const r = b.castUltimate(1000);
+      const evs = b.drainEvents();
+      const ev = evs.filter((e) => e.t === 'ultimate')[0] || null;
+      const hitKinds = evs.filter((e) => e.t === 'hit' && e.kind === 'ultimate').length;
+      const left = ultLeftMs(s, {}, 1200);
+      const again = b.castUltimate(1200);
+      const t5 = { ...s, jobTier: 5 };
+      const t3 = { ...s, jobTier: 3 };
+      const cdBase = ultCdOf(s, {});
+      const cdCut = ultCdOf(s, { synCdrPct: 10 });
+      return { name: def && def.name, mul: def && def.mul, ok: r.ok, hits: r.hits, dmg: r.dmg, atk,
+        before, hitKinds, ev: ev && { hits: ev.hits, dmg: ev.dmg, name: ev.ko, tier: ev.tier, icon: ev.icon },
+        casts: s.ult.casts, left, againOk: again.ok, reason: again.reason,
+        hp: Math.round(b.player.hp), healed: b.player.hp >= hpMax * 0.5,
+        ultUntil: b.ultUntil, ultBonus: b.ultBonus, critDmg: b.stats.critDmg,
+        t5: ultimateOf(t5).name, t3: ultimateOf(t3), cdBase, cdCut,
+        minTier: ULT_MIN_TIER, defs: ULTIMATES.map((u) => [u.tier, u.name, u.cd, u.mul]) };
+    """)
+    ok(ult47["t3"] is None and ult47["t5"] == "용신 강림" and ult47["minTier"] == 4 and ult47["name"] == "용의 심판", "궁극기 해금 — 전직 5단계부터(6단계는 용신 강림)", json.dumps({"t3": ult47["t3"], "t5": ult47["t5"], "name": ult47["name"]}, ensure_ascii=False))
+    ok(ult47["ok"] is True and ult47["hits"] == ult47["before"] and ult47["hitKinds"] == ult47["hits"], "궁극기 발동 — 전장의 모든 적 타격", json.dumps({"hits": ult47["hits"], "before": ult47["before"]}))
+    ok(ult47["dmg"] >= ult47["atk"] * ult47["mul"] * ult47["hits"] * 0.85 and ult47["dmg"] <= ult47["atk"] * ult47["mul"] * ult47["hits"] * ult47["critDmg"] * 1.15, "궁극기 피해 — 공격력 × 배율(치명타 포함) 범위", json.dumps({"dmg": ult47["dmg"], "atk": ult47["atk"], "mul": ult47["mul"]}))
+    ok(ult47["ev"] and ult47["ev"]["name"] == "용의 심판" and ult47["ev"]["tier"] == 4 and ult47["ev"]["dmg"] == ult47["dmg"], "궁극기 이벤트 — 이름·단계·총 피해 전달(연출·로그)", json.dumps(ult47["ev"], ensure_ascii=False))
+    ok(ult47["casts"] == 1 and ult47["left"] > 40000 and ult47["againOk"] is False, "궁극기 쿨타임 — 발동 뒤 재사용 차단", json.dumps({"casts": ult47["casts"], "left": ult47["left"], "again": ult47["againOk"]}))
+    ok(ult47["healed"] is True and ult47["ultBonus"] == 0.5 and ult47["ultUntil"] > 1000, "궁극기 부가 효과 — 회복·공격력 버프 지속", json.dumps({"hp": ult47["hp"], "bonus": ult47["ultBonus"]}))
+    ok(ult47["cdBase"] == 45000 and abs(ult47["cdCut"] - 40500) < 0.01, "궁극기 쿨타임 — 부동산 시너지 쿨감 반영", json.dumps({"base": ult47["cdBase"], "cut": ult47["cdCut"]}))
+
+    # ── 5) 자동 시전 토글 ──
+    auto47 = js(ctx, """
+      const RNG = (seed) => { let x = seed; return function () { x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296; }; };
+      const run = (opts, ticks) => {
+        const s = defaultState(0); s.jobTier = 4; s.level = 70; s.stage = 33; s.maxStage = 33;
+        s.autoSkill = opts.skill; s.autoUlt = opts.ult;
+        const b = new Battle(s, () => ({}), RNG(13), 0);
+        let t = 0;
+        const c = { ult: 0, skill: 0 };
+        for (let i = 0; i < ticks; i++) {
+          t += 50; b.tick(50, t);
+          for (const e of b.drainEvents()) { if (e.t === 'ultimate') c.ult++; else if (e.t === 'skill') c.skill++; }
+        }
+        return { ...c, casts: s.ult.casts };
+      };
+      const off = run({ skill: false, ult: false }, 1200);   // 60초
+      const on = run({ skill: true, ult: true }, 1200);
+      const ultOnly = run({ skill: false, ult: true }, 1200);
+      return { off, on, ultOnly };
+    """)
+    ok(auto47["off"]["ult"] == 0 and auto47["off"]["skill"] == 0, "자동 시전 토글 끔 — 스킬·궁극기 모두 손으로만", json.dumps(auto47["off"]))
+    ok(auto47["on"]["ult"] >= 1 and auto47["on"]["skill"] > 10 and auto47["on"]["casts"] == auto47["on"]["ult"], "자동 시전 켬 — 스킬·궁극기 자동 발동", json.dumps(auto47["on"]))
+    ok(auto47["ultOnly"]["ult"] >= 1 and auto47["ultOnly"]["skill"] == 0, "궁극기만 자동 — 스킬 자동을 꺼도 궁극기는 발동", json.dumps(auto47["ultOnly"]))
+
+    # ── 6) 저장 호환·마이그레이션 ──
+    mig47 = js(ctx, """
+      const full = { ...defaultState(0) };
+      delete full.autoSkill; delete full.autoUlt; delete full.ult;
+      delete full.gear.autoDismantle; delete full.gear.auto;
+      full.jobTier = 4; full.level = 70; full.maxStage = 33;
+      const mig = normalizeState(JSON.parse(JSON.stringify(full)), 0);
+      const kept = normalizeState({ ver: 3, jobTier: 5, autoSkill: false, autoUlt: false, ult: { last: 900, casts: 7 },
+        gear: { items: [{ uid: 1, id: 'w_dragon', at: 0 }], equipped: { weapon: 1 }, autoDismantle: 'rare', auto: { count: 5, shards: 70 } } }, 0);
+      const bad = normalizeState({ ver: 3, autoSkill: 'no', autoUlt: 0, ult: { last: -5, casts: 'x' },
+        gear: { autoDismantle: 'zzz', auto: { count: -3, shards: 'NaN' } } }, 0);
+      const v46 = { ver: 3, level: 40, stage: 24, maxStage: 24, gold: 1234, jobTier: 3,
+        gear: { items: [{ uid: 3, id: 'w_flame', at: 0 }, { uid: 4, id: 'a_guard', at: 0 }], equipped: { weapon: 3 }, nextUid: 5, seen: { w_flame: 1 }, drops: 2, bulk: 1 } };
+      const back = normalizeState(v46, 0);
+      return { mig: [mig.autoSkill, mig.autoUlt, mig.ult, mig.gear.autoDismantle, mig.gear.auto],
+        kept: [kept.autoSkill, kept.autoUlt, kept.ult, kept.gear.autoDismantle, kept.gear.auto, kept.jobTier],
+        bad: [bad.autoSkill, bad.autoUlt, bad.ult, bad.gear.autoDismantle, bad.gear.auto],
+        v46: [back.gear.items.length, back.gear.equipped.weapon, back.gold, back.jobTier] };
+    """)
+    ok(mig47["mig"] == [True, True, {"last": 0, "casts": 0}, "off", {"count": 0, "shards": 0}], "v4.6 저장본 → 새 설정 기본값(자동 시전 켬 · 자동분해 끔) 마이그레이션", json.dumps(mig47["mig"]))
+    ok(mig47["kept"] == [False, False, {"last": 900, "casts": 7}, "rare", {"count": 5, "shards": 70}, 5], "저장된 토글·궁극기 상태·자동분해 설정 보존", json.dumps(mig47["kept"]))
+    ok(mig47["bad"] == [True, True, {"last": 0, "casts": 0}, "off", {"count": 0, "shards": 0}], "손상 값 방어 — 잘못된 토글·음수·문자 정리", json.dumps(mig47["bad"]))
+    ok(mig47["v46"] == [2, 3, 1234, 3], "기존 장비 인벤토리·장착·골드·전직 그대로 유지", json.dumps(mig47["v46"]))
+
+    # ── 7) UI — 자동분해 설정·궁극기 카드·설정 토글 ──
+    tpl47 = js(ctx2, """
+      const mk = (s) => { const buffs = computeBuffs(s, 0); return { s, battle: { stats: calcStats(s, buffs), def: stageDef(s.stage), boss: null, player: { hp: 100 } },
+        app: { buffs }, logs: [], tab: 'gear', el: {}, install: { hidden: true } }; };
+      const s = defaultState(0); s.jobTier = 4; s.level = 70; s.stage = 33; s.maxStage = 33; s.gold = 90000; s.shards = 300;
+      for (const id of ['w_dragon', 'a_abyss', 'h_abyss', 'r_eye', 'm_grail']) acquireGear(s, id, { now: 0 });
+      acquireGear(s, 'a_plate', { now: 0 });   // 고급 — 기준을 켜기 전에 보관
+      acquireGear(s, 'h_cloth', { now: 0 });   // 일반
+      acquireGear(s, 'a_guard', { now: 0 });   // 레어
+      s.gear.autoDismantle = 'advanced';
+      s.gear.auto = { count: 12, shards: 180 };
+      const ui = mk(s);
+      ui.huntSub = 'skill';
+      const gear = __tpls.gear(ui), hunt = __tpls.hunt(ui), settings = __tpls.settings(ui);
+      const s0 = defaultState(0); const ui0 = mk(s0); ui0.huntSub = 'skill';
+      const hunt0 = __tpls.hunt(ui0), gear0 = __tpls.gear(ui0);
+      const s5 = { ...s, jobTier: 5 }; const hunt5 = __tpls.hunt(mk(s5));
+      return { gear, hunt, settings, hunt0, gear0, hunt5,
+        chips: ['off', 'common', 'advanced', 'rare', 'hero'].map((m) => gear.includes('data-action="gear-auto" data-value="' + m + '"')),
+        bulk: gear.includes('data-value="threshold"'), stat: gear.includes('누적 12개') && gear.includes('💎180'),
+        modeText: gear.includes('고급 이하'), offText: gear0.includes('끔 — 새 장비는 모두 인벤토리에 보관됩니다'),
+        ultName: hunt.includes('용의 심판') && hunt.includes('data-action="cast-ult"') && hunt.includes('data-action="toggle-auto-ult"'),
+        ult5: hunt5.includes('용신 강림'), ultLocked: hunt0.includes('드래곤 로드') && !hunt0.includes('data-action="cast-ult"'),
+        autoSkill: hunt.includes('data-action="toggle-auto-skill"') && settings.includes('스킬 자동 시전'),
+        autoUlt: settings.includes('궁극기 자동 발동') && settings.includes('data-action="toggle-auto-ult"'),
+        bad: /undefined|NaN/.test(gear + hunt + settings + hunt0 + gear0 + hunt5) };
+    """)
+    ok(tpl47["chips"] == [True] * 5 and tpl47["modeText"] and tpl47["offText"], "장비 탭 — 자동분해 5단계 칩(끔·일반·고급·레어·영웅)과 상태 문구", json.dumps({"chips": tpl47["chips"]}))
+    ok(tpl47["stat"] is True and tpl47["bulk"] is True, "장비 탭 — 누적 자동분해 건수·강화석·기준 이하 일괄분해 버튼", "")
+    ok(tpl47["ultName"] is True and tpl47["ult5"] is True and tpl47["ultLocked"] is True, "사냥 탭 — 궁극기 카드(시전·자동 발동) / 용신 강림 / 해금 전 잠금 안내", "")
+    ok(tpl47["autoSkill"] is True and tpl47["autoUlt"] is True, "설정·스킬 카드 — 자동 시전·궁극기 자동 발동 토글", "")
+    ok(tpl47["bad"] is False, "v4.7 템플릿에 undefined/NaN 누출 없음")
+
+    readme47 = read("README.md")
+    ok(all(x in readme47 for x in ["v4.7.0", "자동분해", "궁극기", "용의 심판"]), "README — v4.7 자동분해·궁극기 반영", "")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

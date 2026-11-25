@@ -352,6 +352,18 @@ export class Renderer {
             });
           }
         }
+      } else if (ev.t === 'ultimate') {
+        // 🐉 v4.7 상위 전직 궁극기 — 전장을 가로지르는 빛기둥 · 회전 문양 · 적마다 충격 고리
+        this.fx.push({ key: 'ultimate', x: ECON.playerX, t0: now, dur: 980, color: ev.color, burst: ev.burst });
+        this.rings.push({ x: ECON.playerX, life: 1, r: 46, color: ev.burst || ev.color || '#ffe9a8', wide: 2.4 });
+        this.rings.push({ x: ECON.playerX, life: 1, r: 24, color: ev.color || '#ff9a3d', wide: 1.6 });
+        this.shake = Math.max(this.shake, 8.5);
+        this.flash = Math.max(this.flash, 0.34);
+        for (const x of ev.xs || []) {
+          this.rings.push({ x, life: 1, r: 16, color: ev.burst || ev.color || '#ffe9a8', wide: 1.5 });
+          this.burst(x, ev.color || '#ff9a3d', 9, true);
+        }
+        this.addFloater(ECON.playerX, `${ev.icon || '🐉'} ${ev.ko || '궁극기'}`, false, 'gold', ev.color || '#ffe9a8', 1.35, now);
       } else if (ev.t === 'lifesteal') {
         // 🩸 흡혈 — 캐릭터 발밑에 붉은 고리 + 회복 숫자
         this.rings.push({ x: ECON.playerX, life: 1, r: 14, color: '#ff6a7a', wide: 0.9 });
@@ -2532,6 +2544,42 @@ export class Renderer {
           }
           ctx.drawImage(img, -sz / 2, -sz / 2, sz, sz);
         }
+      } else if (f.key === 'ultimate') {
+        // 궁극기: 캐릭터를 감싸는 빛기둥 + 회전하는 용 문양 + 퍼지는 파동
+        const cx = this.worldX(ECON.playerX);
+        const col = f.color || '#ffe9a8';
+        const bst = f.burst || '#fff6c4';
+        const pillar = ctx.createLinearGradient(cx, gy - 230 * sc, cx, gy);
+        pillar.addColorStop(0, 'rgba(255,255,255,0)');
+        pillar.addColorStop(0.35, hexA(col, 0.34 * fade));
+        pillar.addColorStop(1, hexA(bst, 0.05 * fade));
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = pillar;
+        ctx.beginPath();
+        ctx.moveTo(cx - 16 * sc, gy);
+        ctx.lineTo(cx - 9 * sc, gy - 230 * sc);
+        ctx.lineTo(cx + 9 * sc, gy - 230 * sc);
+        ctx.lineTo(cx + 16 * sc, gy);
+        ctx.closePath();
+        ctx.fill();
+        // 회전 문양 2겹
+        ctx.strokeStyle = hexA(bst, 0.65 * fade);
+        ctx.lineWidth = 2.6 * sc;
+        for (let i = 0; i < 2; i++) {
+          const rr = (34 + i * 22 + k * 92) * sc;
+          const a0 = k * Math.PI * 2.4 + i * 1.1;
+          ctx.beginPath();
+          ctx.ellipse(cx, gy - (70 - i * 22) * sc, rr, rr * 0.42, 0, a0, a0 + 2.5);
+          ctx.stroke();
+        }
+        // 발치 파동
+        ctx.globalAlpha = fade * 0.8;
+        ctx.strokeStyle = hexA(col, 0.75);
+        ctx.lineWidth = 3 * sc;
+        ctx.beginPath();
+        ctx.ellipse(cx, gy - 6 * sc, (30 + k * 170) * sc, (10 + k * 52) * sc, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
       } else if (f.key === 'heal') {
         // 치유: 발치에서 올라오는 초록 빛 입자 + 부드러운 고리
         ctx.globalAlpha = fade * 0.75;

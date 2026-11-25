@@ -1,7 +1,7 @@
 // land-rpg / src/combat.js
 // 자동 전투 시뮬레이션. DOM·Canvas 의존 없음 → 헤드리스 검증 가능.
 // 렌더러는 이 객체의 엔티티를 읽고, UI는 events 큐를 소비한다.
-import { ECON, SKILLS, stageDef, monsterKo, monsterMotion, monsterAttack, THEMES } from './data.js';
+import { ECON, SKILLS, stageDef, monsterKo, monsterMotion, monsterAttack, THEMES, ultimateOf, ultLeftMs } from './data.js';
 import {
   calcStats, currentHp, skillEffect, killReward, registerKill, clearStage, monsterStats, skillCdOf,
 } from './state.js';
@@ -78,6 +78,10 @@ export class Battle {
     this.bossEnds = 0;
     this.bossReadyAt = 0;
     this.berserkUntil = 0;
+    // v4.7 상위 전직 궁극기 — 발동 뒤 한동안 공격력 버프 · 직전 타격 총 피해(이벤트 표시용)
+    this.ultUntil = 0;
+    this.ultBonus = 0;
+    this.lastHitDealt = 0;
     this.lastSpawn = 0;
     this.lastRegen = 0;
     this.lastStatsAt = 0;
@@ -456,6 +460,8 @@ export class Battle {
   roll(rawMul, now) {
     let dmg = this.stats.atk * rawMul * (0.9 + this.rng() * 0.2);
     if (this.berserkUntil > now) dmg *= 1 + skillEffect('berserk', this.s.skills.berserk.lv);
+    // v4.7 궁극기 발동 직후의 공격력 버프
+    if (this.ultUntil > now) dmg *= 1 + (this.ultBonus || 0);
     let crit = false;
     if (this.rng() < this.stats.crit) {
       crit = true;
@@ -467,6 +473,7 @@ export class Battle {
   hit(list, mul, kind, now) {
     let hits = 0;
     let dealt = 0;
+    this.lastHitDealt = 0;
     for (const m of list) {
       if (m.dead || m.dying) continue;
       const { dmg: rawDmg, crit } = this.roll(mul, now);
@@ -495,6 +502,7 @@ export class Battle {
         this.emit({ t: 'lifesteal', heal });
       }
     }
+    this.lastHitDealt = dealt;
     return hits;
   }
 
@@ -580,6 +588,7 @@ export class Battle {
           equipped: !!drop.equipped,
           duplicate: !!drop.duplicate,
           shards: drop.shards || 0,
+          auto: !!drop.auto,          // v4.7 자동분해 → 강화석
           isBoss: m.isBoss,
         });
         if (drop.equipped) this.refreshStats(now);
@@ -689,14 +698,61 @@ export class Battle {
     const alive = this.targets();
     // v4.6 부동산 시너지(쿨감)를 반영한 실효 쿨타임
     const cd = (key) => skillCdOf(key, this.buffs());
-    // 회복: 체력 65% 이하
-    if (now - sk.heal.last >= cd('heal') && this.player.hp / this.stats.hpMax < 0.65) this.castSkill('heal', now);
-    // 광폭: 보스전 또는 적 2마리 이상
-    if (now - sk.berserk.last >= cd('berserk') && (this.boss || alive.length >= 2)) this.castSkill('berserk', now);
-    // 범위 베기: 적 2마리 이상
-    if (now - sk.whirl.last >= cd('whirl') && alive.length >= 2) this.castSkill('whirl', now);
-    // 강격: 적이 사거리 안에 있을 때
-    if (now - sk.strike.last >= cd('strike') && alive.some((m) => m.x - this.player.x <= ECON.playerRange)) this.castSkill('strike', now);
+    // v4.7: 설정에서 '스킬 자동 시전'을 끄면 손으로 누를 때만 나간다
+    if (this.s.autoSkill !== false) {
+      // 회복: 체력 65% 이하
+      if (now - sk.heal.last >= cd('heal') && this.player.hp / this.stats.hpMax < 0.65) this.castSkill('heal', now);
+      // 광폭: 보스전 또는 적 2마리 이상
+      if (now - sk.berserk.last >= cd('berserk') && (this.boss || alive.length >= 2)) this.castSkill('berserk', now);
+      // 범위 베기: 적 2마리 이상
+      if (now - sk.whirl.last >= cd('whirl') && alive.length >= 2) this.castSkill('whirl', now);
+      // 강격: 적이 사거리 안에 있을 때
+      if (now - sk.strike.last >= cd('strike') && alive.some((m) => m.x - this.player.x <= ECON.playerRange)) this.castSkill('strike', now);
+    }
+    // v4.7 상위 전직 궁극기 — 보스전이거나 적이 여럿일 때 준비되면 자동 발동
+    const u = ultimateOf(this.s);
+    if (u && this.s.autoUlt !== false && !this.player.dead) {
+      if (ultLeftMs(this.s, this.buffs(), now) <= 0 && (this.boss || alive.length >= 2)) this.castUltimate(now);
+    }
+  }
+
+  /**
+   * v4.7 상위 전직 궁극기(5번째 필살기) 시전.
+   *  - 전장의 모든 적에게 mul 배율 피해 → 발동 뒤 dur 동안 공격력 버프 · 일정량 회복
+   *  - 해금 전(전직 4단계 미만)이면 거부하고, 쿨타임 중이면 남은 시간을 돌려준다.
+   * @returns {{ ok:boolean, reason?:string, def?:object, hits?:number, dmg?:number, leftMs?:number }}
+   */
+  castUltimate(now = Date.now()) {
+    const def = ultimateOf(this.s);
+    if (!def) return { ok: false, reason: '상위 전직(드래곤 로드)에서 해금됩니다' };
+    if (this.player.dead) return { ok: false, reason: '전투 불능 상태입니다' };
+    if (!this.s.ult || typeof this.s.ult !== 'object') this.s.ult = { last: 0, casts: 0 };
+    const u = this.s.ult;
+    const leftMs = ultLeftMs(this.s, this.buffs(), now);
+    if (leftMs > 0) return { ok: false, reason: `궁극기 재사용 대기 ${(leftMs / 1000).toFixed(1)}초`, leftMs };
+    const alive = this.targets();
+    if (!alive.length) return { ok: false, reason: '지금은 적이 없습니다' };
+
+    u.last = now;
+    u.casts = Math.max(0, Math.floor(Number(u.casts) || 0)) + 1;
+    this.player.skillAt = now;
+    this.player.skillKey = 'ultimate';
+    this.player.attackAt = now;
+    this.player.attackKind = 'ultimate';
+    this.ultUntil = now + (def.dur || 0);
+    this.ultBonus = def.bonus || 0;
+    if (def.heal > 0 && this.player.hp < this.stats.hpMax) {
+      this.player.hp = Math.min(this.stats.hpMax, this.player.hp + Math.round(this.stats.hpMax * def.heal));
+    }
+    const list = alive.slice();
+    this.hit(list, def.mul, 'ultimate', now);
+    const dmg = this.lastHitDealt || 0;
+    this.emit({
+      t: 'ultimate', key: 'ultimate', name: def.name, ko: def.name, icon: def.icon,
+      tier: def.tier, color: def.color, burst: def.burst, dmg, hits: list.length,
+      xs: list.map((m) => m.x),
+    });
+    return { ok: true, def, hits: list.length, dmg };
   }
 
   castSkill(key, now = Date.now()) {

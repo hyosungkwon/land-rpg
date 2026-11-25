@@ -319,6 +319,42 @@ export function itemScore(item) {
   return ridx(it.rarity) * 1000 + sum;
 }
 
+/* ────────────────────────────── 자동분해 등급 기준 (v4.7) ──────────────────────────────
+ * 방치 중 인벤토리가 넘치지 않도록, 설정 등급 이하의 새 장비를 들어오는 즉시 강화석으로 바꾼다.
+ *  - 'off'       : 끔(기본 — 기존 저장본을 건드리지 않는 안전한 기본값)
+ *  - 'common'    : 일반 이하
+ *  - 'advanced'  : 고급 이하
+ *  - 'rare'      : 레어 이하
+ *  - 'hero'      : 영웅 이하
+ * 제외 대상: ① 지금 장착 중인 장비 ② 기준보다 높은 등급 ③ 자동 장착되는 장비(현재 등급보다 높음)
+ */
+export const AUTO_DISMANTLE_MODES = [
+  { id: 'off', label: '끔', short: '끔' },
+  { id: 'common', label: '일반 이하', short: '일반' },
+  { id: 'advanced', label: '고급 이하', short: '고급' },
+  { id: 'rare', label: '레어 이하', short: '레어' },
+  { id: 'hero', label: '영웅 이하', short: '영웅' },
+];
+export const AUTO_DISMANTLE_IDS = AUTO_DISMANTLE_MODES.map((m) => m.id);
+
+/** 저장값을 안전한 모드 id 로 정리한다(모르는 값은 끔) */
+export function normalizeAutoMode(v) {
+  return AUTO_DISMANTLE_IDS.includes(v) ? v : 'off';
+}
+
+/** 자동분해 기준 등급 인덱스(끔이면 -1) */
+export function autoDismantleIdx(s) {
+  const mode = normalizeAutoMode(s && s.gear && s.gear.autoDismantle);
+  return mode === 'off' ? -1 : RARITY_INDEX[mode];
+}
+
+/** 자동분해 기준의 표시 이름('레어 이하' / '끔') */
+export function autoDismantleLabel(s) {
+  const mode = normalizeAutoMode(s && s.gear && s.gear.autoDismantle);
+  const m = AUTO_DISMANTLE_MODES.find((x) => x.id === mode) || AUTO_DISMANTLE_MODES[0];
+  return m.label;
+}
+
 /* ────────────────────────────── 상태 ────────────────────────────── */
 export const GEAR_MAX_ITEMS = 120; // 인벤토리 상한 — 넘치면 가장 약한(미장착) 장비부터 자동 분해
 export const GEAR_FILTERS = ['all', ...EQUIP_SLOTS];
@@ -332,6 +368,8 @@ export function newGearState() {
     seen: {},                        // { itemId: 획득 횟수 } — 수집 현황
     drops: 0,                        // 사냥 드랍 획득 수
     bulk: 0,                         // 일괄 분해로 정리한 수
+    autoDismantle: 'off',            // v4.7 자동분해 등급 기준
+    auto: { count: 0, shards: 0 },   // v4.7 자동분해 누적(건수 · 강화석)
   };
 }
 
@@ -371,6 +409,13 @@ export function normalizeGear(raw, legacyRarity, now = 0) {
   }
   g.drops = Math.max(0, Math.floor(Number(src.drops) || 0));
   g.bulk = Math.max(0, Math.floor(Number(src.bulk) || 0));
+  // v4.7: 자동분해 기준·누적 — 없는 저장본은 '끔'으로 시작한다(아이템을 조용히 지우지 않는다)
+  g.autoDismantle = normalizeAutoMode(src.autoDismantle);
+  const rawAuto = src.auto && typeof src.auto === 'object' ? src.auto : {};
+  g.auto = {
+    count: Math.max(0, Math.floor(Number(rawAuto.count) || 0)),
+    shards: Math.max(0, Math.floor(Number(rawAuto.shards) || 0)),
+  };
 
   // v3 → v4 마이그레이션: 등급만 있던 저장본을 '그 등급의 장비'로 바꿔 끼운다.
   // (강화 레벨 s.equip 은 부위에 남아 있으므로 그대로 이어진다)
@@ -486,10 +531,22 @@ export function acquireGear(s, itemId, { autoEquip = true, now = 0, source = 'dr
     return { ok: true, item: it, duplicate: true, equipped: false, shards };
   }
 
+  const equip = autoEquip && shouldAutoEquip(s, it);
+  // v4.7 자동분해 — 기준 등급 이하이고, 장착/자동 장착 대상이 아니면 인벤토리에 넣지 않고 즉시 강화석으로
+  const autoIdx = autoDismantleIdx(s);
+  if (!equip && autoIdx >= 0 && ridx(it.rarity) <= autoIdx) {
+    const shards = dismantleValue(it);
+    s.shards = Math.max(0, Math.floor(Number(s.shards) || 0)) + shards;
+    if (s.records) s.records.gearDust = Math.max(0, Number(s.records.gearDust) || 0) + shards;
+    if (!s.gear.auto || typeof s.gear.auto !== 'object') s.gear.auto = { count: 0, shards: 0 };
+    s.gear.auto.count = Math.max(0, Math.floor(Number(s.gear.auto.count) || 0)) + 1;
+    s.gear.auto.shards = Math.max(0, Math.floor(Number(s.gear.auto.shards) || 0)) + shards;
+    return { ok: true, item: it, duplicate: false, equipped: false, auto: true, shards };
+  }
+
   const uid = Math.max(1, Math.floor(Number(s.gear.nextUid) || 1));
   s.gear.nextUid = uid + 1;
   s.gear.items.push({ uid, id: it.id, at: Math.max(0, Number(now) || 0) });
-  const equip = autoEquip && shouldAutoEquip(s, it);
   if (equip) s.gear.equipped[it.slot] = uid;
 
   let overflow = 0;
@@ -540,10 +597,14 @@ export function dismantleGear(s, uid) {
   return { ok: true, item: it, shards, wasEquipped };
 }
 
-/** 일괄 분해 — mode: 'low'(장착보다 낮은 등급) | 'common'(일반 등급) */
+/** 일괄 분해 — mode: 'low'(장착보다 낮은 등급) | 'common'(일반 등급) | 'threshold'(자동분해 기준 이하) */
 export function dismantleTargets(s, mode = 'low') {
   const rows = gearOwned(s).filter((row) => !row.equipped);
   if (mode === 'common') return rows.filter((row) => row.def.rarity === 'common');
+  if (mode === 'threshold') {
+    const idx = autoDismantleIdx(s);
+    return idx < 0 ? [] : rows.filter((row) => ridx(row.def.rarity) <= idx);
+  }
   return rows.filter((row) => ridx(row.def.rarity) < ridx(equippedRarity(s, row.def.slot)));
 }
 

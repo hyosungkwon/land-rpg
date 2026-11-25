@@ -2,7 +2,7 @@
 // 밸런스·몬스터·장비·스킬 정의. DOM 의존 없음(헤드리스 테스트 가능).
 // v3: 게스트 전용 통합 경제 — 골드 하나로 사냥과 부동산을 함께 굴린다.
 
-export const APP_VERSION = '4.6.0';
+export const APP_VERSION = '4.7.0';
 export const SAVE_KEY = 'land_rpg_unified_v3';
 export const SAVE_VERSION = 3;
 
@@ -520,6 +520,51 @@ export const SKILLS = {
   berserk: { name: '광폭', icon: '🔥', key: '3', cd: 22000, dur: 7000, bonus: 0.6, color: '#ff7a59', desc: '7초간 공격력 +60%' },
   heal: { name: '회복', icon: '💚', key: '4', cd: 16000, ratio: 0.28, color: '#7fe08a', desc: '최대 체력의 28% 회복' },
 };
+/* ────────────────────────────── 상위 전직 궁극기 (v4.7) ──────────────────────────────
+ * 5단계 드래곤 로드부터 열리는 다섯 번째 필살기.
+ *  - 기존 4개 스킬 퀵슬롯은 그대로 두고, 전투 화면에 전용 궁극기 버튼을 따로 둔다.
+ *  - 조건이 차면 자동으로 발동하고(설정에서 끌 수 있다), 직접 눌러도 시전된다.
+ *  - mul 은 공격력 배율(모든 적에게), dur/bonus 는 발동 뒤 한동안의 공격력 버프, heal 은 최대 체력 대비 회복.
+ */
+export const ULTIMATES = [
+  {
+    tier: 4, id: 'ult_dragon', name: '용의 심판', icon: '🐉', key: 'ultimate',
+    cd: 45000, mul: 8.5, dur: 5000, bonus: 0.5, heal: 0.12, color: '#ff4d8d', burst: '#ff8fb0',
+    desc: '전장의 모든 적에게 850% 피해 · 5초간 공격력 +50% · 체력 12% 회복',
+  },
+  {
+    tier: 5, id: 'ult_god', name: '용신 강림', icon: '👑', key: 'ultimate',
+    cd: 36000, mul: 13, dur: 6000, bonus: 0.7, heal: 0.2, color: '#ffe9a8', burst: '#fff6c4',
+    desc: '전장의 모든 적에게 1300% 피해 · 6초간 공격력 +70% · 체력 20% 회복',
+  },
+];
+export const ULT_MIN_TIER = ULTIMATES[0].tier; // 궁극기 해금 전직 단계(5단계 드래곤 로드)
+
+/** 현재 전직 단계에 맞는 궁극기(없으면 null = 아직 해금 전) */
+export function ultimateOf(state) {
+  const t = Math.max(0, Math.floor(Number(state && state.jobTier) || 0));
+  if (t < ULT_MIN_TIER) return null;
+  let pick = null;
+  for (const u of ULTIMATES) if (u.tier <= t) pick = u;
+  return pick;
+}
+
+/** 궁극기 실효 쿨타임 — 부동산 시너지 쿨감(상한 40%)을 반영한다 */
+export function ultCdOf(state, buffs) {
+  const u = ultimateOf(state);
+  if (!u) return 0;
+  const cdr = Math.min(0.4, Math.max(0, Number((buffs || {}).synCdrPct) || 0) / 100);
+  return u.cd * (1 - cdr);
+}
+
+/** 궁극기 남은 쿨타임(ms) — 아직 한 번도 쓰지 않았으면 0(바로 사용 가능) */
+export function ultLeftMs(state, buffs, now = Date.now()) {
+  if (!ultimateOf(state)) return 0;
+  const last = Math.max(0, Number(state && state.ult && state.ult.last) || 0);
+  if (last <= 0) return 0;
+  return Math.max(0, last + ultCdOf(state, buffs) - now);
+}
+
 export const SKILL_UPGRADE_MAX = 20;
 export const SKILL_COST_BASE = 6;
 export const SKILL_COST_GROWTH = 1.3;
