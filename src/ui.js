@@ -10,6 +10,7 @@ import { expNeed, skillEffect, shardPrice, enhanceMaxCount, maxShardsBuy, SHARD_
 import {
   CITIES, LAND, portfolioOf, computeBuffs, buffProgress, formatGold, priceInfo,
   CITY_BY_KEY, LANDMARK, landmarkLevel, landmarkQuote, landmarkSummary, landmarkRentMul, leasePctOf,
+  LAND_MANAGER, isFavoriteCity, landManagerUnlocked,
 } from './land.js';
 import {
   AUCTION, auctionStatus, auctionLot, auctionBonusText,
@@ -191,6 +192,8 @@ export class UI {
       case 'land-more': actions.landMore(); break;
       case 'land-sort': actions.landSort(v); break;
       case 'land-tier': actions.landTier(v); break;
+      case 'land-fav': actions.landFav(v); break;
+      case 'toggle-auto-rent': actions.toggleAutoRent(); break;
       case 'claim-rent': actions.claimRent(); break;
       case 'rent-info': actions.rentInfo(); break;
       case 'auction-bid': actions.auctionBid(); break;
@@ -1974,12 +1977,17 @@ function tplLandHome(ui) {
           const newsTag = h.news ? '<span class="tag hot">📈 호재</span>' : '';
           const leaseTag = h.leasePct > 0 ? `<span class="tag lease">🏷️ 임대 +${h.leasePct}%</span>` : '';
           const mulTag = h.rentMul > 1.001 ? `<span class="up">임대 ×${h.rentMul.toFixed(2)}</span>` : '';
+          const fav = isFavoriteCity(s, h.city.key);
+          const pnlTag = h.profitPct != null
+            ? `<span class="pnl ${h.profitPct >= 0 ? 'up' : 'dn'}">${h.profitPct >= 0 ? '+' : ''}${h.profitPct.toFixed(1)}%</span>`
+            : '';
+          const bandPct = Math.round((h.bandPos != null ? h.bandPos : 0.5) * 100);
           return `<div class="hold${h.news ? ' hot' : ''}">
             <div class="h-ico">${h.city.emoji}</div>
             <div class="h-mid">
-              <div class="h-name">${esc(h.city.name)}<span class="h-region">${esc(h.city.region)}</span>${traitBadge(h.city.trait)}${newsTag}${lmBtn}${leaseTag}</div>
-              <div class="h-line"><b>${fmt(h.qty)}평</b><span class="dim"> · 평가 💰${formatGold(h.value)}</span>${mulTag ? ` · ${mulTag}` : ''}</div>
-              <div class="h-line dim">시간 +💰${formatGold(h.incomePerHour)} · 회수 ${paybackText(payback)} · ${trendHtml(h.trend)}</div>
+              <div class="h-name"><button class="fav-btn${fav ? ' on' : ''}" type="button" data-action="land-fav" data-value="${h.city.key}" aria-label="관심 매물">${fav ? '★' : '☆'}</button>${esc(h.city.name)}<span class="h-region">${esc(h.city.region)}</span>${traitBadge(h.city.trait)}${newsTag}${lmBtn}${leaseTag}</div>
+              <div class="h-line"><b>${fmt(h.qty)}평</b><span class="dim"> · 평가 💰${formatGold(h.value)}</span>${pnlTag ? ` ${pnlTag}` : ''}${mulTag ? ` · ${mulTag}` : ''}</div>
+              <div class="h-line dim">시간 +💰${formatGold(h.incomePerHour)} · 회수 ${paybackText(payback)} · ${trendHtml(h.trend)} <span class="band-pill ${h.bandLabel === '저점' ? 'lo' : h.bandLabel === '고점' ? 'hi' : ''}">${esc(h.bandLabel || '보통')} ${bandPct}%</span></div>
             </div>
             <div class="m-btns">
               <button class="mini buy" data-action="land-trade" data-value="${h.city.key}" data-side="buy">매수</button>
@@ -2008,6 +2016,14 @@ function tplLandHome(ui) {
     </div>
     ${holdings}
     ${more}
+    ${(() => {
+      const unlocked = landManagerUnlocked(s);
+      const on = unlocked && !!(s.land && s.land.autoRent);
+      return `<div class="land-mgr">
+        <span class="tiny">🤖 <b>영지 관리인</b> <span class="dim">${unlocked ? '접속 중 5분마다 임대 자동 수령' : `보유 ${LAND_MANAGER.minCities}곳 달성 시 해금 (${p.cities}/${LAND_MANAGER.minCities})`}</span></span>
+        <button class="switch sm ${on ? 'on' : ''}" type="button" data-action="toggle-auto-rent" aria-label="임대 자동 수령 전환" ${unlocked ? '' : 'disabled'}></button>
+      </div>`;
+    })()}
     <div class="row gap6" style="margin-top:9px">
       <button class="btn small ghost wide" type="button" data-action="land-sub" data-value="market">🛒 매물 투자</button>
       <button class="btn small ghost wide" type="button" data-action="land-sub" data-value="buff">⚡ 건물주 버프</button>
@@ -2046,11 +2062,14 @@ function buildMarketList(ui) {
   const page = Math.max(1, Math.floor(Number(s.land.page) || 1));
 
   const rows = [];
+  const favSet = new Set(Array.isArray(s.land.favorites) ? s.land.favorites : []);
   const setB = regionSetBuffs(owned);
   for (const c of CITIES) {
     const held = Math.floor(Number(owned[c.key]) || 0);
     if (tier === 'owned') {
       if (held <= 0) continue;
+    } else if (tier === 'fav') {
+      if (!favSet.has(c.key)) continue;
     } else if (tier !== 'all' && String(c.tier) !== String(tier)) continue;
     if (q && !(c.name.includes(q) || c.region.includes(q) || c.tierLabel.includes(q))) continue;
     const info = priceInfo(c, now);
@@ -2084,11 +2103,13 @@ function buildMarketList(ui) {
           const lease = leasePctOf(s, c.key);
           const leaseTag = lease > 0 ? `<span class="tag lease">🏷️ 임대 +${lease}%</span>` : '';
           const mulTag = rentMul > 1.001 ? ` · <b class="up">임대 ×${rentMul.toFixed(2)}</b>` : '';
+          const fav = favSet.has(c.key);
+          const bandPct = Math.round((info.bandPos != null ? info.bandPos : 0.5) * 100);
           return `<div class="mkt${info.news ? ' hot' : ''}">
             <div class="m-ico">${c.emoji}</div>
             <div class="m-mid">
-              <div class="m-name">${esc(c.name)}<span class="m-region">${esc(c.region)}</span>${traitBadge(c.trait)}${seasonal}${newsTag}${lmTag}${leaseTag}</div>
-              <div class="m-line"><b>💰${fmt(info.price)}</b><span class="dim">/평</span> ${trendHtml(info.trend)}</div>
+              <div class="m-name"><button class="fav-btn${fav ? ' on' : ''}" type="button" data-action="land-fav" data-value="${c.key}" aria-label="관심 매물">${fav ? '★' : '☆'}</button>${esc(c.name)}<span class="m-region">${esc(c.region)}</span>${traitBadge(c.trait)}${seasonal}${newsTag}${lmTag}${leaseTag}</div>
+              <div class="m-line"><b>💰${fmt(info.price)}</b><span class="dim">/평</span> ${trendHtml(info.trend)} <span class="band-pill ${info.bandLabel === '저점' ? 'lo' : info.bandLabel === '고점' ? 'hi' : ''}">${esc(info.bandLabel || '보통')}</span><span class="band-bar"><i style="left:${bandPct}%"></i></span></div>
               <div class="m-line dim">평당 시간 +💰${fmt(onePyeongIncome)} · 회수 ${paybackText(c.base / hourlyPerPyeong)}${held > 0 ? ` · <b class="own">보유 ${fmt(held)}평</b>` : ''}${mulTag}</div>
               <div class="m-line dim">잔여 ${fmt(remain)}평${!affordable ? ' · <span style="color:var(--dim)">골드 부족</span>' : ''}</div>
             </div>
@@ -2112,12 +2133,14 @@ function tplLandMarket(ui) {
   const sort = s.land.sort || 'roi';
   const list = buildMarketList(ui);
 
+  const favCount = Array.isArray(s.land.favorites) ? s.land.favorites.length : 0;
   const chips = [
     ['all', '전체'],
     ['0', '군'],
     ['1', '시'],
     ['2', '구'],
     ['owned', '보유'],
+    ['fav', `⭐ 관심${favCount ? ` ${favCount}` : ''}`],
   ]
     .map(([k, l]) => `<button class="chip ${String(tier) === k ? 'on' : ''}" data-action="land-tier" data-value="${k}">${l}</button>`)
     .join('');

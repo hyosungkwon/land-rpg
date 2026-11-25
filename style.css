@@ -2443,4 +2443,37 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap;
 }
 
+/* ══════════════ v5.1.0 부동산 즐겨찾기 · 시세 위치 · 영지 관리인 ══════════════ */
+.fav-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 19px; height: 19px; margin-right: 4px; padding: 0;
+  border: 0; border-radius: 5px; background: transparent;
+  color: var(--dim); font-size: 13px; cursor: pointer; vertical-align: middle;
+}
+.fav-btn.on { color: var(--gold); text-shadow: 0 0 6px rgba(255, 207, 92, 0.55); }
+.pnl { font-size: 10px; font-weight: 800; padding: 1px 5px; border-radius: 5px; font-variant-numeric: tabular-nums; }
+.pnl.up { color: var(--green); background: rgba(94, 225, 163, 0.12); }
+.pnl.dn { color: #ff8a8a; background: rgba(255, 107, 107, 0.12); }
+.band-pill {
+  display: inline-block; margin-left: 4px; padding: 0 4px; border-radius: 4px;
+  font-size: 9.5px; font-weight: 800; color: var(--sub); background: rgba(255, 255, 255, 0.06);
+}
+.band-pill.lo { color: #7fd3ff; background: rgba(127, 211, 255, 0.14); }
+.band-pill.hi { color: #ff9a6c; background: rgba(255, 122, 61, 0.14); }
+.band-bar {
+  display: inline-block; position: relative; width: 42px; height: 5px; margin-left: 4px;
+  border-radius: 4px; vertical-align: middle;
+  background: linear-gradient(90deg, rgba(127, 211, 255, 0.45), rgba(255, 255, 255, 0.18), rgba(255, 122, 61, 0.5));
+}
+.band-bar i {
+  position: absolute; top: -1px; width: 5px; height: 7px; margin-left: -2.5px;
+  border-radius: 2px; background: #fff; box-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
+}
+.land-mgr {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-top: 9px; padding: 7px 9px; border-radius: 9px;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line-2);
+}
+
+
 

@@ -155,11 +155,19 @@ export function priceInfo(city, now = Date.now()) {
   const news = newsForCity(city.key, now);
   if (news && news.pricePct > 0) price = Math.round(price * (1 + news.pricePct / 100));
 
+  // v5.1.0: 일일 시세 밴드(±30%) 내 현재 위치(0=저점 ~ 1=고점)
+  const lo = daily * (1 - LAND.band);
+  const hi = daily * (1 + LAND.band);
+  const bandPos = hi > lo ? Math.max(0, Math.min(1, (price - lo) / (hi - lo))) : 0.5;
+  const bandLabel = bandPos <= 0.25 ? '저점' : bandPos >= 0.75 ? '고점' : '보통';
+
   return {
     price,
     daily: Math.round(daily),
     trend: daily > 0 ? ((price - daily) / daily) * 100 : 0,
     swingPct: amp * 100,
+    bandPos: Math.round(bandPos * 1000) / 1000,
+    bandLabel,
     season,
     news: news || null,
   };
@@ -319,6 +327,9 @@ export function landmarkSummary(state) {
 }
 
 /* ─────────────── 통합 상태의 land 부분 기본값 ─────────────── */
+export const LAND_FAV_MAX = 20;
+export const LAND_MANAGER = { minCities: 10, everyMs: 5 * 60 * 1000 };
+
 export function defaultLand(now = Date.now()) {
   return {
     owned: {}, // { cityKey: pyeong }
@@ -328,6 +339,10 @@ export function defaultLand(now = Date.now()) {
     // v4.6: 경매 특별 임대 계약 { cityKey: % } · 급매 경매 기록
     lease: {},
     auction: { done: -1, bids: 0, spend: 0, saved: 0, log: [] },
+    // v5.1: 관심 매물(최대 20곳) · 영지 관리인 임대 자동 수령
+    favorites: [],
+    autoRent: false,
+    autoRentAt: 0,
     accruedRent: 0, // 미수령 임대수익(골드)
     rentAt: now, // 마지막 임대 적립 시각
     bestAsset: 0, // 최고 부동산 평가액
@@ -341,6 +356,39 @@ export function defaultLand(now = Date.now()) {
     sort: 'roi',
     page: 1,
   };
+}
+
+/** 관심 매물 여부 */
+export function isFavoriteCity(state, key) {
+  const fav = state && state.land && Array.isArray(state.land.favorites) ? state.land.favorites : [];
+  return fav.includes(key);
+}
+
+/** 관심 매물 등록/해제 (최대 20곳) */
+export function toggleFavoriteCity(state, key) {
+  if (!state || !CITY_BY_KEY[key]) return { ok: false, reason: '알 수 없는 지역입니다.' };
+  if (!state.land || typeof state.land !== 'object') state.land = defaultLand();
+  const fav = Array.isArray(state.land.favorites) ? state.land.favorites.filter((k) => !!CITY_BY_KEY[k]) : [];
+  const idx = fav.indexOf(key);
+  if (idx >= 0) {
+    fav.splice(idx, 1);
+    state.land.favorites = fav;
+    return { ok: true, fav: false, count: fav.length, city: CITY_BY_KEY[key] };
+  }
+  if (fav.length >= LAND_FAV_MAX) {
+    return { ok: false, reason: `관심 매물은 최대 ${LAND_FAV_MAX}곳까지 등록할 수 있습니다.` };
+  }
+  fav.push(key);
+  state.land.favorites = fav;
+  return { ok: true, fav: true, count: fav.length, city: CITY_BY_KEY[key] };
+}
+
+/** 영지 관리인(임대 자동 수령) 해금 여부 — 보유 10곳 이상 */
+export function landManagerUnlocked(state) {
+  const owned = state && state.land && state.land.owned && typeof state.land.owned === 'object' ? state.land.owned : {};
+  let cnt = 0;
+  for (const v of Object.values(owned)) if (Math.floor(num(v)) > 0) cnt += 1;
+  return cnt >= LAND_MANAGER.minCities;
 }
 
 /* ─────────────── 포트폴리오 ─────────────── */
@@ -391,9 +439,13 @@ export function portfolioOf(state, now = Date.now()) {
       price: info.price,
       daily: info.daily,
       trend: info.trend,
+      bandPos: info.bandPos,
+      bandLabel: info.bandLabel,
       value: v,
       cost,
+      avgCost: qty > 0 && cost > 0 ? Math.round(cost / qty) : info.price,
       profit: cost > 0 ? v - cost : null,
+      profitPct: cost > 0 ? Math.round(((v - cost) / cost) * 1000) / 10 : null,
       incomePerMin: income,
       incomePerHour: income * 60,
       roiPerHour: v > 0 ? (income * 60 * 100) / v : 0,

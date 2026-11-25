@@ -14,7 +14,7 @@ import {
   newGearState, normalizeGear, syncGearRarity, gearMods, acquireGear, equippedRarity,
   shouldAutoEquip, randomItemOfRarity, gearItem, GEAR_BY_RARITY, awakenLevel, GEAR_AWAKEN_BONUS_LV,
 } from './gear.js';
-import { defaultLand } from './land.js';
+import { defaultLand, CITY_BY_KEY, LAND_FAV_MAX } from './land.js';
 import { normalizeAuctionState } from './auction.js';
 import { PET_IDS, PET_MAX_LV, PET_EVO_MAX, JOB_MAX, jobOf, equippedPet, petLevel, petAtkPct, petEvo, petGoldPct, petPassive, petStageInfo } from './meta.js';
 import {
@@ -146,9 +146,15 @@ export function normalizeState(raw, now = nowMs()) {
     : [];
   s.land.page = Math.max(1, Math.floor(num(s.land.page, 1)));
   if (!['home', 'market', 'buff'].includes(s.land.sub)) s.land.sub = 'home';
-  if (!['all', '0', '1', '2', 'owned'].includes(String(s.land.tier))) s.land.tier = 'all';
+  if (!['all', '0', '1', '2', 'owned', 'fav'].includes(String(s.land.tier))) s.land.tier = 'all';
   if (!['roi', 'price', 'trend', 'name'].includes(s.land.sort)) s.land.sort = 'roi';
   s.land.q = typeof s.land.q === 'string' ? s.land.q.slice(0, 30) : '';
+  // v5.1.0: 관심 매물(최대 20곳) · 영지 관리인 임대 자동 수령
+  s.land.favorites = Array.isArray(s.land.favorites)
+    ? [...new Set(s.land.favorites.filter((k) => typeof k === 'string' && !!CITY_BY_KEY[k]))].slice(0, LAND_FAV_MAX)
+    : [];
+  s.land.autoRent = s.land.autoRent === true;
+  s.land.autoRentAt = Math.max(0, num(s.land.autoRentAt, 0));
   s.records = { ...d.records, ...(raw.records || {}) };
   // v4.8: 클라우드 설정 정규화 — 없는 저장본은 게스트(꺼짐)로 시작한다
   const rawCloud = raw.cloud && typeof raw.cloud === 'object' ? raw.cloud : {};

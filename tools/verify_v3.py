@@ -187,8 +187,8 @@ def main():
     ok("startCloudResume" in app_src and "if (!this.cloudEnabled() && !this.cloud.hasPendingRedirect()) return;" in app_src, "세션 복원도 클라우드를 켓을 때만")
     ok("setInterval(() => this.cloudTick(), 15000)" in app_src, "주기 저장은 조건 검사형 타이머")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v5.0.0" in read("sw.js"), "SW 캐시 버전 v5.0.0")
-    ok("APP_VERSION = '5.0.0'" in read("src/data.js"), "앱 버전 v5.0.0")
+    ok("land-rpg-v5.1.0" in read("sw.js"), "SW 캐시 버전 v5.1.0")
+    ok("APP_VERSION = '5.1.0'" in read("src/data.js"), "앱 버전 v5.1.0")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
     ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
@@ -2935,7 +2935,7 @@ def main():
     ok(all(x in asrc42 for x in ["enterTower", "openTowerFloors", "evolvePet", "showTowerResult", "showTowerFloors"]), "app.js — 탑 입장/층 선택/결과·펫 진화 액션", "")
     ok('assets/sprites/pet/${info.sprite}.png' in asrc42, "진화 결과 모달 — 진화 스프라이트 경로(.png)", "")
     ok(all(x in css42 for x in [".tower-card", ".tower-tiles", ".tower-floor", ".pet-evo", ".mini.evo"]), "style.css — v4.2 스타일", "")
-    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v5.0.0" in read("sw.js") and "APP_VERSION = '5.0.0'" in read("src/data.js"), "버전·서비스워커(5.0.0 · cloud 프리캐시)", "")
+    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v5.1.0" in read("sw.js") and "APP_VERSION = '5.1.0'" in read("src/data.js"), "버전·서비스워커(5.1.0 · cloud 프리캐시)", "")
     pkg_ok = (not os.path.exists(os.path.join(ROOT, "package.json"))) or ('"version": "' in read("package.json"))
     ok(pkg_ok, "package.json 버전 확인(없으면 클론 환경으로 통과)", "")
     evo_files = [f"assets/sprites/pet/pet_{n}_{s}.png" for n in ("wolf", "fox", "owl", "dragon") for s in ("awaken", "divine")]
@@ -3086,7 +3086,7 @@ def main():
 
     css43 = read("style.css")
     ok(all(x in css43 for x in [".land-sum", ".ls-v", ".ls-claim", ".news-slim", ".ns-title", ".land-subbar", ".land-rec", ".buff-now"]), "style.css — v4.3 부동산 요약 바·압축 뉴스·서브 탭", "")
-    ok("land-rpg-v5.0.0" in read("sw.js") and "'5.0.0'" in read("src/data.js"), "버전·캐시 v5.0.0", "")
+    ok("land-rpg-v5.1.0" in read("sw.js") and "'5.1.0'" in read("src/data.js"), "버전·캐시 v5.1.0", "")
 
     section("[20] ⚔️ v4.4 S31+ 무한 구간 리밸런싱 · 강화석 대량 교환 · 상위 전직")
 
@@ -3963,7 +3963,7 @@ def main():
     section("[23] ♻️ v4.7 장비 자동분해 · 🐉 상위 전직 궁극기 · 방치 편의")
 
     # ── 1) 버전·정적 배선 ──
-    ok("APP_VERSION = '5.0.0'" in read("src/data.js") and "land-rpg-v5.0.0" in read("sw.js"), "v5.0.0 버전·서비스워커 캐시 갱신", "")
+    ok("APP_VERSION = '5.1.0'" in read("src/data.js") and "land-rpg-v5.1.0" in read("sw.js"), "v5.1.0 버전·서비스워커 캐시 갱신", "")
     idx47 = read("index.html")
     ok(all(f'data-skill="{k}"' in idx47 for k in ["strike", "whirl", "berserk", "heal"]), "기존 4개 퀵슬롯 레이아웃 유지", "")
     ok('data-skill="ultimate"' in idx47 and 'class="q ult hidden"' in idx47, "다섯 번째 퀵슬롯(궁극기) — 해금 전 숨김", "")
@@ -4205,7 +4205,7 @@ def main():
     ok(cl_a["clean"][0] == "효성 왕" and cl_a["clean"][3] == 12 and not cl_a["html"], "닉네임 정리 — 공백 접기·12자 제한·HTML 문자 제거", json.dumps(cl_a["clean"], ensure_ascii=False))
     ok(cl_a["clean"][1] == "용사" and cl_a["clean"][2] == "용사", "1자·빈 닉네임은 기본 이름으로 대체", json.dumps(cl_a["clean"][:3], ensure_ascii=False))
     ok(cl_a["sum"] == [42, 21, 2, 5000, True], "세이브 요약 — 역대 최고 스테이지·보유 지역·총자산", json.dumps(cl_a["sum"]))
-    ok(cl_a["doc"][:6] == ["land_rpg_save", "5.0.0", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
+    ok(cl_a["doc"][:6] == ["land_rpg_save", "5.1.0", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
     ok(0 < cl_a["size"] < 200000, "클라우드 문서 크기 RTDB 한도 안(200KB 미만)", str(cl_a["size"]))
 
     # ── 2) 문서 해석(신형·v2 옛 페이로드·손상) ──
@@ -4309,7 +4309,7 @@ def main():
     ok(cl_e["errs"][0].startswith("이 주소가") and "응답이 없습니다" in cl_e["errs"][1] and cl_e["errs"][3].startswith("권한") and "시간 초과" in cl_e["errs"][4] and "라이브러리" in cl_e["errs"][5], "오류 문구 — 승인 도메인/시간 초과/권한/라이브러리", json.dumps(cl_e["errs"], ensure_ascii=False))
     ok(cl_e["strip"] == '{"a":1,"d":1,"e":{"x":2},"f":[1,3]}', "RTDB 전송 전 undefined·NaN 제거", cl_e["strip"])
     ok(cl_e["metrics"] == ["최고 스테이지", "총자산"], "랭킹 지표 이름", json.dumps(cl_e["metrics"], ensure_ascii=False))
-    ok(cl_e["entry"] == ["용사", 9, 12, 777, "5.0.0", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
+    ok(cl_e["entry"] == ["용사", 9, 12, 777, "5.1.0", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
 
     # ── 6) 세이브 호환 · 마이그레이션 ──
     mig48 = js(ctx, """
@@ -4806,6 +4806,52 @@ def main():
     ok(ui50["has4Tabs"] and ui50["hasTowerVal"] and not ui50["bad"], "랭킹 카드 — 4종 탭(스테이지/총자산/도전의 탑/일일 보스) 렌더", json.dumps(ui50))
     sw50 = read("sw.js")
     ok(all(os.path.exists(os.path.join(ROOT, f)) and f"'./{f}'" in sw50 for f in ("src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js")), "UI 모듈 분리(ui-fmt/ui-cloud/ui-gear) 파일 존재 · sw.js 프리캐시 포함")
+
+    # ── 15) v5.1.0 부동산 관심 매물 · 시세 위치/수익률 · 영지 관리인 ──
+    section("v5.1.0 부동산 관심 매물 · 시세 지표 · 영지 관리인")
+    l51 = js(ctx, """
+      const s = defaultState(1000); s.gold = 9000000;
+      const c0 = CITIES[0];
+      const pi = priceInfo(c0, 1000);
+      applyTrade(s, c0.key, 'buy', 10, 1000);
+      s.land.totalCost[c0.key] = Math.round(pi.price * 10 * 0.8); // +25% 수익 시뮬레이션
+      const pf = portfolioOf(s, 1000);
+      const h0 = pf.holdings[0];
+      const f1 = toggleFavoriteCity(s, c0.key);
+      const isFav1 = isFavoriteCity(s, c0.key);
+      const f2 = toggleFavoriteCity(s, c0.key);
+      const isFav2 = isFavoriteCity(s, c0.key);
+      const mgrBefore = landManagerUnlocked(s);
+      for (let i = 1; i < 10; i++) s.land.owned[CITIES[i].key] = 1;
+      const mgrAfter = landManagerUnlocked(s);
+      const norm = normalizeState({ land: { favorites: [c0.key, 'bogus', c0.key], tier: 'fav', autoRent: true } }, 0);
+      return {
+        bandOk: pi.bandPos >= 0 && pi.bandPos <= 1 && ['저점', '보통', '고점'].includes(pi.bandLabel),
+        pnlOk: h0.profitPct > 20 && h0.profit > 0 && h0.avgCost > 0,
+        favToggle: f1.ok && f1.fav && isFav1 && f2.ok && !f2.fav && !isFav2,
+        mgr: [mgrBefore, mgrAfter],
+        norm: [norm.land.favorites, norm.land.tier, norm.land.autoRent],
+      };
+    """)
+    ok(l51["bandOk"] and l51["pnlOk"], "시세 밴드 위치(저점/보통/고점) · 보유 수익률(%) 계산", json.dumps(l51))
+    ok(l51["favToggle"] and l51["mgr"] == [False, True] and l51["norm"] == [[l51["norm"][0][0]], "fav", True], "관심 매물 토글 · 영지 관리인 10곳 해금 · 저장 정규화", json.dumps(l51))
+
+    ui51 = js(ctx2, """
+      const s = defaultState(1000); s.gold = 9000000;
+      for (let i = 0; i < 10; i++) applyTrade(s, CITIES[i].key, 'buy', 3, 1000);
+      toggleFavoriteCity(s, CITIES[0].key);
+      const buffs = computeBuffs(s, 1000);
+      const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(1), boss: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'land', el: {}, install: { hidden: true } };
+      const home = __landSub(ui, 'home');
+      s.land.tier = 'fav';
+      const marketFav = __landSub(ui, 'market');
+      return {
+        hasHome: home.includes('data-action="land-fav"') && home.includes('data-action="toggle-auto-rent"') && home.includes('영지 관리인') && home.includes('band-pill'),
+        hasFavFilter: marketFav.includes('data-value="fav"') && marketFav.includes('band-bar') && (marketFav.match(/class="mkt/g) || []).length === 1,
+        bad: /undefined|NaN|\\[object Object\\]/.test(home + marketFav),
+      };
+    """)
+    ok(ui51["hasHome"] and ui51["hasFavFilter"] and not ui51["bad"], "부동산 홈/매물 탭 — 즐겨찾기 필터·시세 게이지·영지 관리인 렌더", json.dumps(ui51))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

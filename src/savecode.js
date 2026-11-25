@@ -134,6 +134,9 @@ export function compactSave(state) {
     delete c.land.sub;
     delete c.land.tier;
     delete c.land.sort;
+    delete c.land.autoRentAt;
+    if (Array.isArray(c.land.favorites) && !c.land.favorites.length) delete c.land.favorites;
+    if (!c.land.autoRent) delete c.land.autoRent;
   }
   if (c.news && typeof c.news === 'object') c.news.log = [];
   if (c.gear && typeof c.gear === 'object') {

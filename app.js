@@ -23,6 +23,7 @@ import { Battle } from './src/combat.js';
 import {
   computeBuffs, portfolioOf, accrueRent, claimRent, applyTrade, quoteTrade, maxBuyQty,
   CITY_BY_KEY, formatGold, LAND, LANDMARK, landmarkQuote, buildLandmark as buildLandmarkState,
+  LAND_MANAGER, toggleFavoriteCity, landManagerUnlocked,
 } from './src/land.js';
 import { activeNews, newsCovers } from './src/region.js';
 import { AUCTION, auctionStatus, bidQuote, applyAuctionBid } from './src/auction.js';
@@ -235,6 +236,18 @@ class App {
       if (now - this.lastRentTick >= 1000) {
         this.lastRentTick = now;
         this.accrueRent(now, 1);
+        // v5.1.0 🤖 영지 관리인: 보유 10곳 이상 + 켜짐이면 5분마다 미수령 임대수익 자동 수령
+        if (this.s.land && this.s.land.autoRent && landManagerUnlocked(this.s)
+          && now - (this.s.land.autoRentAt || 0) >= LAND_MANAGER.everyMs
+          && (this.s.land.accruedRent || 0) >= 1) {
+          const got = claimRent(this.s);
+          if (got >= 1) {
+            this.s.land.autoRentAt = now;
+            this.s.records.totalRent = (this.s.records.totalRent || 0) + got;
+            trackDailyQuest(this.s, 'rent', 1, now);
+            this.ui.addLog(`🤖 <b>영지 관리인</b> 임대 자동 수령 · 💰+${got.toLocaleString()}`);
+          }
+        }
       }
       if (now - this.lastSave > 8000) {
         this.lastSave = now;
@@ -1329,6 +1342,29 @@ class App {
         this.s.land.tier = k;
         this.s.land.page = 1;
         this.save();
+        this.ui.render();
+      },
+      landFav: (key) => {
+        const r = toggleFavoriteCity(this.s, key);
+        if (!r.ok) {
+          this.ui.toast(r.reason || '관심 매물을 변경할 수 없습니다', 'red');
+          return;
+        }
+        this.save();
+        this.sound.ui();
+        this.ui.toast(r.fav ? `⭐ ${r.city.name} 관심 매물 등록 (${r.count}곳)` : `${r.city.name} 관심 매물 해제`);
+        this.ui.render();
+      },
+      toggleAutoRent: () => {
+        if (!landManagerUnlocked(this.s)) {
+          this.ui.toast(`보유 지역 ${LAND_MANAGER.minCities}곳 이상 달성 시 해금됩니다`, 'red');
+          return;
+        }
+        this.s.land.autoRent = !this.s.land.autoRent;
+        this.s.land.autoRentAt = Date.now();
+        this.save(true);
+        this.sound.ui();
+        this.ui.toast(this.s.land.autoRent ? '🤖 영지 관리인 켜짐 — 5분마다 임대 자동 수령' : '영지 관리인 꺼짐');
         this.ui.render();
       },
       landSearch: (q) => {
