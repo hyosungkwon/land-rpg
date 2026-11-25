@@ -232,6 +232,7 @@ export class UI {
       case 'cloud-auto': actions.cloudToggleAuto(); break;
       case 'cloud-nick': actions.cloudNickSave(); break;
       case 'cloud-rank': actions.cloudRank(v || 'stage'); break;
+      case 'cloud-compare': actions.cloudCompare(); break;
       case 'cloud-rank-refresh': actions.cloudRankRefresh(); break;
       case 'close-modal': this.closeModal(); break;
       default: break;
@@ -2361,6 +2362,8 @@ function cloudCard(ui) {
       <span class="tiny">60초 자동 저장 <span class="dim">${(s.cloud && s.cloud.autoSync === false) ? '끔' : '켬'}</span></span>
       <button class="switch ${(s.cloud && s.cloud.autoSync !== false) ? 'on' : ''}" data-action="cloud-auto" aria-label="자동 저장 전환"></button>
     </div>
+    ${(ui.app && ui.app._cloudHold) ? `<div class="note warn" style="margin-top:7px">⚠️ 클라우드에 더 앞선 세이브가 있습니다. 어느 쪽을 남길지 고르기 전까지 <b>자동 저장을 멈췄습니다</b>.</div>
+    <button class="btn small primary block" style="margin-top:6px" type="button" data-action="cloud-compare">🔍 비교해서 고르기</button>` : ''}
     <div class="row gap6" style="margin-top:9px">
       <button class="btn small blue wide" type="button" data-action="cloud-save">☁️ 지금 저장</button>
       <button class="btn small ghost wide" type="button" data-action="cloud-load">📥 불러오기</button>

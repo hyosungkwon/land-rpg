@@ -118,6 +118,7 @@ class App {
     this.lastCloudUpload = 0;
     this._rankKey = '';
     this._cloudCmp = null;
+    this._cloudHold = false; // 클라우드가 앞서는데 사용자가 아직 고르지 않음 → 자동 저장 중지
     this._cloudBusy = false;
     this._cloudAuthBusy = false;
     this._cloudResumeStarted = false;
@@ -734,6 +735,7 @@ class App {
   async cloudTick() {
     const c = this.cloud;
     if (!this.cloudEnabled() || !c.signedIn || c.busy || this._cloudBusy) return;
+    if (this._cloudHold) return; // 더 앞선 클라우드 세이브를 덮어쓰지 않는다 — 사용자가 고를 때까지 대기
     if (this.s.cloud && this.s.cloud.autoSync === false) return;
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
     const now = Date.now();
@@ -816,12 +818,14 @@ class App {
     // 비교 모달에서 바로 복원할 수 있게 읽어 둔 세이브를 보관(복원 가능할 때만)
     this._cloudLoad = loaded.restorable ? loaded : null;
     cmp.restorable = !!loaded.restorable;
+    // 클라우드가 더 앞서거나 양쪽이 충돌하면, 사용자가 고르기 전까지 자동 저장을 멈춘다
+    this._cloudHold = cmp.action === 'download' || cmp.action === 'conflict';
     if (cmp.action === 'same') {
       if (!silent) this.ui.toast('☁️ 클라우드와 같은 진행도입니다');
       return cmp;
     }
     if (silent) {
-      if (cmp.action === 'download' || cmp.action === 'conflict') {
+      if (this._cloudHold) {
         this.ui.toast('☁️ 클라우드에 더 앞선 세이브가 있습니다 — 설정 ☁️ 카드에서 불러올 수 있어요', 'gold');
       }
       return cmp;
@@ -836,7 +840,8 @@ class App {
     if (!r.ok || !r.loaded || !r.loaded.doc) return null;
     const cmp = compareSaves(this.cloudSummary(), r.loaded.summary);
     this._cloudCmp = cmp;
-    if (silent && (cmp.action === 'download' || cmp.action === 'conflict')) {
+    this._cloudHold = cmp.action === 'download' || cmp.action === 'conflict';
+    if (silent && this._cloudHold) {
       this.ui.toast('☁️ 클라우드에 더 앞선 세이브가 있습니다 — 설정 ☁️ 카드에서 불러올 수 있어요', 'gold');
     }
     return cmp;
@@ -859,7 +864,7 @@ class App {
     if (canLoad) {
       actions.push({ label: '📥 클라우드 불러오기', style: rec === 'cloud' ? 'primary' : 'ghost', onClick: () => this.cloudRestore() });
     }
-    actions.push({ label: '📤 이 기기 세이브 올리기', style: rec === 'local' || !canLoad ? 'primary' : 'ghost', onClick: () => this.cloudUpload({ silent: false }) });
+    actions.push({ label: '📤 이 기기 올리기', style: rec === 'local' || !canLoad ? 'primary' : 'ghost', onClick: () => this.cloudUpload({ silent: false }) });
     this.ui.modal({
       title: '☁️ 클라우드 세이브 확인',
       sub: '이 기기 ↔ 클라우드 · 덮어쓰기 전에 한 번 확인합니다',
@@ -884,6 +889,7 @@ class App {
       return { ok: false, code: 'no-user' };
     }
     if (this._cloudBusy) return { ok: false, code: 'busy' };
+    if (silent && this._cloudHold) return { ok: false, code: 'hold' }; // 비교 전에는 조용히 올리지 않는다
     this._cloudBusy = true;
     try {
       this.save(true);
@@ -895,6 +901,7 @@ class App {
         return r;
       }
       this.lastCloudUpload = r.at || Date.now();
+      this._cloudHold = false; // 올리기로 결정(또는 직접 저장) → 자동 저장 재개
       this.s.cloud.enabled = true;
       this.s.cloud.uid = c.uid;
       this.s.cloud.lastSync = this.lastCloudUpload;
@@ -1012,6 +1019,7 @@ class App {
     }
     this.prevSave = this.readPrevSave();
     this.applySaveState(next);
+    this._cloudHold = false; // 클라우드에서 불러왔으니 자동 저장 재개
     this.lastCloudUpload = next.cloud.lastSync;
     this._rankKey = '';
     this.ui.toast(`☁️ 클라우드 세이브를 불러왔습니다 — Lv.${next.level} · S${Math.max(next.peakStage || 1, next.maxStage || 1)}`, 'green');
@@ -1534,6 +1542,7 @@ class App {
       cloudNickSave: () => this.cloudSaveNick(),
       cloudRank: (key) => this.cloudRank(key),
       cloudRankRefresh: () => this.cloudRank((this.cloud.rank && this.cloud.rank.key) || 'stage'),
+      cloudCompare: () => (this._cloudCmp ? this.openCloudSyncModal(this._cloudCmp) : this.cloudCheckRemote({ silent: false })),
     };
   }
 

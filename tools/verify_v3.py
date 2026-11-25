@@ -4406,9 +4406,11 @@ def main():
         rank: [o.includes('🥇'), o.includes('rank-row me'), o.includes('내 순위'), o.includes('S40'), o.includes('data-action=\"cloud-rank\" data-value=\"asset\"')],
         emptyGuest: [g.includes('🏆 랭킹 불러오기'), g.includes('data-action=\"cloud-rank-refresh\"')],
         loading: loading.includes('불러오는 중'),
+        holdOff: g.includes('data-action=\"cloud-compare\"'),
         sessionOnly: [sessionOnly.includes('이어서 클라우드 켜기'), sessionOnly.includes('로그인 세션'), sessionOnly.includes('data-action=\"cloud-save\"'), sessionOnly.includes('id=\"cloudNick\"')],
         err: err.includes('다시 시도'),
         order: g.indexOf('cloud-card') < g.indexOf('세이브 코드 백업'),
+        hold: __tpls.settings((() => { const m = mk(on); m.s.cloud.enabled = true; m.app._cloudHold = true; return m; })()).includes('data-action=\"cloud-compare\"'),
         bad: /undefined|NaN/.test(g + o + loading + err),
       };
     """)
@@ -4416,7 +4418,8 @@ def main():
     ok(all(ui48["on"]), "설정 탭(연결됨) — 저장·불러오기·로그아웃·자동저장·닉네임 입력", json.dumps(ui48["on"]))
     ok(all(ui48["rank"]), "랭킹 카드 — 메달·내 행 강조·내 순위·총자산·지표 전환", json.dumps(ui48["rank"]))
     ok(all(ui48["emptyGuest"]) and ui48["loading"] and ui48["err"], "랭킹 카드 — 빈 목록/불러오는 중/오류 상태", json.dumps({"e": ui48["emptyGuest"], "l": ui48["loading"], "x": ui48["err"]}))
-    ok(ui48["order"], "클라우드 카드는 설정 탭 맨 위(상단 배지에서 바로 보임)")
+    ok(ui48["hold"] is True and ui48["holdOff"] is False, "비교 대기 상태 — 카드에 '비교해서 고르기' 안내(게스트에는 없음)")
+    ok(ui48["order"], "클라우드 카드는 설정 탭 맨 위(설정 탭을 열면 바로 보임)")
     ok(ui48["sessionOnly"] == [True, True, False, False], "세션만 남은 브라우저 — 게스트 카드 + '이어서 켜기'(저장 버튼·닉네임 없음)", json.dumps(ui48["sessionOnly"]))
     ok(ui48["bad"] is False, "v4.8 설정 템플릿에 undefined/NaN 누출 없음")
 
@@ -4429,6 +4432,7 @@ def main():
     asrc48 = read("app.js")
     ok(all(x in asrc48 for x in ["cloudUpload", "openCloudLoad", "cloudRestore", "cloudPushRank", "cloudTick", "cloudSignIn"]), "app.js — 저장·불러오기·복원·랭킹·주기 저장 배선")
     ok("applySaveState(next)" in asrc48 and "writePrevSave" in asrc48, "클라우드 복원도 직전 세이브 보관 경로를 쓴다")
+    ok("if (this._cloudHold) return;" in asrc48 and "_cloudHold = cmp.action === 'download'" in asrc48, "클라우드가 앞설 때 자동 저장이 덮어쓰지 않는다(결정 전 정지)")
     css48 = read("style.css")
     ok(all(x in css48 for x in [".cloud-card", ".rank-row", ".rank-pos", ".rank-me", ".cloud-nick-in"]), "style.css — v4.8 클라우드·랭킹 스타일")
     readme48 = read("README.md")
