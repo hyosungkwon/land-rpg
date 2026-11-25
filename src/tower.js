@@ -1,6 +1,9 @@
 // land-rpg / src/tower.js
 // v4.2 🗼 도전의 탑 — 층마다 다른 기믹으로 스펙·장비 조합을 시험하는 영구 진행 콘텐츠.
-//   · 10층 고정. 층마다 테마·기믹·목표(처치 수/보스)·제한 시간이 다르다.
+//   · 1~10층은 손으로 만든 고정 층. 층마다 테마·기믹·목표(처치 수/보스)·제한 시간이 다르다.
+//   · v4.5: 11층부터는 자동 생성되는 무한 확장 구간(TOWER_MAX_FLOOR=200).
+//     5층마다 한 단계씩 강해지고(계단식), 보스 층에는 기믹이 3개 겹친다. 보상도 층마다 커진다.
+//   · 최고 층을 하루 한 번 '일일 소탕'으로 되돌릴 수 있어 재도전 동기가 끊기지 않는다.
 //   · 몬스터 체력은 '내 DPS × 목표 처치 시간', 공격력은 '내 최대 체력 × 비율'로 잡는다
 //     → 스테이지가 올라가도 난이도가 흐려지지 않고, 빌드(방어·흡혈·범위·순간딜)가 그대로 시험된다.
 //   · 최초 클리어에만 골드·강화석·초월석·장비를 지급하고, 재도전은 소액 보상만 준다.
@@ -9,6 +12,7 @@
 import { stageGoldBase, RARITIES, RARITY_INDEX, THEMES, monsterKo } from './data.js';
 import { rebirthBonus } from './rebirth.js';
 import { randomItemOfRarity } from './gear.js';
+import { kstDateKey, kstResetMs } from './daily.js';
 
 /* ────────────────────────────── 층별 기믹 ──────────────────────────────
  * 각 기믹은 전투에 실제로 적용된다(combat.js 의 towerTick · hit · damagePlayer).
@@ -38,6 +42,7 @@ export const TOWER_RULES = {
   frenzyStep: 0.25, // 광폭: 1회당 공격력 증가율
   bossAtkMul: 1.6, // 보스 공격력 배율(일반 대비)
   repeatRate: 0.35, // 재도전(2회차 이후) 보상 비율
+  sweepRate: 0.7, // 일일 소탕(최고 층 1회) — 최초 클리어 보상의 70%, 초월석·장비는 없음
 };
 
 /* ────────────────────────────── 층 정의 ──────────────────────────────
@@ -132,14 +137,122 @@ export const TOWER_FLOORS = [
   },
 ];
 
-export const TOWER_MAX_FLOOR = TOWER_FLOORS.length;
-export const TOWER_BY_N = TOWER_FLOORS.reduce((m, f) => { m[f.n] = f; return m; }, {});
+/* ────────────────────────────── ♾️ 11층+ 무한 확장 (v4.5) ──────────────────────────────
+ * 고정 10층 뒤로는 같은 규칙으로 층을 만들어 쓴다(결정론 — 같은 층은 항상 같은 정의).
+ *   · 5층마다 '한 단계' 강해진다: 적 공격력·처치 목표 시간·클리어 보상이 계단식으로 오른다.
+ *   · 기믹은 6종을 돌려 가며 2개씩, 5층마다(보스 층) 3개가 겹친다.
+ *   · 테마·몬스터 구성도 돌아가므로 심층은 매번 다른 배경에서 싸운다.
+ * 몬스터 체력은 여전히 '내 DPS × 처치 목표 시간'이라 스테이지와 무관하게 빌드만 시험한다.
+ */
+const DEEP_NAMES = [
+  '끝없는 회랑', '별이 꺼진 정원', '봉인된 제단', '시간의 나선', '심연의 성문', '용암의 왕좌',
+  '서리 감옥', '공허의 종탑', '천둥의 계단', '빛바랜 신전', '균열의 심장', '무한의 정점',
+];
+const DEEP_THEMES = ['abyss', 'ice', 'volcano', 'ruins', 'desert', 'cave', 'forest', 'meadow'];
+const DEEP_GROUPS = [
+  ['ShadowWraith', 'AbyssEye', 'Skeleton'],
+  ['IceWolf', 'FrostWisp', 'Cyclops'],
+  ['MagmaGolem', 'FireImp', 'Drake'],
+  ['AbyssEye', 'ShadowWraith', 'Minotaur'],
+  ['Scorpion', 'Mummy', 'Sandworm'],
+  ['CaveSpider', 'Golem', 'Batling'],
+];
+const DEEP_BOSSES = ['AbyssLord', 'VoidWalker', 'Cerberus', 'DeathLord', 'IceGiant', 'Ifrit', 'Seraphim', 'Anubis'];
+const DEEP_STEP_EVERY = 5; // 5층마다 한 단계
+const DEEP_BASE_MIN_STAGE = 22; // 10층(탑의 정점)과 같은 스테이지 조건 — 이후는 빌드 싸움
 
-/** 층 번호 → 정의(없으면 null) */
+export const TOWER_FIXED_FLOOR = TOWER_FLOORS.length; // 손으로 만든 고정 층 수(10)
+export const TOWER_MAX_FLOOR = 200; // 무한 확장 포함 최대 층(생성 상한)
+export const TOWER_DEEP = {
+  stepEvery: DEEP_STEP_EVERY,
+  minStage: DEEP_BASE_MIN_STAGE,
+  baseKillSec: 1.85, // 11층 일반 몹 처치 목표 시간(초)
+  stepKillSec: 0.1, // 한 단계당 +0.1초
+  baseBossSec: 18, // 11층 보스 처치 목표 시간(초)
+  stepBossSec: 1.6, // 한 단계당 +1.6초
+  baseAtkOfHp: 1.05, // 11층 몹 1대 = 내 최대 체력의 1.05%
+  stepAtkOfHp: 0.16, // 한 단계당 +0.16%p
+  baseGoldMul: 1300, // 11층 골드 배율(스테이지 기본 골드 ×)
+  stepGoldMul: 110, // 층마다 +110
+  baseShards: 220,
+  stepShards: 16,
+};
+
+const DEEP_CACHE = new Map();
+
+/** 11층 이상 층 정의(11~TOWER_MAX_FLOOR). 범위 밖이면 null */
+export function towerDeepFloor(n) {
+  const k = Math.floor(Number(n) || 0);
+  if (!(k > TOWER_FIXED_FLOOR) || k > TOWER_MAX_FLOOR) return null;
+  if (DEEP_CACHE.has(k)) return DEEP_CACHE.get(k);
+  const c = k - TOWER_FIXED_FLOOR; // 11층 = 1
+  const idx = c - 1;
+  const step = Math.floor(idx / DEEP_STEP_EVERY); // 5층마다 한 단계
+  const bossOnly = c % DEEP_STEP_EVERY === 0; // 15·20·25… 보스 층
+  const gim = TOWER_GIMMICK_IDS;
+  const gimmicks = bossOnly
+    ? [gim[idx % 6], gim[(idx + 2) % 6], gim[(idx + 4) % 6]]
+    : [gim[idx % 6], gim[(idx + 2) % 6]];
+  const goal = bossOnly ? 1 : 10 + (idx % 4) * 2;
+  const killSec = DEEP.killSec(c, step);
+  const bossSec = DEEP.bossSec(step);
+  const atkOfHp = DEEP.atkOfHp(step);
+  const timeLimitMs = bossOnly
+    ? Math.max(35000, 60000 - step * 1800)
+    : Math.max(40000, 72000 - step * 2200);
+  const def = {
+    n: k,
+    name: DEEP_NAMES[idx % DEEP_NAMES.length],
+    theme: DEEP_THEMES[idx % DEEP_THEMES.length],
+    gimmicks,
+    minStage: DEEP_BASE_MIN_STAGE,
+    goal,
+    timeLimitMs,
+    maxAlive: bossOnly ? 1 : 6 + (idx % 3),
+    spawnMs: bossOnly ? 900 : 820 - (idx % 3) * 90,
+    killSec,
+    bossSec,
+    atkOfHp,
+    normals: DEEP_GROUPS[idx % DEEP_GROUPS.length],
+    boss: bossOnly ? DEEP_BOSSES[step % DEEP_BOSSES.length] : null,
+    bossOnly,
+    deep: true,
+    tip: bossOnly
+      ? '세 기믹이 겹치는 심층 보스 — 빌드를 총동원하세요.'
+      : `${DEEP_STEP_EVERY}층마다 기믹이 하나 더 겹치고 적이 강해집니다.`,
+    reward: {
+      goldMul: DEEP.goldMul(c),
+      shards: DEEP.shards(c),
+      points: bossPoints(bossOnly, c),
+      item: bossOnly ? (k % 20 === 0 ? 'legend' : 'rare') : (c % 3 === 0 ? 'rare' : null),
+    },
+  };
+  DEEP_CACHE.set(k, def);
+  return def;
+}
+
+/* 심층 수치 — 검증·UI 가 같은 식을 참조한다 */
+export const DEEP = {
+  killSec: (c, step) => Math.round((TOWER_DEEP.baseKillSec + step * TOWER_DEEP.stepKillSec + (c % DEEP_STEP_EVERY) * 0.02) * 100) / 100,
+  bossSec: (step) => TOWER_DEEP.baseBossSec + step * TOWER_DEEP.stepBossSec,
+  atkOfHp: (step) => Math.round((TOWER_DEEP.baseAtkOfHp + step * TOWER_DEEP.stepAtkOfHp) * 100) / 100,
+  goldMul: (c) => TOWER_DEEP.baseGoldMul + c * TOWER_DEEP.stepGoldMul,
+  shards: (c) => TOWER_DEEP.baseShards + c * TOWER_DEEP.stepShards,
+};
+
+/** 심층 보스 층 초월석 — 5층마다 6P, 위로 갈수록 조금씩 더 */
+function bossPoints(bossOnly, c) {
+  if (!bossOnly) return 0;
+  return 6 + Math.floor(c / 5);
+}
+
+/** 층 번호 → 정의(고정 1~10 · 자동 생성 11~200 · 없으면 null) */
 export function towerFloor(n) {
   const k = Math.floor(Number(n) || 0);
-  return TOWER_BY_N[k] || null;
+  return TOWER_BY_N[k] || towerDeepFloor(k) || null;
 }
+
+export const TOWER_BY_N = TOWER_FLOORS.reduce((m, f) => { m[f.n] = f; return m; }, {});
 
 /** 층 정의 → 기믹 정의 배열 */
 export function towerGimmicks(def) {
@@ -191,7 +304,7 @@ export function towerStageDef(n) {
 
 /* ────────────────────────────── 저장 상태 ────────────────────────────── */
 export function defaultTowerState() {
-  return { cleared: [], best: 0, runs: 0, fails: 0, last: null };
+  return { cleared: [], best: 0, runs: 0, fails: 0, last: null, sweep: { date: '', floor: 0, gold: 0, shards: 0, at: 0 } };
 }
 
 /** state.tower 보장(없거나 손상되면 새로 만든다) */
@@ -224,12 +337,21 @@ export function normalizeTowerState(raw) {
     }
     : null;
   const bestCleared = cleared.length ? cleared[cleared.length - 1] : 0;
+  const rawSweep = raw.sweep && typeof raw.sweep === 'object' ? raw.sweep : {};
+  const sweep = {
+    date: typeof rawSweep.date === 'string' ? rawSweep.date.slice(0, 10) : '',
+    floor: Math.max(0, Math.min(TOWER_MAX_FLOOR, Math.floor(num(rawSweep.floor, 0)))),
+    gold: Math.max(0, Math.floor(num(rawSweep.gold, 0))),
+    shards: Math.max(0, Math.floor(num(rawSweep.shards, 0))),
+    at: Math.max(0, num(rawSweep.at, 0)),
+  };
   return {
     cleared,
     best: Math.max(0, Math.min(TOWER_MAX_FLOOR, Math.max(Math.floor(num(raw.best, 0)), bestCleared))),
     runs: Math.max(0, Math.floor(num(raw.runs, 0))),
     fails: Math.max(0, Math.floor(num(raw.fails, 0))),
     last,
+    sweep,
   };
 }
 
@@ -245,12 +367,14 @@ export function towerCleared(state, n) {
   return clearedFloors(state).includes(Math.floor(Number(n) || 0));
 }
 
-/** 입장 가능 여부 — 1층은 항상, n층은 n-1층 클리어 + 최고 스테이지 조건이 필요하다 */
+/** 입장 가능 여부 — 1층은 항상, n층은 n-1층 클리어 + 최고 스테이지 조건이 필요하다(심층 포함) */
 export function towerUnlocked(state, n) {
   const k = Math.floor(Number(n) || 0);
   if (k < 1 || k > TOWER_MAX_FLOOR) return false;
+  const def = towerFloor(k);
+  if (!def) return false;
   const maxStage = Math.max(1, Math.floor(Number(state && state.maxStage) || 1));
-  const need = Math.max(1, Math.floor(Number(TOWER_BY_N[k].minStage) || 1));
+  const need = Math.max(1, Math.floor(Number(def.minStage) || 1));
   if (maxStage < need) return false;
   if (k === 1) return true;
   return towerCleared(state, k - 1);
@@ -269,7 +393,7 @@ export function towerLockReason(state, n) {
 
 /**
  * 탑 진행 요약 — UI·검증 공용
- * { max, clearedCount, cleared, best, next, nextDef, allCleared, pct }
+ * { max, fixed, clearedCount, cleared, best, deep, next, nextDef, allCleared, pct }
  */
 export function towerProgress(state) {
   const cleared = clearedFloors(state);
@@ -279,14 +403,69 @@ export function towerProgress(state) {
   const allCleared = cleared.length >= TOWER_MAX_FLOOR;
   return {
     max: TOWER_MAX_FLOOR,
+    fixed: TOWER_FIXED_FLOOR,
     clearedCount: cleared.length,
     cleared,
     best,
+    deep: best > TOWER_FIXED_FLOOR,
     next: allCleared ? 0 : next,
     nextDef: allCleared ? null : towerFloor(next),
     allCleared,
     pct: cleared.length / TOWER_MAX_FLOOR,
   };
+}
+
+/* ────────────────────────────── 🧹 일일 소탕 (v4.5) ──────────────────────────────
+ * 하루 한 번, 지금까지 오른 '최고 층'을 다시 돌지 않고 한 번에 털어 골드·강화석을 받는다.
+ * 심층(11층+)으로 갈수록 소탕 보상도 커져 매일 접속할 이유가 된다. 초월석·장비는 없다(직접 도전 몫).
+ */
+export function towerSweepInfo(state, now = Date.now()) {
+  const st = towerState(state);
+  const date = kstDateKey(now);
+  const best = Math.max(0, Math.min(TOWER_MAX_FLOOR, Math.floor(Number(st.best) || 0)));
+  const claimed = !!(st.sweep && st.sweep.date === date);
+  return {
+    date,
+    best,
+    claimed,
+    available: best >= 1 && !claimed,
+    floor: best,
+    resetMs: kstResetMs(now),
+    last: st.sweep && st.sweep.date ? st.sweep : null,
+  };
+}
+
+/** 일일 소탕 실행 — 최고 층 1회분(최초 보상의 70%)을 즉시 지급한다 */
+export function towerSweepClaim(state, now = Date.now()) {
+  const info = towerSweepInfo(state, now);
+  if (info.best < 1) return { ok: false, reason: '아직 클리어한 층이 없습니다.' };
+  if (info.claimed) return { ok: false, reason: '오늘 소탕 보상은 이미 받았습니다 — 내일 00:00(KST)에 다시 열립니다.' };
+  const def = towerFloor(info.best);
+  if (!def) return { ok: false, reason: '소탕할 층이 없습니다.' };
+  const stage = Math.max(1, Math.floor(Number(state && state.stage) || 1));
+  const rb = rebirthBonus(state);
+  const r = def.reward || {};
+  const gold = Math.max(0, Math.round(stageGoldBase(stage) * (r.goldMul || 200) * TOWER_RULES.sweepRate * (1 + rb.goldPct / 100)));
+  const shards = Math.max(0, Math.round((r.shards || 30) * TOWER_RULES.sweepRate * (1 + rb.shardPct / 100)));
+  state.gold = Math.floor((Number(state.gold) || 0) + gold);
+  state.shards = Math.floor((Number(state.shards) || 0) + shards);
+  if (state.records) state.records.totalGold = (Number(state.records.totalGold) || 0) + gold;
+  const st = towerState(state);
+  st.sweep = { date: info.date, floor: info.best, gold, shards, at: now };
+  return { ok: true, floor: info.best, name: def.name, gold, shards, date: info.date };
+}
+
+/** 소탕 버튼 한 줄 텍스트 — "🧹 12층 소탕 💰12,400 💎150" */
+export function towerSweepText(state) {
+  const info = towerSweepInfo(state);
+  if (info.best < 1) return '최고 층부터 열립니다';
+  const def = towerFloor(info.best);
+  const stage = Math.max(1, Math.floor(Number(state && state.stage) || 1));
+  const rb = rebirthBonus(state);
+  const r = (def && def.reward) || {};
+  const gold = Math.round(stageGoldBase(stage) * (r.goldMul || 200) * TOWER_RULES.sweepRate * (1 + rb.goldPct / 100));
+  const shards = Math.round((r.shards || 30) * TOWER_RULES.sweepRate * (1 + rb.shardPct / 100));
+  return `${info.best}층 소탕 💰${gold.toLocaleString('ko-KR')} 💎${shards}`;
 }
 
 /* ────────────────────────────── 보상 ────────────────────────────── */

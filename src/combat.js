@@ -1,12 +1,13 @@
 // land-rpg / src/combat.js
 // 자동 전투 시뮬레이션. DOM·Canvas 의존 없음 → 헤드리스 검증 가능.
 // 렌더러는 이 객체의 엔티티를 읽고, UI는 events 큐를 소비한다.
-import { ECON, SKILLS, stageDef, monsterKo, monsterMotion, monsterAttack } from './data.js';
+import { ECON, SKILLS, stageDef, monsterKo, monsterMotion, monsterAttack, THEMES } from './data.js';
 import {
   calcStats, currentHp, skillEffect, killReward, registerKill, clearStage, monsterStats,
 } from './state.js';
 import { DUNGEON, PET_ATTACK_MS, equippedPet, petDmgPct, dungeonReward, petEvo, petSkillOf, petPassive, petGoldPct } from './meta.js';
 import { TOWER_RULES, TOWER_MAX_FLOOR, towerFloor, towerStageDef, towerHas, towerReward, towerCleared, towerState, towerUnlocked, towerLockReason } from './tower.js';
+import { DAILY, dailyBossFor, dailyInfo, consumeDailyAttempt, dailyReward, recordDailyRun, dailyDpsCap } from './daily.js';
 import { codexMeet, codexKill } from './quests.js';
 import { tryGearDrop, acquireGear } from './gear.js';
 
@@ -89,6 +90,8 @@ export class Battle {
     this.dungeon = null;
     // v4.2 🗼 도전의 탑 상태(진행 중일 때만 객체)
     this.tower = null;
+    // v4.5 🌟 일일 보스 상태(30초 타임어택 진행 중일 때만 객체)
+    this.daily = null;
     this.syncStage();
     this.spawnInitial(startAt);
   }
@@ -106,6 +109,16 @@ export class Battle {
   /** 🗼 도전의 탑 진행 중인가 */
   inTower() {
     return !!this.tower;
+  }
+
+  /** 🌟 일일 보스 진행 중인가 */
+  inDaily() {
+    return !!this.daily;
+  }
+
+  /** 일일 보스 남은 시간(ms) */
+  dailyLeft(now = Date.now()) {
+    return this.daily ? Math.max(0, this.daily.ends - now) : 0;
   }
 
   /** 도전의 탑 남은 시간(ms) */
@@ -245,6 +258,10 @@ export class Battle {
     this.attack(now);
     this.petAttack(now);
     this.petSkillTick(now);
+    if (this.daily) {
+      this.dailyTick(now);
+      return;
+    }
     if (this.dungeon) {
       this.dungeonTick(now);
       return;
@@ -400,7 +417,8 @@ export class Battle {
       this.player.reviveAt = now + ECON.reviveMs;
       this.emit({ t: 'playerDeath' });
       if (this.boss) this.failBoss(now, 'dead');
-      if (this.dungeon) this.endDungeon(now); // 쓰러지면 던전 종료(그때까지의 보상 지급)
+      if (this.daily) this.endDailyBoss(now, 'dead'); // 쓰러져도 그때까지의 피해로 보상
+      else if (this.dungeon) this.endDungeon(now); // 쓰러지면 던전 종료(그때까지의 보상 지급)
       else if (this.tower) this.endTower(now, 'dead'); // 탑에서 쓰러지면 패배 — 잃는 것 없이 복귀
       // v3.8: 쓰러지면 몰려든 무리가 흩어진다 — 부활 직후 바로 다시 눌리는 일 없이 숨을 돌린다
       else this.scatterMonsters(now);
@@ -463,6 +481,7 @@ export class Battle {
       m.knock = Math.min(30, (m.knock || 0) + (crit ? 18 : 10));
       if (this.dungeon) this.dungeon.dmg += dmg;
       if (this.tower) this.tower.dmg += dmg;
+      if (this.daily) { this.daily.dmg += dmg; this.daily.hits = (this.daily.hits || 0) + 1; }
       dealt += dmg;
       hits++;
       this.emit({ t: 'hit', id: m.id, dmg, crit, x: m.x, isBoss: m.isBoss, kind });
@@ -486,6 +505,15 @@ export class Battle {
     m.moving = false;
     // 📖 도감: 처치 수 기록(던전 몹 포함)
     try { codexKill(this.s, m.name); } catch (e) { /* ignore */ }
+    // v4.5 🌟 일일 보스: 보스가 쓰러지면(이론상) 그 자리에서 종료 — 남은 시간은 버린다.
+    if (this.daily) {
+      this.emit({
+        t: 'monsterDeath', id: m.id, name: m.name, ko: m.ko, isBoss: m.isBoss, x: m.x,
+        gold: 0, exp: 0, shards: 0, levelUps: 0, daily: true,
+      });
+      this.endDailyBoss(now, 'kill');
+      return;
+    }
     // 황금 던전: 보상은 종료 시 한 번에 지급하고, 여기서는 처치 수만 센다.
     if (this.dungeon) {
       if (m.isBoss) this.dungeon.bossKills += 1;
@@ -744,6 +772,8 @@ export class Battle {
   startBoss(now = Date.now()) {
     if (this.boss || !this.s.bossReady || this.player.dead) return false;
     if (this.tower) return false; // 탑 도전 중에는 스테이지 보스를 부르지 않는다
+    if (this.daily) return false; // 일일 보스 중에도 마찬가지
+    if (this.dungeon) return false;
     const boss = this.makeMonster(this._def.boss, true, now);
     // v3.8: 보스전은 1:1 결투 — 잡몹 무리는 물러나 보스와 정면으로 붙는다
     this.monsters = this.monsters.filter((m) => m.dying);
@@ -795,6 +825,7 @@ export class Battle {
   startDungeon(now = Date.now()) {
     if (this.dungeon) return { ok: false, reason: '이미 던전이 진행 중입니다.' };
     if (this.tower) return { ok: false, reason: '도전의 탑 진행 중에는 입장할 수 없습니다.' };
+    if (this.daily) return { ok: false, reason: '일일 보스 진행 중에는 입장할 수 없습니다.' };
     if (this.player.dead) return { ok: false, reason: '전투 불능 상태에서는 입장할 수 없습니다.' };
     if (this.boss) return { ok: false, reason: '스테이지 보스 전투 중에는 입장할 수 없습니다.' };
     this.dungeon = {
@@ -895,6 +926,7 @@ export class Battle {
    */
   startTower(floor, now = Date.now()) {
     if (this.tower) return { ok: false, reason: '이미 도전의 탑에 입장해 있습니다.' };
+    if (this.daily) return { ok: false, reason: '일일 보스 진행 중에는 입장할 수 없습니다.' };
     if (this.dungeon) return { ok: false, reason: '황금 던전 진행 중에는 입장할 수 없습니다.' };
     if (this.boss) return { ok: false, reason: '스테이지 보스 전투 중에는 입장할 수 없습니다.' };
     if (this.player.dead) return { ok: false, reason: '전투 불능 상태에서는 입장할 수 없습니다.' };
@@ -1089,6 +1121,129 @@ export class Battle {
       points: reward ? reward.points : 0,
       item: reward && reward.item ? { id: reward.item.id, name: reward.item.name, rarity: reward.item.rarity, slot: reward.item.slot } : null,
       next: how === 'clear' && t.n < TOWER_MAX_FLOOR ? t.n + 1 : 0,
+    });
+    return reward;
+  }
+
+  /* ───────────── 🌟 일일 보스 (v4.5) ─────────────
+   * 하루 2회, 30초 타임어택. 보스 한 마리에게 넣은 누적 피해로 S~D 등급을 매긴다.
+   *  - 보스 체력 = 내 DPS × 150초 → 30초 안에 잡히지 않는다. 오직 '얼마나 넣었나'를 겨룬다.
+   *  - 등급 기준 = 내 DPS × 30초 대비 비율 → 스테이지·스펙이 달라도 공정하다.
+   *  - 보상은 골드·강화석·초월석을 즉시 지급하고 원래 사냥으로 복귀한다.
+   */
+  startDailyBoss(now = Date.now()) {
+    if (this.daily) return { ok: false, reason: '이미 일일 보스에 도전 중입니다.' };
+    if (this.dungeon) return { ok: false, reason: '황금 던전 진행 중에는 입장할 수 없습니다.' };
+    if (this.tower) return { ok: false, reason: '도전의 탑 진행 중에는 입장할 수 없습니다.' };
+    if (this.boss) return { ok: false, reason: '스테이지 보스 전투 중에는 입장할 수 없습니다.' };
+    if (this.player.dead) return { ok: false, reason: '전투 불능 상태에서는 입장할 수 없습니다.' };
+    const used = consumeDailyAttempt(this.s, now);
+    if (!used.ok) return used;
+    const bd = dailyBossFor(now);
+    const base = stageDef(this.s.stage);
+    const theme = THEMES.find((t) => t.id === bd.theme) || base.theme;
+    const def = {
+      ...base,
+      theme,
+      themeName: `일일 보스 · ${bd.title}`,
+      boss: bd.key,
+      bossOnly: true,
+      tier: 'daily',
+      daily: true,
+    };
+    this.daily = {
+      t0: now,
+      ends: now + DAILY.durationMs,
+      dmg: 0,
+      hits: 0,
+      bossKills: 0,
+      boss: null,
+      key: bd.key,
+      ko: bd.ko,
+      title: bd.title,
+      date: bd.date,
+      def,
+    };
+    this.monsters = [];
+    this.boss = null;
+    this.bossEnds = 0;
+    this.bossReadyAt = 0;
+    this._def = def; // 배경·HUD 가 일일 보스 테마로 바뀐다
+    this.player.hp = this.stats.hpMax; // 입장 시 체력 완충
+    // 보스 한 마리 — 바로 앞(캐릭터 사거리 밖)에서 시작해 곧 붙는다
+    const m = this.makeMonster(bd.key, true, now);
+    const dps = Math.max(1, this.stats.dps || 1);
+    const hp = Math.max(1, Math.round(dps * DAILY.bossHpSec));
+    m.maxHp = hp;
+    m.hp = hp;
+    m.atk = Math.max(1, Math.round((this.stats.hpMax * DAILY.atkOfHpPct) / 100));
+    m.baseAtk = m.atk;
+    m.attackGap = DAILY.attackGapMs;
+    m.daily = true;
+    m.x = ECON.playerX + 240;
+    m.lastAttack = now;
+    this.monsters.push(m);
+    this.daily.boss = m;
+    this.emit({
+      t: 'dailyStart', ko: bd.ko, title: bd.title, key: bd.key, theme: bd.theme,
+      ends: this.daily.ends, duration: DAILY.durationMs, date: bd.date, left: used.left,
+    });
+    return { ok: true, boss: bd, left: used.left };
+  }
+
+  dailyTick(now) {
+    const d = this.daily;
+    if (!d) return;
+    if (!d.boss || d.boss.dead || d.boss.hp <= 0) {
+      this.endDailyBoss(now, 'kill');
+      return;
+    }
+    if (now >= d.ends) this.endDailyBoss(now, 'timeout');
+  }
+
+  /**
+   * 일일 보스 종료 — 누적 피해로 등급·보상을 정해 즉시 지급하고 원래 사냥으로 복귀.
+   * @param {'timeout'|'dead'|'kill'} how
+   */
+  endDailyBoss(now = Date.now(), how = 'timeout') {
+    const d = this.daily;
+    if (!d) return null;
+    this.daily = null;
+    const dps = Math.max(1, this.stats.dps || 1);
+    const dmg = Math.max(0, Math.round(d.dmg));
+    const reward = dailyReward(this.s, { dmg, dps, ratio: dmg / dailyDpsCap(dps) }, this.rng);
+    this.s.gold = Math.floor((this.s.gold || 0) + reward.gold);
+    this.s.shards = Math.floor((this.s.shards || 0) + reward.shards);
+    if (this.s.records) this.s.records.totalGold = (this.s.records.totalGold || 0) + reward.gold;
+    if (reward.points > 0) {
+      if (!this.s.rebirth || typeof this.s.rebirth !== 'object') {
+        this.s.rebirth = { count: 0, points: 0, totalPoints: 0, traits: {}, bestStage: 1, at: 0 };
+      }
+      this.s.rebirth.points = Math.max(0, Math.floor(this.s.rebirth.points || 0)) + reward.points;
+      this.s.rebirth.totalPoints = Math.max(0, Math.floor(this.s.rebirth.totalPoints || 0)) + reward.points;
+    }
+    const rec = recordDailyRun(this.s, {
+      dmg, grade: reward.grade.id, how, gold: reward.gold, shards: reward.shards,
+      points: reward.points, ratio: reward.ratio,
+    }, now);
+    // 몬스터 정리 후 원래 스테이지 사냥으로 복귀
+    for (const m of this.monsters) {
+      m.dead = true;
+      m.dying = 0;
+    }
+    this.monsters = [];
+    this.boss = null;
+    this.bossEnds = 0;
+    this.bossReadyAt = 0;
+    this.syncStage();
+    this.spawnInitial(now);
+    this.refreshStats(now);
+    const left = dailyInfo(this.s, now).left;
+    this.emit({
+      t: 'dailyEnd', how, ko: d.ko, key: d.key, title: d.title,
+      dmg, grade: reward.grade.id, gradeLabel: reward.grade.label, gradeColor: reward.grade.color,
+      ratio: reward.ratio, gold: reward.gold, shards: reward.shards, points: reward.points,
+      isBest: rec.isBest, best: rec.best, bestGrade: rec.bestGrade, left,
     });
     return reward;
   }

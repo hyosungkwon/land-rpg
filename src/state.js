@@ -20,6 +20,7 @@ import {
   collectionBonus, normalizeQuestState, normalizeAchievements, normalizeCodex, equipLevelSum,
 } from './quests.js';
 import { normalizeTowerState } from './tower.js';
+import { defaultDailyState, normalizeDailyState } from './daily.js';
 
 const nowMs = () => Date.now();
 
@@ -63,7 +64,9 @@ export function defaultState(now = nowMs()) {
     dungeonCooldown: 0,
     dungeon: { best: 0, runs: 0, last: null },
     // v4.2 🗼 도전의 탑 — 층별 클리어 기록 · 도전 횟수
-    tower: { cleared: [], best: 0, runs: 0, fails: 0, last: null },
+    tower: { cleared: [], best: 0, runs: 0, fails: 0, last: null, sweep: { date: '', floor: 0, gold: 0, shards: 0, at: 0 } },
+    // v4.5 🌟 일일 보스 — 날짜(KST)별 도전 횟수 · 최고 피해
+    dailyBoss: defaultDailyState(),
     // v3.3 수집 메타: 순차 미션 · 업적 수령 · 도감 기록
     quests: { idx: 0, claimed: [], done: 0, at: 0 },
     achievements: { claimed: [] },
@@ -159,6 +162,8 @@ export function normalizeState(raw, now = nowMs()) {
   };
   // v4.2: 도전의 탑 기록 정규화(층 번호 1~10 · 중복 제거 · 손상 방어)
   s.tower = normalizeTowerState(raw.tower);
+  // v4.5: 일일 보스 기록 정규화(KST 날짜가 바뀌면 도전 횟수만 리셋 · 최고 기록 유지)
+  s.dailyBoss = normalizeDailyState(raw.dailyBoss, now);
 
   // v3.3: 미션/업적/도감 기본값 병합 (없는 저장본은 그대로 진행도 유지)
   s.quests = normalizeQuestState(raw.quests);

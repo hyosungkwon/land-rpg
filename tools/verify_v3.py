@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""land-rpg v4.4.0 검증 (QuickJS + 정적 검사)
+"""land-rpg v4.5.0 검증 (QuickJS + 정적 검사)
 
 1) 모든 JS 파일 문법(파싱) 검사
 2) 정적 검사 (Firebase/로그인 흔적 0, 저장 키 v3, sw 캐시 v3.5)
@@ -25,8 +25,8 @@ import sys
 import quickjs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/render.js", "src/ui.js", "src/sound.js"]
+FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/render.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -95,8 +95,8 @@ def main():
     for bad in ["firebase", "signInWithPopup", "Google 로그인", "gstatic", "firebaseio", "googleapis"]:
         ok(bad.lower() not in text_all.lower(), f"Firebase/로그인 흔적 없음: {bad}")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v4.4.0" in read("sw.js"), "SW 캐시 버전 v4.4.0")
-    ok("APP_VERSION = '4.4.0'" in read("src/data.js"), "앱 버전 v4.4.0")
+    ok("land-rpg-v4.5.0" in read("sw.js"), "SW 캐시 버전 v4.5.0")
+    ok("APP_VERSION = '4.5.0'" in read("src/data.js"), "앱 버전 v4.5.0")
     ok(os.path.exists(os.path.join(ROOT, "src/savecode.js")), "src/savecode.js 존재")
     ok("'./src/savecode.js'" in read("sw.js"), "sw.js 프리캐시에 savecode.js 포함")
     ok("'./src/gear.js'" in read("sw.js"), "sw.js 프리캐시에 gear.js 포함")
@@ -2346,7 +2346,7 @@ def main():
     ok(all(x in read("src/state.js") for x in ["gearMods", "normalizeGear", "syncGearRarity", "compareGear"]), "상태에 장비 옵션·마이그레이션·비교 반영(state.js)")
     css4 = read("style.css")
     ok(all(x in css4 for x in [".gear-slots", ".gslot", ".inv-grid", ".inv-card", ".cmp-vs", ".cmp-opts", ".cmp-stats", ".iv-eq", ".gsvg"]), "v4 장비 UI CSS(슬롯·그리드·비교 모달)")
-    ok("장비 시스템" in read("README.md") and "4.4.0" in read("README.md"), "README v4.4.0 반영")
+    ok("장비 시스템" in read("README.md") and "4.5.0" in read("README.md"), "README v4.5.0 반영")
 
     # ══════════════════════════════════════════════════════════════════════
     section("[17] 🖼️ v4.1 테마 배경 · ♾️ 환생 중간 스테이지 점프")
@@ -2505,6 +2505,7 @@ def main():
         themeId: towerStageDef(7).theme.id,
         rules: TOWER_RULES,
         max: TOWER_MAX_FLOOR,
+        fixed: TOWER_FIXED_FLOOR,
         gimText: towerGimmickText(TOWER_FLOORS[6]),
         goalText: towerGoalText(TOWER_FLOORS[2]),
         rewardText: towerRewardText(defaultState(0), 3),
@@ -2598,7 +2599,7 @@ def main():
                c1, c1again, c3, c5, failBare, winStrong, timeout };
     """)
     d42 = tw["defs"]
-    ok(d42["floors"] == list(range(1, 11)) and d42["max"] == 10, "도전의 탑 10층 정의", json.dumps(d42["floors"]))
+    ok(d42["floors"] == list(range(1, 11)) and d42["max"] == 200 and d42["fixed"] == 10, "고정 10층 + 심층 11~200층 정의", json.dumps([d42["floors"], d42["max"], d42["fixed"]]))
     ok(d42["names"][0] == "첫 관문" and d42["names"][6] == "무리의 파도" and d42["names"][9] == "탑의 정점", "층 이름", json.dumps(d42["names"], ensure_ascii=False))
     ok(d42["gimIds"] == ["swarm", "barrage", "frenzy", "regen", "timeattack", "guard"], "기믹 6종(다굴·포격·광폭·재생·타임어택·철벽)", json.dumps(d42["gimIds"]))
     ok(all(all(g in d42["gimIds"] for g in f) for f in d42["allGim"]) and len({g for f in d42["allGim"] for g in f}) == 6, "모든 층 기믹이 정의된 6종 안에서 쓰임", json.dumps(d42["allGim"]))
@@ -2614,15 +2615,15 @@ def main():
     ok("💎" in d42["rewardText"] and "✨" in d42["rewardText"], "보상 미리보기 텍스트(강화석·초월석)", d42["rewardText"])
 
     p0 = tw["p0"]
-    ok(p0["max"] == 10 and p0["clearedCount"] == 0 and p0["next"] == 1 and p0["pct"] == 0, "초기 진행도 — 0/10 · 다음 1층", json.dumps({k: p0[k] for k in ["clearedCount", "next", "pct"]}))
+    ok(p0["max"] == 200 and p0["clearedCount"] == 0 and p0["next"] == 1 and p0["pct"] == 0 and p0["deep"] is False, "초기 진행도 — 0/200 · 다음 1층", json.dumps({k: p0[k] for k in ["max", "clearedCount", "next", "pct"]}))
     ok(tw["uStart"] == [True, False], "1층은 항상 열림, 2층은 잠김", json.dumps(tw["uStart"]))
     ok(tw["prog"]["clearedCount"] == 1 and tw["prog"]["next"] == 2 and tw["prog"]["best"] == 1, "1층 클리어 후 진행도", json.dumps({k: tw["prog"][k] for k in ["clearedCount", "next", "best"]}))
     ok(tw["gate"]["two"] is True and tw["gate"]["three"] is False and tw["gate"]["why3"] == "최고 스테이지 4 필요", "최고 스테이지 게이트(3층 = S4)", json.dumps(tw["gate"], ensure_ascii=False))
     ok(tw["gate2"]["three"] is True, "스테이지가 오르면 잠금 해제", json.dumps(tw["gate2"]))
     bad = tw["bad"]
-    ok(bad["cleared"] == [1, 2] and bad["best"] == 10 and bad["runs"] == 0 and bad["fails"] == 0, "저장 기록 정규화(중복·범위 밖·음수 방어)", json.dumps(bad, ensure_ascii=False))
+    ok(bad["cleared"] == [1, 2, 99] and bad["best"] == 99 and bad["runs"] == 0 and bad["fails"] == 0, "저장 기록 정규화(중복·음수·상한 200 방어 · 심층 99층 유지)", json.dumps(bad, ensure_ascii=False))
     ok(bad["last"]["n"] == 3 and bad["last"]["gold"] == 0 and bad["last"]["dmg"] == 0, "지난 도전 기록 정규화", json.dumps(bad["last"], ensure_ascii=False))
-    ok(tw["oldTower"] == {"cleared": [], "best": 0, "runs": 0, "fails": 0, "last": None} and tw["oldPetEvo"] == {}, "기존(v4.1) 세이브 호환 — 탑·펫 진화 기본값", json.dumps([tw["oldTower"], tw["oldPetEvo"]], ensure_ascii=False))
+    ok(tw["oldTower"]["cleared"] == [] and tw["oldTower"]["best"] == 0 and tw["oldTower"]["last"] is None and tw["oldTower"]["sweep"]["date"] == "" and tw["oldPetEvo"] == {}, "기존(v4.1) 세이브 호환 — 탑·소탕·펫 진화 기본값", json.dumps([tw["oldTower"], tw["oldPetEvo"]], ensure_ascii=False))
 
     first, again = tw["first"], tw["again"]
     ok(first["first"] is True and first["points"] == 2 and first["item"] is None, "3층 최초 클리어 — 초월석 2P", json.dumps({k: first[k] for k in ["first", "points", "gold", "shards"]}))
@@ -2835,9 +2836,9 @@ def main():
     ok(all(x in asrc42 for x in ["enterTower", "openTowerFloors", "evolvePet", "showTowerResult", "showTowerFloors"]), "app.js — 탑 입장/층 선택/결과·펫 진화 액션", "")
     ok('assets/sprites/pet/${info.sprite}.png' in asrc42, "진화 결과 모달 — 진화 스프라이트 경로(.png)", "")
     ok(all(x in css42 for x in [".tower-card", ".tower-tiles", ".tower-floor", ".pet-evo", ".mini.evo"]), "style.css — v4.2 스타일", "")
-    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.4.0" in read("sw.js") and "APP_VERSION = '4.4.0'" in read("src/data.js"), "버전·서비스워커(4.4.0 · tower.js 프리캐시)", "")
-    pkg_ok = os.path.exists(os.path.join(ROOT, "package.json")) and '"version": "4.4.0"' in read("package.json")
-    ok(pkg_ok, "package.json 버전 4.4.0(로컬 검증용)", "")
+    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.5.0" in read("sw.js") and "APP_VERSION = '4.5.0'" in read("src/data.js"), "버전·서비스워커(4.5.0 · tower.js 프리캐시)", "")
+    pkg_ok = os.path.exists(os.path.join(ROOT, "package.json")) and '"version": "4.5.0"' in read("package.json")
+    ok(pkg_ok, "package.json 버전 4.5.0(로컬 검증용)", "")
     evo_files = [f"assets/sprites/pet/pet_{n}_{s}.png" for n in ("wolf", "fox", "owl", "dragon") for s in ("awaken", "divine")]
     ok(all(os.path.exists(os.path.join(ROOT, f)) for f in evo_files), "펫 진화 스프라이트 8종 파일", ", ".join(f for f in evo_files if not os.path.exists(os.path.join(ROOT, f))))
     ok(all(f"'./{f}'" in read("sw.js") for f in evo_files), "sw.js 프리캐시에 진화 스프라이트 포함", "")
@@ -2986,7 +2987,7 @@ def main():
 
     css43 = read("style.css")
     ok(all(x in css43 for x in [".land-sum", ".ls-v", ".ls-claim", ".news-slim", ".ns-title", ".land-subbar", ".land-rec", ".buff-now"]), "style.css — v4.3 부동산 요약 바·압축 뉴스·서브 탭", "")
-    ok("land-rpg-v4.4.0" in read("sw.js") and "'4.4.0'" in read("src/data.js"), "버전·캐시 v4.4.0", "")
+    ok("land-rpg-v4.5.0" in read("sw.js") and "'4.5.0'" in read("src/data.js"), "버전·캐시 v4.5.0", "")
 
     section("[20] ⚔️ v4.4 S31+ 무한 구간 리밸런싱 · 강화석 대량 교환 · 상위 전직")
 
@@ -3150,8 +3151,316 @@ def main():
     ok(job44["name4"] == "드래곤 로드" and job44["name5"] == "용신", "저장본의 상위 전직 칭호가 그대로 복원", json.dumps({"n4": job44["name4"], "n5": job44["name5"]}, ensure_ascii=False))
     ok(job44["atk4"] > job44["atk3"] * 1.26 and job44["hp4"] > job44["hp3"] * 1.2 and job44["peak"] == 4, "상위 전직 배율이 실제 스탯·역대 기록에 반영", json.dumps({k: job44[k] for k in ["atk3", "atk4", "hp3", "hp4", "peak"]}))
 
+    section("[21] 🗼 v4.5 도전의 탑 무한 확장 · 🌟 일일 보스")
+    tw45 = js(ctx, """
+      const RNG=(seed)=>{let x=seed;return function(){x=(x*1664525+1013904223)>>>0;return x/4294967296;};};
+      const clearedTo = (n) => Array.from({length:n}, (_, i) => i + 1);
+      function mk(clearedUpto, opts) {
+        opts = opts || {};
+        const s = defaultState(0);
+        s.level = opts.level || 40;
+        s.stage = opts.stage || 24;
+        s.maxStage = opts.maxStage || 30;
+        const q = opts.eq == null ? 40 : opts.eq;
+        const r = opts.rar || 'legend';
+        s.equip = { weapon:q, armor:q, helmet:q, ring:q, amulet:q };
+        s.gearRarity = { weapon:r, armor:r, helmet:r, ring:r, amulet:r };
+        s.tower = { cleared: clearedTo(clearedUpto), best: clearedUpto, runs: 0, fails: 0, last: null,
+                    sweep: { date: '', floor: 0, gold: 0, shards: 0, at: 0 } };
+        const b = new Battle(s, () => ({}), RNG(opts.seed || 7), 0);
+        return { s, b };
+      }
+      function runTower(floor, opts, ticks) {
+        const { s, b } = mk(floor - 1, opts);
+        const r0 = b.startTower(floor, 1000);
+        const gold0 = s.gold, shards0 = s.shards, items0 = s.gear.items.length;
+        let t = 1000, ev = null, minPct = 100;
+        for (let i = 0; i < (ticks || 2600); i++) {
+          t += 50; b.tick(50, t);
+          for (const e of b.drainEvents()) if (e.t === 'towerEnd') ev = e;
+          if (b.tower) minPct = Math.min(minPct, 100 * b.player.hp / b.stats.hpMax);
+          if (ev) break;
+        }
+        return {
+          ok: r0.ok, how: s.tower.last && s.tower.last.how, first: ev && ev.first, next: ev && ev.next,
+          points: ev && ev.points, item: ev && ev.item && ev.item.rarity, gold: ev && ev.gold,
+          goldGain: s.gold - gold0, shardsGain: s.shards - shards0, itemsDelta: s.gear.items.length - items0,
+          clearedTail: s.tower.cleared.slice(-2), best: s.tower.best, minPct: Math.round(minPct),
+          retryNext: (function(){ try { return b.startTower(ev ? ev.next : floor, t + 1000).ok; } catch (e) { return false; } })(),
+        };
+      }
+
+      const defs = [11, 12, 15, 20, 25, 50, 100, 200].map((n) => {
+        const f = towerFloor(n);
+        return {
+          n, name: f.name, deep: !!f.deep, themeOk: THEMES.some((t) => t.id === f.theme),
+          gims: f.gimmicks.length, bossOnly: !!f.bossOnly, boss: !!f.boss, mins: f.minStage,
+          atk: f.atkOfHp, killSec: f.killSec, goal: f.goal, limit: Math.round(f.timeLimitMs / 1000),
+          goldMul: f.reward.goldMul, shards: f.reward.shards, points: f.reward.points, item: f.reward.item || null,
+        };
+      });
+      const edge = { f201: towerFloor(201), f0: towerFloor(0), f10deep: !!towerFloor(10).deep, max: TOWER_MAX_FLOOR, fixed: TOWER_FIXED_FLOOR };
+      const gimSet = new Set();
+      for (let n = 11; n <= 22; n++) for (const g of towerFloor(n).gimmicks) gimSet.add(g);
+      const scaling = [11, 16, 21, 31, 51, 101].map((n) => ({ n, atk: towerFloor(n).atkOfHp, gold: towerFloor(n).reward.goldMul, kill: towerFloor(n).killSec, limit: Math.round(towerFloor(n).timeLimitMs / 1000) }));
+
+      const gate = (function () {
+        const s = defaultState(0);
+        s.maxStage = 24; s.tower.cleared = clearedTo(10); s.tower.best = 10;
+        const a = { f11: towerUnlocked(s, 11), f12: towerUnlocked(s, 12), why12: towerLockReason(s, 12) };
+        s.tower.cleared = clearedTo(11); s.tower.best = 11;
+        const b = { f12: towerUnlocked(s, 12), f13: towerUnlocked(s, 13) };
+        const low = defaultState(0);
+        low.maxStage = 20; low.tower.cleared = clearedTo(10); low.tower.best = 10;
+        const c = { f11: towerUnlocked(low, 11), why: towerLockReason(low, 11) };
+        return { a, b, c };
+      })();
+
+      const st = defaultState(0); st.stage = 24;
+      const r10 = towerReward(st, 10, { first: true, rng: () => 0.5 });
+      const r11 = towerReward(st, 11, { first: true, rng: () => 0.5 });
+      const r11again = towerReward(st, 11, { first: false, rng: () => 0.5 });
+      const r15 = towerReward(st, 15, { first: true, rng: () => 0.5 });
+      const r20 = towerReward(st, 20, { first: true, rng: () => 0.5 });
+      const r101 = towerReward(st, 101, { first: true, rng: () => 0.5 });
+      const rewardText = towerRewardText(st, 15);
+      const stageDef11 = towerStageDef(11);
+      const progress = (function () {
+        const s = defaultState(0); s.maxStage = 24; s.tower.cleared = clearedTo(13); s.tower.best = 13;
+        const p = towerProgress(s);
+        return { best: p.best, deep: p.deep, next: p.next, max: p.max, fixed: p.fixed, clearedCount: p.clearedCount };
+      })();
+
+      const c11 = runTower(11, { seed: 7 }, 2600);
+      const c15 = runTower(15, { seed: 7 }, 3000);
+      const c101 = runTower(101, { seed: 7, level: 60, stage: 30, maxStage: 34 }, 2000);
+
+      // ── 일일 보스 ──
+      const T0 = Date.UTC(2026, 10, 25, 5, 0, 0); // 2026-11-25 14:00 KST
+      const keyA = kstDateKey(Date.UTC(2026, 10, 24, 14, 59, 59)); // KST 23:59:59
+      const keyB = kstDateKey(Date.UTC(2026, 10, 24, 15, 0, 0));   // KST 다음 날 00:00
+      const reset1 = kstResetMs(Date.UTC(2026, 10, 24, 14, 59, 59));
+      const reset2 = kstResetMs(T0);
+      const fresh = dailyInfo(defaultState(0), T0);
+      const gradeIds = [dailyGradeAt(1.7).id, dailyGradeAt(1.3).id, dailyGradeAt(1.0).id, dailyGradeAt(0.7).id, dailyGradeAt(0.1).id];
+      const ds0 = defaultState(0); ds0.stage = 24;
+      const dS = dailyReward(ds0, { dmg: 0, dps: 1000, ratio: 1.6 }, () => 0.5);
+      const dA = dailyReward(ds0, { dmg: 0, dps: 1000, ratio: 1.3 }, () => 0.5);
+      const dC = dailyReward(ds0, { dmg: 0, dps: 1000, ratio: 0.7 }, () => 0.5);
+      const dD = dailyReward(ds0, { dmg: 0, dps: 1000, ratio: 0.05 }, () => 0.5);
+
+      function mkDaily(opts) {
+        opts = opts || {};
+        const { s, b } = mk(0, opts);
+        const r0 = b.startDailyBoss(opts.now || T0);
+        return { s, b, r0 };
+      }
+      const st1 = mkDaily({});
+      const entry = {
+        ok: st1.r0.ok, left0: dailyInfo(st1.s, T0).left, used: st1.s.dailyBoss.used,
+        ko: st1.r0.boss && st1.r0.boss.ko, title: st1.r0.boss && st1.r0.boss.title, theme: st1.b.def.theme.id,
+        themeName: st1.b.def.themeName, monsters: st1.b.monsters.length, bossIsBoss: !!(st1.b.daily && st1.b.daily.boss.isBoss),
+        bossHp: st1.b.daily && st1.b.daily.boss.maxHp, dps: st1.b.stats.dps, hpFull: st1.b.player.hp === st1.b.stats.hpMax,
+        towerReject: st1.b.startTower(1, T0).ok, dunReject: st1.b.startDungeon(T0).ok, bossReject: st1.b.challengeBoss(T0),
+        starts: st1.b.drainEvents().filter((e) => e.t === 'dailyStart').length,
+      };
+      // 한 판 끝까지(30초) — 자동 전투로 피해가 쌓이고 등급·보상이 나온다
+      function playDaily(opts) {
+        const { s, b, r0 } = mkDaily(opts || {});
+        let t = (opts && opts.now) || T0, ev = null;
+        const gold0 = s.gold, shards0 = s.shards;
+        for (let i = 0; i < 900; i++) {
+          t += 50; b.tick(50, t);
+          for (const e of b.drainEvents()) if (e.t === 'dailyEnd') ev = e;
+          if (ev) break;
+        }
+        return {
+          ok: r0.ok, ev: ev, dmg: ev && ev.dmg, grade: ev && ev.grade, ratio: ev && ev.ratio,
+          goldGain: s.gold - gold0, shardsGain: s.shards - shards0, points: ev && ev.points,
+          used: s.dailyBoss.used, left: dailyInfo(s, t).left, best: s.dailyBoss.best, bestGrade: s.dailyBoss.bestGrade,
+          isBest: ev && ev.isBest, stage: s.stage, monsters: b.monsters.length, dailyNull: b.daily === null,
+          themeBack: b.def.theme.id,
+          secondOk: (function(){ try { const r = b.startDailyBoss(t + 1000); if (r.ok) b.endDailyBoss(t + 1100, 'timeout'); return r.ok; } catch (e) { return false; } })(),
+          third: (function(){ try { return b.startDailyBoss(t + 1000).ok; } catch (e) { return false; } })(),
+          thirdReason: (function(){ try { return b.startDailyBoss(t + 1000).reason; } catch (e) { return String(e); } })(),
+        };
+      }
+      const play1 = playDaily({});
+      const play2 = playDaily({});
+      // 쓰러지면 그때까지의 피해로 종료(보상 지급)
+      const deadRun = (function () {
+        const { s, b } = mkDaily({});
+        b.daily.dmg = 5000;
+        b.damagePlayer(1e9, { ko: '테스트' }, T0 + 1000);
+        const ev = b.drainEvents().filter((e) => e.t === 'dailyEnd')[0];
+        return { how: ev && ev.how, dmg: ev && ev.dmg, gold: ev && ev.gold, grade: ev && ev.grade, dailyNull: b.daily === null };
+      })();
+
+      const resetState = {
+        stale: normalizeDailyState({ date: '2026-01-01', used: 2, best: 12345, bestGrade: 'A', runs: 9, last: { at: 5, dmg: 12345, grade: 'A', gold: 10, shards: 3, points: 1, ratio: 1.3 } }, T0),
+        same: normalizeDailyState({ date: kstDateKey(T0), used: 1, best: 900, bestGrade: 'B' }, T0),
+        junk: normalizeDailyState({ date: kstDateKey(T0), used: 99, best: -5, bestGrade: 'Z', last: { grade: 'Z' } }, T0),
+        none: normalizeDailyState(null, T0),
+      };
+
+      // ── 일일 소탕 ──
+      const sweepState = (function () {
+        const s = defaultState(0); s.stage = 24; s.tower.cleared = clearedTo(12); s.tower.best = 12;
+        const before = { gold: s.gold, shards: s.shards };
+        const info0 = towerSweepInfo(s, T0);
+        const c1 = towerSweepClaim(s, T0);
+        const gainGold = s.gold - before.gold;
+        const info1 = towerSweepInfo(s, T0);
+        const c2 = towerSweepClaim(s, T0);
+        const c3 = towerSweepClaim(s, T0 + 86400000);
+        const info2 = towerSweepInfo(s, T0 + 86400000);
+        const first = towerReward(s, 12, { first: true, rng: () => 0.5 });
+        return {
+          available: info0.available, floor: info0.floor, ok: c1.ok, gold: c1.gold, shards: c1.shards,
+          gainGold, claimed: info1.claimed, availableAfter: info1.available,
+          again: c2.ok, nextDay: c3.ok, nextClaimed: info2.claimed, firstGold: first.gold, firstShards: first.shards,
+          text: towerSweepText(s),
+        };
+      })();
+      const emptySweep = (function () {
+        const s = defaultState(0);
+        return { available: towerSweepInfo(s, T0).available, claim: towerSweepClaim(s, T0).ok };
+      })();
+
+      // ── 세이브 호환 ──
+      const oldSave = normalizeState({ ver: 3, level: 30, stage: 24, maxStage: 30,
+        tower: { cleared: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], best: 13, runs: 7, fails: 2, last: null },
+        dungeon: { best: 100, runs: 1, last: null } }, T0);
+      const junkTower = normalizeTowerState({ cleared: [1, 1, 11, 11, 201, -2, '13'], best: 999, sweep: { date: 5, floor: '12', gold: -3 } });
+
+      return { defs, edge, gimSet: [...gimSet], scaling, gate, r10, r11, r11again, r15, r20, r101, rewardText,
+               stageDef11: { name: stageDef11.themeName, theme: stageDef11.theme.id, tower: !!stageDef11.tower },
+               progress, c11, c15, c101,
+               kst: { keyA, keyB, reset1, reset2, fresh: { left: fresh.left, used: fresh.used, best: fresh.best, boss: fresh.boss.ko, title: fresh.boss.title, resetMs: fresh.resetMs } },
+               gradeIds, dS: { grade: dS.grade.id, gold: dS.gold, shards: dS.shards, points: dS.points, ratio: dS.ratio },
+               dA: { grade: dA.grade.id, gold: dA.gold, shards: dA.shards, points: dA.points },
+               dC: { grade: dC.grade.id, gold: dC.gold, shards: dC.shards, points: dC.points },
+               dD: { grade: dD.grade.id, gold: dD.gold, shards: dD.shards, points: dD.points },
+               entry, play1, play2, deadRun, resetState, sweepState, emptySweep,
+               oldSave: { daily: oldSave.dailyBoss, tower: oldSave.tower, deepCleared: oldSave.tower.cleared.length, best: oldSave.tower.best },
+               junkTower };
+    """)
+    d45 = tw45["defs"]
+    ok([x["n"] for x in d45] == [11, 12, 15, 20, 25, 50, 100, 200] and tw45["edge"]["max"] == 200 and tw45["edge"]["fixed"] == 10, "심층 11~200층 자동 생성(상한 200)", json.dumps([x["n"] for x in d45]))
+    ok(tw45["edge"]["f201"] is None and tw45["edge"]["f0"] is None and tw45["edge"]["f10deep"] is False, "범위 밖 층 없음 · 고정 10층은 심층 아님", json.dumps(tw45["edge"]))
+    ok(all(x["deep"] and x["themeOk"] and x["mins"] == 22 for x in d45), "심층 테마 유효 · 최소 스테이지 S22", json.dumps([(x["n"], x["themeOk"], x["mins"]) for x in d45]))
+    ok(all(x["gims"] == 2 for x in d45 if not x["bossOnly"]) and all(x["gims"] == 3 and x["boss"] for x in d45 if x["bossOnly"]), "심층 일반 2기믹 · 보스 층 3기믹+보스", json.dumps([(x["n"], x["gims"], x["bossOnly"]) for x in d45]))
+    ok([x["n"] for x in d45 if x["bossOnly"]] == [15, 20, 25, 50, 100, 200], "5층마다 심층 보스 층(15·20·25…)", json.dumps([x["n"] for x in d45 if x["bossOnly"]]))
+    ok(len(tw45["gimSet"]) == 6, "심층 기믹 로테이션이 6종을 모두 사용", json.dumps(tw45["gimSet"]))
+    sc45 = tw45["scaling"]
+    ok(all(sc45[i]["atk"] < sc45[i + 1]["atk"] for i in range(len(sc45) - 1)) and all(sc45[i]["gold"] < sc45[i + 1]["gold"] for i in range(len(sc45) - 1)), "계단식 강화 — 층이 오를수록 공격력·보상 증가", json.dumps([(x["n"], x["atk"], x["gold"]) for x in sc45]))
+    ok(sc45[0]["limit"] >= 60 and sc45[-1]["limit"] >= 35 and sc45[-1]["kill"] > sc45[0]["kill"], "심층 제한 시간 35초 이상 · 처치 목표 시간 증가", json.dumps([(x["n"], x["limit"], x["kill"]) for x in sc45]))
+    gate = tw45["gate"]
+    ok(gate["a"]["f11"] is True and gate["a"]["f12"] is False and "11층" in gate["a"]["why12"], "10층 클리어 후 11층만 열림", json.dumps(gate["a"], ensure_ascii=False))
+    ok(gate["b"]["f12"] is True and gate["b"]["f13"] is False, "심층도 한 층씩 해제", json.dumps(gate["b"]))
+    ok(gate["c"]["f11"] is False and gate["c"]["why"] == "최고 스테이지 22 필요", "스테이지 S22 미만이면 심층 잠김", json.dumps(gate["c"], ensure_ascii=False))
+    ok(tw45["r11"]["gold"] > tw45["r10"]["gold"] and tw45["r11"]["shards"] > tw45["r10"]["shards"] and tw45["r101"]["gold"] > tw45["r11"]["gold"], "심층 보상이 10층·아래 층보다 크다", json.dumps({"r10": tw45["r10"]["gold"], "r11": tw45["r11"]["gold"], "r101": tw45["r101"]["gold"]}))
+    ok(tw45["r11again"]["points"] == 0 and tw45["r11again"]["item"] is None and tw45["r11again"]["gold"] == round(tw45["r11"]["gold"] * 0.35), "심층 재도전은 35%·초월석/장비 없음", json.dumps({"first": tw45["r11"]["gold"], "again": tw45["r11again"]["gold"]}))
+    ok(tw45["r15"]["points"] == 7 and (tw45["r15"]["item"] or {}).get("rarity") == "rare" and tw45["r20"]["points"] == 8 and (tw45["r20"]["item"] or {}).get("rarity") == "legend", "심층 보스 층 초월석·장비 보상(15층 7P·20층 전설)", json.dumps({"r15": [tw45["r15"]["points"], (tw45["r15"]["item"] or {}).get("rarity")], "r20": [tw45["r20"]["points"], (tw45["r20"]["item"] or {}).get("rarity")]}))
+    ok("💎" in tw45["rewardText"] and "✨" in tw45["rewardText"], "심층 보상 미리보기 텍스트", tw45["rewardText"])
+    ok(tw45["stageDef11"]["name"] == "도전의 탑 11층 · 끝없는 회랑" and tw45["stageDef11"]["tower"] is True, "심층 층 정의 → 전투 테마/HUD 변환", json.dumps(tw45["stageDef11"], ensure_ascii=False))
+    ok(tw45["progress"]["best"] == 13 and tw45["progress"]["deep"] is True and tw45["progress"]["next"] == 14 and tw45["progress"]["max"] == 200, "진행도 — 심층 최고 13층·다음 14층", json.dumps(tw45["progress"]))
+
+    c11 = tw45["c11"]
+    ok(c11["ok"] is True and c11["how"] == "clear" and c11["first"] is True and c11["next"] == 12, "11층 진입·클리어 — 다음 12층 해제", json.dumps({k: c11[k] for k in ["ok", "how", "first", "next"]}))
+    ok(c11["clearedTail"] == [10, 11] and c11["best"] == 11 and c11["goldGain"] > 0 and c11["shardsGain"] >= 220, "11층 클리어 기록·보상 지급(강화석 220+)", json.dumps({k: c11[k] for k in ["clearedTail", "best", "goldGain", "shardsGain"]}))
+    ok(c11["retryNext"] is True, "클리어 후 12층 바로 도전 가능", json.dumps({"retry": c11["retryNext"]}))
+    c15 = tw45["c15"]
+    ok(c15["ok"] is True and c15["how"] == "clear" and c15["points"] == 7 and c15["item"] == "rare" and c15["itemsDelta"] == 1, "15층 심층 보스 클리어 — 7P·레어 장비", json.dumps({k: c15[k] for k in ["ok", "how", "points", "item", "itemsDelta"]}))
+    c101 = tw45["c101"]
+    ok(c101["ok"] is True and c101["how"] in ("clear", "dead", "timeout"), "101층(고층) 진입·전투·복귀", json.dumps({k: c101[k] for k in ["ok", "how", "minPct"]}))
+
+    kst = tw45["kst"]
+    ok(kst["keyA"] == "2026-11-24" and kst["keyB"] == "2026-11-25", "KST 자정 경계 — 날짜 키", json.dumps([kst["keyA"], kst["keyB"]]))
+    ok(kst["reset1"] == 1000 and 0 < kst["reset2"] <= 86400000, "다음 자정(KST)까지 남은 시간", json.dumps([kst["reset1"], kst["reset2"]]))
+    ok(kst["fresh"]["left"] == 2 and kst["fresh"]["used"] == 0 and kst["fresh"]["best"] == 0 and kst["fresh"]["boss"], "새 세이브 — 도전 2회·오늘의 보스", json.dumps(kst["fresh"], ensure_ascii=False))
+    ok(tw45["gradeIds"] == ["S", "A", "B", "C", "D"], "등급 경계 S/A/B/C/D", json.dumps(tw45["gradeIds"]))
+    dS, dA, dC, dD = tw45["dS"], tw45["dA"], tw45["dC"], tw45["dD"]
+    ok(dS["grade"] == "S" and dS["points"] == 3 and dS["shards"] == 70 and dS["gold"] > dA["gold"] > dC["gold"] > dD["gold"], "등급별 보상 — S는 초월석 3P·강화석 70", json.dumps([dS, dA, dC, dD]))
+    ok(dC["points"] == 0 and dD["points"] == 0 and dD["shards"] == 6, "C·D 등급은 초월석 없음", json.dumps([dC, dD]))
+
+    entry = tw45["entry"]
+    ok(entry["ok"] is True and entry["left0"] == 1 and entry["used"] == 1 and entry["starts"] == 1, "일일 보스 입장 — 도전 1회 차감·남은 1회", json.dumps({k: entry[k] for k in ["ok", "left0", "used", "starts"]}))
+    ok(entry["monsters"] == 1 and entry["bossIsBoss"] is True and entry["bossHp"] >= entry["dps"] * 150 * 0.98 and entry["hpFull"] is True, "보스 1마리(체력 = DPS×150초)·체력 완충", json.dumps({k: entry[k] for k in ["monsters", "bossHp", "dps", "hpFull"]}))
+    ok(entry["towerReject"] is False and entry["dunReject"] is False and entry["bossReject"] is False, "일일 보스 중 탑·던전·스테이지 보스 거부", json.dumps({k: entry[k] for k in ["towerReject", "dunReject", "bossReject"]}))
+    ok("일일 보스" in entry["themeName"] and entry["theme"], "일일 보스 테마/HUD 라벨", json.dumps([entry["themeName"], entry["theme"]], ensure_ascii=False))
+
+    play1 = tw45["play1"]
+    ok(play1["ok"] is True and play1["ev"] is not None and play1["dmg"] > 0 and play1["grade"] in list("SABCD"), "일일 보스 30초 전투 — 누적 피해·등급 산출", json.dumps({k: play1[k] for k in ["dmg", "grade", "ratio"]}))
+    ok(play1["goldGain"] > 0 and play1["shardsGain"] > 0 and play1["points"] >= 0 and play1["goldGain"] == play1["ev"]["gold"], "보상 즉시 지급(골드·강화석·초월석)", json.dumps({k: play1[k] for k in ["goldGain", "shardsGain", "points"]}))
+    ok(play1["best"] == play1["dmg"] and play1["isBest"] is True and play1["bestGrade"] == play1["grade"] and play1["left"] == 1, "최고 피해·등급 기록·남은 횟수 1", json.dumps({k: play1[k] for k in ["best", "bestGrade", "isBest", "left"]}))
+    ok(play1["dailyNull"] is True and play1["monsters"] >= 1 and play1["stage"] == 24, "종료 후 원래 스테이지 사냥 복귀", json.dumps({k: play1[k] for k in ["dailyNull", "monsters", "stage", "themeBack"]}))
+    ok(play1["secondOk"] is True, "두 번째 도전 가능", json.dumps({"second": play1["secondOk"]}))
+    ok(play1["third"] is False and "모두 사용" in (play1["thirdReason"] or ""), "세 번째 도전은 거부(하루 2회)", json.dumps({"third": play1["third"], "why": play1["thirdReason"]}, ensure_ascii=False))
+    play2 = tw45["play2"]
+    ok(play2["used"] == 1 and play2["left"] == 1 and play2["third"] is False, "두 번째 판도 같은 규칙(1회 차감)", json.dumps({k: play2[k] for k in ["used", "left", "third"]}))
+    dead = tw45["deadRun"]
+    ok(dead["how"] == "dead" and dead["dmg"] == 5000 and dead["gold"] >= 0 and dead["dailyNull"] is True, "전투 불능 — 그때까지의 피해로 종료·보상", json.dumps(dead, ensure_ascii=False))
+
+    rs = tw45["resetState"]
+    ok(rs["stale"]["date"] == "2026-11-25" and rs["stale"]["used"] == 0 and rs["stale"]["best"] == 12345 and rs["stale"]["bestGrade"] == "A", "날짜가 바뀌면 횟수만 리셋(최고 기록 유지)", json.dumps(rs["stale"], ensure_ascii=False))
+    ok(rs["same"]["used"] == 1 and rs["same"]["best"] == 900, "같은 날짜면 사용 횟수 유지", json.dumps(rs["same"], ensure_ascii=False))
+    ok(rs["junk"]["used"] == 2 and rs["junk"]["best"] == 0 and rs["junk"]["bestGrade"] == "D" and rs["junk"]["last"] is None, "손상된 일일 보스 기록 정규화(상한·음수·등급)", json.dumps(rs["junk"], ensure_ascii=False))
+    ok(rs["none"]["used"] == 0 and rs["none"]["date"] == "2026-11-25", "기록 없음 → 오늘 날짜·0회", json.dumps(rs["none"], ensure_ascii=False))
+
+    swp = tw45["sweepState"]
+    ok(swp["available"] is True and swp["floor"] == 12 and swp["ok"] is True and swp["gold"] > 0 and swp["shards"] > 0, "일일 소탕 — 최고 12층 보상 지급", json.dumps({k: swp[k] for k in ["available", "floor", "gold", "shards"]}))
+    ok(swp["gainGold"] == swp["gold"] and swp["claimed"] is True and swp["availableAfter"] is False and swp["again"] is False, "소탕은 하루 1회(중복 거부)", json.dumps({k: swp[k] for k in ["gainGold", "claimed", "again"]}))
+    ok(swp["nextDay"] is True and swp["nextClaimed"] is True, "다음 날 다시 소탕 가능", json.dumps({"next": swp["nextDay"]}))
+    ok(swp["gold"] < swp["firstGold"] and swp["shards"] < swp["firstShards"], "소탕은 최초 클리어보다 적다(70%)", json.dumps({"sweep": [swp["gold"], swp["shards"]], "first": [swp["firstGold"], swp["firstShards"]]}))
+    ok(tw45["emptySweep"]["available"] is False and tw45["emptySweep"]["claim"] is False, "클리어한 층이 없으면 소탕 불가", json.dumps(tw45["emptySweep"]))
+
+    old = tw45["oldSave"]
+    ok(old["daily"]["date"] == "2026-11-25" and old["daily"]["used"] == 0 and old["daily"]["best"] == 0 and old["daily"]["last"] is None, "v4.4 세이브 → 일일 보스 기본값 마이그레이션", json.dumps(old["daily"], ensure_ascii=False))
+    ok(old["tower"]["sweep"]["date"] == "" and old["tower"]["sweep"]["floor"] == 0, "v4.4 세이브 → 탑 소탕 기본값", json.dumps(old["tower"]["sweep"]))
+    ok(old["deepCleared"] == 13 and old["best"] == 13, "v4.4 세이브의 심층 기록 보존", json.dumps({"n": old["deepCleared"], "best": old["best"]}))
+    jt = tw45["junkTower"]
+    ok(jt["cleared"] == [1, 11, 13] and jt["best"] == 200 and jt["sweep"]["floor"] == 12 and jt["sweep"]["gold"] == 0, "탑 저장 정규화 — 심층 중복 제거·상한 200·소탕 손상 방어", json.dumps(jt, ensure_ascii=False))
+
+    # ── v4.5 화면·배선 ──
+    tpl45 = js(ctx2, """
+      const s = defaultState(0);
+      s.level = 45; s.stage = 24; s.maxStage = 30; s.gold = 2000000; s.shards = 800;
+      s.tower = { cleared: Array.from({length: 12}, (_, i) => i + 1), best: 12, runs: 9, fails: 1,
+                  last: { at: 0, n: 13, how: 'timeout', kills: 7, bossKills: 0, dmg: 9000, gold: 0, shards: 0, points: 0 },
+                  sweep: { date: '', floor: 0, gold: 0, shards: 0, at: 0 } };
+      s.dailyBoss = { date: kstDateKey(Date.now()), used: 1, best: 51234, bestGrade: 'A', bestDate: '', runs: 3,
+                      last: { at: Date.now(), dmg: 51234, grade: 'A', how: 'timeout', gold: 12000, shards: 45, points: 2, ratio: 1.25 } };
+      for (const c of CITIES.slice(0, 4)) s.land.owned[c.key] = 40;
+      const buffs = computeBuffs(s, 0);
+      const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(24), boss: null, dungeon: null, tower: null, daily: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'hunt', el: {}, install: { hidden: true } };
+      const growth = __huntSub(ui, 'growth');
+      const settings = __tpls.settings(ui);
+      const running = { ...ui, battle: { ...ui.battle, daily: { t0: Date.now(), ends: Date.now() + 20000, dmg: 12345, ko: '보이드 워커', title: '공허의 방랑자', floor: null } } };
+      const growing = __huntSub(running, 'growth');
+      return { growth, settings, growing, tiles: (growth.match(/class="tf /g) || []).length,
+               bad: /undefined|NaN|\\[object Object\\]/.test(growth + settings + growing) };
+    """)
+    ok(tpl45["bad"] is False, "v4.5 템플릿에 undefined/NaN 누출 없음")
+    ok("일일 보스" in tpl45["growth"] and 'data-action="daily"' in tpl45["growth"] and "30초 타임어택" in tpl45["growth"], "사냥→성장 탭에 일일 보스 카드·도전 버튼", "")
+    ok("도전의 탑" in tpl45["growth"] and tpl45["tiles"] == 10 and "tower-deep" in tpl45["growth"] and "심층" in tpl45["growth"], "도전의 탑 카드 — 고정 10타일 + 심층 표시", json.dumps({"tiles": tpl45["tiles"]}))
+    ok('data-action="tower-sweep"' in tpl45["growth"] and "일일 소탕" in tpl45["growth"], "탑 카드에 일일 소탕 버튼", "")
+    ok("최고 12층" in tpl45["growth"] and "13층" in tpl45["growth"] and "최고" in tpl45["growth"], "심층 진행·다음 층 표시", "")
+    ok("진행 중" in tpl45["growing"] and "12345" in tpl45["growing"] and "일일 보스" in tpl45["growing"], "일일 보스 진행 중 카드(누적 피해)", "")
+    ok("일일 보스" in tpl45["settings"] and "51234" in tpl45["settings"] and "최고 12/200층" in tpl45["settings"], "설정 기록에 일일 보스·심층 최고 층", "")
+
+    usrc45 = read("src/ui.js"); asrc45 = read("app.js"); rsrc45 = read("src/render.js"); css45 = read("style.css")
+    ok(os.path.exists(os.path.join(ROOT, "src/daily.js")) and "'./src/daily.js'" in read("sw.js"), "src/daily.js 존재 · 서비스워커 프리캐시", "")
+    ok(all(x in usrc45 for x in ['data-action="daily"', 'data-action="tower-sweep"', "dailyBossCard", "tower-deep"]), "ui.js — 일일 보스 카드·소탕 버튼", "")
+    ok(all(x in asrc45 for x in ["enterDaily", "claimTowerSweep", "showDailyResult", "dailyEnd", "dailyStart", "towerSweepClaim"]), "app.js — 일일 보스 입장·결과·소탕 액션", "")
+    ok(all(x in rsrc45 for x in ["drawDailyHud", "dailyStart", "dailyEnd", "dailyGradeAt"]), "render.js — 일일 보스 HUD·연출", "")
+    ok(all(x in css45 for x in [".daily-card", ".daily-result-grade", ".tower-deep", ".mini.sweep", ".tower-sec"]), "style.css — 일일 보스·심층 스타일", "")
+    ok(all(x in read("src/combat.js") for x in ["startDailyBoss", "endDailyBoss", "dailyTick", "consumeDailyAttempt", "recordDailyRun"]), "combat.js — 일일 보스 전투 구현", "")
+    ok(all(x in read("src/tower.js") for x in ["towerDeepFloor", "TOWER_MAX_FLOOR = 200", "towerSweepClaim", "sweepRate"]), "tower.js — 심층 생성·일일 소탕", "")
+
+
     readme44 = read("README.md")
-    ok(all(x in readme44 for x in ["v4.4.0", "드래곤 로드", "용신", "×100"]) and "×1.08" in readme44, "README — v4.4 성장률·상위 전직·대량 교환 반영", "")
+    ok(all(x in readme44 for x in ["v4.5.0", "드래곤 로드", "용신", "×100", "심층", "일일 보스", "일일 소탕"]) and "×1.08" in readme44, "README — v4.5 심층·일일 보스·소탕 + v4.4 내용 유지", "")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

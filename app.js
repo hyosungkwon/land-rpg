@@ -30,7 +30,9 @@ import {
 import {
   TOWER_FLOORS, TOWER_MAX_FLOOR, TOWER_GIMMICKS, towerFloor, towerProgress, towerGimmickText,
   towerGoalText, towerRewardText, towerUnlocked, towerGimmicks, towerLockReason,
+  TOWER_FIXED_FLOOR, towerSweepClaim, towerSweepText, towerSweepInfo,
 } from './src/tower.js';
+import { DAILY, dailyInfo, dailyBossFor, dailyGradeText } from './src/daily.js';
 import {
   claimQuest as claimQuestState, claimAchievement as claimAchievementState,
   achievementStatus, claimedAchievementCount, codexStats, codexDetail, codexCity, codexGear,
@@ -291,6 +293,7 @@ class App {
       this.battle.boss = null;
       this.battle.dungeon = null; // 던전 중 예외가 나도 스테이지 사냥으로 복귀
       this.battle.tower = null; // 탑 도전 중 예외가 나도 스테이지 사냥으로 복귀
+      this.battle.daily = null; // 일일 보스 중 예외가 나도 스테이지 사냥으로 복귀
       this.battle.syncStage();
       this.battle.events = [];
       this.battle.refreshStats(Date.now());
@@ -402,6 +405,20 @@ class App {
         this.ui.renderIfNeeded();
       } else if (ev.t === 'towerFrenzy') {
         this.ui.addLog(`🔥 ${ev.n}층 보스 광폭 — 공격력 상승(${ev.step}회)`);
+      } else if (ev.t === 'dailyStart') {
+        this.ui.addLog(`🌟 <b>일일 보스 ${esc(ev.ko)}</b> ${esc(ev.title)} — 30초 누적 피해 도전`);
+        this.ui.toast(`🌟 일일 보스 ${ev.ko} — 30초 타임어택! (남은 ${ev.left}회)`, 'gold');
+        this.sound.boss();
+        this.ui.renderIfNeeded();
+      } else if (ev.t === 'dailyEnd') {
+        this.battle.refreshStats();
+        this.checkPets(now);
+        this.save(true);
+        this.sound.fanfare();
+        const gains = [ev.gold ? `💰+${ev.gold.toLocaleString()}` : '', ev.shards ? `💎+${ev.shards}` : '', ev.points ? `✨+${ev.points}P` : ''].filter(Boolean).join(' ');
+        this.ui.addLog(`🌟 <b>일일 보스 ${ev.gradeLabel}등급</b> · 피해 ${ev.dmg.toLocaleString()} · ${gains}`);
+        this.showDailyResult(ev);
+        this.ui.renderIfNeeded();
       } else if (ev.t === 'towerEnd') {
         this.battle.refreshStats();
         this.checkPets(now);
@@ -919,6 +936,38 @@ class App {
         this.ui.render();
       },
       openTowerFloors: () => this.showTowerFloors(),
+
+      /** 🧹 v4.5 일일 소탕 — 최고 층 보상을 하루 한 번 즉시 수령 */
+      claimTowerSweep: () => {
+        const now = Date.now();
+        const r = towerSweepClaim(this.s, now);
+        if (!r.ok) {
+          this.ui.toast(r.reason, 'red');
+          return;
+        }
+        this.save(true);
+        this.sound.fanfare();
+        this.renderer.onEvents([{ t: 'towerEnd', how: 'clear', n: r.floor }], Date.now());
+        this.ui.toast(`🧹 ${r.floor}층 소탕 · 💰+${r.gold.toLocaleString()} 💎+${r.shards}`, 'gold');
+        this.ui.addLog(`🧹 <b>${r.floor}층 일일 소탕</b> — 💰+${r.gold.toLocaleString()} 💎+${r.shards}`);
+        this.ui.render();
+      },
+
+      /** 🌟 v4.5 일일 보스 — 30초 타임어택 입장 */
+      enterDaily: () => {
+        this.sound.unlock();
+        const now = Date.now();
+        const r = this.battle.startDailyBoss(now);
+        if (!r.ok) {
+          this.ui.toast(r.reason, 'red');
+          return;
+        }
+        this.save(true);
+        this.sound.boss();
+        this.ui.toast(`🌟 일일 보스 ${r.boss.ko} — 30초 타임어택!`, 'gold');
+        this.ui.addLog(`🌟 <b>일일 보스 ${esc(r.boss.ko)}</b> ${esc(r.boss.title)} · 30초 누적 피해 도전`);
+        this.ui.render();
+      },
 
       evolvePet: (id) => {
         this.sound.unlock();
@@ -1998,7 +2047,26 @@ class App {
     });
   }
 
-  /* ───────────── 🗼 도전의 탑 결과 · 층 선택 (v4.2) ───────────── */
+  /* ───────────── 🌟 일일 보스 결과 (v4.5) · 🗼 도전의 탑 결과·층 선택 (v4.2) ───────────── */
+  /** 일일 보스 결과 모달 — 등급·누적 피해·보상 */
+  showDailyResult(ev) {
+    const rw = [
+      { e: '💰', v: ev.gold.toLocaleString(), k: '골드' },
+      { e: '💎', v: ev.shards.toLocaleString(), k: '강화석' },
+    ];
+    if (ev.points) rw.push({ e: '✨', v: `+${ev.points}P`, k: '초월석' });
+    rw.push({ e: '⚔️', v: ev.dmg.toLocaleString(), k: '누적 피해' });
+    const how = ev.how === 'dead' ? '전투 불능' : ev.how === 'kill' ? '보스 격파!' : '30초 종료';
+    this.ui.modal({
+      title: `🌟 일일 보스 · ${ev.gradeLabel}등급`,
+      sub: `${ev.ko} · ${how} · 기본 화력 대비 ${Math.round((ev.ratio || 0) * 100)}%`,
+      body: `<div class="daily-result-grade" style="color:${ev.gradeColor || '#ffd76a'}">${ev.gradeLabel}<small>${ev.isBest ? ' 최고 기록 갱신' : `${ev.bestGrade} 최고`}</small></div>
+             <div class="modal-rewards">${rw.map((r) => `<div class="rw"><div class="e">${r.e}</div><div class="v">${esc(r.v)}</div><div class="k">${r.k}</div></div>`).join('')}</div>
+             <div class="note" style="margin-top:9px">보상은 이미 반영되었습니다. 오늘 남은 도전 <b>${ev.left}회</b> · 매일 00:00(KST)에 다시 채워집니다.<br>원래 스테이지 자동사냥으로 복귀했습니다.</div>`,
+      actions: [{ label: '확인', style: 'primary', onClick: () => {} }],
+    });
+  }
+
   /** 층 클리어 결과 모달 — 최초 클리어면 보상, 재도전이면 소액 보상 */
   showTowerResult(ev) {
     const def = towerFloor(ev.n);
@@ -2021,10 +2089,10 @@ class App {
     });
   }
 
-  /** 층 선택 모달 — 클리어/도전 가능/잠금 상태와 기믹·보상을 한눈에 */
+  /** 층 선택 모달 — 클리어/도전 가능/잠금 상태와 기믹·보상을 한눈에 (v4.5: 심층 11층+ 창) */
   showTowerFloors() {
     const tp = towerProgress(this.s);
-    const rows = TOWER_FLOORS.map((f) => {
+    const row = (f) => {
       const cleared = tp.cleared.includes(f.n);
       const open = towerUnlocked(this.s, f.n);
       const gims = towerGimmicks(f).map((g) => `${g.icon} ${g.name}`).join(' · ');
@@ -2035,19 +2103,29 @@ class App {
         <div class="tf-mid">
           <div class="tf-name">${esc(f.name)} <span class="tiny dim">${esc(towerGoalText(f))}</span></div>
           <div class="tf-gim">${esc(gims)}</div>
-          <div class="tf-rew">최초 ${esc(towerRewardText(this.s, f.n))} · 최고 S${f.minStage}</div>
+          <div class="tf-rew">최초 ${esc(towerRewardText(this.s, f.n))} · 최고 S${f.minStage}${f.deep ? ' · 심층' : ''}</div>
         </div>
         <div class="tf-act">
           <span class="tiny">${state}</span>
-          ${open ? `<button class="mini ${cleared ? '' : 'up'}" type="button" data-action="tower" data-value="${f.n}" ${this.battle && this.battle.tower ? 'disabled' : ''}>${cleared ? '재도전' : '도전'}</button>` : '<button class="mini" type="button" disabled>잠김</button>'}
+          ${open ? `<button class="mini ${cleared ? '' : 'up'}" type="button" data-action="tower" data-value="${f.n}" ${this.battle && (this.battle.tower || this.battle.daily) ? 'disabled' : ''}>${cleared ? '재도전' : '도전'}</button>` : '<button class="mini" type="button" disabled>잠김</button>'}
         </div>
       </div>`;
-    }).join('');
+    };
+    const rows = TOWER_FLOORS.map(row).join('');
+    // 심층 창 — 진행 지점 앞뒤 12층만 보여 준다(200층을 한 화면에 그리지 않는다)
+    const from = Math.max(TOWER_FIXED_FLOOR + 1, Math.min(Math.max(1, tp.best), TOWER_MAX_FLOOR - 11));
+    const deep = [];
+    for (let n = from; n <= Math.min(TOWER_MAX_FLOOR, from + 11); n++) {
+      const f = towerFloor(n);
+      if (f) deep.push(row(f));
+    }
     this.ui.modal({
       title: '🗼 도전의 탑 · 층 선택',
-      sub: `${tp.clearedCount}/${tp.max}층 클리어 · ${tp.allCleared ? '모든 층 클리어!' : `다음 ${tp.next}층`} · 패배해도 잃는 것은 없습니다`,
-      body: `<div class="tower-list">${rows}</div>
-             <div class="note" style="margin-top:9px">층마다 <b>기믹</b>이 다릅니다 — 다굴·포격·광폭·재생·타임어택·철벽. 장비 조합(흡혈·방어·범위 베기)을 시험해 보세요.</div>`,
+      sub: `최고 ${tp.best}층 / ${tp.max}층 · ${tp.allCleared ? '모든 층 클리어!' : `다음 ${tp.next}층`} · 패배해도 잃는 것은 없습니다`,
+      body: `<div class="tower-list">${rows}
+             <div class="tower-sec">♾️ 심층 구간 — ${from}~${Math.min(TOWER_MAX_FLOOR, from + 11)}층 (5층마다 기믹 +1 · 보상 증가)</div>
+             ${deep.join('')}</div>
+             <div class="note" style="margin-top:9px">층마다 <b>기믹</b>이 다릅니다 — 다굴·포격·광폭·재생·타임어택·철벽. 장비 조합(흡혈·방어·범위 베기)을 시험해 보세요.<br>11층부터는 <b>자동 생성되는 심층</b>으로, 올라갈수록 적이 강해지고 보상도 커집니다.</div>`,
       actions: [{ label: '닫기', style: 'ghost', onClick: () => {} }],
     });
   }

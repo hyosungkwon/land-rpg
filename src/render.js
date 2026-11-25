@@ -6,6 +6,7 @@ import { ECON, THEMES, spriteSrc, bgSrc, RARITIES, RARITY_INDEX, monsterMotion, 
 import { equippedItem } from './gear.js';
 import { petStageInfo, jobOf, isUpperJob } from './meta.js';
 import { TOWER_GIMMICKS, towerGimmicks } from './tower.js';
+import { DAILY, dailyDpsCap, dailyGradeAt } from './daily.js';
 
 const rnd = (seed) => {
   const x = Math.sin(seed * 127.1) * 43758.5453;
@@ -484,6 +485,34 @@ export class Renderer {
               s: 2 + Math.random() * 2.4,
             });
           }
+        }
+      } else if (ev.t === 'dailyStart') {
+        this.flash = Math.max(this.flash, 0.34);
+        this.shake = Math.max(this.shake, 6);
+        for (let i = 0; i < 3; i++) this.rings.push({ x: ECON.playerX, life: 1, r: 18 + i * 18, color: '#ffd76a', wide: 1.7 });
+        for (let i = 0; i < 30; i++) {
+          this.embers.push({
+            x: ECON.playerX + (Math.random() - 0.5) * 220,
+            y: this.groundY() - Math.random() * 40,
+            vy: -100 - Math.random() * 150,
+            life: 1,
+            s: 1.5 + Math.random() * 2.6,
+            color: Math.random() < 0.5 ? '#ffd76a' : '#ffe9b0',
+          });
+        }
+      } else if (ev.t === 'dailyEnd') {
+        this.flash = Math.max(this.flash, 0.28);
+        this.shake = Math.max(this.shake, 6);
+        for (let i = 0; i < 34; i++) {
+          this.sparks.push({
+            x: ECON.playerX + (Math.random() - 0.5) * 140,
+            y: this.groundY() - 60 * this.scale(),
+            life: 1,
+            vx: (Math.random() - 0.5) * 280,
+            vy: -130 - Math.random() * 170,
+            color: Math.random() < 0.5 ? '#ffd76a' : '#fff3cf',
+            s: 2 + Math.random() * 2.4,
+          });
         }
       } else if (ev.t === 'dungeonStart') {
         this.flash = Math.max(this.flash, 0.34);
@@ -1213,6 +1242,7 @@ export class Renderer {
       }
       this.drawBossBar(ctx, W, t);
       this.drawDungeonHud(ctx, W, t);
+      this.drawDailyHud(ctx, W, t);
       this.drawTowerHud(ctx, W, t);
       this.drawTowerBanner(ctx, W, t);
       this.drawPromoteBanner(ctx, W, t);
@@ -2658,6 +2688,70 @@ export class Renderer {
     }
     this.floaters = this.floaters.filter((f) => f.life > 0);
     ctx.globalAlpha = 1;
+  }
+
+  /* ─────────── 🌟 일일 보스 HUD (v4.5) ─────────── */
+  /** 보스 이름 · 남은 시간 · 누적 피해 · 현재 등급을 캔버스 상단에 그린다 */
+  drawDailyHud(ctx, W, now) {
+    const d = this.battle && this.battle.daily;
+    if (!d) return;
+    const left = Math.max(0, d.ends - now);
+    const total = Math.max(1, d.ends - d.t0);
+    const k = Math.max(0, Math.min(1, left / total));
+    const bw = Math.min(W * 0.9, 356);
+    const bx = (W - bw) / 2;
+    const by = 50;
+    const hgt = 52;
+    const sc = Math.min(1.2, Math.max(0.85, this.W / 390));
+    const pulse = 0.7 + 0.3 * Math.sin(now / 150);
+    const dps = Math.max(1, (this.battle.stats && this.battle.stats.dps) || 1);
+    const ratio = Math.max(0, d.dmg / dailyDpsCap(dps));
+    const grade = dailyGradeAt(ratio);
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,215,106,0.8)';
+    ctx.shadowBlur = 15 * pulse;
+    const g = ctx.createLinearGradient(bx, by, bx, by + hgt);
+    g.addColorStop(0, 'rgba(64,40,8,0.95)');
+    g.addColorStop(0.5, 'rgba(30,20,6,0.95)');
+    g.addColorStop(1, 'rgba(64,40,8,0.95)');
+    ctx.fillStyle = g;
+    roundRect(ctx, bx, by, bw, hgt, 10);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = `rgba(255,215,120,${0.5 + 0.3 * pulse})`;
+    ctx.lineWidth = 2;
+    roundRect(ctx, bx + 1, by + 1, bw - 2, hgt - 2, 9);
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffe6a8';
+    ctx.font = `900 ${Math.round(12.5 * sc)}px ${FONT}`;
+    ctx.fillText(`🌟 일일 보스 · ${d.ko || ''}`, bx + 12, by + 18);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = left / 1000 <= 5 ? '#ff9a9a' : '#fff6d8';
+    ctx.font = `900 ${Math.round(15 * sc)}px ${FONT}`;
+    ctx.fillText(`${(left / 1000).toFixed(1)}s`, bx + bw - 12, by + 18);
+
+    // 남은 시간 바
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    roundRect(ctx, bx + 12, by + 24, bw - 24, 7, 4);
+    ctx.fill();
+    const bg = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+    bg.addColorStop(0, k < 0.25 ? '#ff7a7a' : '#ffd76a');
+    bg.addColorStop(1, k < 0.25 ? '#ff9a3d' : '#ff9a3d');
+    ctx.fillStyle = bg;
+    roundRect(ctx, bx + 12, by + 24, Math.max(2, (bw - 24) * k), 7, 4);
+    ctx.fill();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(255,235,190,0.92)';
+    ctx.font = `700 ${Math.round(9.5 * sc)}px ${FONT}`;
+    ctx.fillText(`누적 피해 ${Math.round(d.dmg || 0).toLocaleString()}`, bx + 12, by + hgt - 4);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = grade.color;
+    ctx.font = `900 ${Math.round(10.5 * sc)}px ${FONT}`;
+    ctx.fillText(`${grade.icon} ${grade.id} · 화력 ${Math.round(ratio * 100)}%`, bx + bw - 12, by + hgt - 4);
+    ctx.restore();
   }
 
   /* ─────────── 🔥 황금 던전 HUD ─────────── */

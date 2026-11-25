@@ -19,9 +19,12 @@ import {
   PET_EVO_MAX, petEvo, petStageInfo, petEvolveInfo, petSkillOf, petSkillText, petGoldPct, evoStageDef,
 } from './meta.js';
 import {
-  TOWER_FLOORS, TOWER_MAX_FLOOR, TOWER_GIMMICKS, towerFloor, towerProgress, towerGimmickText,
-  towerGoalText, towerRewardText, towerGimmicks, towerUnlocked, towerLockReason,
+  TOWER_FLOORS, TOWER_MAX_FLOOR, TOWER_FIXED_FLOOR, TOWER_GIMMICKS, towerFloor, towerProgress, towerGimmickText,
+  towerGoalText, towerRewardText, towerGimmicks, towerUnlocked, towerLockReason, towerSweepInfo, towerSweepText,
 } from './tower.js';
+import {
+  DAILY, dailyInfo, dailyBossFor, dailyGradeText,
+} from './daily.js';
 import {
   QUESTS, ACHIEVEMENTS, questStateOf, currentQuest, questProgress, codexStats,
   achievementStatus, claimedAchievementCount,
@@ -193,6 +196,8 @@ export class UI {
       case 'dungeon': actions.enterDungeon(v); break;
       case 'tower': actions.enterTower(Number(v) || 0); break;
       case 'tower-floors': actions.openTowerFloors(); break;
+      case 'tower-sweep': actions.claimTowerSweep(); break;
+      case 'daily': actions.enterDaily(); break;
       case 'claim-quest': actions.claimQuest(v); break;
       case 'claim-achievement': actions.claimAchievement(v); break;
       case 'open-codex': actions.openCodex(v || 'monster'); break;
@@ -461,7 +466,29 @@ export class UI {
               : `최근 ${last.n}층 ${last.how === 'dead' ? '패배(전투 불능)' : '패배(시간 초과)'} · 언제든 재도전`)
             : '1층부터 차례대로 — 패배해도 잃는 것은 없습니다';
       } else if (k === 'tower-free') {
-        el.disabled = !!(b && (b.tower || b.dungeon || b.boss));
+        el.disabled = !!(b && (b.tower || b.dungeon || b.daily || b.boss));
+      } else if (k === 'daily-free') {
+        const di = dailyInfo(s, now);
+        el.disabled = !!(b && b.daily) || di.left <= 0;
+      } else if (k === 'daily-left') {
+        const d = b && b.daily;
+        const di = dailyInfo(s, now);
+        el.textContent = d ? `진행 중 · ${(Math.max(0, d.ends - now) / 1000).toFixed(1)}초` : `남은 도전 ${di.left}/${DAILY.attempts}`;
+      } else if (k === 'daily-run') {
+        const d = b && b.daily;
+        const di = dailyInfo(s, now);
+        const last = di.last;
+        el.innerHTML = d
+          ? `<b style="color:var(--gold)">진행 중</b> · 누적 피해 ${fmt(d.dmg)} · ${(Math.max(0, d.ends - now) / 1000).toFixed(1)}초 남음`
+          : last
+            ? `최근 ${esc(dailyGradeText(last.grade, last.ratio))} · 피해 ${fmt(last.dmg)} · 💰${fmt(last.gold)} 💎${fmt(last.shards)}${last.points ? ` ✨${last.points}P` : ''}`
+            : `오늘의 보스 · 30초 동안 누적 피해로 등급 보상`;
+      } else if (k === 'sweep-state') {
+        const sw = towerSweepInfo(s, now);
+        el.textContent = sw.available ? '오늘 소탕 가능' : sw.best < 1 ? '최고 층부터 열림' : '오늘 소탕 완료';
+      } else if (k === 'sweep-btn') {
+        const sw = towerSweepInfo(s, now);
+        el.disabled = !sw.available;
       } else if (k === 'rent') {
         el.textContent = `💰${fmt(Math.floor(s.land.accruedRent || 0))}`;
       } else if (k === 'rent-c') {
@@ -749,6 +776,8 @@ function towerCard(ui) {
   const last = s.tower && s.tower.last;
   const entryN = running ? running.n : (tp.next || tp.max);
   const def = towerFloor(entryN);
+  const deep = tp.best > TOWER_FIXED_FLOOR;
+  const sw = towerSweepInfo(s, now);
   const tiles = TOWER_FLOORS.map((f) => {
     const cleared = tp.cleared.includes(f.n);
     const open = cleared || f.n === 1 || tp.cleared.includes(f.n - 1);
@@ -768,22 +797,65 @@ function towerCard(ui) {
   return `
   <div class="card tower-card${tp.allCleared ? ' done' : ''}">
     <div class="card-head">
-      <div class="card-title"><span class="t-ico">🗼</span>도전의 탑<small>${tp.clearedCount}/${tp.max}층 클리어</small></div>
+      <div class="card-title"><span class="t-ico">🗼</span>도전의 탑<small>최고 ${tp.best}층 · ♾️ ${tp.max}층까지</small></div>
       <span class="tiny" style="color:var(--blue)" data-live="tower-run">${running ? `진행 중 · ${(Math.max(0, running.ends - now) / 1000).toFixed(1)}초` : last ? (last.how === 'clear' ? `최근 ${last.n}층 클리어` : `최근 ${last.n}층 ${last.how === 'dead' ? '패배' : '시간 초과'}`) : '1층부터 도전'}</span>
     </div>
     <div class="tower-tiles">${tiles}</div>
+    <div class="tower-deep${deep ? ' on' : ''}">
+      <span>♾️ 심층</span>
+      <b>${deep ? `최고 ${tp.best}층` : '11층부터 무한'}</b>
+      <span class="dim">${tp.next ? `다음 ${tp.next}층` : '모든 층 클리어'}</span>
+      <button class="mini sweep" type="button" data-action="tower-sweep" data-live="sweep-btn" ${sw.available ? '' : 'disabled'}>🧹 ${sw.available ? '일일 소탕' : '소탕 완료'}</button>
+    </div>
     ${def ? `
     <div class="tower-next">
       <b>${def.n}층 ${esc(def.name)}</b>
       <span class="dim">${esc(towerGoalText(def))}</span>
     </div>
     <div class="tiny ellip" style="color:var(--blue)">${esc(towerGimmickText(def))}</div>
-    <div class="tiny dim ellip" style="margin-top:2px">최초 클리어 ${towerRewardText(s, def.n)}</div>` : `<div class="tiny" style="color:var(--gold)">🗼 모든 층 클리어! 재도전으로 골드·강화석을 계속 모을 수 있습니다.</div>`}
+    <div class="tiny dim ellip" style="margin-top:2px">최초 클리어 ${towerRewardText(s, def.n)}${def.deep ? ' · 심층(보상 증가)' : ''}</div>` : `<div class="tiny" style="color:var(--gold)">🗼 모든 층 클리어! 재도전·일일 소탕으로 골드·강화석을 계속 모을 수 있습니다.</div>`}
     <div class="row gap6" style="margin-top:7px">
       <button class="btn small ${running || !canEnter ? 'ghost' : 'blue'} wide" type="button" data-action="tower" data-value="${entryN}" data-live="tower-free" style="min-height:34px" ${running || !canEnter ? 'disabled' : ''}>${running ? '🗼 도전 중' : !canEnter ? `🔒 ${esc(lockWhy)}` : `🗼 ${entryN}층 도전`}</button>
       <button class="btn small ghost wide" type="button" data-action="tower-floors" style="min-height:34px">층 선택 ▸</button>
     </div>
     <div class="tiny dim ellip" style="margin-top:5px" data-live="tower-last">${lastLine}</div>
+    <div class="tiny ellip" style="margin-top:2px" data-live="sweep-state">${sw.available ? `🧹 일일 소탕 가능 — ${esc(towerSweepText(s))}` : sw.best < 1 ? '🧹 일일 소탕 — 최고 층을 클리어하면 열립니다' : '🧹 오늘 소탕 완료 · 내일 00:00(KST)에 다시'}</div>
+  </div>`;
+}
+
+/* ══════════════════════════ 🌟 일일 보스 (v4.5) ══════════════════════════
+ * 30초 타임어택 · 하루 2회. 누적 피해로 S~D 등급 → 골드·강화석·초월석.
+ */
+function dailyBossCard(ui) {
+  const s = ui.s;
+  const b = ui.battle;
+  const now = Date.now();
+  const di = dailyInfo(s, now);
+  const d = b && b.daily;
+  const last = di.last;
+  const boss = di.boss;
+  const best = di.best > 0 ? `${di.grade.icon} ${di.bestGrade} · ${fmt(di.best)}` : '기록 없음';
+  return `
+  <div class="card daily-card">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🌟</span>일일 보스<small>30초 타임어택 · 하루 ${DAILY.attempts}회</small></div>
+      <span class="tiny" style="color:var(--gold)" data-live="daily-left">${d ? `진행 중 · ${(Math.max(0, d.ends - now) / 1000).toFixed(1)}초` : `남은 도전 ${di.left}/${DAILY.attempts}`}</span>
+    </div>
+    <div class="daily-head">
+      <span class="daily-boss">${esc(boss.ko)}</span>
+      <span class="tiny dim ellip">${esc(boss.title)} · 등급 S~D 보상</span>
+    </div>
+    <div class="row gap6" style="margin-top:5px">
+      <button class="btn small ${di.left > 0 && !d ? 'primary' : 'ghost'} wide" type="button" data-action="daily" data-live="daily-free" style="min-height:34px" ${d || di.left <= 0 ? 'disabled' : ''}>${d ? '🌟 도전 중' : di.left > 0 ? `🌟 도전 (${di.left}회 남음)` : '오늘 도전 완료'}</button>
+    </div>
+    <div class="tiny ellip" style="margin-top:5px" data-live="daily-run">${
+      d
+        ? `<b style="color:var(--gold)">진행 중</b> · 누적 피해 ${fmt(d.dmg)} · ${(Math.max(0, d.ends - now) / 1000).toFixed(1)}초 남음`
+        : last
+          ? `최근 ${esc(dailyGradeText(last.grade, last.ratio))} · 피해 ${fmt(last.dmg)} · 💰${fmt(last.gold)} 💎${fmt(last.shards)}${last.points ? ` ✨${last.points}P` : ''}`
+          : '30초 동안 누적 피해로 등급 보상 — 패배해도 받은 피해만큼 지급'
+    }</div>
+    <div class="tiny dim ellip" style="margin-top:2px">최고 ${esc(best)} 피해 · 매일 00:00(KST) 횟수 리셋</div>
   </div>`;
 }
 
@@ -1086,7 +1158,7 @@ function petLine(ui) {
 }
 
 function tplHuntGrowth(ui) {
-  return `${jobCard(ui)}${rebirthCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${petLine(ui)}`;
+  return `${jobCard(ui)}${rebirthCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}${petLine(ui)}`;
 }
 
 /* ───────────── 🎯 미션·도감 ───────────── */
@@ -2058,7 +2130,8 @@ function tplSettings(ui) {
     <div class="kv"><span class="k">동료 펫</span><span class="v">${petDef(s.pet && s.pet.equipped) ? `${petDef(s.pet.equipped).emoji} ${esc(petStageInfo(s, s.pet.equipped).name)}${petEvo(s, s.pet.equipped) > 0 ? ` (${petStageInfo(s, s.pet.equipped).def.label})` : ''}` : '없음'}</span></div>
     <div class="kv"><span class="k">펫 진화</span><span class="v">★${petEvoCount}마리 / ${PETS.length}종</span></div>
     <div class="kv"><span class="k">황금 던전</span><span class="v">${fmt((s.dungeon && s.dungeon.runs) || 0)}회 · 최고 피해 ${fmt((s.dungeon && s.dungeon.best) || 0)}</span></div>
-    <div class="kv"><span class="k">도전의 탑</span><span class="v">🗼 ${tp.clearedCount}/${tp.max}층 · 도전 ${fmt((s.tower && s.tower.runs) || 0)}회</span></div>
+    <div class="kv"><span class="k">도전의 탑</span><span class="v">🗼 최고 ${tp.best}/${tp.max}층 · 도전 ${fmt((s.tower && s.tower.runs) || 0)}회</span></div>
+    <div class="kv"><span class="k">일일 보스</span><span class="v">🌟 최고 ${fmt((s.dailyBoss && s.dailyBoss.best) || 0)} 피해 ${s.dailyBoss && s.dailyBoss.best > 0 ? `(${s.dailyBoss.bestGrade})` : ''} · 오늘 ${(s.dailyBoss && s.dailyBoss.used) || 0}/${DAILY.attempts}회</span></div>
     <div class="kv"><span class="k">장비</span><span class="v">35종 장비 · 5부위 인벤토리</span></div>
     <div class="kv"><span class="k">도감 · 업적</span><span class="v">수집 ${c.pct}% · 업적 ${achClaimed}/${ACHIEVEMENTS.length}</span></div>
     <div class="kv"><span class="k">경제</span><span class="v">골드 하나 (사냥 = 부동산)</span></div>

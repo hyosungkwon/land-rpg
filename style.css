@@ -2011,6 +2011,41 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .tower-next b { font-weight: 900; letter-spacing: -0.2px; }
 .tower-next span { font-size: 10px; flex: 0 0 auto; }
 
+/* v4.5 심층(11층+) · 일일 소탕 */
+.tower-deep {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  padding: 4px 7px;
+  border-radius: 8px;
+  border: 1px dashed rgba(120, 170, 255, 0.28);
+  background: rgba(120, 170, 255, 0.05);
+  font-size: 9.5px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+.tower-deep.on { border-color: rgba(255, 215, 106, 0.4); background: rgba(255, 215, 106, 0.06); color: var(--gold); }
+.tower-deep b { font-size: 10px; font-weight: 900; }
+.tower-deep .dim { margin-left: auto; font-size: 9px; }
+.mini.sweep { flex: 0 0 auto; min-width: 0; height: 22px; padding: 0 7px; font-size: 9.5px; color: #ffe6a8; border-color: rgba(255, 215, 106, 0.4); background: rgba(255, 215, 106, 0.12); }
+.mini.sweep:disabled { color: var(--dim); border-color: var(--line); background: rgba(255, 255, 255, 0.03); }
+.tower-sec { margin: 4px 0 2px; padding-top: 4px; border-top: 1px dashed var(--line); font-size: 10px; font-weight: 800; color: var(--blue); }
+
+/* v4.5 🌟 일일 보스 */
+.daily-card { border-color: rgba(255, 215, 106, 0.22); }
+.daily-head { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
+.daily-boss { font-size: 12px; font-weight: 900; color: #ffe6a8; letter-spacing: -0.2px; }
+.daily-result-grade {
+  font-size: 46px;
+  font-weight: 900;
+  line-height: 1;
+  text-align: center;
+  margin: 2px 0 10px;
+  text-shadow: 0 4px 18px rgba(255, 215, 106, 0.35);
+}
+.daily-result-grade small { display: block; margin-top: 5px; font-size: 11px; font-weight: 800; color: var(--gold); letter-spacing: 0; }
+
 /* 층 선택 모달 */
 .tower-list { display: flex; flex-direction: column; gap: 6px; max-height: 54vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 .tower-floor {
