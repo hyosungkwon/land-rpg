@@ -224,50 +224,113 @@ export function gearIcon(item, size = 34) {
  */
 export const GEAR_ITEMS = [
   /* ⚔️ 무기 */
-  { id: 'w_iron', slot: 'weapon', rarity: 'common', name: '철검', form: 'sword', tint: '#cfd8e3', accent: '#8b98a6', gem: '#ffcf5c', opts: { atkPct: 3 }, desc: '병사가 처음 쥐는 무난한 검' },
-  { id: 'w_steel', slot: 'weapon', rarity: 'common', name: '강철 장검', form: 'greatsword', tint: '#b9c6d6', accent: '#7c8b9c', gem: '#9fe0ff', opts: { critPct: 3 }, desc: '길이로 치명타를 노리는 검' },
-  { id: 'w_axe', slot: 'weapon', rarity: 'advanced', name: '학살자의 도끼', form: 'axe', tint: '#e0614f', accent: '#6b4a2a', gem: '#ffd166', opts: { bossDmg: 9, whirlDmg: 6 }, desc: '보스와 무리를 함께 베는 도끼' },
-  { id: 'w_flame', slot: 'weapon', rarity: 'rare', name: '화염검', form: 'sword', tint: '#ff8a3d', accent: '#b23a12', gem: '#ffe06a', opts: { atkPct: 7, bossDmg: 6 }, desc: '날이 붉게 달아오른 검', fx: { core: '#fff3cf', mid: '#ff8a3d', glow: '#ff3b2f' } },
-  { id: 'w_frost', slot: 'weapon', rarity: 'hero', name: '빙결검', form: 'crystal', tint: '#8fe3ff', accent: '#3f8fc4', gem: '#e6faff', opts: { atkSpd: 9, critPct: 6 }, desc: '얼음 결정이 빠르게 파고든다', fx: { core: '#f2fdff', mid: '#8fe3ff', glow: '#2f8fd8' } },
-  { id: 'w_thunder', slot: 'weapon', rarity: 'hero', name: '천둥창', form: 'spear', tint: '#ffe36a', accent: '#8a6b1f', gem: '#fff6c4', opts: { atkSpd: 13, critDmg: 14 }, desc: '번개처럼 연달아 찌른다', fx: { core: '#fffbe0', mid: '#ffe36a', glow: '#c79a1a' } },
-  { id: 'w_dragon', slot: 'weapon', rarity: 'legend', name: '드래곤슬레이어', form: 'fang', tint: '#ff5a3d', accent: '#ffcf5c', gem: '#ffe9a8', opts: { atkPct: 16, bossDmg: 22, lifesteal: 6, whirlDmg: 12 }, desc: '용을 베어 그 힘을 빨아들인다', fx: { core: '#fff2c4', mid: '#ff9a3d', glow: '#ff2f1f' } },
+  { id: 'w_iron', slot: 'weapon', rarity: 'common', set: 'guardian', name: '철검', form: 'sword', tint: '#cfd8e3', accent: '#8b98a6', gem: '#ffcf5c', opts: { atkPct: 3 }, desc: '병사가 처음 쥐는 무난한 검' },
+  { id: 'w_steel', slot: 'weapon', rarity: 'common', set: 'storm', name: '강철 장검', form: 'greatsword', tint: '#b9c6d6', accent: '#7c8b9c', gem: '#9fe0ff', opts: { critPct: 3 }, desc: '길이로 치명타를 노리는 검' },
+  { id: 'w_axe', slot: 'weapon', rarity: 'advanced', set: 'dragon', name: '학살자의 도끼', form: 'axe', tint: '#e0614f', accent: '#6b4a2a', gem: '#ffd166', opts: { bossDmg: 9, whirlDmg: 6 }, desc: '보스와 무리를 함께 베는 도끼' },
+  { id: 'w_flame', slot: 'weapon', rarity: 'rare', set: 'dragon', name: '화염검', form: 'sword', tint: '#ff8a3d', accent: '#b23a12', gem: '#ffe06a', opts: { atkPct: 7, bossDmg: 6 }, desc: '날이 붉게 달아오른 검', fx: { core: '#fff3cf', mid: '#ff8a3d', glow: '#ff3b2f' } },
+  { id: 'w_frost', slot: 'weapon', rarity: 'hero', set: 'abyss', name: '빙결검', form: 'crystal', tint: '#8fe3ff', accent: '#3f8fc4', gem: '#e6faff', opts: { atkSpd: 9, critPct: 6 }, desc: '얼음 결정이 빠르게 파고든다', fx: { core: '#f2fdff', mid: '#8fe3ff', glow: '#2f8fd8' } },
+  { id: 'w_thunder', slot: 'weapon', rarity: 'hero', set: 'storm', name: '천둥창', form: 'spear', tint: '#ffe36a', accent: '#8a6b1f', gem: '#fff6c4', opts: { atkSpd: 13, critDmg: 14 }, desc: '번개처럼 연달아 찌른다', fx: { core: '#fffbe0', mid: '#ffe36a', glow: '#c79a1a' } },
+  { id: 'w_dragon', slot: 'weapon', rarity: 'legend', set: 'dragon', name: '드래곤슬레이어', form: 'fang', tint: '#ff5a3d', accent: '#ffcf5c', gem: '#ffe9a8', opts: { atkPct: 16, bossDmg: 22, lifesteal: 6, whirlDmg: 12 }, desc: '용을 베어 그 힘을 빨아들인다', fx: { core: '#fff2c4', mid: '#ff9a3d', glow: '#ff2f1f' } },
 
   /* 🛡️ 갑옷 */
-  { id: 'a_leather', slot: 'armor', rarity: 'common', name: '가죽갑옷', form: 'vest', tint: '#a9743f', accent: '#6b4a2a', gem: '#ffcf5c', opts: { hpPct: 3 }, desc: '가볍게 몸을 감싸는 갑옷' },
-  { id: 'a_chain', slot: 'armor', rarity: 'common', name: '사슬갑옷', form: 'chain', tint: '#9aa6b4', accent: '#5f6b7a', gem: '#9fe0ff', opts: { dmgRed: 3 }, desc: '고리가 충격을 나눠 받는다' },
-  { id: 'a_plate', slot: 'armor', rarity: 'advanced', name: '강철갑옷', form: 'plate', tint: '#b3c0cf', accent: '#6f7d8d', gem: '#ffd166', opts: { hpPct: 6, dmgRed: 2 }, desc: '두꺼운 판금으로 버틴다' },
-  { id: 'a_guard', slot: 'armor', rarity: 'rare', name: '수호자 판금', form: 'plate', tint: '#d8c07a', accent: '#8a6f2f', gem: '#ffe9a8', opts: { dmgRed: 6, hpPct: 8 }, desc: '지키는 자의 갑옷' },
-  { id: 'a_scale', slot: 'armor', rarity: 'hero', name: '용비늘갑옷', form: 'scale', tint: '#4fb68a', accent: '#1f7a58', gem: '#b6ffd9', opts: { dmgRed: 8, hpPct: 11, regen: 2 }, desc: '비늘이 스스로 상처를 덮는다' },
-  { id: 'a_holy', slot: 'armor', rarity: 'hero', name: '성기사의 성갑', form: 'plate', tint: '#e8eef6', accent: '#c8a54a', gem: '#fff2c4', opts: { hpPct: 14, regen: 4, dmgRed: 5 }, desc: '빛이 감돌아 상처가 아문다' },
-  { id: 'a_abyss', slot: 'armor', rarity: 'legend', name: '심연의 망토', form: 'cloak', tint: '#5a3fa8', accent: '#b98bff', gem: '#e6d6ff', opts: { hpPct: 18, dmgRed: 12, lifesteal: 4 }, desc: '심연이 대신 맞아 준다' },
+  { id: 'a_leather', slot: 'armor', rarity: 'common', set: 'storm', name: '가죽갑옷', form: 'vest', tint: '#a9743f', accent: '#6b4a2a', gem: '#ffcf5c', opts: { hpPct: 3 }, desc: '가볍게 몸을 감싸는 갑옷' },
+  { id: 'a_chain', slot: 'armor', rarity: 'common', set: 'guardian', name: '사슬갑옷', form: 'chain', tint: '#9aa6b4', accent: '#5f6b7a', gem: '#9fe0ff', opts: { dmgRed: 3 }, desc: '고리가 충격을 나눠 받는다' },
+  { id: 'a_plate', slot: 'armor', rarity: 'advanced', set: 'guardian', name: '강철갑옷', form: 'plate', tint: '#b3c0cf', accent: '#6f7d8d', gem: '#ffd166', opts: { hpPct: 6, dmgRed: 2 }, desc: '두꺼운 판금으로 버틴다' },
+  { id: 'a_guard', slot: 'armor', rarity: 'rare', set: 'guardian', name: '수호자 판금', form: 'plate', tint: '#d8c07a', accent: '#8a6f2f', gem: '#ffe9a8', opts: { dmgRed: 6, hpPct: 8 }, desc: '지키는 자의 갑옷' },
+  { id: 'a_scale', slot: 'armor', rarity: 'hero', set: 'dragon', name: '용비늘갑옷', form: 'scale', tint: '#4fb68a', accent: '#1f7a58', gem: '#b6ffd9', opts: { dmgRed: 8, hpPct: 11, regen: 2 }, desc: '비늘이 스스로 상처를 덮는다' },
+  { id: 'a_holy', slot: 'armor', rarity: 'hero', set: 'fortune', name: '성기사의 성갑', form: 'plate', tint: '#e8eef6', accent: '#c8a54a', gem: '#fff2c4', opts: { hpPct: 14, regen: 4, dmgRed: 5 }, desc: '빛이 감돌아 상처가 아문다' },
+  { id: 'a_abyss', slot: 'armor', rarity: 'legend', set: 'abyss', name: '심연의 망토', form: 'cloak', tint: '#5a3fa8', accent: '#b98bff', gem: '#e6d6ff', opts: { hpPct: 18, dmgRed: 12, lifesteal: 4 }, desc: '심연이 대신 맞아 준다' },
 
   /* 🪖 투구 */
-  { id: 'h_cloth', slot: 'helmet', rarity: 'common', name: '천 투구', form: 'cap', tint: '#b89560', accent: '#7a5c34', gem: '#ffcf5c', opts: { hpPct: 2 }, desc: '머리를 덮는 두꺼운 천' },
-  { id: 'h_iron', slot: 'helmet', rarity: 'common', name: '철 투구', form: 'helm', tint: '#a9b6c6', accent: '#6a7686', gem: '#9fe0ff', opts: { dmgRed: 2 }, desc: '정면을 지키는 철모' },
-  { id: 'h_hood', slot: 'helmet', rarity: 'advanced', name: '사냥꾼의 두건', form: 'hood', tint: '#4f7a5a', accent: '#2f4f38', gem: '#b6ffd9', opts: { critPct: 5 }, desc: '급소를 노리는 시야' },
-  { id: 'h_horn', slot: 'helmet', rarity: 'rare', name: '뿔달린 투구', form: 'horned', tint: '#c2a06a', accent: '#7a5c34', gem: '#ffd166', opts: { hpPct: 7, dmgRed: 3 }, desc: '뿔이 적의 공격을 흘려보낸다' },
-  { id: 'h_crown', slot: 'helmet', rarity: 'hero', name: '왕관', form: 'crown', tint: '#ffcf5c', accent: '#b8860b', gem: '#ff7a3d', opts: { goldPct: 10, hpPct: 8 }, desc: '주변의 재물이 모여든다' },
-  { id: 'h_dragon', slot: 'helmet', rarity: 'hero', name: '용의 투구', form: 'horned', tint: '#d94f3d', accent: '#7a2118', gem: '#ffe9a8', opts: { dmgRed: 7, hpPct: 10 }, desc: '용의 두개골을 깎아 만든 투구' },
-  { id: 'h_abyss', slot: 'helmet', rarity: 'legend', name: '심연의 왕관', form: 'crown', tint: '#6f4fd8', accent: '#b98bff', gem: '#e6d6ff', opts: { critPct: 8, dmgRed: 10, regen: 3 }, desc: '어둠이 급소를 가려 준다' },
+  { id: 'h_cloth', slot: 'helmet', rarity: 'common', set: 'fortune', name: '천 투구', form: 'cap', tint: '#b89560', accent: '#7a5c34', gem: '#ffcf5c', opts: { hpPct: 2 }, desc: '머리를 덮는 두꺼운 천' },
+  { id: 'h_iron', slot: 'helmet', rarity: 'common', set: 'guardian', name: '철 투구', form: 'helm', tint: '#a9b6c6', accent: '#6a7686', gem: '#9fe0ff', opts: { dmgRed: 2 }, desc: '정면을 지키는 철모' },
+  { id: 'h_hood', slot: 'helmet', rarity: 'advanced', set: 'storm', name: '사냥꾼의 두건', form: 'hood', tint: '#4f7a5a', accent: '#2f4f38', gem: '#b6ffd9', opts: { critPct: 5 }, desc: '급소를 노리는 시야' },
+  { id: 'h_horn', slot: 'helmet', rarity: 'rare', set: 'guardian', name: '뿔달린 투구', form: 'horned', tint: '#c2a06a', accent: '#7a5c34', gem: '#ffd166', opts: { hpPct: 7, dmgRed: 3 }, desc: '뿔이 적의 공격을 흘려보낸다' },
+  { id: 'h_crown', slot: 'helmet', rarity: 'hero', set: 'fortune', name: '왕관', form: 'crown', tint: '#ffcf5c', accent: '#b8860b', gem: '#ff7a3d', opts: { goldPct: 10, hpPct: 8 }, desc: '주변의 재물이 모여든다' },
+  { id: 'h_dragon', slot: 'helmet', rarity: 'hero', set: 'dragon', name: '용의 투구', form: 'horned', tint: '#d94f3d', accent: '#7a2118', gem: '#ffe9a8', opts: { dmgRed: 7, hpPct: 10 }, desc: '용의 두개골을 깎아 만든 투구' },
+  { id: 'h_abyss', slot: 'helmet', rarity: 'legend', set: 'abyss', name: '심연의 왕관', form: 'crown', tint: '#6f4fd8', accent: '#b98bff', gem: '#e6d6ff', opts: { critPct: 8, dmgRed: 10, regen: 3 }, desc: '어둠이 급소를 가려 준다' },
 
   /* 💍 반지 */
-  { id: 'r_copper', slot: 'ring', rarity: 'common', name: '구리 반지', form: 'band', tint: '#c08457', accent: '#8a5a34', gem: '#ffcf5c', opts: { critPct: 2 }, desc: '손끝이 조금 가벼워진다' },
-  { id: 'r_silver', slot: 'ring', rarity: 'common', name: '은 반지', form: 'band', tint: '#cdd6e0', accent: '#8b98a6', gem: '#9fe0ff', opts: { goldPct: 4 }, desc: '재물을 부르는 은빛' },
-  { id: 'r_ruby', slot: 'ring', rarity: 'advanced', name: '루비 반지', form: 'gem', tint: '#c9a24a', accent: '#8a6f2f', gem: '#ff4d6a', opts: { critDmg: 9 }, desc: '붉은 빛이 치명타를 키운다' },
-  { id: 'r_sharp', slot: 'ring', rarity: 'rare', name: '예리한 인장', form: 'seal', tint: '#b3c0cf', accent: '#6f7d8d', gem: '#ffd166', opts: { critPct: 6, critDmg: 8 }, desc: '급소를 정확히 파고든다' },
-  { id: 'r_storm', slot: 'ring', rarity: 'hero', name: '폭풍의 인장', form: 'gem', tint: '#7aa8d8', accent: '#3f6d9c', gem: '#9fe0ff', opts: { atkSpd: 12, critPct: 6 }, desc: '손이 폭풍처럼 빨라진다' },
-  { id: 'r_sage', slot: 'ring', rarity: 'hero', name: '현자의 반지', form: 'seal', tint: '#8f7fd8', accent: '#5a4aa8', gem: '#e6d6ff', opts: { lifesteal: 5, regen: 4 }, desc: '체력을 되찾으며 끈질기게 버틴다' },
-  { id: 'r_eye', slot: 'ring', rarity: 'legend', name: '드래곤의 눈', form: 'gem', tint: '#ffcf5c', accent: '#b8860b', gem: '#ff7a3d', opts: { critPct: 12, critDmg: 25, lifesteal: 5 }, desc: '용의 눈이 급소를 꿰뚫는다' },
+  { id: 'r_copper', slot: 'ring', rarity: 'common', set: 'guardian', name: '구리 반지', form: 'band', tint: '#c08457', accent: '#8a5a34', gem: '#ffcf5c', opts: { critPct: 2 }, desc: '손끝이 조금 가벼워진다' },
+  { id: 'r_silver', slot: 'ring', rarity: 'common', set: 'fortune', name: '은 반지', form: 'band', tint: '#cdd6e0', accent: '#8b98a6', gem: '#9fe0ff', opts: { goldPct: 4 }, desc: '재물을 부르는 은빛' },
+  { id: 'r_ruby', slot: 'ring', rarity: 'advanced', set: 'dragon', name: '루비 반지', form: 'gem', tint: '#c9a24a', accent: '#8a6f2f', gem: '#ff4d6a', opts: { critDmg: 9 }, desc: '붉은 빛이 치명타를 키운다' },
+  { id: 'r_sharp', slot: 'ring', rarity: 'rare', set: 'storm', name: '예리한 인장', form: 'seal', tint: '#b3c0cf', accent: '#6f7d8d', gem: '#ffd166', opts: { critPct: 6, critDmg: 8 }, desc: '급소를 정확히 파고든다' },
+  { id: 'r_storm', slot: 'ring', rarity: 'hero', set: 'storm', name: '폭풍의 인장', form: 'gem', tint: '#7aa8d8', accent: '#3f6d9c', gem: '#9fe0ff', opts: { atkSpd: 12, critPct: 6 }, desc: '손이 폭풍처럼 빨라진다' },
+  { id: 'r_sage', slot: 'ring', rarity: 'hero', set: 'abyss', name: '현자의 반지', form: 'seal', tint: '#8f7fd8', accent: '#5a4aa8', gem: '#e6d6ff', opts: { lifesteal: 5, regen: 4 }, desc: '체력을 되찾으며 끈질기게 버틴다' },
+  { id: 'r_eye', slot: 'ring', rarity: 'legend', set: 'dragon', name: '드래곤의 눈', form: 'gem', tint: '#ffcf5c', accent: '#b8860b', gem: '#ff7a3d', opts: { critPct: 12, critDmg: 25, lifesteal: 5 }, desc: '용의 눈이 급소를 꿰뚫는다' },
 
   /* 🧿 부적 */
-  { id: 'm_wood', slot: 'amulet', rarity: 'common', name: '나무 부적', form: 'talisman', tint: '#c9a878', accent: '#8a5a34', gem: '#ffcf5c', opts: { goldPct: 3 }, desc: '행운을 빌어 둔 나무 패' },
-  { id: 'm_silver', slot: 'amulet', rarity: 'common', name: '은 부적', form: 'pendant', tint: '#cdd6e0', accent: '#8b98a6', gem: '#9fe0ff', opts: { dropPct: 4 }, desc: '전리품이 잘 모인다' },
-  { id: 'm_clover', slot: 'amulet', rarity: 'advanced', name: '행운의 클로버', form: 'pendant', tint: '#5ee1a3', accent: '#1f9c66', gem: '#b6ffd9', opts: { goldPct: 8 }, desc: '네 잎이 골드를 부른다' },
-  { id: 'm_crystal', slot: 'amulet', rarity: 'rare', name: '마력의 수정', form: 'orb', tint: '#69c0ff', accent: '#2f7fd8', gem: '#eaf7ff', opts: { atkPct: 7, regen: 2 }, desc: '마력이 체력을 감싼다' },
-  { id: 'm_ember', slot: 'amulet', rarity: 'hero', name: '불꽃의 성흔', form: 'pendant', tint: '#ff7a3d', accent: '#b23a12', gem: '#ffe06a', opts: { bossDmg: 12, atkPct: 6 }, desc: '보스에게 불꽃이 옮겨붙는다' },
-  { id: 'm_star', slot: 'amulet', rarity: 'hero', name: '별의 성표', form: 'star', tint: '#ffe36a', accent: '#b8860b', gem: '#fff6c4', opts: { dropPct: 12, goldPct: 10 }, desc: '별빛이 전리품을 끌어모은다' },
-  { id: 'm_grail', slot: 'amulet', rarity: 'legend', name: '심연의 성배', form: 'grail', tint: '#6f4fd8', accent: '#b98bff', gem: '#e6d6ff', opts: { goldPct: 20, dropPct: 18, whirlDmg: 20 }, desc: '심연이 부와 회오리를 내린다' },
+  { id: 'm_wood', slot: 'amulet', rarity: 'common', set: 'guardian', name: '나무 부적', form: 'talisman', tint: '#c9a878', accent: '#8a5a34', gem: '#ffcf5c', opts: { goldPct: 3 }, desc: '행운을 빌어 둔 나무 패' },
+  { id: 'm_silver', slot: 'amulet', rarity: 'common', set: 'fortune', name: '은 부적', form: 'pendant', tint: '#cdd6e0', accent: '#8b98a6', gem: '#9fe0ff', opts: { dropPct: 4 }, desc: '전리품이 잘 모인다' },
+  { id: 'm_clover', slot: 'amulet', rarity: 'advanced', set: 'fortune', name: '행운의 클로버', form: 'pendant', tint: '#5ee1a3', accent: '#1f9c66', gem: '#b6ffd9', opts: { goldPct: 8 }, desc: '네 잎이 골드를 부른다' },
+  { id: 'm_crystal', slot: 'amulet', rarity: 'rare', set: 'abyss', name: '마력의 수정', form: 'orb', tint: '#69c0ff', accent: '#2f7fd8', gem: '#eaf7ff', opts: { atkPct: 7, regen: 2 }, desc: '마력이 체력을 감싼다' },
+  { id: 'm_ember', slot: 'amulet', rarity: 'hero', set: 'dragon', name: '불꽃의 성흔', form: 'pendant', tint: '#ff7a3d', accent: '#b23a12', gem: '#ffe06a', opts: { bossDmg: 12, atkPct: 6 }, desc: '보스에게 불꽃이 옮겨붙는다' },
+  { id: 'm_star', slot: 'amulet', rarity: 'hero', set: 'fortune', name: '별의 성표', form: 'star', tint: '#ffe36a', accent: '#b8860b', gem: '#fff6c4', opts: { dropPct: 12, goldPct: 10 }, desc: '별빛이 전리품을 끌어모은다' },
+  { id: 'm_grail', slot: 'amulet', rarity: 'legend', set: 'abyss', name: '심연의 성배', form: 'grail', tint: '#6f4fd8', accent: '#b98bff', gem: '#e6d6ff', opts: { goldPct: 20, dropPct: 18, whirlDmg: 20 }, desc: '심연이 부와 회오리를 내린다' },
 ];
+
+/* ────────────────────────────── v5.2.0 장비 테마 세트 효과 (5종 · 2/3/4세트) ──────────────────────────────
+ * 같은 테마의 장비를 2·3·4부위 장착할 때마다 누적 보너스가 발동된다.
+ * 5종 모두 4부위 이상에 걸쳐 분포해 2+2 / 2+3 / 4세트 조합이 모두 가능하다.
+ */
+export const GEAR_SETS = [
+  {
+    id: 'dragon', icon: '🐉', name: '용살자', color: '#ff7a3d',
+    tiers: [
+      { need: 2, opts: { bossDmg: 12, atkPct: 8 } },
+      { need: 3, opts: { critDmg: 20, lifesteal: 3 } },
+      { need: 4, opts: { bossDmg: 20, atkPct: 15 } },
+    ],
+  },
+  {
+    id: 'abyss', icon: '🌌', name: '심연', color: '#b98bff',
+    tiers: [
+      { need: 2, opts: { lifesteal: 3, dmgRed: 5 } },
+      { need: 3, opts: { whirlDmg: 18, hpPct: 12 } },
+      { need: 4, opts: { atkPct: 16, critDmg: 24 } },
+    ],
+  },
+  {
+    id: 'guardian', icon: '🛡️', name: '수호자', color: '#7cc4ff',
+    tiers: [
+      { need: 2, opts: { hpPct: 10, dmgRed: 4 } },
+      { need: 3, opts: { regen: 3, dmgRed: 6 } },
+      { need: 4, opts: { hpPct: 18, atkPct: 12 } },
+    ],
+  },
+  {
+    id: 'storm', icon: '⚡', name: '폭풍', color: '#ffe36a',
+    tiers: [
+      { need: 2, opts: { atkSpd: 8, critPct: 4 } },
+      { need: 3, opts: { critDmg: 18, atkPct: 8 } },
+      { need: 4, opts: { atkSpd: 10, whirlDmg: 20 } },
+    ],
+  },
+  {
+    id: 'fortune', icon: '🍀', name: '황금', color: '#5ee1a3',
+    tiers: [
+      { need: 2, opts: { goldPct: 15, dropPct: 10 } },
+      { need: 3, opts: { goldPct: 20, atkPct: 8 } },
+      { need: 4, opts: { dropPct: 20, goldPct: 25 } },
+    ],
+  },
+];
+export const GEAR_SET_BY_ID = GEAR_SETS.reduce((m, st) => { m[st.id] = st; return m; }, {});
+
+/** 아이템이 속한 테마 세트 정의(없으면 null) */
+export function gearSetOf(item) {
+  const it = typeof item === 'string' ? gearItem(item) : item;
+  return (it && it.set && GEAR_SET_BY_ID[it.set]) || null;
+}
+
+/** 세트 보너스 옵션 객체 → 읽기 좋은 문자열 */
+export function gearSetBonusText(opts, sep = ' · ') {
+  if (!opts || typeof opts !== 'object') return '';
+  return GEAR_OPT_KEYS
+    .filter((k) => typeof opts[k] === 'number' && opts[k] > 0)
+    .map((k) => gearOptText(k, opts[k]))
+    .join(sep);
+}
 
 export const GEAR_BY_ID = GEAR_ITEMS.reduce((m, it) => { m[it.id] = it; return m; }, {});
 export const GEAR_BY_SLOT = EQUIP_SLOTS.reduce((m, slot) => {
@@ -766,7 +829,52 @@ export function gearPresetSummary(s, idx) {
   return { idx: i, ...meta, saved, owned, active: !!(g && g.activePreset === i) };
 }
 
-/** 장착 아이템 옵션 합계 — calcStats 가 읽는다 (v4.10 부위 각성 +8%/Lv 증폭 포함) */
+/** 장착 중인 테마 세트별 발동 현황 */
+export function gearSetStatus(s) {
+  const counts = {};
+  for (const st of GEAR_SETS) counts[st.id] = 0;
+  if (s && s.gear) {
+    for (const slot of EQUIP_SLOTS) {
+      const it = equippedItem(s, slot);
+      if (it && it.set && counts[it.set] !== undefined) counts[it.set] += 1;
+    }
+  }
+  return GEAR_SETS.map((st) => {
+    const count = counts[st.id] || 0;
+    const activeTiers = st.tiers.filter((t) => count >= t.need);
+    const nextTier = st.tiers.find((t) => count < t.need) || null;
+    const mods = {};
+    for (const t of activeTiers) {
+      for (const [k, v] of Object.entries(t.opts || {})) {
+        mods[k] = (mods[k] || 0) + v;
+      }
+    }
+    return {
+      ...st,
+      count,
+      active: activeTiers.length > 0,
+      activeTier: activeTiers.length ? activeTiers[activeTiers.length - 1].need : 0,
+      activeTiers,
+      nextTier,
+      mods,
+    };
+  });
+}
+
+/** 활성화된 장비 세트 효과 옵션 합계 */
+export function gearSetMods(s) {
+  const out = {};
+  for (const k of GEAR_OPT_KEYS) out[k] = 0;
+  for (const st of gearSetStatus(s)) {
+    if (!st.active) continue;
+    for (const [k, v] of Object.entries(st.mods)) {
+      if (out[k] !== undefined && isFinite(v) && v > 0) out[k] += v;
+    }
+  }
+  return out;
+}
+
+/** 장착 아이템 옵션 합계 — calcStats 가 읽는다 (v4.10 부위 각성 +8%/Lv · v5.2 테마 세트 효과 포함) */
 export function gearMods(s) {
   const out = {};
   for (const k of GEAR_OPT_KEYS) out[k] = 0;
@@ -779,6 +887,10 @@ export function gearMods(s) {
       const v = Number(it.opts[k]);
       if (isFinite(v) && v > 0) out[k] += Math.round(v * mul * 10) / 10;
     }
+  }
+  const sm = gearSetMods(s);
+  for (const k of GEAR_OPT_KEYS) {
+    if (sm[k] > 0) out[k] = Math.round((out[k] + sm[k]) * 10) / 10;
   }
   return out;
 }

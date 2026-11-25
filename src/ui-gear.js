@@ -6,6 +6,7 @@ import {
   equippedItem, equippedRarity, gearCollection, gearSlotCounts, dismantleValue,
   dismantleTargets, AUTO_DISMANTLE_MODES, autoDismantleLabel, normalizeAutoMode,
   GEAR_PRESET_NAMES, GEAR_AWAKEN_BONUS_LV, awakenLevel, gearPresetSummary,
+  gearSetOf, gearSetStatus, gearSetBonusText,
 } from './gear.js';
 import { esc, fmt } from './ui-fmt.js';
 
@@ -15,6 +16,11 @@ export const rarityBadge = (id) => {
 };
 
 export const rarityName = (id) => (RARITIES[RARITY_INDEX[id] || 0] || RARITIES[0]).name;
+
+const setBadge = (item) => {
+  const st = gearSetOf(item);
+  return st ? `<span class="gset-tag" style="--sc:${st.color}">${st.icon}${st.name}</span>` : '';
+};
 
 const slotUid = (s, slot) => {
   const uid = s.gear && s.gear.equipped ? s.gear.equipped[slot] : null;
@@ -49,12 +55,29 @@ export function gearSlotCards(s) {
       <button class="gslot${it ? ' on' : ' empty'}" type="button"${idAttr}>
         <span class="gs-ico">${it ? gearIcon(it, 40) : `<b class="gs-none">${def.icon}</b>`}</span>
         <span class="gs-mid">
-          <span class="gs-name">${it ? esc(it.name) : `${def.name} 없음`}${rarityBadge(rid)}${awk > 0 ? `<span class="awk-badge">🔥★${awk}</span>` : ''}</span>
+          <span class="gs-name">${it ? esc(it.name) : `${def.name} 없음`}${rarityBadge(rid)}${it ? setBadge(it) : ''}${awk > 0 ? `<span class="awk-badge">🔥★${awk}</span>` : ''}</span>
           <span class="gs-sub">${def.icon} ${def.name} <b class="lv">+${lv}</b>${awk > 0 ? ` · 각성 +${awk * GEAR_AWAKEN_BONUS_LV}강` : ''}${it ? '' : ' · 뽑기·사냥으로 획득'}</span>
           <span class="gs-opts">${it ? optChips(it, 2) : '<span class="opt dim">장착하면 고유 옵션이 붙습니다</span>'}</span>
         </span>
       </button>`;
   }).join('');
+
+  // v5.2.0: 테마 세트 효과 요약 스트립
+  const sets = gearSetStatus(s);
+  const activeSets = sets.filter((st) => st.active);
+  const setPills = sets
+    .filter((st) => st.count > 0)
+    .sort((a, b) => b.count - a.count)
+    .map((st) => `<span class="gset-pill${st.active ? ' on' : ''}" style="--sc:${st.color}">
+      <b>${st.icon} ${st.name} ${st.count}세트</b>
+      <small>${st.active ? esc(gearSetBonusText(st.mods)) : `다음 ${st.nextTier.need}세트: ${esc(gearSetBonusText(st.nextTier.opts))}`}</small>
+    </span>`)
+    .join('');
+  const setBar = `<div class="gset-bar">
+    <div class="gset-head"><span>🛡️ 테마 세트 효과</span><small class="dim">${activeSets.length ? `${activeSets.map((x) => `${x.icon}${x.name} ${x.activeTier}세트`).join(' · ')} 발동` : '같은 테마 2부위 이상 장착 시 발동'}</small></div>
+    ${setPills ? `<div class="gset-list">${setPills}</div>` : ''}
+  </div>`;
+
   return `
   <div class="card">
     <div class="card-head">
@@ -62,6 +85,7 @@ export function gearSlotCards(s) {
       <span class="tiny dim">프리셋 1탭 전환 · 장비 눌러 비교</span>
     </div>
     <div class="gear-presets">${presets}</div>
+    ${setBar}
     <div class="gear-slots">${rows}</div>
   </div>`;
 }
@@ -110,7 +134,7 @@ export function gearInventory(s) {
           <span class="iv-tag">${row.equipped ? '<i class="iv-eq">장착중</i>' : rarityBadge(row.def.rarity)}</span>
         </span>
         <span class="iv-name">${esc(row.def.name)}</span>
-        <span class="iv-rar">${rarityBadge(row.def.rarity)}<b class="iv-slot">${EQUIP[row.def.slot].icon}${EQUIP[row.def.slot].name}</b></span>
+        <span class="iv-rar">${rarityBadge(row.def.rarity)}${setBadge(row.def)}<b class="iv-slot">${EQUIP[row.def.slot].icon}${EQUIP[row.def.slot].name}</b></span>
         <span class="iv-opts">${optChips(row.def, 2)}</span>
       </button>`).join('')
     : `<div class="inv-empty">

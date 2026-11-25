@@ -2475,5 +2475,39 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line-2);
 }
 
+/* ══════════════ v5.2.0 장비 테마 세트 효과 ══════════════ */
+.gset-tag {
+  display: inline-block; margin-left: 4px; padding: 0 4px; border-radius: 5px;
+  font-size: 9px; font-weight: 800; color: var(--sc, var(--gold));
+  background: rgba(255, 255, 255, 0.05); border: 1px solid color-mix(in srgb, var(--sc, #ffcf5c) 38%, transparent);
+  vertical-align: middle; line-height: 1.45;
+}
+.gset-bar {
+  margin-bottom: 9px; padding: 7px 9px; border-radius: 9px;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line-2);
+}
+.gset-head { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; }
+.gset-head small { font-size: 9.5px; font-weight: 700; }
+.gset-list { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.gset-pill {
+  display: flex; flex-direction: column; gap: 1px; padding: 5px 7px; border-radius: 7px;
+  background: rgba(255, 255, 255, 0.025); border: 1px solid var(--line-2);
+  font-size: 10.5px; color: var(--dim);
+}
+.gset-pill.on {
+  color: var(--txt);
+  border-color: color-mix(in srgb, var(--sc, #ffcf5c) 52%, transparent);
+  background: color-mix(in srgb, var(--sc, #ffcf5c) 10%, transparent);
+}
+.gset-pill b { font-size: 10.5px; color: var(--sc, var(--gold)); }
+.gset-pill small { font-size: 9.5px; color: var(--sub); line-height: 1.35; }
+.gset-modal {
+  display: flex; flex-direction: column; gap: 4px; margin-bottom: 9px;
+  padding: 6px 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line-2);
+}
+.gset-tier { display: flex; justify-content: space-between; gap: 8px; font-size: 10.5px; color: var(--dim); }
+.gset-tier.on { color: var(--txt); font-weight: 700; }
+.gset-tier.on b { color: var(--sc, var(--gold)); }
+
 
 

@@ -11,6 +11,7 @@ import {
   equipGear, dismantleGear, bulkDismantle, dismantleTargets, dismantleValue, itemScore, GEAR_OPTS,
   normalizeAutoMode, autoDismantleLabel,
   saveGearPreset as saveGearPresetState, applyGearPreset as applyGearPresetState, awakenSlot as awakenSlotState,
+  gearSetOf, gearSetStatus, gearSetBonusText,
 } from './src/gear.js';
 
 const GEAR_OPT_LABEL = (k) => (GEAR_OPTS[k] ? `${GEAR_OPTS[k].icon} ${GEAR_OPTS[k].name}` : k);
@@ -2636,11 +2637,23 @@ class App {
       stat('범위 베기', d.whirlDmgPct * 100, (v) => `${v.toFixed(1)}%p`),
     ].filter((html) => !html.includes('class="same">—')).join('');
 
+    const itSet = gearSetOf(it);
+    const setBox = itSet ? (() => {
+      const st = gearSetStatus(s).find((x) => x.id === itSet.id);
+      const cnt = st ? st.count : 0;
+      const lines = itSet.tiers.map((t) => {
+        const on = cnt >= t.need;
+        return `<div class="gset-tier${on ? ' on' : ''}"><b>${t.need}세트</b><span>${esc(gearSetBonusText(t.opts))}</span></div>`;
+      }).join('');
+      return `<div class="cmp-sec">테마 세트 <small>${itSet.icon} ${itSet.name} · 현재 ${cnt}부위 장착</small></div>
+        <div class="gset-modal" style="--sc:${itSet.color}">${lines}</div>`;
+    })() : '';
+
     const body = `
       <div class="cmp-head">
         <span class="cmp-ico">${gearIcon(it, 54)}</span>
         <span class="cmp-title">
-          <span class="cmp-name">${esc(it.name)} <span class="rb ${r.id}">${r.name}</span></span>
+          <span class="cmp-name">${esc(it.name)} <span class="rb ${r.id}">${r.name}</span>${itSet ? `<span class="gset-tag" style="--sc:${itSet.color}">${itSet.icon}${itSet.name}</span>` : ''}</span>
           <span class="cmp-sub">${EQUIP[it.slot].icon} ${EQUIP[it.slot].name} · ${esc(it.desc || '')} · 강화 +${lv} (부위 공유)</span>
         </span>
       </div>
@@ -2659,6 +2672,7 @@ class App {
       ${isOn ? '<div class="note" style="margin:0 0 8px">지금 장착 중인 장비입니다. 같은 부위의 다른 장비를 눌러 비교해 보세요.</div>' : ''}
       <div class="cmp-sec">고유 옵션 <small>지금 → 이 장비</small></div>
       <div class="cmp-opts">${optRows}</div>
+      ${setBox}
       <div class="cmp-sec">장착하면 달라지는 것</div>
       <div class="cmp-stats">${stats || '<div class="tiny dim">스탯 변화 없음</div>'}</div>`;
 
