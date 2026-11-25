@@ -16,7 +16,7 @@ import {
 const GEAR_OPT_LABEL = (k) => (GEAR_OPTS[k] ? `${GEAR_OPTS[k].icon} ${GEAR_OPTS[k].name}` : k);
 import { encodeSave, decodeSave, summarizeSave } from './src/savecode.js';
 import {
-  CLOUD, CloudSync, buildCloudDoc, cloudSummary, compareSaves, rankEntryOf,
+  CLOUD, CloudSync, buildCloudDoc, cloudSummary, compareSaves, rankEntryOf, normalizeRankKey,
   sanitizeNick, nickOf, formatAsset,
 } from './src/cloud.js';
 import { Battle } from './src/combat.js';
@@ -932,7 +932,7 @@ class App {
     const c = this.cloud;
     if (!c.signedIn) return null;
     const entry = rankEntryOf(this.s, { uid: c.uid, nick: nickOf(this.s), now: Date.now() });
-    const key = `${entry.name}|${entry.stage}|${entry.totalAsset}|${entry.level}`;
+    const key = `${entry.name}|${entry.stage}|${entry.totalAsset}|${entry.level}|${entry.towerBest}|${entry.dailyBest}`;
     if (key === this._rankKey) return null;
     this._rankKey = key;
     const r = await c.writeRank(entry);
@@ -1038,9 +1038,9 @@ class App {
     this.ui.syncCloud();
   }
 
-  /** 랭킹 보기/새로고침 — 게스트도 볼 수 있는 공개 보드 */
+  /** 랭킹 보기/새로고침 — 게스트도 볼 수 있는 공개 보드 (v5.0 4종 지표) */
   async cloudRank(key = 'stage', opts = {}) {
-    const metric = key === 'asset' ? 'asset' : 'stage';
+    const metric = normalizeRankKey(key);
     this.ui.syncCloud('connecting');
     const r = await this.cloud.readRank(metric);
     if (!r.ok) {

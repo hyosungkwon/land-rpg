@@ -103,6 +103,9 @@ export function cloudSummary(state, now = Date.now()) {
     totalAsset,
     cities,
     rebirth: int(rb.count),
+    towerBest: int(s.tower && s.tower.best),
+    dailyBest: int(s.dailyBoss && s.dailyBoss.best),
+    dailyGrade: String((s.dailyBoss && s.dailyBoss.bestGrade) || 'D'),
     playMs: int(s.records && s.records.playMs),
     nick: nickOf(s),
     ts: int(s.lastActiveAt),
@@ -240,6 +243,12 @@ export function compareSaves(local, cloud, opts = {}) {
 }
 
 /** 랭킹 항목 정리 — 예전 기록(stage/level/kills)도 같은 모양으로 읽는다 */
+export const RANK_KEYS = ['stage', 'asset', 'tower', 'daily'];
+
+export function normalizeRankKey(key) {
+  return RANK_KEYS.includes(key) ? key : 'stage';
+}
+
 export function rankEntryOf(state, opts = {}) {
   const uid = String(opts.uid || '');
   const now = int(opts.now, Date.now());
@@ -253,6 +262,9 @@ export function rankEntryOf(state, opts = {}) {
     totalAsset: sum.totalAsset,
     cities: sum.cities,
     rebirth: sum.rebirth,
+    towerBest: sum.towerBest,
+    dailyBest: sum.dailyBest,
+    dailyGrade: sum.dailyGrade,
     time: now,
     v: APP_VERSION,
   };
@@ -262,6 +274,8 @@ export function normalizeRankRow(entry, uid) {
   const e = entry && typeof entry === 'object' ? entry : {};
   const stage = Math.max(0, int(e.stage, int(e.peakStage, 0)));
   const hasAsset = typeof e.totalAsset === 'number' || typeof e.asset === 'number';
+  const hasTower = typeof e.towerBest === 'number';
+  const hasDaily = typeof e.dailyBest === 'number';
   return {
     uid: String(e.uid || uid || ''),
     name: sanitizeNick(e.name || e.nick, String(e.uid || uid || '')),
@@ -271,21 +285,34 @@ export function normalizeRankRow(entry, uid) {
     totalAsset: int(e.totalAsset, int(e.asset)),
     cities: int(e.cities),
     rebirth: int(e.rebirth),
+    towerBest: int(e.towerBest),
+    dailyBest: int(e.dailyBest),
+    dailyGrade: typeof e.dailyGrade === 'string' ? e.dailyGrade.slice(0, 2) : 'D',
     time: int(e.time, int(e.ts)),
     hasAsset,
+    hasTower,
+    hasDaily,
   };
 }
 
-/** 랭킹 정렬 — key: 'stage' | 'asset'. 동점은 같은 순위(1,2,2,4) 로 묶는다. */
+const RANK_METRIC_FIELD = {
+  stage: 'stage',
+  asset: 'totalAsset',
+  tower: 'towerBest',
+  daily: 'dailyBest',
+};
+
+/** 랭킹 정렬 — key: 'stage' | 'asset' | 'tower' | 'daily'. 동점은 같은 순위(1,2,2,4) 로 묶는다. */
 export function rankRows(map, key = 'stage', opts = {}) {
+  const k = normalizeRankKey(key);
   const limit = Math.max(1, int(opts.limit, CLOUD.topN));
-  const metric = key === 'asset' ? 'totalAsset' : 'stage';
+  const metric = RANK_METRIC_FIELD[k];
   const other = metric === 'stage' ? 'totalAsset' : 'stage';
   const src = map && typeof map === 'object' ? map : {};
   const rows = [];
   for (const uid of Object.keys(src)) {
     const row = normalizeRankRow(src[uid], uid);
-    if (row.stage <= 0 && row.totalAsset <= 0) continue; // 빈 기록은 목록에서 뺀다
+    if (row.stage <= 0 && row.totalAsset <= 0 && row.towerBest <= 0 && row.dailyBest <= 0) continue; // 빈 기록은 목록에서 뺀다
     rows.push(row);
   }
   rows.sort((a, b) => {
@@ -302,9 +329,9 @@ export function rankRows(map, key = 'stage', opts = {}) {
     const val = r[metric];
     if (prev === null || val !== prev) rank = i + 1;
     prev = val;
-    out.push({ ...r, rank, metric: key === 'asset' ? 'asset' : 'stage', value: val });
+    out.push({ ...r, rank, metric: k, value: val });
   }
-  return { key: key === 'asset' ? 'asset' : 'stage', rows: out.slice(0, limit), all: out, count: out.length };
+  return { key: k, rows: out.slice(0, limit), all: out, count: out.length };
 }
 
 /** 내 순위(전체 기준) — 목록에 없으면 null */
@@ -322,16 +349,23 @@ export function formatAsset(n) {
   return formatGold(v);
 }
 
-/** 목록 값 표기 — 최고 스테이지 S24 · 총자산 💰1.2조 */
+/** 목록 값 표기 — 최고 스테이지 S24 · 총자산 💰1.2조 · 도전의 탑 🗼42층 · 일일 보스 🌟1.2만 */
 export function rankValueText(key, row) {
   const r = row && typeof row === 'object' ? row : {};
-  if (key === 'asset') return r.hasAsset === false ? '—' : `💰${formatAsset(int(r.totalAsset))}`;
+  const k = normalizeRankKey(key);
+  if (k === 'asset') return r.hasAsset === false ? '—' : `💰${formatAsset(int(r.totalAsset))}`;
+  if (k === 'tower') return r.hasTower === false || int(r.towerBest) <= 0 ? '—' : `🗼${int(r.towerBest)}층`;
+  if (k === 'daily') return r.hasDaily === false || int(r.dailyBest) <= 0 ? '—' : `🌟${formatAsset(int(r.dailyBest))}`;
   return `S${Math.max(0, int(r.stage))}`;
 }
 
 /** 랭킹 지표 한글 이름 */
 export function rankMetricLabel(key) {
-  return key === 'asset' ? '총자산' : '최고 스테이지';
+  const k = normalizeRankKey(key);
+  if (k === 'asset') return '총자산';
+  if (k === 'tower') return '도전의 탑';
+  if (k === 'daily') return '일일 보스';
+  return '최고 스테이지';
 }
 
 /** HUD·카드에 쓰는 상태 문구 */
@@ -688,13 +722,14 @@ export class CloudSync {
 
   /** rpg_rankings 전체 읽기 — 공개 노드라 게스트도 볼 수 있다 */
   async readRank(key = 'stage') {
-    this.rank = { ...this.rank, key: key === 'asset' ? 'asset' : 'stage', loading: true, error: '' };
+    const k = normalizeRankKey(key);
+    this.rank = { ...this.rank, key: k, loading: true, error: '' };
     this.emit();
     try {
       const sdk = await this.ensureSdk();
       const snap = await withTimeout(sdk.get(sdk.ref(sdk.db, CLOUD.rankPath)), CLOUD.netTimeoutMs, '랭킹 읽기', this.timer);
       const map = snap && typeof snap.val === 'function' ? snap.val() : null;
-      const built = rankRows(map, key, { limit: CLOUD.topN });
+      const built = rankRows(map, k, { limit: CLOUD.topN });
       this.rank = { ...built, loading: false, at: this.now(), error: '' };
       this.emit(this.signedIn ? 'online' : 'guest');
       return { ok: true, rank: this.rank };

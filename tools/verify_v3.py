@@ -96,7 +96,7 @@ except ImportError:
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui.js", "src/sound.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -187,8 +187,8 @@ def main():
     ok("startCloudResume" in app_src and "if (!this.cloudEnabled() && !this.cloud.hasPendingRedirect()) return;" in app_src, "세션 복원도 클라우드를 켓을 때만")
     ok("setInterval(() => this.cloudTick(), 15000)" in app_src, "주기 저장은 조건 검사형 타이머")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v4.10.0" in read("sw.js"), "SW 캐시 버전 v4.10.0")
-    ok("APP_VERSION = '4.10.0'" in read("src/data.js"), "앱 버전 v4.10.0")
+    ok("land-rpg-v5.0.0" in read("sw.js"), "SW 캐시 버전 v5.0.0")
+    ok("APP_VERSION = '5.0.0'" in read("src/data.js"), "앱 버전 v5.0.0")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
     ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
@@ -343,7 +343,7 @@ def main():
         )
     }
     ctx2 = quickjs.Context()
-    ctx2.eval(bundle(FILES + ["src/ui.js"], ui_extras))
+    ctx2.eval(bundle(FILES + ["src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui.js"], ui_extras))
     tpl = js(ctx2, """
       const s = defaultState(0);
       s.gold = 90000; s.shards = 320; s.level = 12; s.stage = 7; s.maxStage = 7; s.killsInStage = 4;
@@ -2935,7 +2935,7 @@ def main():
     ok(all(x in asrc42 for x in ["enterTower", "openTowerFloors", "evolvePet", "showTowerResult", "showTowerFloors"]), "app.js — 탑 입장/층 선택/결과·펫 진화 액션", "")
     ok('assets/sprites/pet/${info.sprite}.png' in asrc42, "진화 결과 모달 — 진화 스프라이트 경로(.png)", "")
     ok(all(x in css42 for x in [".tower-card", ".tower-tiles", ".tower-floor", ".pet-evo", ".mini.evo"]), "style.css — v4.2 스타일", "")
-    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.10.0" in read("sw.js") and "APP_VERSION = '4.10.0'" in read("src/data.js"), "버전·서비스워커(4.10.0 · cloud 프리캐시)", "")
+    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v5.0.0" in read("sw.js") and "APP_VERSION = '5.0.0'" in read("src/data.js"), "버전·서비스워커(5.0.0 · cloud 프리캐시)", "")
     pkg_ok = (not os.path.exists(os.path.join(ROOT, "package.json"))) or ('"version": "' in read("package.json"))
     ok(pkg_ok, "package.json 버전 확인(없으면 클론 환경으로 통과)", "")
     evo_files = [f"assets/sprites/pet/pet_{n}_{s}.png" for n in ("wolf", "fox", "owl", "dragon") for s in ("awaken", "divine")]
@@ -3086,7 +3086,7 @@ def main():
 
     css43 = read("style.css")
     ok(all(x in css43 for x in [".land-sum", ".ls-v", ".ls-claim", ".news-slim", ".ns-title", ".land-subbar", ".land-rec", ".buff-now"]), "style.css — v4.3 부동산 요약 바·압축 뉴스·서브 탭", "")
-    ok("land-rpg-v4.10.0" in read("sw.js") and "'4.10.0'" in read("src/data.js"), "버전·캐시 v4.10.0", "")
+    ok("land-rpg-v5.0.0" in read("sw.js") and "'5.0.0'" in read("src/data.js"), "버전·캐시 v5.0.0", "")
 
     section("[20] ⚔️ v4.4 S31+ 무한 구간 리밸런싱 · 강화석 대량 교환 · 상위 전직")
 
@@ -3963,7 +3963,7 @@ def main():
     section("[23] ♻️ v4.7 장비 자동분해 · 🐉 상위 전직 궁극기 · 방치 편의")
 
     # ── 1) 버전·정적 배선 ──
-    ok("APP_VERSION = '4.10.0'" in read("src/data.js") and "land-rpg-v4.10.0" in read("sw.js"), "v4.10.0 버전·서비스워커 캐시 갱신", "")
+    ok("APP_VERSION = '5.0.0'" in read("src/data.js") and "land-rpg-v5.0.0" in read("sw.js"), "v5.0.0 버전·서비스워커 캐시 갱신", "")
     idx47 = read("index.html")
     ok(all(f'data-skill="{k}"' in idx47 for k in ["strike", "whirl", "berserk", "heal"]), "기존 4개 퀵슬롯 레이아웃 유지", "")
     ok('data-skill="ultimate"' in idx47 and 'class="q ult hidden"' in idx47, "다섯 번째 퀵슬롯(궁극기) — 해금 전 숨김", "")
@@ -4205,7 +4205,7 @@ def main():
     ok(cl_a["clean"][0] == "효성 왕" and cl_a["clean"][3] == 12 and not cl_a["html"], "닉네임 정리 — 공백 접기·12자 제한·HTML 문자 제거", json.dumps(cl_a["clean"], ensure_ascii=False))
     ok(cl_a["clean"][1] == "용사" and cl_a["clean"][2] == "용사", "1자·빈 닉네임은 기본 이름으로 대체", json.dumps(cl_a["clean"][:3], ensure_ascii=False))
     ok(cl_a["sum"] == [42, 21, 2, 5000, True], "세이브 요약 — 역대 최고 스테이지·보유 지역·총자산", json.dumps(cl_a["sum"]))
-    ok(cl_a["doc"][:6] == ["land_rpg_save", "4.10.0", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
+    ok(cl_a["doc"][:6] == ["land_rpg_save", "5.0.0", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
     ok(0 < cl_a["size"] < 200000, "클라우드 문서 크기 RTDB 한도 안(200KB 미만)", str(cl_a["size"]))
 
     # ── 2) 문서 해석(신형·v2 옛 페이로드·손상) ──
@@ -4287,7 +4287,7 @@ def main():
     ok(cl_d["assetFirst"] == ["b:900", "c:500", "a:200"], "총자산 정렬 — 금액 기준", json.dumps(cl_d["assetFirst"]))
     ok(cl_d["top1"] == "u24" and cl_d["topLast"] == "u5", "25명 중 TOP 20 절단", json.dumps([cl_d["top1"], cl_d["topLast"]]))
     ok(cl_d["me"] == [2, "감마"], "내 순위 조회(동점 포함 전체 기준)", json.dumps(cl_d["me"], ensure_ascii=False))
-    ok(cl_d["old"] == {"uid": "old", "name": "HyosungK", "level": 33, "stage": 17, "gold": 0, "totalAsset": 0, "cities": 0, "rebirth": 0, "time": 1795426582912, "hasAsset": False}, "옛 랭킹 항목 정규화(없는 값은 0 · 총자산 없음 표시)", json.dumps(cl_d["old"], ensure_ascii=False))
+    ok(cl_d["old"] == {"uid": "old", "name": "HyosungK", "level": 33, "stage": 17, "gold": 0, "totalAsset": 0, "cities": 0, "rebirth": 0, "towerBest": 0, "dailyBest": 0, "dailyGrade": "D", "time": 1795426582912, "hasAsset": False, "hasTower": False, "hasDaily": False}, "옛 랭킹 항목 정규화(없는 값은 0 · 총자산/탑/일일 없음 표시)", json.dumps(cl_d["old"], ensure_ascii=False))
     ok(cl_d["values"] == ["S24", "💰1.20조", "💰5.50억"], "랭킹 값 표기 — S24 · 조/억 축약", json.dumps(cl_d["values"], ensure_ascii=False))
     ok(js(ctx, "return rankValueText('asset', { totalAsset: 0, hasAsset: false });") == "—", "총자산 기록이 없는 옛 항목은 '—' (0으로 보이지 않게)")
     ok(cl_d["fmt"][:2] == ["1.20조", "5.50억"] and cl_d["fmt"][2].replace(",", "") == "1234", "총자산 포맷 — 조·억·원 단위", json.dumps(cl_d["fmt"], ensure_ascii=False))
@@ -4309,7 +4309,7 @@ def main():
     ok(cl_e["errs"][0].startswith("이 주소가") and "응답이 없습니다" in cl_e["errs"][1] and cl_e["errs"][3].startswith("권한") and "시간 초과" in cl_e["errs"][4] and "라이브러리" in cl_e["errs"][5], "오류 문구 — 승인 도메인/시간 초과/권한/라이브러리", json.dumps(cl_e["errs"], ensure_ascii=False))
     ok(cl_e["strip"] == '{"a":1,"d":1,"e":{"x":2},"f":[1,3]}', "RTDB 전송 전 undefined·NaN 제거", cl_e["strip"])
     ok(cl_e["metrics"] == ["최고 스테이지", "총자산"], "랭킹 지표 이름", json.dumps(cl_e["metrics"], ensure_ascii=False))
-    ok(cl_e["entry"] == ["용사", 9, 12, 777, "4.10.0", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
+    ok(cl_e["entry"] == ["용사", 9, 12, 777, "5.0.0", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
 
     # ── 6) 세이브 호환 · 마이그레이션 ──
     mig48 = js(ctx, """
@@ -4765,6 +4765,47 @@ def main():
       };
     """)
     ok(g410_ui["hasPresets"] and g410_ui["hasAwaken"] and not g410_ui["bad"], "장비 탭 — 프리셋 3슬롯 바 · +100강 부위 각성 버튼 렌더", json.dumps(g410_ui))
+
+    # ── 14) v5.0.0 랭킹 4종 확장(도전의 탑 · 일일 보스) · UI 모듈 분리 ──
+    section("v5.0.0 랭킹 4종 확장 · UI 모듈화(ui-fmt/ui-cloud/ui-gear)")
+    r50 = js(ctx, """
+      const s = defaultState(1000);
+      s.maxStage = 45; s.peakStage = 45; s.tower.best = 64; s.dailyBoss.best = 1250000; s.dailyBoss.bestGrade = 'S';
+      const e = rankEntryOf(s, { uid: 'u1', nick: '영주왕', now: 2000 });
+      const map = {
+        u1: e,
+        u2: { name: '탑장인', level: 50, stage: 30, totalAsset: 10000, towerBest: 120, dailyBest: 500000, time: 10 },
+        u3: { name: '옛기록', level: 40, stage: 35, totalAsset: 20000, time: 5 },
+      };
+      const byTower = rankRows(map, 'tower');
+      const byDaily = rankRows(map, 'daily');
+      return {
+        keys: RANK_KEYS,
+        entryFields: [e.towerBest, e.dailyBest, e.dailyGrade],
+        towerTop: byTower.rows.map(r => [r.uid, r.rank, rankValueText('tower', r)]),
+        dailyTop: byDaily.rows.map(r => [r.uid, r.rank, rankValueText('daily', r)]),
+        labels: [rankMetricLabel('tower'), rankMetricLabel('daily')],
+      };
+    """)
+    ok(r50["keys"] == ["stage", "asset", "tower", "daily"] and r50["entryFields"] == [64, 1250000, "S"], "랭킹 4종 키 · 탑 최고 층/일일 보스 피해 등록 항목", json.dumps(r50["entryFields"]))
+    ok(r50["towerTop"][0][0] == "u2" and r50["towerTop"][0][2] == "🗼120층" and r50["towerTop"][2][2] == "—", "도전의 탑 랭킹 정렬 · 옛 기록 '—' 처리", json.dumps(r50["towerTop"], ensure_ascii=False))
+    ok(r50["dailyTop"][0][0] == "u1" and r50["dailyTop"][0][2].startswith("🌟") and r50["dailyTop"][2][2] == "—", "일일 보스 랭킹 정렬 · 옛 기록 '—' 처리", json.dumps(r50["dailyTop"], ensure_ascii=False))
+    ok(r50["labels"] == ["도전의 탑", "일일 보스"], "랭킹 지표 한글 라벨(도전의 탑 · 일일 보스)")
+
+    ui50 = js(ctx2, """
+      const s = defaultState(0); const buffs = computeBuffs(s, 0);
+      const cloud = { status: 'guest', rank: { key: 'tower', rows: [{ rank: 1, uid: 'a', name: '탑왕', level: 80, stage: 50, towerBest: 99, hasTower: true }], count: 1, at: 5 } };
+      const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(1), boss: null, player: { hp: 100 } }, app: { buffs, cloud }, logs: [], tab: 'settings', el: {}, install: { hidden: true } };
+      const h = __tpls.settings(ui);
+      return {
+        has4Tabs: ['stage', 'asset', 'tower', 'daily'].every((k) => h.includes('data-action="cloud-rank" data-value="' + k + '"')),
+        hasTowerVal: h.includes('🗼99층'),
+        bad: /undefined|NaN|\\[object Object\\]/.test(h),
+      };
+    """)
+    ok(ui50["has4Tabs"] and ui50["hasTowerVal"] and not ui50["bad"], "랭킹 카드 — 4종 탭(스테이지/총자산/도전의 탑/일일 보스) 렌더", json.dumps(ui50))
+    sw50 = read("sw.js")
+    ok(all(os.path.exists(os.path.join(ROOT, f)) and f"'./{f}'" in sw50 for f in ("src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js")), "UI 모듈 분리(ui-fmt/ui-cloud/ui-gear) 파일 존재 · sw.js 프리캐시 포함")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:
