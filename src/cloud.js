@@ -261,6 +261,7 @@ export function rankEntryOf(state, opts = {}) {
 export function normalizeRankRow(entry, uid) {
   const e = entry && typeof entry === 'object' ? entry : {};
   const stage = Math.max(0, int(e.stage, int(e.peakStage, 0)));
+  const hasAsset = typeof e.totalAsset === 'number' || typeof e.asset === 'number';
   return {
     uid: String(e.uid || uid || ''),
     name: sanitizeNick(e.name || e.nick, String(e.uid || uid || '')),
@@ -271,6 +272,7 @@ export function normalizeRankRow(entry, uid) {
     cities: int(e.cities),
     rebirth: int(e.rebirth),
     time: int(e.time, int(e.ts)),
+    hasAsset,
   };
 }
 
@@ -323,7 +325,7 @@ export function formatAsset(n) {
 /** 목록 값 표기 — 최고 스테이지 S24 · 총자산 💰1.2조 */
 export function rankValueText(key, row) {
   const r = row && typeof row === 'object' ? row : {};
-  if (key === 'asset') return `💰${formatAsset(int(r.totalAsset))}`;
+  if (key === 'asset') return r.hasAsset === false ? '—' : `💰${formatAsset(int(r.totalAsset))}`;
   return `S${Math.max(0, int(r.stage))}`;
 }
 

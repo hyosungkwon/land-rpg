@@ -4213,8 +4213,9 @@ def main():
     ok(cl_d["assetFirst"] == ["b:900", "c:500", "a:200"], "총자산 정렬 — 금액 기준", json.dumps(cl_d["assetFirst"]))
     ok(cl_d["top1"] == "u24" and cl_d["topLast"] == "u5", "25명 중 TOP 20 절단", json.dumps([cl_d["top1"], cl_d["topLast"]]))
     ok(cl_d["me"] == [2, "감마"], "내 순위 조회(동점 포함 전체 기준)", json.dumps(cl_d["me"], ensure_ascii=False))
-    ok(cl_d["old"] == {"uid": "old", "name": "HyosungK", "level": 33, "stage": 17, "gold": 0, "totalAsset": 0, "cities": 0, "rebirth": 0, "time": 1795426582912}, "옛 랭킹 항목 정규화(없는 값은 0)", json.dumps(cl_d["old"], ensure_ascii=False))
+    ok(cl_d["old"] == {"uid": "old", "name": "HyosungK", "level": 33, "stage": 17, "gold": 0, "totalAsset": 0, "cities": 0, "rebirth": 0, "time": 1795426582912, "hasAsset": False}, "옛 랭킹 항목 정규화(없는 값은 0 · 총자산 없음 표시)", json.dumps(cl_d["old"], ensure_ascii=False))
     ok(cl_d["values"] == ["S24", "💰1.20조", "💰5.50억"], "랭킹 값 표기 — S24 · 조/억 축약", json.dumps(cl_d["values"], ensure_ascii=False))
+    ok(js(ctx, "return rankValueText('asset', { totalAsset: 0, hasAsset: false });") == "—", "총자산 기록이 없는 옛 항목은 '—' (0으로 보이지 않게)")
     ok(cl_d["fmt"][:2] == ["1.20조", "5.50억"] and cl_d["fmt"][2].replace(",", "") == "1234", "총자산 포맷 — 조·억·원 단위", json.dumps(cl_d["fmt"], ensure_ascii=False))
 
     # ── 5) 상태 문구 · 오류 문구 · 유틸 ──
