@@ -297,7 +297,7 @@ export function claimAttendance(state, now = Date.now(), rng = Math.random) {
   let acq = null;
   if (slot.rarity) {
     item = randomItemOfRarity(slot.rarity, rng);
-    if (item) acq = acquireGear(state, item.id, { autoEquip: true, now, source: 'attendance' });
+    if (item) acq = acquireGear(state, item.id, { autoEquip: true, now, source: 'attendance', rollAffix: true, rng });
   }
   st.lastDate = info.today;
   st.day = slot.day;
@@ -428,7 +428,7 @@ export function claimWeeklyMilestone(state, idx, now = Date.now(), rng = Math.ra
   let acq = null;
   if (m.rarity) {
     item = randomItemOfRarity(m.rarity, rng);
-    if (item) acq = acquireGear(state, item.id, { autoEquip: true, now, source: 'weekly' });
+    if (item) acq = acquireGear(state, item.id, { autoEquip: true, now, source: 'weekly', rollAffix: true, rng });
   }
   const wb = weeklyBossState(state, now);
   wb.claimed.push(m.idx);

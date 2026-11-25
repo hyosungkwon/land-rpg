@@ -2585,5 +2585,20 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .gear-set-filters { margin-top: 5px; gap: 4px; }
 .chip.gs { padding: 3px 7px; font-size: 10px; }
 
+/* ══════════════ v5.6.0 장비 잠재 접두사 · 재련 ══════════════ */
+.af-tag {
+  display: inline-block; margin-right: 3px; margin-left: 3px; padding: 0 4px; border-radius: 5px;
+  font-size: 9px; font-weight: 800; color: #ffe38a;
+  background: rgba(255, 215, 106, 0.14); border: 1px solid rgba(255, 215, 106, 0.36);
+  vertical-align: middle; line-height: 1.4;
+}
+.af-box {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  margin-bottom: 9px; padding: 6px 9px; border-radius: 8px;
+  background: rgba(255, 215, 106, 0.08); border: 1px solid rgba(255, 215, 106, 0.32);
+  font-size: 11px;
+}
+.af-box b { color: var(--gold); }
+
 
 

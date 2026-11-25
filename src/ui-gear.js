@@ -3,10 +3,10 @@
 import { EQUIP, EQUIP_SLOTS, RARITIES, RARITY_INDEX, GACHA, gachaCost } from './data.js';
 import {
   GEAR_ITEMS, GEAR_FILTERS, gearIcon, gearList, gearOwned, gearOptionList,
-  equippedItem, equippedRarity, gearCollection, gearSlotCounts, dismantleValue,
+  equippedItem, equippedRow, equippedRarity, gearCollection, gearSlotCounts, dismantleValue,
   dismantleTargets, AUTO_DISMANTLE_MODES, autoDismantleLabel, normalizeAutoMode,
   GEAR_PRESET_NAMES, GEAR_AWAKEN_BONUS_LV, awakenLevel, gearPresetSummary,
-  GEAR_SETS, GEAR_SET_FILTERS, gearSetOf, gearSetStatus, gearSetBonusText,
+  GEAR_SETS, GEAR_SET_FILTERS, gearSetOf, gearSetStatus, gearSetBonusText, gearAffixInfo,
 } from './gear.js';
 import { esc, fmt } from './ui-fmt.js';
 
@@ -20,6 +20,11 @@ export const rarityName = (id) => (RARITIES[RARITY_INDEX[id] || 0] || RARITIES[0
 const setBadge = (item) => {
   const st = gearSetOf(item);
   return st ? `<span class="gset-tag" style="--sc:${st.color}">${st.icon}${st.name}</span>` : '';
+};
+
+const affixBadge = (affix) => {
+  const af = gearAffixInfo(affix);
+  return af ? `<span class="af-tag">✨${esc(af.name)}</span>` : '';
 };
 
 const slotUid = (s, slot) => {
@@ -45,18 +50,20 @@ export function gearSlotCards(s) {
 
   const rows = EQUIP_SLOTS.map((slot) => {
     const def = EQUIP[slot];
+    const row = equippedRow(s, slot);
     const it = equippedItem(s, slot);
     const rid = equippedRarity(s, slot);
     const lv = s.equip[slot];
     const awk = awakenLevel(s, slot);
     const uid = slotUid(s, slot);
+    const af = row && row.affix ? gearAffixInfo(row.affix) : null;
     const idAttr = it && uid ? ` data-action="gear-item" data-value="${uid}"` : ' disabled';
     return `
       <button class="gslot${it ? ' on' : ' empty'}" type="button"${idAttr}>
         <span class="gs-ico">${it ? gearIcon(it, 40) : `<b class="gs-none">${def.icon}</b>`}</span>
         <span class="gs-mid">
-          <span class="gs-name">${it ? esc(it.name) : `${def.name} 없음`}${rarityBadge(rid)}${it ? setBadge(it) : ''}${awk > 0 ? `<span class="awk-badge">🔥★${awk}</span>` : ''}</span>
-          <span class="gs-sub">${def.icon} ${def.name} <b class="lv">+${lv}</b>${awk > 0 ? ` · 각성 +${awk * GEAR_AWAKEN_BONUS_LV}강` : ''}${it ? '' : ' · 뽑기·사냥으로 획득'}</span>
+          <span class="gs-name">${it ? esc(it.name) : `${def.name} 없음`}${rarityBadge(rid)}${it ? setBadge(it) : ''}${af ? affixBadge(row.affix) : ''}${awk > 0 ? `<span class="awk-badge">🔥★${awk}</span>` : ''}</span>
+          <span class="gs-sub">${def.icon} ${def.name} <b class="lv">+${lv}</b>${awk > 0 ? ` · 각성 +${awk * GEAR_AWAKEN_BONUS_LV}강` : ''}${af ? ` · ${esc(af.text)}` : ''}${it ? '' : ' · 뽑기·사냥으로 획득'}</span>
           <span class="gs-opts">${it ? optChips(it, 2) : '<span class="opt dim">장착하면 고유 옵션이 붙습니다</span>'}</span>
         </span>
       </button>`;
@@ -142,7 +149,7 @@ export function gearInventory(s) {
           <span class="iv-ico">${gearIcon(row.def, 38)}</span>
           <span class="iv-tag">${row.equipped ? '<i class="iv-eq">장착중</i>' : rarityBadge(row.def.rarity)}</span>
         </span>
-        <span class="iv-name">${esc(row.def.name)}</span>
+        <span class="iv-name">${row.affix ? affixBadge(row.affix) : ''}${esc(row.def.name)}</span>
         <span class="iv-rar">${rarityBadge(row.def.rarity)}${setBadge(row.def)}<b class="iv-slot">${EQUIP[row.def.slot].icon}${EQUIP[row.def.slot].name}</b></span>
         <span class="iv-opts">${optChips(row.def, 2)}</span>
       </button>`).join('')

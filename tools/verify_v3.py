@@ -187,8 +187,8 @@ def main():
     ok("startCloudResume" in app_src and "if (!this.cloudEnabled() && !this.cloud.hasPendingRedirect()) return;" in app_src, "세션 복원도 클라우드를 켓을 때만")
     ok("setInterval(() => this.cloudTick(), 15000)" in app_src, "주기 저장은 조건 검사형 타이머")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v5.5.0" in read("sw.js"), "SW 캐시 버전 v5.5.0")
-    ok("APP_VERSION = '5.5.0'" in read("src/data.js"), "앱 버전 v5.5.0")
+    ok("land-rpg-v5.6.0" in read("sw.js"), "SW 캐시 버전 v5.6.0")
+    ok("APP_VERSION = '5.6.0'" in read("src/data.js"), "앱 버전 v5.6.0")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
     ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
@@ -2115,8 +2115,8 @@ def main():
         optMeta: Object.keys(GEAR_OPTS).every(k => !!GEAR_OPTS[k].name && !!GEAR_OPTS[k].icon),
       };
     """)
-    ok(30 <= cat["total"] <= 40, "장비 카탈로그 25~35종 이상(부위별 5~7종)", f"{cat['total']}종")
-    ok(all(5 <= cat["perSlot"][sl]["n"] <= 7 for sl in cat["perSlot"]), "부위별 5~7종", json.dumps({k: v["n"] for k, v in cat["perSlot"].items()}))
+    ok(cat["total"] >= 55, "장비 카탈로그 55종 이상(부위별 11종)", f"{cat['total']}종")
+    ok(all(cat["perSlot"][sl]["n"] >= 11 for sl in cat["perSlot"]), "부위별 11종 이상", json.dumps({k: v["n"] for k, v in cat["perSlot"].items()}))
     ok(len(set(cat["ids"])) == cat["total"], "아이템 id 중복 없음", str(len(set(cat["ids"]))))
     ok(len(set(cat["names"])) == cat["total"], "아이템 이름 모두 다름", str(len(set(cat["names"]))))
     ok(len(set(cat["icons"])) == cat["total"], "아이템마다 다른 모양(SVG) — 35종 모두 구분됨", str(len(set(cat["icons"]))))
@@ -2937,7 +2937,7 @@ def main():
     ok(all(x in asrc42 for x in ["enterTower", "openTowerFloors", "evolvePet", "showTowerResult", "showTowerFloors"]), "app.js — 탑 입장/층 선택/결과·펫 진화 액션", "")
     ok('assets/sprites/pet/${info.sprite}.png' in asrc42, "진화 결과 모달 — 진화 스프라이트 경로(.png)", "")
     ok(all(x in css42 for x in [".tower-card", ".tower-tiles", ".tower-floor", ".pet-evo", ".mini.evo"]), "style.css — v4.2 스타일", "")
-    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v5.5.0" in read("sw.js") and "APP_VERSION = '5.5.0'" in read("src/data.js"), "버전·서비스워커(5.5.0 · cloud 프리캐시)", "")
+    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v5.6.0" in read("sw.js") and "APP_VERSION = '5.6.0'" in read("src/data.js"), "버전·서비스워커(5.6.0 · cloud 프리캐시)", "")
     pkg_ok = (not os.path.exists(os.path.join(ROOT, "package.json"))) or ('"version": "' in read("package.json"))
     ok(pkg_ok, "package.json 버전 확인(없으면 클론 환경으로 통과)", "")
     evo_files = [f"assets/sprites/pet/pet_{n}_{s}.png" for n in ("wolf", "fox", "owl", "dragon") for s in ("awaken", "divine")]
@@ -3088,7 +3088,7 @@ def main():
 
     css43 = read("style.css")
     ok(all(x in css43 for x in [".land-sum", ".ls-v", ".ls-claim", ".news-slim", ".ns-title", ".land-subbar", ".land-rec", ".buff-now"]), "style.css — v4.3 부동산 요약 바·압축 뉴스·서브 탭", "")
-    ok("land-rpg-v5.5.0" in read("sw.js") and "'5.5.0'" in read("src/data.js"), "버전·캐시 v5.5.0", "")
+    ok("land-rpg-v5.6.0" in read("sw.js") and "'5.6.0'" in read("src/data.js"), "버전·캐시 v5.6.0", "")
 
     section("[20] ⚔️ v4.4 S31+ 무한 구간 리밸런싱 · 강화석 대량 교환 · 상위 전직")
 
@@ -3965,7 +3965,7 @@ def main():
     section("[23] ♻️ v4.7 장비 자동분해 · 🐉 상위 전직 궁극기 · 방치 편의")
 
     # ── 1) 버전·정적 배선 ──
-    ok("APP_VERSION = '5.5.0'" in read("src/data.js") and "land-rpg-v5.5.0" in read("sw.js"), "v5.5.0 버전·서비스워커 캐시 갱신", "")
+    ok("APP_VERSION = '5.6.0'" in read("src/data.js") and "land-rpg-v5.6.0" in read("sw.js"), "v5.6.0 버전·서비스워커 캐시 갱신", "")
     idx47 = read("index.html")
     ok(all(f'data-skill="{k}"' in idx47 for k in ["strike", "whirl", "berserk", "heal"]), "기존 4개 퀵슬롯 레이아웃 유지", "")
     ok('data-skill="ultimate"' in idx47 and 'class="q ult hidden"' in idx47, "다섯 번째 퀵슬롯(궁극기) — 해금 전 숨김", "")
@@ -4207,7 +4207,7 @@ def main():
     ok(cl_a["clean"][0] == "효성 왕" and cl_a["clean"][3] == 12 and not cl_a["html"], "닉네임 정리 — 공백 접기·12자 제한·HTML 문자 제거", json.dumps(cl_a["clean"], ensure_ascii=False))
     ok(cl_a["clean"][1] == "용사" and cl_a["clean"][2] == "용사", "1자·빈 닉네임은 기본 이름으로 대체", json.dumps(cl_a["clean"][:3], ensure_ascii=False))
     ok(cl_a["sum"] == [42, 21, 2, 5000, True], "세이브 요약 — 역대 최고 스테이지·보유 지역·총자산", json.dumps(cl_a["sum"]))
-    ok(cl_a["doc"][:6] == ["land_rpg_save", "5.5.0", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
+    ok(cl_a["doc"][:6] == ["land_rpg_save", "5.6.0", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
     ok(0 < cl_a["size"] < 200000, "클라우드 문서 크기 RTDB 한도 안(200KB 미만)", str(cl_a["size"]))
 
     # ── 2) 문서 해석(신형·v2 옛 페이로드·손상) ──
@@ -4311,7 +4311,7 @@ def main():
     ok(cl_e["errs"][0].startswith("이 주소가") and "응답이 없습니다" in cl_e["errs"][1] and cl_e["errs"][3].startswith("권한") and "시간 초과" in cl_e["errs"][4] and "라이브러리" in cl_e["errs"][5], "오류 문구 — 승인 도메인/시간 초과/권한/라이브러리", json.dumps(cl_e["errs"], ensure_ascii=False))
     ok(cl_e["strip"] == '{"a":1,"d":1,"e":{"x":2},"f":[1,3]}', "RTDB 전송 전 undefined·NaN 제거", cl_e["strip"])
     ok(cl_e["metrics"] == ["최고 스테이지", "총자산"], "랭킹 지표 이름", json.dumps(cl_e["metrics"], ensure_ascii=False))
-    ok(cl_e["entry"] == ["용사", 9, 12, 777, "5.5.0", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
+    ok(cl_e["entry"] == ["용사", 9, 12, 777, "5.6.0", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
 
     # ── 6) 세이브 호환 · 마이그레이션 ──
     mig48 = js(ctx, """
@@ -4684,7 +4684,7 @@ def main():
     ok(q49["qCount"] == 30 and q49["aCount"] == 36, "v4.9.0 미션 30단계 · 업적 36종 확장", json.dumps({"q": q49["qCount"], "a": q49["aCount"]}))
     ok(q49["m17Ok"] and q49["m17Pts"] == 3 and q49["ptsAfterM17"] == 3, "후반 미션 초월석(✨) 보상 지급", json.dumps({"pts": q49["ptsAfterM17"]}))
     ok(q49["newReady"], "후반 업적(S100·용신·환생·탑100·일일S·신수·경매·장비35종) 판정 정확")
-    ok(q49["gearItems"] == {"seen": 35, "total": 35} and q49["petEvos"] == {"seen": 5, "total": 12} and q49["detailGearLen"] == 35 and q49["detailPetStages"] == 3, "도감 v2 — 장비 35종 · 펫 진화 12단계 집계", json.dumps({"g": q49["gearItems"], "p": q49["petEvos"]}))
+    ok(q49["gearItems"] == {"seen": 55, "total": 55} and q49["petEvos"] == {"seen": 5, "total": 12} and q49["detailGearLen"] == 55 and q49["detailPetStages"] == 3, "도감 v2 — 장비 55종 · 펫 진화 12단계 집계", json.dumps({"g": q49["gearItems"], "p": q49["petEvos"]}))
     ok(q49["dqReadyCount"] == 5 and q49["claimedOk"] and q49["dupFail"] and q49["bonusOk"] and q49["bonusDup"], "일일 퀘스트 5종 수령 · 중복 거부 · 올클리어 보너스(💎60·✨3P)", json.dumps({"r": q49["dqReadyCount"], "b": q49["bonusOk"]}))
     ok(q49["resetCleared"] and len(q49["oldDqDate"]) == 10, "일일 퀘스트 KST 자정 리셋 · 구버전 세이브 마이그레이션")
 
@@ -5071,6 +5071,34 @@ def main():
     ok(ui55["enhOk"] and ui55["bagOk"] and ui55["gacOk"] and not ui55["bad"], "장비 3서브 탭(강화·장착 / 인벤토리 / 뽑기) 분리 렌더", json.dumps(ui55))
     ok(ui55["dragOnlyLen"] == 1 and ui55["dragOnlyId"] == "w_dragon" and ui55["gb"]["enhance"] == 1 and ui55["chalOk"], "인벤토리 테마 세트 필터 · 장비 알림 배지 · 사냥 도전 영역 필터", json.dumps(ui55))
     ok('id="stageSpeedBtn"' in idx55 and 'id="gearTabDot"' in idx55, "index.html 캔버스 배속 칩 · 장비 탭 알림 점 추가")
+
+    # ── 20) v5.6.0 장비 55종 대확장 · 잠재 접두사 & 재련 ──
+    section("v5.6.0 장비 55종 대확장 · 잠재 접두사 · 재련")
+    g56 = js(ctx, """
+      const total = GEAR_ITEMS.length;
+      const legendsBySet = {};
+      for (const st of GEAR_SETS) legendsBySet[st.id] = GEAR_ITEMS.filter((it) => it.rarity === 'legend' && it.set === st.id).length;
+      const iconsUnique = new Set(GEAR_ITEMS.map((it) => gearIcon(it))).size;
+      const s = defaultState(1000); s.level = 30; s.shards = 200;
+      const acq = acquireGear(s, 'w_stormbow', { autoEquip: true, rollAffix: true, rng: () => 0.0 });
+      const row = equippedRow(s, 'weapon');
+      const af1 = gearAffixInfo(row.affix);
+      const mods1 = gearMods(s);
+      const rf = reforgeGear(s, row.uid, () => 0.5);
+      const af2 = gearAffixInfo(row.affix);
+      const norm = normalizeState({ gear: { items: [{ uid: 1, id: 'w_scythe', affix: { id: 'fierce', val: 999 } }], equipped: { weapon: 1 } } }, 0);
+      return {
+        total,
+        iconsUnique,
+        allSetsHaveLegend: Object.values(legendsBySet).every((n) => n >= 2),
+        legendsBySet,
+        af1Ok: acq.ok && !!af1 && af1.id === 'fierce' && mods1.atkPct >= af1.val,
+        rfOk: rf.ok && !!af2 && af2.id !== af1.id && s.shards === 200 - gearReforgeCost('w_stormbow'),
+        normClamp: norm.gear.items[0].affix.val,
+      };
+    """)
+    ok(g56["total"] == 55 and g56["iconsUnique"] == 55 and g56["allSetsHaveLegend"], "장비 55종(전부 고유 SVG) · 5종 테마 모두 전설 2부위 이상 보유", json.dumps(g56))
+    ok(g56["af1Ok"] and g56["rfOk"] and g56["normClamp"] == 13, "잠재 접두사 롤·gearMods 반영·재련 리롤(강화석 차감)·저장 정규화", json.dumps(g56))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

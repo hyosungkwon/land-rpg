@@ -203,6 +203,56 @@ const FORMS = {
     <path d="M11.4 26.4c0-2.2 2-3.6 4.6-3.6s4.6 1.4 4.6 3.6Z" fill="${a}"/>
     <circle cx="16" cy="8.6" r="2" fill="${g}" opacity=".9"/>
     <path d="M8.4 5.4c-1.4 3 .2 5.4 2.6 6.2M23.6 5.4c1.4 3-.2 5.4-2.6 6.2" stroke="${a}" stroke-width="1.2" fill="none"/>`,
+  /* v5.6 신규 SVG 모양 10종: 카타나 · 대낫 · 신궁 · 전투망치 · 로브 · 이지스 · 서클릿 · 바이저 · 문장반지 · 성유물 */
+  katana: (c, a, g) => `
+    <path d="M22.8 2.4C19.6 7.4 17 13 15 19.6l-2.6-.8C14.6 12.2 17.6 6.8 21 2.2Z" fill="${c}"/>
+    <path d="M21.8 3.2c-2.6 4.4-4.8 9.2-6.6 15" stroke="#ffffff" stroke-opacity=".55" stroke-width="1" fill="none"/>
+    <rect x="9.8" y="19.2" width="7.4" height="2.4" rx="1.2" fill="${a}" transform="rotate(14 13.5 20.4)"/>
+    <path d="M12.6 21.4 10.6 28.6" stroke="#4a3a2a" stroke-width="2.6" stroke-linecap="round"/>
+    <circle cx="10.2" cy="29.4" r="1.4" fill="${g}"/>`,
+  scythe: (c, a, g) => `
+    <path d="M15 4.4 17.4 29" stroke="${a}" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M15.4 5.2C22 3.8 27 6.8 28.4 12.6c-4-2.4-8.4-2.8-13-1.4Z" fill="${c}"/>
+    <path d="M16.2 6.8c4.8-.6 8.4 1 10.6 4" stroke="#ffffff" stroke-opacity=".5" stroke-width="1" fill="none"/>
+    <circle cx="15.2" cy="6.8" r="1.8" fill="${g}"/>`,
+  bow: (c, a, g) => `
+    <path d="M11 4.4C22.4 7.6 22.4 24.4 11 27.6" fill="none" stroke="${c}" stroke-width="3.2" stroke-linecap="round"/>
+    <path d="M11 5.2v21.6" stroke="${a}" stroke-width="1.2" opacity=".85"/>
+    <path d="M7.6 16h16.6" stroke="${g}" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M22.6 13.4 26.4 16l-3.8 2.6Z" fill="${g}"/>`,
+  hammer: (c, a, g) => `
+    <rect x="14.6" y="12.4" width="2.8" height="16.6" rx="1.4" fill="${a}"/>
+    <rect x="6.4" y="4.6" width="19.2" height="9" rx="2.2" fill="${c}"/>
+    <rect x="8.6" y="6.2" width="14.8" height="2.2" rx="1" fill="#ffffff" opacity=".4"/>
+    <circle cx="16" cy="9.2" r="2" fill="${g}"/>`,
+  robe: (c, a, g) => `
+    <path d="M11 4.4 16 7.4l5-3 3.4 3.4-2 5.4 2.4 13.6H7.2l2.4-13.6-2-5.4Z" fill="${c}"/>
+    <path d="M16 7.4v19.4" stroke="${a}" stroke-width="2" opacity=".8"/>
+    <path d="M11 4.4 16 11l5-6.6" fill="none" stroke="${a}" stroke-width="1.4"/>
+    <circle cx="16" cy="12.4" r="1.8" fill="${g}"/>`,
+  aegis: (c, a, g) => `
+    <path d="M16 2.8 25 6.4v8.8c0 6.8-5 12-9 14-4-2-9-7.2-9-14V6.4Z" fill="${c}"/>
+    <path d="M16 5.6 22.4 8.2v6.6c0 5-3.4 8.8-6.4 10.4-3-1.6-6.4-5.4-6.4-10.4V8.2Z" fill="none" stroke="${a}" stroke-width="1.6"/>
+    <path d="M16 7.6v15.4M10.8 14h10.4" stroke="${a}" stroke-width="1.5" opacity=".8"/>
+    <circle cx="16" cy="14" r="2.3" fill="${g}"/>`,
+  circlet: (c, a, g) => `
+    <path d="M6.4 19.6c0-5.4 4.2-9.6 9.6-9.6s9.6 4.2 9.6 9.6" fill="none" stroke="${c}" stroke-width="3.2" stroke-linecap="round"/>
+    <path d="M16 5.2 19 10.6 16 13.8 13 10.6Z" fill="${g}"/>
+    <circle cx="10.2" cy="13.4" r="1.4" fill="${a}"/>
+    <circle cx="21.8" cy="13.4" r="1.4" fill="${a}"/>`,
+  visor: (c, a, g) => `
+    <path d="M8.6 20.6V13c0-4.4 3.4-7.8 7.4-7.8s7.4 3.4 7.4 7.8v7.6l-7.4 3.8Z" fill="${c}"/>
+    <path d="M10.6 13.6h10.8l-1.2 3.2h-8.4Z" fill="#10161f" opacity=".85"/>
+    <path d="M16 5.2v8.4" stroke="${a}" stroke-width="1.8"/>
+    <circle cx="16" cy="8.4" r="1.6" fill="${g}"/>`,
+  signet: (c, a, g) => `
+    <ellipse cx="16" cy="19.6" rx="7.2" ry="7" fill="none" stroke="${c}" stroke-width="3.4"/>
+    <polygon points="16,5 21.4,9.6 19.6,15.6 12.4,15.6 10.6,9.6" fill="${a}"/>
+    <circle cx="16" cy="10.6" r="2.2" fill="${g}"/>`,
+  relic: (c, a, g) => `
+    <path d="M16 3.2 24.4 11.6 16 28 7.6 11.6Z" fill="${c}"/>
+    <path d="M16 6.4 21.4 11.8 16 23.4 10.6 11.8Z" fill="none" stroke="${a}" stroke-width="1.5"/>
+    <circle cx="16" cy="13" r="2.6" fill="${g}"/>`,
 };
 
 /** 아이템 아이콘 SVG 문자열 */
@@ -231,6 +281,11 @@ export const GEAR_ITEMS = [
   { id: 'w_frost', slot: 'weapon', rarity: 'hero', set: 'abyss', name: '빙결검', form: 'crystal', tint: '#8fe3ff', accent: '#3f8fc4', gem: '#e6faff', opts: { atkSpd: 9, critPct: 6 }, desc: '얼음 결정이 빠르게 파고든다', fx: { core: '#f2fdff', mid: '#8fe3ff', glow: '#2f8fd8' } },
   { id: 'w_thunder', slot: 'weapon', rarity: 'hero', set: 'storm', name: '천둥창', form: 'spear', tint: '#ffe36a', accent: '#8a6b1f', gem: '#fff6c4', opts: { atkSpd: 13, critDmg: 14 }, desc: '번개처럼 연달아 찌른다', fx: { core: '#fffbe0', mid: '#ffe36a', glow: '#c79a1a' } },
   { id: 'w_dragon', slot: 'weapon', rarity: 'legend', set: 'dragon', name: '드래곤슬레이어', form: 'fang', tint: '#ff5a3d', accent: '#ffcf5c', gem: '#ffe9a8', opts: { atkPct: 16, bossDmg: 22, lifesteal: 6, whirlDmg: 12 }, desc: '용을 베어 그 힘을 빨아들인다', fx: { core: '#fff2c4', mid: '#ff9a3d', glow: '#ff2f1f' } },
+  /* v5.6 신규 무기 4종 */
+  { id: 'w_katana', slot: 'weapon', rarity: 'rare', set: 'storm', name: '질풍 카타나', form: 'katana', tint: '#b7f0ff', accent: '#3d7fa8', gem: '#ffe36a', opts: { atkSpd: 8, critPct: 5 }, desc: '바람을 가르는 얇은 도신', fx: { core: '#f0fdff', mid: '#7fd3ff', glow: '#2a9df4' } },
+  { id: 'w_hammer', slot: 'weapon', rarity: 'hero', set: 'guardian', name: '타이탄 해머', form: 'hammer', tint: '#d8c592', accent: '#5f6f85', gem: '#7cc4ff', opts: { hpPct: 12, dmgRed: 6, atkPct: 9 }, desc: '묵직한 일격으로 전선을 지킨다', fx: { core: '#fff8dc', mid: '#7cc4ff', glow: '#3b82f6' } },
+  { id: 'w_stormbow', slot: 'weapon', rarity: 'legend', set: 'storm', name: '뇌전 신궁', form: 'bow', tint: '#ffe36a', accent: '#5ecbff', gem: '#ffffff', opts: { atkSpd: 18, critPct: 10, critDmg: 22 }, desc: '번개 화살이 쉴 새 없이 쏟아진다', fx: { core: '#ffffff', mid: '#ffe36a', glow: '#38bdf8' } },
+  { id: 'w_scythe', slot: 'weapon', rarity: 'legend', set: 'abyss', name: '심연의 대낫', form: 'scythe', tint: '#9c78ff', accent: '#442b88', gem: '#ff6ba8', opts: { atkPct: 18, lifesteal: 8, whirlDmg: 22 }, desc: '어둠을 베어 생명력을 거둬들인다', fx: { core: '#f5e8ff', mid: '#b98bff', glow: '#6d28d9' } },
 
   /* 🛡️ 갑옷 */
   { id: 'a_leather', slot: 'armor', rarity: 'common', set: 'storm', name: '가죽갑옷', form: 'vest', tint: '#a9743f', accent: '#6b4a2a', gem: '#ffcf5c', opts: { hpPct: 3 }, desc: '가볍게 몸을 감싸는 갑옷' },
@@ -240,6 +295,11 @@ export const GEAR_ITEMS = [
   { id: 'a_scale', slot: 'armor', rarity: 'hero', set: 'dragon', name: '용비늘갑옷', form: 'scale', tint: '#4fb68a', accent: '#1f7a58', gem: '#b6ffd9', opts: { dmgRed: 8, hpPct: 11, regen: 2 }, desc: '비늘이 스스로 상처를 덮는다' },
   { id: 'a_holy', slot: 'armor', rarity: 'hero', set: 'fortune', name: '성기사의 성갑', form: 'plate', tint: '#e8eef6', accent: '#c8a54a', gem: '#fff2c4', opts: { hpPct: 14, regen: 4, dmgRed: 5 }, desc: '빛이 감돌아 상처가 아문다' },
   { id: 'a_abyss', slot: 'armor', rarity: 'legend', set: 'abyss', name: '심연의 망토', form: 'cloak', tint: '#5a3fa8', accent: '#b98bff', gem: '#e6d6ff', opts: { hpPct: 18, dmgRed: 12, lifesteal: 4 }, desc: '심연이 대신 맞아 준다' },
+  /* v5.6 신규 갑옷 4종 */
+  { id: 'a_windmail', slot: 'armor', rarity: 'rare', set: 'storm', name: '질풍 경갑', form: 'vest', tint: '#6fd3ff', accent: '#2a6f9c', gem: '#ffe36a', opts: { atkSpd: 6, hpPct: 7 }, desc: '깃털처럼 가벼운 바람 갑옷' },
+  { id: 'a_goldrobe', slot: 'armor', rarity: 'rare', set: 'fortune', name: '황금 상단 로브', form: 'robe', tint: '#f0c869', accent: '#8a5f14', gem: '#5ee1a3', opts: { goldPct: 10, dropPct: 6 }, desc: '재물을 부르는 황금빛 예복' },
+  { id: 'a_aegis', slot: 'armor', rarity: 'legend', set: 'guardian', name: '이지스 성갑', form: 'aegis', tint: '#8ec8ff', accent: '#ffe36a', gem: '#ffffff', opts: { hpPct: 24, dmgRed: 15, regen: 5, lifesteal: 4 }, desc: '절대 뚫리지 않는 수호신의 방패 갑옷' },
+  { id: 'a_dragonlord', slot: 'armor', rarity: 'legend', set: 'dragon', name: '용왕의 비늘갑옷', form: 'scale', tint: '#e04832', accent: '#ffcf5c', gem: '#fff0b3', opts: { hpPct: 18, bossDmg: 18, atkPct: 10 }, desc: '고대 용왕의 숨결이 서린 비늘갑옷' },
 
   /* 🪖 투구 */
   { id: 'h_cloth', slot: 'helmet', rarity: 'common', set: 'fortune', name: '천 투구', form: 'cap', tint: '#b89560', accent: '#7a5c34', gem: '#ffcf5c', opts: { hpPct: 2 }, desc: '머리를 덮는 두꺼운 천' },
@@ -249,6 +309,11 @@ export const GEAR_ITEMS = [
   { id: 'h_crown', slot: 'helmet', rarity: 'hero', set: 'fortune', name: '왕관', form: 'crown', tint: '#ffcf5c', accent: '#b8860b', gem: '#ff7a3d', opts: { goldPct: 10, hpPct: 8 }, desc: '주변의 재물이 모여든다' },
   { id: 'h_dragon', slot: 'helmet', rarity: 'hero', set: 'dragon', name: '용의 투구', form: 'horned', tint: '#d94f3d', accent: '#7a2118', gem: '#ffe9a8', opts: { dmgRed: 7, hpPct: 10 }, desc: '용의 두개골을 깎아 만든 투구' },
   { id: 'h_abyss', slot: 'helmet', rarity: 'legend', set: 'abyss', name: '심연의 왕관', form: 'crown', tint: '#6f4fd8', accent: '#b98bff', gem: '#e6d6ff', opts: { critPct: 8, dmgRed: 10, regen: 3 }, desc: '어둠이 급소를 가려 준다' },
+  /* v5.6 신규 투구 4종 */
+  { id: 'h_visor', slot: 'helmet', rarity: 'rare', set: 'dragon', name: '용기사 바이저', form: 'visor', tint: '#d96f4a', accent: '#7a2c18', gem: '#ffd166', opts: { bossDmg: 8, hpPct: 6 }, desc: '보스의 약점을 포착하는 시야' },
+  { id: 'h_stormcirc', slot: 'helmet', rarity: 'hero', set: 'storm', name: '폭풍의 서클릿', form: 'circlet', tint: '#9fe0ff', accent: '#ffe36a', gem: '#ffffff', opts: { atkSpd: 10, critDmg: 14 }, desc: '전광석화처럼 판단을 가속한다' },
+  { id: 'h_paladin', slot: 'helmet', rarity: 'legend', set: 'guardian', name: '수호신의 투구', form: 'visor', tint: '#d8e8ff', accent: '#5a9be0', gem: '#ffe36a', opts: { hpPct: 20, dmgRed: 12, regen: 4, critPct: 6 }, desc: '성스러운 빛으로 치명상을 막는다' },
+  { id: 'h_midas', slot: 'helmet', rarity: 'legend', set: 'fortune', name: '미다스의 황금관', form: 'crown', tint: '#ffe066', accent: '#d98218', gem: '#5ee1a3', opts: { goldPct: 24, dropPct: 16, critPct: 8 }, desc: '손끝에 닿는 전리품을 황금으로 바꾼다' },
 
   /* 💍 반지 */
   { id: 'r_copper', slot: 'ring', rarity: 'common', set: 'guardian', name: '구리 반지', form: 'band', tint: '#c08457', accent: '#8a5a34', gem: '#ffcf5c', opts: { critPct: 2 }, desc: '손끝이 조금 가벼워진다' },
@@ -258,6 +323,11 @@ export const GEAR_ITEMS = [
   { id: 'r_storm', slot: 'ring', rarity: 'hero', set: 'storm', name: '폭풍의 인장', form: 'gem', tint: '#7aa8d8', accent: '#3f6d9c', gem: '#9fe0ff', opts: { atkSpd: 12, critPct: 6 }, desc: '손이 폭풍처럼 빨라진다' },
   { id: 'r_sage', slot: 'ring', rarity: 'hero', set: 'abyss', name: '현자의 반지', form: 'seal', tint: '#8f7fd8', accent: '#5a4aa8', gem: '#e6d6ff', opts: { lifesteal: 5, regen: 4 }, desc: '체력을 되찾으며 끈질기게 버틴다' },
   { id: 'r_eye', slot: 'ring', rarity: 'legend', set: 'dragon', name: '드래곤의 눈', form: 'gem', tint: '#ffcf5c', accent: '#b8860b', gem: '#ff7a3d', opts: { critPct: 12, critDmg: 25, lifesteal: 5 }, desc: '용의 눈이 급소를 꿰뚫는다' },
+  /* v5.6 신규 반지 4종 */
+  { id: 'r_guard', slot: 'ring', rarity: 'rare', set: 'guardian', name: '철벽의 인장', form: 'signet', tint: '#95b8d8', accent: '#4a6b8a', gem: '#bfeaff', opts: { dmgRed: 5, hpPct: 8 }, desc: '단단한 방어 문장이 새겨진 반지' },
+  { id: 'r_fortune', slot: 'ring', rarity: 'hero', set: 'fortune', name: '황금 상인의 반지', form: 'signet', tint: '#ffd76a', accent: '#9c6f18', gem: '#5ee1a3', opts: { goldPct: 14, dropPct: 10 }, desc: '거상의 행운이 깃든 인장 반지' },
+  { id: 'r_tempest', slot: 'ring', rarity: 'legend', set: 'storm', name: '태풍의 고리', form: 'gem', tint: '#6fd3ff', accent: '#ffe36a', gem: '#ffffff', opts: { atkSpd: 16, critPct: 12, critDmg: 18 }, desc: '손끝에서 태풍이 휘몰아친다' },
+  { id: 'r_titan', slot: 'ring', rarity: 'legend', set: 'guardian', name: '불멸의 수호링', form: 'signet', tint: '#c5deff', accent: '#3d7cc4', gem: '#ffd76a', opts: { hpPct: 18, dmgRed: 10, regen: 5, lifesteal: 4 }, desc: '거인의 불굴의 생명력이 깃든 반지' },
 
   /* 🧿 부적 */
   { id: 'm_wood', slot: 'amulet', rarity: 'common', set: 'guardian', name: '나무 부적', form: 'talisman', tint: '#c9a878', accent: '#8a5a34', gem: '#ffcf5c', opts: { goldPct: 3 }, desc: '행운을 빌어 둔 나무 패' },
@@ -267,6 +337,11 @@ export const GEAR_ITEMS = [
   { id: 'm_ember', slot: 'amulet', rarity: 'hero', set: 'dragon', name: '불꽃의 성흔', form: 'pendant', tint: '#ff7a3d', accent: '#b23a12', gem: '#ffe06a', opts: { bossDmg: 12, atkPct: 6 }, desc: '보스에게 불꽃이 옮겨붙는다' },
   { id: 'm_star', slot: 'amulet', rarity: 'hero', set: 'fortune', name: '별의 성표', form: 'star', tint: '#ffe36a', accent: '#b8860b', gem: '#fff6c4', opts: { dropPct: 12, goldPct: 10 }, desc: '별빛이 전리품을 끌어모은다' },
   { id: 'm_grail', slot: 'amulet', rarity: 'legend', set: 'abyss', name: '심연의 성배', form: 'grail', tint: '#6f4fd8', accent: '#b98bff', gem: '#e6d6ff', opts: { goldPct: 20, dropPct: 18, whirlDmg: 20 }, desc: '심연이 부와 회오리를 내린다' },
+  /* v5.6 신규 부적 4종 */
+  { id: 'm_stormrel', slot: 'amulet', rarity: 'rare', set: 'storm', name: '번개 성유물', form: 'relic', tint: '#7fd3ff', accent: '#ffe36a', gem: '#ffffff', opts: { atkSpd: 8, critPct: 5 }, desc: '짜릿한 전류가 흐르는 고대 유물' },
+  { id: 'm_guardrel', slot: 'amulet', rarity: 'hero', set: 'guardian', name: '수호의 성유물', form: 'relic', tint: '#9ecbff', accent: '#4d7cb8', gem: '#ffe9a8', opts: { hpPct: 14, dmgRed: 7, regen: 3 }, desc: '치명타격을 완화하는 수호 유물' },
+  { id: 'm_phoenix', slot: 'amulet', rarity: 'legend', set: 'dragon', name: '불사조의 심장', form: 'star', tint: '#ff6a3d', accent: '#ffd76a', gem: '#fff5cc', opts: { atkPct: 16, bossDmg: 20, regen: 5 }, desc: '타오르는 재생의 불꽃을 품은 보석' },
+  { id: 'm_midas', slot: 'amulet', rarity: 'legend', set: 'fortune', name: '황금신의 성배', form: 'grail', tint: '#ffd76a', accent: '#d98218', gem: '#5ee1a3', opts: { goldPct: 28, dropPct: 22, atkPct: 10, whirlDmg: 15 }, desc: '황금과 전리품이 끝없이 넘쳐흐른다' },
 ];
 
 /* ────────────────────────────── v5.2.0 장비 테마 세트 효과 (5종 · 2/3/4세트) ──────────────────────────────
@@ -317,6 +392,80 @@ export const GEAR_SETS = [
 ];
 export const GEAR_SET_BY_ID = GEAR_SETS.reduce((m, st) => { m[st.id] = st; return m; }, {});
 export const GEAR_SET_FILTERS = ['all', ...GEAR_SETS.map((st) => st.id)];
+
+/* ────────────────────────────── v5.6.0 장비 접두사(잠재 옵션) · 재련 ──────────────────────────────
+ * 드랍/뽑기/보상으로 얻은 장비에 랜덤 잠재 옵션 1줄이 붙으며, 강화석으로 언제든 재련(리롤)할 수 있다.
+ */
+export const GEAR_AFFIXES = [
+  { id: 'fierce', name: '맹렬한', key: 'atkPct', vals: [2, 4, 6, 9, 13] },
+  { id: 'sturdy', name: '견고한', key: 'hpPct', vals: [3, 5, 8, 12, 16] },
+  { id: 'keen', name: '예리한', key: 'critPct', vals: [1, 2, 4, 6, 8] },
+  { id: 'brutal', name: '잔혹한', key: 'critDmg', vals: [4, 7, 11, 16, 22] },
+  { id: 'swift', name: '신속한', key: 'atkSpd', vals: [2, 4, 6, 8, 11] },
+  { id: 'vampiric', name: '흡혈의', key: 'lifesteal', vals: [1, 1, 2, 3, 4] },
+  { id: 'slayer', name: '학살의', key: 'bossDmg', vals: [3, 6, 9, 13, 18] },
+  { id: 'greedy', name: '탐욕의', key: 'goldPct', vals: [4, 7, 11, 16, 22] },
+];
+export const GEAR_AFFIX_BY_ID = GEAR_AFFIXES.reduce((m, a) => { m[a.id] = a; return m; }, {});
+export const GEAR_REFORGE_COST = [5, 10, 20, 35, 55]; // 일반 → 전설 강화석 비용
+
+/** 등급별 잠재 재련 비용(강화석) */
+export function gearReforgeCost(item) {
+  const it = typeof item === 'string' ? gearItem(item) : item;
+  if (!it) return 10;
+  return GEAR_REFORGE_COST[ridx(it.rarity)] || 10;
+}
+
+/** 랜덤 잠재 옵션 생성 (prevId 와 다른 접두사 우선 선택) */
+export function rollGearAffix(rarityId, rng = Math.random, prevId = null) {
+  const idx = ridx(rarityId);
+  const pool = prevId ? GEAR_AFFIXES.filter((a) => a.id !== prevId) : GEAR_AFFIXES;
+  const pick = pool[Math.floor(rng() * pool.length) % pool.length] || GEAR_AFFIXES[0];
+  return { id: pick.id, val: pick.vals[idx] || pick.vals[0] };
+}
+
+/** 저장된 affix 정규화(없거나 손상이면 null) */
+export function normalizeAffix(raw, rarityId) {
+  if (!raw || typeof raw !== 'object') return null;
+  const def = GEAR_AFFIX_BY_ID[raw.id];
+  if (!def) return null;
+  const maxVal = def.vals[Math.min(def.vals.length - 1, ridx(rarityId))] || def.vals[def.vals.length - 1];
+  const val = Math.max(1, Math.min(maxVal, Math.floor(Number(raw.val) || maxVal)));
+  return { id: def.id, val };
+}
+
+/** affix 표시 객체 { id, name, key, val, text } (없으면 null) */
+export function gearAffixInfo(affix) {
+  if (!affix || !GEAR_AFFIX_BY_ID[affix.id]) return null;
+  const def = GEAR_AFFIX_BY_ID[affix.id];
+  return { id: def.id, name: def.name, key: def.key, val: affix.val, text: gearOptText(def.key, affix.val) };
+}
+
+/** 장착 슬롯의 아이템 행({ uid, id, at, affix? }) */
+export function equippedRow(s, slot) {
+  const g = s && s.gear;
+  if (!g || !g.items) return null;
+  const uid = g.equipped && g.equipped[slot];
+  if (!uid) return null;
+  return g.items.find((x) => x.uid === uid) || null;
+}
+
+/** v5.6 잠재 재련 — 강화석을 써서 해당 장비의 접두사(잠재 옵션)를 새로 뽑는다 */
+export function reforgeGear(s, uid, rng = Math.random) {
+  const g = s && s.gear;
+  if (!g || !Array.isArray(g.items)) return { ok: false, reason: '장비 정보가 없습니다.' };
+  const row = g.items.find((x) => x.uid === Math.floor(Number(uid)));
+  const it = row ? gearItem(row.id) : null;
+  if (!it) return { ok: false, reason: '장비를 찾을 수 없습니다.' };
+  const cost = gearReforgeCost(it);
+  if (Math.floor(Number(s.shards) || 0) < cost) {
+    return { ok: false, reason: `강화석이 부족합니다. (필요 💎${cost})`, cost };
+  }
+  s.shards = Math.floor(s.shards - cost);
+  const prevId = row.affix && row.affix.id ? row.affix.id : null;
+  row.affix = rollGearAffix(it.rarity, rng, prevId);
+  return { ok: true, uid: row.uid, item: it, affix: gearAffixInfo(row.affix), spent: cost };
+}
 
 /** 아이템이 속한 테마 세트 정의(없으면 null) */
 export function gearSetOf(item) {
@@ -472,7 +621,10 @@ export function normalizeGear(raw, legacyRarity, now = 0) {
     if (!isFinite(uid) || uid <= 0 || used.has(uid)) uid = used.size + 1;
     while (used.has(uid)) uid += 1;
     used.add(uid);
-    g.items.push({ uid, id: def.id, at: Math.max(0, Number(row.at) || 0) });
+    const cleanRow = { uid, id: def.id, at: Math.max(0, Number(row.at) || 0) };
+    const af = normalizeAffix(row.affix, def.rarity);
+    if (af) cleanRow.affix = af;
+    g.items.push(cleanRow);
     if (g.items.length >= GEAR_MAX_ITEMS) break;
   }
   const eq = src.equipped && typeof src.equipped === 'object' ? src.equipped : {};
@@ -621,7 +773,7 @@ export function shouldAutoEquip(s, item) {
  * 중복(같은 아이템)은 즉시 강화석으로 분해. 상한을 넘으면 가장 약한 미장착 장비부터 정리.
  * @returns {{ ok:boolean, uid?:number, item?:object, equipped?:boolean, duplicate?:boolean, shards?:number, overflow?:number }}
  */
-export function acquireGear(s, itemId, { autoEquip = true, now = 0, source = 'drop' } = {}) {
+export function acquireGear(s, itemId, { autoEquip = true, now = 0, source = 'drop', rollAffix = false, rng = Math.random } = {}) {
   const it = gearItem(itemId);
   if (!s || !it) return { ok: false };
   if (!s.gear) s.gear = newGearState();
@@ -653,7 +805,9 @@ export function acquireGear(s, itemId, { autoEquip = true, now = 0, source = 'dr
 
   const uid = Math.max(1, Math.floor(Number(s.gear.nextUid) || 1));
   s.gear.nextUid = uid + 1;
-  s.gear.items.push({ uid, id: it.id, at: Math.max(0, Number(now) || 0) });
+  const newRow = { uid, id: it.id, at: Math.max(0, Number(now) || 0) };
+  if (rollAffix) newRow.affix = rollGearAffix(it.rarity, rng);
+  s.gear.items.push(newRow);
   if (equip) s.gear.equipped[it.slot] = uid;
 
   let overflow = 0;
@@ -876,18 +1030,23 @@ export function gearSetMods(s) {
   return out;
 }
 
-/** 장착 아이템 옵션 합계 — calcStats 가 읽는다 (v4.10 부위 각성 +8%/Lv · v5.2 테마 세트 효과 포함) */
+/** 장착 아이템 옵션 합계 — calcStats 가 읽는다 (v4.10 부위 각성 +8%/Lv · v5.2 테마 세트 · v5.6 잠재 접두사 포함) */
 export function gearMods(s) {
   const out = {};
   for (const k of GEAR_OPT_KEYS) out[k] = 0;
   if (!s || !s.gear) return out;
   for (const slot of EQUIP_SLOTS) {
-    const it = equippedItem(s, slot);
+    const row = equippedRow(s, slot);
+    const it = row ? gearItem(row.id) : null;
     if (!it || !it.opts) continue;
     const mul = 1 + (awakenLevel(s, slot) * GEAR_AWAKEN_OPT_PCT) / 100;
     for (const k of GEAR_OPT_KEYS) {
       const v = Number(it.opts[k]);
       if (isFinite(v) && v > 0) out[k] += Math.round(v * mul * 10) / 10;
+    }
+    const af = row.affix ? gearAffixInfo(row.affix) : null;
+    if (af && out[af.key] !== undefined && af.val > 0) {
+      out[af.key] += Math.round(af.val * mul * 10) / 10;
     }
   }
   const sm = gearSetMods(s);
@@ -963,6 +1122,6 @@ export function tryGearDrop(s, { isBoss = false, stage = 1, buffs = null, dropMu
   const idx = rollDropRarityIdx(stage, isBoss, rng);
   const it = randomItemOfRarity(RARITIES[idx].id, rng);
   if (!it) return null;
-  const res = acquireGear(s, it.id, { autoEquip: true, now, source: 'drop' });
+  const res = acquireGear(s, it.id, { autoEquip: true, now, source: 'drop', rollAffix: true, rng });
   return res.ok ? { ...res, isBoss } : null;
 }

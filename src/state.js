@@ -636,7 +636,7 @@ export function pullGear(s, times = 1, rng = Math.random, now = nowMs()) {
     const curIdx = RARITY_INDEX[prevRarity] || 0;
     const equip = shouldAutoEquip(s, item);
     const hadItem = !!equippedItemId(s, slot);
-    const acq = acquireGear(s, item.id, { autoEquip: equip, now, source: 'gacha' });
+    const acq = acquireGear(s, item.id, { autoEquip: equip, now, source: 'gacha', rollAffix: true, rng });
     let shards = acq.shards || 0;
     let replaced = null;
     if (equip) {

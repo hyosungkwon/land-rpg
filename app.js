@@ -11,7 +11,7 @@ import {
   equipGear, dismantleGear, bulkDismantle, dismantleTargets, dismantleValue, itemScore, GEAR_OPTS,
   normalizeAutoMode, autoDismantleLabel,
   saveGearPreset as saveGearPresetState, applyGearPreset as applyGearPresetState, awakenSlot as awakenSlotState,
-  gearSetOf, gearSetStatus, gearSetBonusText,
+  gearSetOf, gearSetStatus, gearSetBonusText, gearAffixInfo, gearReforgeCost, reforgeGear as reforgeGearState,
 } from './src/gear.js';
 
 const GEAR_OPT_LABEL = (k) => (GEAR_OPTS[k] ? `${GEAR_OPTS[k].icon} ${GEAR_OPTS[k].name}` : k);
@@ -2709,6 +2709,14 @@ class App {
       stat('범위 베기', d.whirlDmgPct * 100, (v) => `${v.toFixed(1)}%p`),
     ].filter((html) => !html.includes('class="same">—')).join('');
 
+    const rowObj = gearOwned(s).find((x) => x.uid === id);
+    const af = rowObj && rowObj.affix ? gearAffixInfo(rowObj.affix) : null;
+    const rfCost = gearReforgeCost(it);
+    const affixBox = `<div class="cmp-sec">잠재 접두사 <small>강화석 재련으로 변경 가능</small></div>
+      <div class="af-box">${af
+        ? `<b>✨ ${esc(af.name)}</b><span>${esc(af.text)}</span>`
+        : '<span class="dim">잠재 옵션 없음 — 아래 재련 버튼으로 각인할 수 있습니다</span>'}</div>`;
+
     const itSet = gearSetOf(it);
     const setBox = itSet ? (() => {
       const st = gearSetStatus(s).find((x) => x.id === itSet.id);
@@ -2744,6 +2752,7 @@ class App {
       ${isOn ? '<div class="note" style="margin:0 0 8px">지금 장착 중인 장비입니다. 같은 부위의 다른 장비를 눌러 비교해 보세요.</div>' : ''}
       <div class="cmp-sec">고유 옵션 <small>지금 → 이 장비</small></div>
       <div class="cmp-opts">${optRows}</div>
+      ${affixBox}
       ${setBox}
       <div class="cmp-sec">장착하면 달라지는 것</div>
       <div class="cmp-stats">${stats || '<div class="tiny dim">스탯 변화 없음</div>'}</div>`;
@@ -2753,12 +2762,34 @@ class App {
       actions.push({ label: `⚔️ 장착하기`, style: 'primary', onClick: () => this.actions.equipGearItem(id) });
     }
     actions.push({
+      label: `🔮 재련 · 💎${rfCost}`,
+      style: 'ghost',
+      keepOpen: true,
+      onClick: () => this.reforgeGearItem(id),
+    });
+    actions.push({
       label: `♻️ 분해 · 💎${dismantleValue(it)}`,
       style: 'ghost',
       onClick: () => this.confirmDismantleGear(id),
     });
     actions.push({ label: '닫기', style: 'ghost', onClick: () => {} });
     this.ui.modal({ title: '⚔️ 장비 비교', sub: isOn ? '장착 중' : '장착하면 아래 수치만큼 바뀝니다(부위 강화 레벨은 그대로)', body, actions });
+  }
+
+  reforgeGearItem(uid) {
+    this.sound.unlock();
+    const r = reforgeGearState(this.s, uid);
+    if (!r.ok) {
+      this.ui.toast(r.reason || '재련할 수 없습니다', 'red');
+      return;
+    }
+    this.battle.refreshStats();
+    this.save(true);
+    this.sound.levelUp();
+    this.ui.toast(`🔮 잠재 재련 완료 — ✨${r.affix.name} (${r.affix.text})`, 'gold');
+    this.ui.addLog(`🔮 <b>${esc(r.item.name)}</b> 재련 → ✨${esc(r.affix.name)} ${esc(r.affix.text)} (💎${r.spent})`);
+    this.ui.render();
+    this.openGearItem(uid);
   }
 
   confirmDismantleGear(uid) {
