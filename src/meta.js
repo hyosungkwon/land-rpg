@@ -14,6 +14,45 @@ import { rebirthBonus } from './rebirth.js';
  * atkPct / goldPct: 동행 중 영구 패시브(%)
  */
 export const PET_ATTACK_MS = 1500;
+// v5.3.0 보조 펫 슬롯(2마리 동행) · 전투 배속(×1 / ×1.5 / ×2)
+export const SUB_PET_REQ = { rebirth: 1, cities: 20 };
+export const SUB_PET_RATE = 0.5;
+export const SUB_PET_ATTACK_MS = 2100;
+export const BATTLE_SPEEDS = [1, 1.5, 2];
+
+/** 보조 펫 슬롯 해금 여부 — 환생 1회 이상 또는 보유 지역 20곳 이상 */
+export function subPetUnlocked(state) {
+  if (!state || typeof state !== 'object') return false;
+  const rb = Math.max(0, Math.floor(Number(state.rebirth && state.rebirth.count) || 0));
+  if (rb >= SUB_PET_REQ.rebirth) return true;
+  const owned = state.land && state.land.owned && typeof state.land.owned === 'object' ? state.land.owned : {};
+  let cities = 0;
+  for (const k of Object.keys(owned)) if (Math.floor(Number(owned[k]) || 0) > 0) cities += 1;
+  return cities >= SUB_PET_REQ.cities;
+}
+
+/** 전투 배속 해금 여부 — 환생 1회 이상 */
+export function battleSpeedUnlocked(state) {
+  return Math.max(0, Math.floor(Number(state && state.rebirth && state.rebirth.count) || 0)) >= 1;
+}
+
+/** 전투 배속 정규화(1 / 1.5 / 2) */
+export function normalizeBattleSpeed(v) {
+  const n = Number(v);
+  return BATTLE_SPEEDS.includes(n) ? n : 1;
+}
+
+/** 현재 실제 적용되는 전투 배속(미해금이면 항상 1) */
+export function effectiveBattleSpeed(state) {
+  return battleSpeedUnlocked(state) ? normalizeBattleSpeed(state && state.battleSpeed) : 1;
+}
+
+/** 다음 배속 값 순환 (1 → 1.5 → 2 → 1) */
+export function nextBattleSpeed(state) {
+  const cur = normalizeBattleSpeed(state && state.battleSpeed);
+  const idx = BATTLE_SPEEDS.indexOf(cur);
+  return BATTLE_SPEEDS[(idx + 1) % BATTLE_SPEEDS.length];
+}
 
 export const PETS = [
   {
@@ -362,6 +401,16 @@ export function equippedPet(state) {
   return petDef(id);
 }
 
+/** 장착된 보조 펫 정의(미해금·미장착·주펫과 동일하면 null) */
+export function subPet(state) {
+  if (!subPetUnlocked(state)) return null;
+  const ps = state && state.pet;
+  if (!ps || !ps.sub || ps.sub === ps.equipped) return null;
+  const unlocked = Array.isArray(ps.unlocked) ? ps.unlocked : [];
+  if (!unlocked.includes(ps.sub)) return null;
+  return petDef(ps.sub);
+}
+
 /** 펫 해금 조건 충족 여부 — portfolio 는 portfolioOf(state) 결과 */
 export function petSatisfied(def, portfolio) {
   if (!def || !def.unlock || !portfolio) return false;
@@ -424,18 +473,42 @@ export function syncPets(state, now = Date.now()) {
   // 자동 장착 상태에서 더 높은 펫이 새로 열리면 함께 올려준다
   if (!raw.chosen && best && petTier(best) > petTier(equipped)) equipped = best;
 
-  state.pet = { equipped, unlocked, chosen: !!raw.chosen, levels, evo };
+  const sub = raw.sub && have.has(raw.sub) && raw.sub !== equipped ? raw.sub : null;
+  state.pet = { equipped, sub, unlocked, chosen: !!raw.chosen, levels, evo };
   return { newly, equipped, changed: newly.length > 0 || equipped !== beforeEquipped };
 }
 
-/** 직접 장착/교체. 해금된 펫만 가능. */
+/** 직접 장착/교체. 해금된 펫만 가능. 보조 펫과 겹치면 서로 자리를 바꾼다. */
 export function equipPet(state, id) {
   const def = petDef(id);
   if (!def) return { ok: false, reason: '알 수 없는 펫입니다.' };
   const unlocked = (state.pet && state.pet.unlocked) || [];
   if (!unlocked.includes(id)) return { ok: false, reason: '아직 해금되지 않은 펫입니다.' };
-  state.pet = { ...(state.pet || {}), equipped: id, unlocked: unlocked.slice(), chosen: true };
-  return { ok: true, pet: def };
+  const prevEq = state.pet && state.pet.equipped ? state.pet.equipped : null;
+  let nextSub = state.pet && state.pet.sub ? state.pet.sub : null;
+  if (nextSub === id) {
+    nextSub = prevEq && prevEq !== id && unlocked.includes(prevEq) && subPetUnlocked(state) ? prevEq : null;
+  }
+  state.pet = { ...(state.pet || {}), equipped: id, sub: nextSub, unlocked: unlocked.slice(), chosen: true };
+  return { ok: true, pet: def, sub: nextSub };
+}
+
+/** v5.3.0 보조 펫 장착/해제 (id=null|'none' 이면 해제) */
+export function equipSubPet(state, id) {
+  if (!subPetUnlocked(state)) {
+    return { ok: false, reason: `환생 ${SUB_PET_REQ.rebirth}회 또는 보유 지역 ${SUB_PET_REQ.cities}곳 달성 시 해금됩니다.` };
+  }
+  if (!id || id === 'none') {
+    state.pet = { ...(state.pet || {}), sub: null };
+    return { ok: true, pet: null, cleared: true };
+  }
+  const def = petDef(id);
+  if (!def) return { ok: false, reason: '알 수 없는 펫입니다.' };
+  const unlocked = (state.pet && state.pet.unlocked) || [];
+  if (!unlocked.includes(id)) return { ok: false, reason: '아직 해금되지 않은 펫입니다.' };
+  if (state.pet && state.pet.equipped === id) return { ok: false, reason: '이미 주 동행 중인 펫입니다.' };
+  state.pet = { ...(state.pet || {}), sub: id, unlocked: unlocked.slice() };
+  return { ok: true, pet: def, cleared: false };
 }
 
 /* ────────────────────────────── 🔥 전직/각성 ──────────────────────────────

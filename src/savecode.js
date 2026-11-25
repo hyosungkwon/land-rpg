@@ -158,6 +158,8 @@ export function compactSave(state) {
     if (!Object.keys(nonzero).length && !hasClaim && !c.dailyQuests.bonusClaimed) delete c.dailyQuests;
     else c.dailyQuests.progress = nonzero;
   }
+  if (c.pet && typeof c.pet === 'object' && !c.pet.sub) delete c.pet.sub;
+  if (!c.battleSpeed || Number(c.battleSpeed) <= 1) delete c.battleSpeed;
   return c;
 }
 

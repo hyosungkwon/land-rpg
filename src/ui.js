@@ -25,6 +25,7 @@ import {
   PETS, DUNGEON, PET_MAX_LV, petDef, petProgress, petLevel, petAtkPct, petDmgPct,
   petUpgradeCost, jobOf, jobProgress, dungeonState, JOB_COUNT, isUpperJob,
   PET_EVO_MAX, petEvo, petStageInfo, petEvolveInfo, petSkillOf, petSkillText, petGoldPct, evoStageDef,
+  SUB_PET_REQ, subPetUnlocked, subPet, battleSpeedUnlocked, effectiveBattleSpeed,
 } from './meta.js';
 import {
   TOWER_FLOORS, TOWER_MAX_FLOOR, TOWER_FIXED_FLOOR, TOWER_GIMMICKS, towerFloor, towerProgress, towerGimmickText,
@@ -207,8 +208,10 @@ export class UI {
       case 'rebirth-traits': actions.openRebirthTraits(); break;
       case 'rebirth-trait': actions.upgradeRebirthTrait(v); break;
       case 'pet-equip': actions.equipPet(v); break;
+      case 'pet-sub': actions.equipSubPet(v); break;
       case 'pet-upgrade': actions.upgradePet(v); break;
       case 'pet-evolve': actions.evolvePet(v); break;
+      case 'cycle-speed': actions.cycleSpeed(); break;
       case 'dungeon': actions.enterDungeon(v); break;
       case 'tower': actions.enterTower(Number(v) || 0); break;
       case 'tower-floors': actions.openTowerFloors(); break;
@@ -977,13 +980,16 @@ function dailyBossCard(ui) {
 
 function petCard(ui) {
   const s = ui.s;
-  const ps = s.pet || { equipped: null, unlocked: [] };
+  const ps = s.pet || { equipped: null, sub: null, unlocked: [] };
   const unlockedIds = Array.isArray(ps.unlocked) ? ps.unlocked : [];
   const equipped = petDef(ps.equipped);
+  const subUnlocked = subPetUnlocked(s);
+  const subDef = subPet(s);
 
   const rows = PETS.map((def) => {
     const unlocked = unlockedIds.includes(def.id);
     const on = ps.equipped === def.id;
+    const isSub = !!(subDef && subDef.id === def.id);
     const pr = petProgress(s, def.id);
     const lv = petLevel(s, def.id);
     const cost = petUpgradeCost(lv);
@@ -999,16 +1005,21 @@ function petCard(ui) {
       : evo.max
         ? '<button class="mini evo max" type="button" disabled>신수</button>'
         : `<button class="mini evo ${evo.can ? 'ready' : ''}" type="button" data-action="pet-evolve" data-value="${def.id}" ${evo.can ? '' : 'disabled'}>${evo.next.badge}진화</button>`;
+    const subBtn = !unlocked || on || !subUnlocked
+      ? ''
+      : isSub
+        ? '<button class="mini sub on" type="button" data-action="pet-sub" data-value="none">보조해제</button>'
+        : `<button class="mini sub" type="button" data-action="pet-sub" data-value="${def.id}">보조</button>`;
     const evoLine = !unlocked
       ? ''
       : evo.max
         ? `<div class="pet-evo done">${esc(info.def.label)} 완료 · ${esc(petSkillText(def, stage))}</div>`
         : `<div class="pet-evo${evo.can ? ' ready' : ''}">→ ${evo.next.badge} ${esc(petStageInfo({ pet: { evo: { [def.id]: evo.next.stage } } }, def.id).name)} · Lv.${evo.lv}/${evo.needLv} · 💎${evo.cost.shards} · 💰${fmt(evo.cost.gold)}${evo.can ? ' ✓' : ` <span class="dim">(${esc(evo.reason)})</span>`}</div>`;
     return `
-      <div class="pet-row ${on ? 'on' : ''} ${unlocked ? '' : 'lock'}">
+      <div class="pet-row ${on ? 'on' : isSub ? 'sub-on' : ''} ${unlocked ? '' : 'lock'}">
         <img class="pet-thumb s${stage}" src="assets/sprites/pet/${info.sprite || def.sprite}.png" alt="" loading="lazy">
         <div class="pet-mid">
-          <div class="pet-name">${def.emoji} ${esc(info.name || def.name)}${badge ? `<span class="evo-badge s${stage}">${badge}</span>` : ''}<span class="lv">Lv.${lv}</span>${on ? '<span class="pet-on">동행 중</span>' : ''}</div>
+          <div class="pet-name">${def.emoji} ${esc(info.name || def.name)}${badge ? `<span class="evo-badge s${stage}">${badge}</span>` : ''}<span class="lv">Lv.${lv}</span>${on ? '<span class="pet-on">동행 중</span>' : isSub ? '<span class="pet-sub-tag">보조 50%</span>' : ''}</div>
           <div class="pet-desc">${esc(def.desc)}</div>
           <div class="pet-stats">공격 ${Math.round(petDmgPct(s, def.id) * 100)}% · 공격력 +${petAtkPct(s, def.id)}%${petGoldPct(s, def.id) ? ` · 골드 +${petGoldPct(s, def.id)}%` : ''}</div>
           ${skill ? `<div class="pet-skill">${skill.icon} <b>${esc(skill.name)}</b> — ${esc(petSkillText(def, stage))}</div>` : ''}
@@ -1021,6 +1032,7 @@ function petCard(ui) {
             : unlocked
               ? `<button class="mini equip" type="button" data-action="pet-equip" data-value="${def.id}">교체</button>`
               : '<button class="mini" type="button" disabled>잠김</button>'}
+          ${subBtn}
           ${unlocked
             ? maxed
               ? '<button class="mini" type="button" disabled>MAX</button>'
@@ -1032,15 +1044,24 @@ function petCard(ui) {
   }).join('');
 
   const evoCount = PETS.filter((d) => petEvo(s, d.id) > 0).length;
+  const headRight = equipped
+    ? `주 ${equipped.emoji}${subDef ? ` · 보조 ${subDef.emoji}` : subUnlocked ? ' · 보조 비어있음' : ''}`
+    : '동행 없음';
   return `
   <div class="card pet-card" id="petCard">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🐾</span>내 동료 펫<small>${unlockedIds.length}/${PETS.length} 해금 · ★진화 ${evoCount}</small></div>
-      <span class="tiny dim">${equipped ? `동행 ${equipped.emoji} ${esc(petStageInfo(s, equipped.id).name)}` : '동행 없음'}</span>
+      <span class="tiny dim">${headRight}</span>
+    </div>
+    <div class="sub-pet-bar${subUnlocked ? ' on' : ''}">
+      <span>🐾 보조 펫 슬롯</span>
+      <small>${subUnlocked
+        ? (subDef ? `${subDef.emoji} ${esc(petStageInfo(s, subDef.id).name)} 동행 중 · 패시브·지원 타격 50%` : '해금됨 — 아래 펫에서 [보조]를 눌러 2마리 동행')
+        : `🔒 환생 ${SUB_PET_REQ.rebirth}회 또는 보유 지역 ${SUB_PET_REQ.cities}곳 달성 시 해금`}</small>
     </div>
     ${rows}
     <div class="note" style="margin-top:9px">
-      부동산이 자라면 <b>자동 해금</b>됩니다. 장착한 펫은 <b>1.5초마다 함께 공격</b>하고, 동행 중에는 패시브가 적용됩니다.<br>
+      부동산이 자라면 <b>자동 해금</b>됩니다. 주 펫은 <b>1.5초마다 함께 공격</b>하고, 보조 펫은 <b>2.1초마다 50% 지원 타격 + 패시브 50%</b>를 더합니다.<br>
       강화(💎) 1단계는 동행 피해·공격력 <b>+10%</b>(최대 Lv.${PET_MAX_LV}). <b>★각성(★) → 신수(★★)</b>는 강화 Lv.5·10과 강화석·골드로 진화하며,
       동행 피해 <b>×1.5 → ×2.1</b> 과 <b>고유 스킬</b>이 붙습니다.
     </div>
@@ -1198,11 +1219,18 @@ function huntStatsCard(ui) {
     ? `<div class="tiny ellip" style="margin-top:3px;color:var(--gold)">📰 ${newsNow.icon} ${esc(newsNow.title)} <span class="dim">· ${esc(newsNow.targetLabel)} 시세 ▲${newsNow.pricePct}%</span></div>`
     : '';
 
+  const spdUnlocked = battleSpeedUnlocked(s);
+  const spdVal = effectiveBattleSpeed(s);
+  const spdBtn = `<button class="spd-btn${spdVal > 1 ? ' on' : ''}${spdUnlocked ? '' : ' lock'}" type="button" data-action="cycle-speed" aria-label="전투 배속 전환">${spdUnlocked ? `⚡ ×${spdVal}` : '🔒 ×2'}</button>`;
+
   return `
   <div class="card stats-card">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">📊</span>전투 스탯<small>${esc(b.def.themeName)} · S${s.stage}${b.def.infinite ? '<span class="inf-badge">∞</span>' : ''}</small></div>
-      <button class="switch sm ${s.autoBoss ? 'on' : ''}" data-action="toggle-auto" aria-label="자동 보스 전환"></button>
+      <div class="row gap6">
+        ${spdBtn}
+        <button class="switch sm ${s.autoBoss ? 'on' : ''}" data-action="toggle-auto" aria-label="자동 보스 전환"></button>
+      </div>
     </div>
     <div class="dps-hero${dps.boost ? ' boost' : ''}" data-live="dps-hero">
       <div class="dps-left">
@@ -1328,18 +1356,20 @@ function petLine(ui) {
   const ps = s.pet || { equipped: null, unlocked: [] };
   const unlockedIds = Array.isArray(ps.unlocked) ? ps.unlocked : [];
   const equipped = petDef(ps.equipped);
+  const subDef = subPet(s);
   // v4.2: 진화 단계·고유 스킬 한 줄 요약
   const info = equipped ? petStageInfo(s, equipped.id) : null;
   const stage = info ? info.stage : 0;
   const skill = equipped ? petSkillOf(s, equipped.id) : null;
   const evoCount = PETS.filter((d) => petEvo(s, d.id) > 0).length;
   const badge = stage >= 2 ? '★★' : stage >= 1 ? '★' : '';
+  const subTxt = subDef ? ` · 보조 ${subDef.emoji} ${esc(petStageInfo(s, subDef.id).name)}` : '';
   return `
   <div class="card pet-line" id="petCard">
     <div class="row">
       <div class="grow ellip">
         <div class="card-title"><span class="t-ico">🐾</span>동료 펫<small>${unlockedIds.length}/${PETS.length} 해금 · ★진화 ${evoCount}</small></div>
-        <div class="tiny dim ellip" style="margin-top:3px">${equipped ? `동행 ${equipped.emoji} ${badge ? `<b style="color:var(--gold)">${badge}</b> ` : ''}${esc(info.name)}` : '동행 중인 펫이 없습니다 — 부동산이 자라면 자동 해금'} · 교체·강화·진화는 부동산 → 건물주 버프</div>
+        <div class="tiny dim ellip" style="margin-top:3px">${equipped ? `동행 ${equipped.emoji} ${badge ? `<b style="color:var(--gold)">${badge}</b> ` : ''}${esc(info.name)}${subTxt}` : '동행 중인 펫이 없습니다 — 부동산이 자라면 자동 해금'} · 교체·보조·강화는 부동산 → 건물주 버프</div>
         ${skill ? `<div class="tiny ellip" style="margin-top:2px;color:${stage >= 1 ? 'var(--blue)' : 'var(--dim)'}">${skill.icon} <b>${esc(skill.name)}</b> — ${esc(petSkillText(equipped, stage))}</div>` : ''}
       </div>
       <button class="btn small ghost" type="button" data-action="open-pets" style="min-height:32px">관리 ▸</button>

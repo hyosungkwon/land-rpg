@@ -1479,10 +1479,13 @@ export class Renderer {
   }
 
   /* ─────────── 🐾 동행 펫 ─────────── */
-  /** 주인공 뒤(왼쪽)에서 따라다니며, 공격할 때는 앞으로 튀어나간다. */
+  /** 주인공 뒤(왼쪽)에서 따라다니며, 공격할 때는 앞으로 튀어나간다. (v5.3: 보조 펫 함께 표시) */
   drawPet(ctx, now, dt) {
     const b = this.battle;
     if (!b) return;
+    const sp = b.subPet ? b.subPet() : null;
+    if (sp) this.drawSubPet(ctx, now, dt, sp);
+    else this.subPetX = null;
     const pet = b.activePet ? b.activePet() : null;
     if (!pet) {
       this.petX = null;
@@ -1560,6 +1563,42 @@ export class Renderer {
       ctx.fillText(label, Math.max(tw / 2 + 3, x), gy - h - 3);
       ctx.restore();
     }
+  }
+
+  /** v5.3 보조 펫 렌더 — 주 펫 뒤쪽 위에서 작게 동행 */
+  drawSubPet(ctx, now, dt, pet) {
+    const b = this.battle;
+    const gy = this.groundY() - 10 * this.scale();
+    const sc = this.scale();
+    const heroX = this.worldX(b.player.x);
+    const info = petStageInfo(b.s, pet.id);
+    const petColor = info.color || pet.color;
+    const h = Math.min(this.H * 0.24, 60 * sc) * (info.scale || 1) * 0.82;
+    const w = h;
+    const home = Math.max(w * 0.5 + 2, heroX - Math.min(118 * sc, w * 1.65));
+    const sway = Math.sin(now / 710 + 1.1) * 5 * sc;
+    if (this.subPetX == null || !isFinite(this.subPetX)) this.subPetX = home;
+    this.subPetX += (home - this.subPetX) * Math.min(1, dt / 170);
+    const lungeAge = now - (b.subPetAnimAt || 0);
+    const lunge = lungeAge >= 0 && lungeAge < 240 ? Math.sin(Math.PI * (1 - lungeAge / 240)) : 0;
+    const x = Math.max(w * 0.5 + 2, this.subPetX + sway + lunge * 42 * sc);
+    const bob = Math.sin(now / 330 + 2.9) * 2 * sc - lunge * 4 * sc;
+
+    ctx.save();
+    ctx.globalAlpha = 0.88;
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.beginPath();
+    ctx.ellipse(x, gy + 2, w * 0.22, w * 0.06, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const img = this.image(info.sprite || pet.sprite) || this.image(pet.sprite);
+    if (img) ctx.drawImage(img, x - w / 2, gy - h + bob, w, h);
+    else {
+      ctx.fillStyle = petColor || '#9fc6ff';
+      ctx.beginPath();
+      ctx.arc(x, gy - h * 0.4 + bob, w * 0.26, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   /* ─────────── 플레이어 ─────────── */

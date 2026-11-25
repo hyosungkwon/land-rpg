@@ -32,9 +32,10 @@ import { Renderer } from './src/render.js';
 import { UI } from './src/ui.js';
 import { GameSound } from './src/sound.js';
 import {
-  PET_SPRITES, PET_EVO_SPRITES, DUNGEON, petDef, syncPets as syncPetUnlocks, equipPet, upgradePet,
+  PET_SPRITES, PET_EVO_SPRITES, DUNGEON, petDef, syncPets as syncPetUnlocks, equipPet, equipSubPet as equipSubPetState, upgradePet,
   promoteJob as promoteJobState, dungeonState, startDungeonCooldown,
   PETS, evolvePet as evolvePetState, petEvolveInfo, petStageInfo, petSkillOf, JOB_COUNT, isUpperJob,
+  battleSpeedUnlocked, nextBattleSpeed,
 } from './src/meta.js';
 import {
   TOWER_FLOORS, TOWER_MAX_FLOOR, TOWER_GIMMICKS, towerFloor, towerProgress, towerGimmickText,
@@ -1424,6 +1425,32 @@ class App {
         this.save();
         this.sound.ui();
         this.ui.toast(`🐾 ${r.pet.emoji} ${r.pet.name} 동행 시작`, 'green');
+        this.ui.render();
+      },
+
+      equipSubPet: (id) => {
+        const r = equipSubPetState(this.s, id === 'none' ? null : id);
+        if (!r.ok) {
+          this.ui.toast(r.reason, 'red');
+          return;
+        }
+        this.battle.refreshStats();
+        this.save();
+        this.sound.ui();
+        this.ui.toast(r.cleared ? '🐾 보조 펫 동행 해제' : `🐾 보조 펫 ${r.pet.emoji} ${r.pet.name} 동행 (패시브·타격 50%)`, 'green');
+        this.ui.render();
+      },
+
+      cycleSpeed: () => {
+        if (!battleSpeedUnlocked(this.s)) {
+          this.ui.toast('⚡ 전투 배속은 환생 1회 달성 시 해금됩니다', 'red');
+          return;
+        }
+        const next = nextBattleSpeed(this.s);
+        this.s.battleSpeed = next;
+        this.save();
+        this.sound.ui();
+        this.ui.toast(`⚡ 전투 배속 ×${next}${next > 1 ? ' (일일 보스는 ×1 고정)' : ''}`, next > 1 ? 'gold' : '');
         this.ui.render();
       },
 

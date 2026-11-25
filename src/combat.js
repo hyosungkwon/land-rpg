@@ -5,7 +5,11 @@ import { ECON, SKILLS, stageDef, monsterKo, monsterMotion, monsterAttack, THEMES
 import {
   calcStats, currentHp, skillEffect, killReward, registerKill, clearStage, monsterStats, skillCdOf,
 } from './state.js';
-import { DUNGEON, PET_ATTACK_MS, equippedPet, petDmgPct, dungeonReward, petEvo, petSkillOf, petPassive, petGoldPct } from './meta.js';
+import {
+  DUNGEON, PET_ATTACK_MS, SUB_PET_ATTACK_MS, SUB_PET_RATE,
+  equippedPet, subPet, petDmgPct, dungeonReward, petEvo, petSkillOf, petPassive, petGoldPct,
+  effectiveBattleSpeed,
+} from './meta.js';
 import { TOWER_RULES, TOWER_MAX_FLOOR, towerFloor, towerStageDef, towerHas, towerReward, towerCleared, towerState, towerUnlocked, towerLockReason } from './tower.js';
 import { DAILY, dailyBossFor, dailyInfo, consumeDailyAttempt, dailyReward, recordDailyRun, dailyDpsCap } from './daily.js';
 import { codexMeet, codexKill, trackDailyQuest } from './quests.js';
@@ -90,9 +94,11 @@ export class Battle {
     this.lastRegen = 0;
     this.lastStatsAt = 0;
     this.time = 0;
-    // v3.2: 동행 펫 애니메이션 시각 · 황금 던전(보스 러시) 상태
+    // v3.2: 동행 펫 애니메이션 시각 · v5.3 보조 펫 동행 · 황금 던전(보스 러시) 상태
     this.petLast = 0;
     this.petAnimAt = 0;
+    this.subPetLast = 0;
+    this.subPetAnimAt = 0;
     this.petSkillAt = 0; // v4.2 펫 액티브 스킬 마지막 발동
     this.petGoldUntil = 0; // v4.2 '황금비' 골드 2배 종료 시각
     this.dungeon = null;
@@ -107,6 +113,17 @@ export class Battle {
   /** 장착된 동행 펫 정의(없으면 null) */
   activePet() {
     return equippedPet(this.s);
+  }
+
+  /** v5.3 장착된 보조 펫 정의(없거나 미해금이면 null) */
+  subPet() {
+    return subPet(this.s);
+  }
+
+  /** v5.3 적용 전투 배속 — 랭킹 공정성을 위해 일일 보스는 항상 ×1 */
+  speed() {
+    if (this.daily) return 1;
+    return effectiveBattleSpeed(this.s);
   }
 
   /** 황금 던전 진행 중인가 */
@@ -260,11 +277,14 @@ export class Battle {
       return;
     }
 
-    this.regen(dt);
+    const spd = this.speed();
+    const dtEff = dt * spd;
+    this.regen(dtEff);
     this.autoSkills(now);
-    this.updateMonsters(dt, now);
-    this.attack(now);
-    this.petAttack(now);
+    this.updateMonsters(dtEff, now, spd);
+    this.attack(now, spd);
+    this.petAttack(now, spd);
+    this.subPetAttack(now, spd);
     this.petSkillTick(now);
     if (this.daily) {
       this.dailyTick(now);
@@ -321,7 +341,7 @@ export class Battle {
     return alive;
   }
 
-  updateMonsters(dt, now) {
+  updateMonsters(dt, now, spd = 1) {
     const p = this.player;
     const alive = this.assignSlots();
     for (const m of alive) {
@@ -341,10 +361,10 @@ export class Battle {
         m.walk = (Number.isFinite(m.walk) ? m.walk : 0) + Math.abs(m.x - prevX);
         m.moving = true;
         if (!m.windupBase) m.windupBase = windupFor(m);
-        const eta = (Math.abs(m.x - standX) / speed) * 1000;
+        const eta = (Math.abs(m.x - standX) / (speed * Math.max(1, spd))) * 1000;
         // 도착 직전 마지막 걸음에서 전조를 시작한다 → 타격은 도착 순간.
         // 타격 예정 시각(도착 또는 공격 간격 도달)에 맞춰 시작해 전조가 너무 길게 남지 않게 한다.
-        const dueW = (Number.isFinite(m.lastAttack) ? m.lastAttack : now) + (m.attackGap || ECON.monsterAttackMs);
+        const dueW = (Number.isFinite(m.lastAttack) ? m.lastAttack : now) + (m.attackGap || ECON.monsterAttackMs) / Math.max(1, spd);
         const strikeAt = Math.max(now + eta, dueW);
         if (!m.windupAt && strikeAt - now <= m.windupBase + 60) {
           m.windupAt = now;
@@ -361,9 +381,9 @@ export class Battle {
       } else {
         m.moving = false;
         if (!m.windupBase) m.windupBase = windupFor(m);
-        const gap = m.attackGap || ECON.monsterAttackMs;
+        const gap = (m.attackGap || ECON.monsterAttackMs) / Math.max(1, spd);
         const heavy = !!m.isBoss && (m.attackSeq || 0) % HEAVY_EVERY === HEAVY_EVERY - 1;
-        const wuTotal = m.windupBase + (heavy ? 170 : 0);
+        const wuTotal = (m.windupBase + (heavy ? 170 : 0)) / Math.max(1, spd);
         const due = (Number.isFinite(m.lastAttack) ? m.lastAttack : now) + gap;
         // 1) 전조: 타격 시점 직전부터 움츠리며(원거리는 기를 모으며) 예고한다
         if (!m.windupAt && now >= due - wuTotal) {
@@ -446,8 +466,8 @@ export class Battle {
   }
 
   /* ───────────── 공격 ───────────── */
-  attack(now) {
-    if (now - this.player.lastAttack < this.stats.attackMs) return;
+  attack(now, spd = 1) {
+    if (now - this.player.lastAttack < this.stats.attackMs / Math.max(1, spd)) return;
     const target = this.targets().find((m) => m.x - this.player.x <= ECON.playerRange);
     if (!target) return;
     this.player.lastAttack = now;
@@ -649,10 +669,10 @@ export class Battle {
   /* ───────────── 동행 펫 ───────────── */
   /** 1.5초마다 주인공 옆에서 함께 공격한다(펫 피해 + 치명타 가능).
    *  v4.2: 불꽃 꼬리(각성+)는 옆의 적까지 함께 태운다. */
-  petAttack(now) {
+  petAttack(now, spd = 1) {
     const pet = this.activePet();
     if (!pet || this.player.dead) return;
-    if (now - (this.petLast || 0) < PET_ATTACK_MS) return;
+    if (now - (this.petLast || 0) < PET_ATTACK_MS / Math.max(1, spd)) return;
     const inRange = this.targets().filter((m) => m.x - this.player.x <= ECON.playerRange);
     if (!inRange.length) return;
     this.petLast = now;
@@ -666,6 +686,20 @@ export class Battle {
       const mul = (i === 0 ? 1 : 0.65) * zerk;
       this.petHitTarget(list[i], base * mul * (0.9 + this.rng() * 0.2), now, 'hit', pet);
     }
+  }
+
+  /** v5.3 보조 펫 지원 타격 — 2.1초마다 50% 위력으로 가장 가까운 적 지원 공격 */
+  subPetAttack(now, spd = 1) {
+    const sp = this.subPet();
+    if (!sp || this.player.dead) return;
+    if (now - (this.subPetLast || 0) < SUB_PET_ATTACK_MS / Math.max(1, spd)) return;
+    const target = this.targets().find((m) => m.x - this.player.x <= ECON.playerRange);
+    if (!target) return;
+    this.subPetLast = now;
+    this.subPetAnimAt = now;
+    const base = this.stats.atk * petDmgPct(this.s, sp.id) * SUB_PET_RATE;
+    const zerk = this.berserkUntil > now ? 1 + skillEffect('berserk', this.s.skills.berserk.lv) * 0.5 : 1;
+    this.petHitTarget(target, base * zerk * (0.9 + this.rng() * 0.2), now, 'sub', sp);
   }
 
   /** 펫 1대 피해 적용 — 치명타·넉백·집계·처치까지 공통 처리 */
@@ -863,7 +897,7 @@ export class Battle {
     if (this.s.bossReady && this.s.autoBoss) return; // 자동 보스 대기 중엔 스폰 중단(수동 모드는 계속 사냥)
     const alive = this.monsters.filter((m) => !m.dead && !m.dying).length;
     if (alive >= ECON.maxMonsters) return; // 상한까지 쌓이면 더 안 나온다(화면이 무리로 가득)
-    if (now - this.lastSpawn < (ECON.spawnMs || 700)) return;
+    if (now - this.lastSpawn < (ECON.spawnMs || 700) / Math.max(1, this.speed())) return;
     this.lastSpawn = now;
     this.spawnNormal(now);
   }

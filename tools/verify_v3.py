@@ -187,8 +187,8 @@ def main():
     ok("startCloudResume" in app_src and "if (!this.cloudEnabled() && !this.cloud.hasPendingRedirect()) return;" in app_src, "세션 복원도 클라우드를 켓을 때만")
     ok("setInterval(() => this.cloudTick(), 15000)" in app_src, "주기 저장은 조건 검사형 타이머")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v5.2.0" in read("sw.js"), "SW 캐시 버전 v5.2.0")
-    ok("APP_VERSION = '5.2.0'" in read("src/data.js"), "앱 버전 v5.2.0")
+    ok("land-rpg-v5.3.0" in read("sw.js"), "SW 캐시 버전 v5.3.0")
+    ok("APP_VERSION = '5.3.0'" in read("src/data.js"), "앱 버전 v5.3.0")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
     ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
@@ -755,8 +755,8 @@ def main():
         badPet: bad.pet, badJob: bad.jobTier, badCd: bad.dungeonCooldown, badBest: bad.dungeon.best, badRuns: bad.dungeon.runs,
       };
     """)
-    ok(compat["level"] == 40 and compat["gold"] == 7777 and compat["pet"] == {"equipped": None, "unlocked": [], "chosen": False, "levels": {}, "evo": {}} and compat["job"] == 0 and compat["cd"] == 0, "v3.1 저장 호환(펫·전직·던전 기본값 병합 · v4.2 evo 포함)", json.dumps(compat, ensure_ascii=False))
-    ok(compat["badPet"] == {"equipped": None, "unlocked": ["fox"], "chosen": False, "levels": {"fox": 1}, "evo": {}} and compat["badJob"] == 5 and compat["badCd"] == 0 and compat["badBest"] == 0 and compat["badRuns"] == 0, "손상된 펫/전직/던전 값 방어", json.dumps({k: compat[k] for k in ["badPet", "badJob", "badCd", "badBest", "badRuns"]}, ensure_ascii=False))
+    ok(compat["level"] == 40 and compat["gold"] == 7777 and compat["pet"] == {"equipped": None, "sub": None, "unlocked": [], "chosen": False, "levels": {}, "evo": {}} and compat["job"] == 0 and compat["cd"] == 0, "v3.1 저장 호환(펫·전직·던전 기본값 병합 · v4.2 evo · v5.3 sub 포함)", json.dumps(compat, ensure_ascii=False))
+    ok(compat["badPet"] == {"equipped": None, "sub": None, "unlocked": ["fox"], "chosen": False, "levels": {"fox": 1}, "evo": {}} and compat["badJob"] == 5 and compat["badCd"] == 0 and compat["badBest"] == 0 and compat["badRuns"] == 0, "손상된 펫/전직/던전 값 방어", json.dumps({k: compat[k] for k in ["badPet", "badJob", "badCd", "badBest", "badRuns"]}, ensure_ascii=False))
 
     tpl2 = js(ctx2, """
       const s = defaultState(0);
@@ -2935,7 +2935,7 @@ def main():
     ok(all(x in asrc42 for x in ["enterTower", "openTowerFloors", "evolvePet", "showTowerResult", "showTowerFloors"]), "app.js — 탑 입장/층 선택/결과·펫 진화 액션", "")
     ok('assets/sprites/pet/${info.sprite}.png' in asrc42, "진화 결과 모달 — 진화 스프라이트 경로(.png)", "")
     ok(all(x in css42 for x in [".tower-card", ".tower-tiles", ".tower-floor", ".pet-evo", ".mini.evo"]), "style.css — v4.2 스타일", "")
-    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v5.2.0" in read("sw.js") and "APP_VERSION = '5.2.0'" in read("src/data.js"), "버전·서비스워커(5.2.0 · cloud 프리캐시)", "")
+    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v5.3.0" in read("sw.js") and "APP_VERSION = '5.3.0'" in read("src/data.js"), "버전·서비스워커(5.3.0 · cloud 프리캐시)", "")
     pkg_ok = (not os.path.exists(os.path.join(ROOT, "package.json"))) or ('"version": "' in read("package.json"))
     ok(pkg_ok, "package.json 버전 확인(없으면 클론 환경으로 통과)", "")
     evo_files = [f"assets/sprites/pet/pet_{n}_{s}.png" for n in ("wolf", "fox", "owl", "dragon") for s in ("awaken", "divine")]
@@ -3086,7 +3086,7 @@ def main():
 
     css43 = read("style.css")
     ok(all(x in css43 for x in [".land-sum", ".ls-v", ".ls-claim", ".news-slim", ".ns-title", ".land-subbar", ".land-rec", ".buff-now"]), "style.css — v4.3 부동산 요약 바·압축 뉴스·서브 탭", "")
-    ok("land-rpg-v5.2.0" in read("sw.js") and "'5.2.0'" in read("src/data.js"), "버전·캐시 v5.2.0", "")
+    ok("land-rpg-v5.3.0" in read("sw.js") and "'5.3.0'" in read("src/data.js"), "버전·캐시 v5.3.0", "")
 
     section("[20] ⚔️ v4.4 S31+ 무한 구간 리밸런싱 · 강화석 대량 교환 · 상위 전직")
 
@@ -3963,7 +3963,7 @@ def main():
     section("[23] ♻️ v4.7 장비 자동분해 · 🐉 상위 전직 궁극기 · 방치 편의")
 
     # ── 1) 버전·정적 배선 ──
-    ok("APP_VERSION = '5.2.0'" in read("src/data.js") and "land-rpg-v5.2.0" in read("sw.js"), "v5.2.0 버전·서비스워커 캐시 갱신", "")
+    ok("APP_VERSION = '5.3.0'" in read("src/data.js") and "land-rpg-v5.3.0" in read("sw.js"), "v5.3.0 버전·서비스워커 캐시 갱신", "")
     idx47 = read("index.html")
     ok(all(f'data-skill="{k}"' in idx47 for k in ["strike", "whirl", "berserk", "heal"]), "기존 4개 퀵슬롯 레이아웃 유지", "")
     ok('data-skill="ultimate"' in idx47 and 'class="q ult hidden"' in idx47, "다섯 번째 퀵슬롯(궁극기) — 해금 전 숨김", "")
@@ -4205,7 +4205,7 @@ def main():
     ok(cl_a["clean"][0] == "효성 왕" and cl_a["clean"][3] == 12 and not cl_a["html"], "닉네임 정리 — 공백 접기·12자 제한·HTML 문자 제거", json.dumps(cl_a["clean"], ensure_ascii=False))
     ok(cl_a["clean"][1] == "용사" and cl_a["clean"][2] == "용사", "1자·빈 닉네임은 기본 이름으로 대체", json.dumps(cl_a["clean"][:3], ensure_ascii=False))
     ok(cl_a["sum"] == [42, 21, 2, 5000, True], "세이브 요약 — 역대 최고 스테이지·보유 지역·총자산", json.dumps(cl_a["sum"]))
-    ok(cl_a["doc"][:6] == ["land_rpg_save", "5.2.0", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
+    ok(cl_a["doc"][:6] == ["land_rpg_save", "5.3.0", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
     ok(0 < cl_a["size"] < 200000, "클라우드 문서 크기 RTDB 한도 안(200KB 미만)", str(cl_a["size"]))
 
     # ── 2) 문서 해석(신형·v2 옛 페이로드·손상) ──
@@ -4309,7 +4309,7 @@ def main():
     ok(cl_e["errs"][0].startswith("이 주소가") and "응답이 없습니다" in cl_e["errs"][1] and cl_e["errs"][3].startswith("권한") and "시간 초과" in cl_e["errs"][4] and "라이브러리" in cl_e["errs"][5], "오류 문구 — 승인 도메인/시간 초과/권한/라이브러리", json.dumps(cl_e["errs"], ensure_ascii=False))
     ok(cl_e["strip"] == '{"a":1,"d":1,"e":{"x":2},"f":[1,3]}', "RTDB 전송 전 undefined·NaN 제거", cl_e["strip"])
     ok(cl_e["metrics"] == ["최고 스테이지", "총자산"], "랭킹 지표 이름", json.dumps(cl_e["metrics"], ensure_ascii=False))
-    ok(cl_e["entry"] == ["용사", 9, 12, 777, "5.2.0", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
+    ok(cl_e["entry"] == ["용사", 9, 12, 777, "5.3.0", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
 
     # ── 6) 세이브 호환 · 마이그레이션 ──
     mig48 = js(ctx, """
@@ -4900,6 +4900,79 @@ def main():
       };
     """)
     ok(ui52["hasBar"] and not ui52["bad"], "장착 슬롯·인벤토리 카드 — 테마 세트 태그·발동 요약 렌더", json.dumps(ui52))
+
+    # ── 17) v5.3.0 보조 펫 슬롯(2마리 동행) · 전투 배속 토글 ──
+    section("v5.3.0 보조 펫 슬롯 · 전투 배속 토글")
+    m53 = js(ctx, """
+      const s = defaultState(1000); s.level = 30;
+      s.pet.unlocked = ['wolf', 'fox', 'owl'];
+      s.pet.equipped = 'wolf';
+      const lockedSub = equipSubPet(s, 'owl');
+      const lockedSpd = effectiveBattleSpeed(s);
+      s.battleSpeed = 2;
+      const lockedSpdStill1 = effectiveBattleSpeed(s);
+      s.rebirth.count = 1;
+      const st0 = calcStats(s, {});
+      const eqSub = equipSubPet(s, 'owl');
+      const st1 = calcStats(s, {});
+      // 주펫과 같은 펫을 보조로 지정하면 거부, 주펫을 보조펫으로 교체하면 자리 스왑
+      const sameFail = equipSubPet(s, 'wolf');
+      equipPet(s, 'owl');
+      const swapped = [s.pet.equipped, s.pet.sub];
+      // 전투에서 보조 펫 지원 타격 발동 & 배속 ×2 시 일반 타격 횟수 증가
+      s.stage = 15; s.maxStage = 15;
+      const b1 = new Battle(s, () => ({}), () => 0.5, 0);
+      s.battleSpeed = 1;
+      let hits1 = 0, subHits = 0;
+      for (let t = 100; t <= 10000; t += 100) {
+        b1.tick(100, t);
+        for (const e of b1.drainEvents()) {
+          if (e.t === 'hit') hits1++;
+          if (e.t === 'petHit' && e.kind === 'sub') subHits++;
+        }
+      }
+      const s2 = JSON.parse(JSON.stringify(s)); s2.battleSpeed = 2;
+      const b2 = new Battle(s2, () => ({}), () => 0.5, 0);
+      let hits2 = 0;
+      for (let t = 100; t <= 10000; t += 100) {
+        b2.tick(100, t);
+        for (const e of b2.drainEvents()) if (e.t === 'hit') hits2++;
+      }
+      // 일일 보스 중에는 배속 ×1 고정
+      b2.daily = { ends: 999999, dmg: 0 };
+      const dailySpd = b2.speed();
+      const norm = normalizeState({ pet: { unlocked: ['wolf', 'owl'], equipped: 'wolf', sub: 'wolf' }, battleSpeed: 9 }, 0);
+      return {
+        lockedSub: lockedSub.ok,
+        lockedSpd: [lockedSpd, lockedSpdStill1],
+        eqSub: eqSub.ok && st1.atk > st0.atk && st1.goldMult > st0.goldMult,
+        sameFail: sameFail.ok,
+        swapped,
+        subHits,
+        hits: [hits1, hits2],
+        dailySpd,
+        norm: [norm.pet.sub, norm.battleSpeed],
+      };
+    """)
+    ok(not m53["lockedSub"] and m53["lockedSpd"] == [1, 1] and m53["eqSub"] and not m53["sameFail"] and m53["swapped"] == ["owl", "wolf"], "보조 펫 해금 게이트 · 패시브 50% · 주/보조 스왑", json.dumps(m53))
+    ok(m53["subHits"] > 0 and m53["hits"][1] > m53["hits"][0] and m53["dailySpd"] == 1 and m53["norm"] == [None, 1], "보조 펫 지원 타격 · 배속 ×2 전투 가속 · 일일 보스 ×1 고정 · 저장 정규화", json.dumps(m53))
+
+    ui53 = js(ctx2, """
+      const s = defaultState(1000);
+      s.rebirth.count = 1; s.battleSpeed = 1.5;
+      s.pet.unlocked = ['wolf', 'owl']; s.pet.equipped = 'wolf'; s.pet.sub = 'owl';
+      const buffs = computeBuffs(s, 1000);
+      const b = new Battle(s, () => buffs, () => 0.5, 1000);
+      const ui = { s, battle: b, app: { buffs }, logs: [], tab: 'hunt', huntSub: 'skill', el: {}, install: { hidden: true } };
+      const huntHtml = __huntSub(ui, 'skill');
+      const buffHtml = __landSub(ui, 'buff');
+      return {
+        hasSpd: huntHtml.includes('data-action="cycle-speed"') && huntHtml.includes('×1.5'),
+        hasSubPet: buffHtml.includes('보조 펫 슬롯') && buffHtml.includes('data-action="pet-sub"') && buffHtml.includes('보조 50%'),
+        bad: /undefined|NaN|\\[object Object\\]/.test(huntHtml + buffHtml),
+      };
+    """)
+    ok(ui53["hasSpd"] and ui53["hasSubPet"] and not ui53["bad"], "사냥 스탯 배속 토글 · 펫 카드 보조 슬롯 UI 렌더", json.dumps(ui53))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

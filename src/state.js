@@ -16,7 +16,10 @@ import {
 } from './gear.js';
 import { defaultLand, CITY_BY_KEY, LAND_FAV_MAX } from './land.js';
 import { normalizeAuctionState } from './auction.js';
-import { PET_IDS, PET_MAX_LV, PET_EVO_MAX, JOB_MAX, jobOf, equippedPet, petLevel, petAtkPct, petEvo, petGoldPct, petPassive, petStageInfo } from './meta.js';
+import {
+  PET_IDS, PET_MAX_LV, PET_EVO_MAX, JOB_MAX, jobOf, equippedPet, petLevel, petAtkPct, petEvo, petGoldPct, petPassive, petStageInfo,
+  SUB_PET_RATE, subPet, normalizeBattleSpeed,
+} from './meta.js';
 import {
   collectionBonus, normalizeQuestState, normalizeAchievements, normalizeCodex, equipLevelSum,
   defaultDailyQuests, normalizeDailyQuests,
@@ -67,7 +70,8 @@ export function defaultState(now = nowMs()) {
     // v3.2 메타 성장: 펫 동료 · 전직 단계 · 황금 던전 쿨타임
     jobTier: 0,
     jobAt: 0,
-    pet: { equipped: null, unlocked: [], chosen: false, levels: {}, evo: {} },
+    pet: { equipped: null, sub: null, unlocked: [], chosen: false, levels: {}, evo: {} },
+    battleSpeed: 1, // v5.3.0 전투 배속(1 / 1.5 / 2, 환생 1회 해금)
     dungeonCooldown: 0,
     dungeon: { best: 0, runs: 0, last: null },
     // v4.2 🗼 도전의 탑 — 층별 클리어 기록 · 도전 횟수
@@ -181,13 +185,17 @@ export function normalizeState(raw, now = nowMs()) {
     const ev = clamp(Math.floor(num(rawEvo[id], 0)), 0, PET_EVO_MAX);
     if (ev > 0) petEvoMap[id] = ev;
   }
+  const eqPet = petIds.includes(rawPet.equipped) ? rawPet.equipped : null;
+  const subPetId = petIds.includes(rawPet.sub) && rawPet.sub !== eqPet ? rawPet.sub : null;
   s.pet = {
-    equipped: petIds.includes(rawPet.equipped) ? rawPet.equipped : null,
+    equipped: eqPet,
+    sub: subPetId,
     unlocked: PET_IDS.filter((id) => petIds.includes(id)),
     chosen: rawPet.chosen === true,
     levels: petLevels,
     evo: petEvoMap,
   };
+  s.battleSpeed = normalizeBattleSpeed(raw.battleSpeed);
   s.jobTier = clamp(Math.floor(num(raw.jobTier, 0)), 0, JOB_MAX);
   s.jobAt = Math.max(0, num(raw.jobAt, 0));
   s.dungeonCooldown = Math.max(0, num(raw.dungeonCooldown, 0));
@@ -363,12 +371,17 @@ export function calcStats(s, buffs = NO_BUFF) {
   const gm = gearMods(s);
   const job = jobOf(s);
   const pet = equippedPet(s);
+  const sp = subPet(s);
   const jobAtkMul = 1 + (job.atkPct || 0) / 100;
   const jobHpMul = 1 + (job.hpPct || 0) / 100;
-  const petAtkMul = 1 + (pet ? petAtkPct(s, pet.id) : 0) / 100;
-  // v4.2: 펫 진화·고유 스킬 — 치명타·골드·보스 추가 피해 패시브
+  const subAtkPct = sp ? Math.round(petAtkPct(s, sp.id) * SUB_PET_RATE * 10) / 10 : 0;
+  const petAtkMul = 1 + ((pet ? petAtkPct(s, pet.id) : 0) + subAtkPct) / 100;
+  // v4.2: 펫 진화·고유 스킬 — 치명타·골드·보스 추가 피해 패시브 (+ v5.3 보조 펫 50%)
   const petPas = pet ? petPassive(s, pet.id) : { critPct: 0, goldPct: 0, splash: 1, bossDmgPct: 0, stage: 0 };
-  const petGold = pet ? petGoldPct(s, pet.id) : 0;
+  const subPas = sp ? petPassive(s, sp.id) : { critPct: 0, goldPct: 0, splash: 1, bossDmgPct: 0, stage: 0 };
+  const subCritPct = Math.round((subPas.critPct || 0) * SUB_PET_RATE * 10) / 10;
+  const subBossPct = Math.round((subPas.bossDmgPct || 0) * SUB_PET_RATE * 10) / 10;
+  const petGold = (pet ? petGoldPct(s, pet.id) : 0) + (sp ? Math.round(petGoldPct(s, sp.id) * SUB_PET_RATE * 10) / 10 : 0);
   // v3.3: 도감 수집률 마일스톤 + 수령한 업적의 소폭 영구 보너스(기본 0 → 기존 밸런스 불변)
   const col = collectionBonus(s);
   const colAtkMul = 1 + (col.atkPct || 0) / 100;
@@ -382,7 +395,7 @@ export function calcStats(s, buffs = NO_BUFF) {
   const hpMax =
     (150 + 30 * L + EQUIP.armor.per * eLv('armor') + EQUIP.helmet.per * eLv('helmet'))
     * (1 + (b.hpPct + extraHp + gm.hpPct) / 100) * jobHpMul * rbHpMul;
-  const crit = Math.min(0.5, 0.05 + (EQUIP.ring.per / 100) * eLv('ring') + (b.critPct + extraCrit + gm.critPct + (petPas.critPct || 0)) / 100);
+  const crit = Math.min(0.5, 0.05 + (EQUIP.ring.per / 100) * eLv('ring') + (b.critPct + extraCrit + gm.critPct + (petPas.critPct || 0) + subCritPct) / 100);
   const critDmg = 2.0 + rb.critDmgAdd + gm.critDmg / 100 + synCritDmg;
   // v3.8 방어·회복 — 다굴에서 버티는 힘. 갑옷/투구 강화(등급 환산 포함) + 환생 '수호' 특성 + v4 장비 옵션
   const defFromGear = EQUIP.armor.defPer * eLv('armor') + EQUIP.helmet.defPer * eLv('helmet');
@@ -395,7 +408,7 @@ export function calcStats(s, buffs = NO_BUFF) {
   // v4.0: 공격 속도 옵션 — 기본 공격 간격을 줄인다(하한 300ms · 최대 40% 단축)
   const attackMs = Math.max(300, (ECON.playerAttackMs - L * 2) * (1 - Math.min(0.4, gm.atkSpd / 100)));
   const lifesteal = Math.min(0.2, gm.lifesteal / 100); // 흡혈 상한 20%
-  const petBossDmgPct = (petPas.bossDmgPct || 0) / 100; // v4.2 용의 숨결
+  const petBossDmgPct = ((petPas.bossDmgPct || 0) + subBossPct) / 100; // v4.2 용의 숨결 + v5.3 보조 펫 50%
   const bossDmgPct = gm.bossDmg / 100 + petBossDmgPct + synBoss;
   const whirlDmgPct = gm.whirlDmg / 100;
   const dps = (atk / (attackMs / 1000)) * (1 + crit * (critDmg - 1));
