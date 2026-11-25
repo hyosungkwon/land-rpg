@@ -621,7 +621,7 @@ export class Battle {
     // v4.0: 사냥·보스 처치로 장비가 드랍된다(보스 우대) — 파밍의 재미
     try {
       const drop = tryGearDrop(this.s, {
-        isBoss: m.isBoss, stage: this.s.stage, buffs: this.buffs(), rng: this.rng, now,
+        isBoss: m.isBoss, stage: this.s.stage, buffs: this.buffs(), dropMult: this.stats.dropMult, rng: this.rng, now,
       });
       if (drop && drop.item) {
         this.emit({
@@ -685,6 +685,7 @@ export class Battle {
     target.knock = Math.min(30, (target.knock || 0) + (crit ? 14 : 8));
     if (this.dungeon) this.dungeon.dmg += dmg;
     if (this.tower) this.tower.dmg += dmg;
+    if (this.daily) { this.daily.dmg += dmg; this.daily.hits = (this.daily.hits || 0) + 1; }
     if (dmg > 0) this.recordDamage(dmg, now);
     this.emit({ t: 'petHit', id: target.id, dmg, crit, x: target.x, pet: pet.id, ko: pet.name, color: pet.color, kind: kind || 'hit' });
     if (target.hp <= 0) this.killMonster(target, now);
@@ -746,12 +747,14 @@ export class Battle {
     const alive = this.targets();
     // v4.6 부동산 시너지(쿨감)를 반영한 실효 쿨타임
     const cd = (key) => skillCdOf(key, this.buffs());
+    // v4.8.2: 스테이지 보스뿐 아니라 일일 보스·도전의 탑 보스 층도 보스전으로 판정
+    const hasBoss = !!(this.boss || this.daily || alive.some((m) => m.isBoss));
     // v4.7: 설정에서 '스킬 자동 시전'을 끄면 손으로 누를 때만 나간다
     if (this.s.autoSkill !== false) {
       // 회복: 체력 65% 이하
       if (now - sk.heal.last >= cd('heal') && this.player.hp / this.stats.hpMax < 0.65) this.castSkill('heal', now);
       // 광폭: 보스전 또는 적 2마리 이상
-      if (now - sk.berserk.last >= cd('berserk') && (this.boss || alive.length >= 2)) this.castSkill('berserk', now);
+      if (now - sk.berserk.last >= cd('berserk') && (hasBoss || alive.length >= 2)) this.castSkill('berserk', now);
       // 범위 베기: 적 2마리 이상
       if (now - sk.whirl.last >= cd('whirl') && alive.length >= 2) this.castSkill('whirl', now);
       // 강격: 적이 사거리 안에 있을 때
@@ -760,7 +763,7 @@ export class Battle {
     // v4.7 상위 전직 궁극기 — 보스전이거나 적이 여럿일 때 준비되면 자동 발동
     const u = ultimateOf(this.s);
     if (u && this.s.autoUlt !== false && !this.player.dead) {
-      if (ultLeftMs(this.s, this.buffs(), now) <= 0 && (this.boss || alive.length >= 2)) this.castUltimate(now);
+      if (ultLeftMs(this.s, this.buffs(), now) <= 0 && (hasBoss || alive.length >= 2)) this.castUltimate(now);
     }
   }
 
@@ -990,7 +993,12 @@ export class Battle {
     const d = this.dungeon;
     if (!d) return null;
     this.dungeon = null;
-    const reward = dungeonReward(this.s, { kills: d.kills, bossKills: d.bossKills, dmg: d.dmg }, this.buffs(), this.rng);
+    const reward = dungeonReward(
+      this.s,
+      { kills: d.kills, bossKills: d.bossKills, dmg: d.dmg, goldMult: this.stats.goldMult, dropMult: this.stats.dropMult },
+      this.buffs(),
+      this.rng,
+    );
     this.s.gold = Math.floor((this.s.gold || 0) + reward.gold);
     this.s.shards = Math.floor((this.s.shards || 0) + reward.shards);
     if (this.s.records) this.s.records.totalGold = (this.s.records.totalGold || 0) + reward.gold;

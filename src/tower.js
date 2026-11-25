@@ -373,7 +373,7 @@ export function towerUnlocked(state, n) {
   if (k < 1 || k > TOWER_MAX_FLOOR) return false;
   const def = towerFloor(k);
   if (!def) return false;
-  const maxStage = Math.max(1, Math.floor(Number(state && state.maxStage) || 1));
+  const maxStage = Math.max(1, Math.floor(Number(state && state.maxStage) || 1), Math.floor(Number(state && state.peakStage) || 1));
   const need = Math.max(1, Math.floor(Number(def.minStage) || 1));
   if (maxStage < need) return false;
   if (k === 1) return true;
@@ -385,7 +385,7 @@ export function towerLockReason(state, n) {
   const k = Math.floor(Number(n) || 0);
   const def = towerFloor(k);
   if (!def) return '없는 층입니다.';
-  const maxStage = Math.max(1, Math.floor(Number(state && state.maxStage) || 1));
+  const maxStage = Math.max(1, Math.floor(Number(state && state.maxStage) || 1), Math.floor(Number(state && state.peakStage) || 1));
   if (maxStage < (def.minStage || 1)) return `최고 스테이지 ${def.minStage} 필요`;
   if (k > 1 && !towerCleared(state, k - 1)) return `${k - 1}층을 먼저 클리어해야 합니다.`;
   return '';

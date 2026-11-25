@@ -256,7 +256,7 @@ export const GEAR_ITEMS = [
   { id: 'r_ruby', slot: 'ring', rarity: 'advanced', name: '루비 반지', form: 'gem', tint: '#c9a24a', accent: '#8a6f2f', gem: '#ff4d6a', opts: { critDmg: 9 }, desc: '붉은 빛이 치명타를 키운다' },
   { id: 'r_sharp', slot: 'ring', rarity: 'rare', name: '예리한 인장', form: 'seal', tint: '#b3c0cf', accent: '#6f7d8d', gem: '#ffd166', opts: { critPct: 6, critDmg: 8 }, desc: '급소를 정확히 파고든다' },
   { id: 'r_storm', slot: 'ring', rarity: 'hero', name: '폭풍의 인장', form: 'gem', tint: '#7aa8d8', accent: '#3f6d9c', gem: '#9fe0ff', opts: { atkSpd: 12, critPct: 6 }, desc: '손이 폭풍처럼 빨라진다' },
-  { id: 'r_sage', slot: 'ring', rarity: 'hero', name: '현자의 반지', form: 'seal', tint: '#8f7fd8', accent: '#5a4aa8', gem: '#e6d6ff', opts: { lifesteal: 5, regen: 4 }, desc: '덜 덜어내고 덜 잃는다' },
+  { id: 'r_sage', slot: 'ring', rarity: 'hero', name: '현자의 반지', form: 'seal', tint: '#8f7fd8', accent: '#5a4aa8', gem: '#e6d6ff', opts: { lifesteal: 5, regen: 4 }, desc: '체력을 되찾으며 끈질기게 버틴다' },
   { id: 'r_eye', slot: 'ring', rarity: 'legend', name: '드래곤의 눈', form: 'gem', tint: '#ffcf5c', accent: '#b8860b', gem: '#ff7a3d', opts: { critPct: 12, critDmg: 25, lifesteal: 5 }, desc: '용의 눈이 급소를 꿰뚫는다' },
 
   /* 🧿 부적 */
@@ -693,9 +693,13 @@ export function randomItemOfRarity(rarityId, rng = Math.random) {
  * 사냥 드랍 판정 — { isBoss, stage, buffs, rng } → 획득 결과 또는 null
  * buffs.dropPct(강화석 드랍 보너스)가 장비 드랍 확률도 함께 올린다.
  */
-export function tryGearDrop(s, { isBoss = false, stage = 1, buffs = null, rng = Math.random, now = 0 } = {}) {
-  const dropPct = Math.max(0, Number(buffs && buffs.dropPct) || 0);
-  const chance = (isBoss ? GEAR_DROP.bossChance : GEAR_DROP.normalChance) * (1 + dropPct / 100);
+export function tryGearDrop(s, { isBoss = false, stage = 1, buffs = null, dropMult = null, rng = Math.random, now = 0 } = {}) {
+  const b = buffs || {};
+  const gm = gearMods(s);
+  const mult = Number.isFinite(Number(dropMult)) && Number(dropMult) > 0
+    ? Number(dropMult)
+    : 1 + (Math.max(0, Number(b.dropPct) || 0) + Math.max(0, Number(b.setDropPct) || 0) + Math.max(0, Number(b.synDropPct) || 0) + Math.max(0, Number(gm.dropPct) || 0)) / 100;
+  const chance = (isBoss ? GEAR_DROP.bossChance : GEAR_DROP.normalChance) * mult;
   if (rng() >= chance) return null;
   const idx = rollDropRarityIdx(stage, isBoss, rng);
   const it = randomItemOfRarity(RARITIES[idx].id, rng);

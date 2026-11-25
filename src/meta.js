@@ -342,7 +342,7 @@ export function upgradePet(state, id) {
   if (lv >= PET_MAX_LV) return { ok: false, reason: '최대 강화 단계입니다.', max: true };
   const cost = petUpgradeCost(lv);
   if (Math.max(0, Math.floor(state.shards || 0)) < cost) {
-    return { ok: false, reason: `강화석이 부족힙니다. (필요 💎${cost})`, need: cost };
+    return { ok: false, reason: `강화석이 부족합니다. (필요 💎${cost})`, need: cost };
   }
   state.shards = Math.floor(state.shards - cost);
   if (!state.pet.levels || typeof state.pet.levels !== 'object') state.pet.levels = {};
@@ -627,7 +627,15 @@ export function dungeonReward(state, run, buffs = {}, rng = Math.random) {
   const dmg = Math.max(0, Number(run && run.dmg) || 0);
   const units = kills * DUNGEON.goldMul + bosses * DUNGEON.goldMul * DUNGEON.bossGoldMul + (dmg / unitHp) * DUNGEON.damageGoldPerHp;
   const swing = typeof rng === 'function' ? 0.92 + rng() * 0.16 : 1;
-  const gold = Math.max(0, Math.round(base * units * (1 + (buffs.goldPct || 0) / 100 + rb.goldPct / 100) * swing));
-  const shards = Math.max(0, Math.round((3 + kills * DUNGEON.shardPerKill + bosses * DUNGEON.bossShards + (dmg / unitHp) * 0.4) * (1 + rb.shardPct / 100)));
+  const b = buffs || {};
+  const pet = equippedPet(state);
+  const goldMult = Number.isFinite(Number(run && run.goldMult)) && Number(run.goldMult) > 0
+    ? Number(run.goldMult)
+    : 1 + ((b.goldPct || 0) + (b.setGoldPct || 0) + (b.landmarkGoldPct || 0) + (b.synGoldPct || 0) + rb.goldPct + (pet ? petGoldPct(state, pet.id) : 0)) / 100;
+  const dropMult = Number.isFinite(Number(run && run.dropMult)) && Number(run.dropMult) > 0
+    ? Number(run.dropMult)
+    : 1 + ((b.dropPct || 0) + (b.setDropPct || 0) + (b.synDropPct || 0) + rb.shardPct) / 100;
+  const gold = Math.max(0, Math.round(base * units * goldMult * swing));
+  const shards = Math.max(0, Math.round((3 + kills * DUNGEON.shardPerKill + bosses * DUNGEON.bossShards + (dmg / unitHp) * 0.4) * dropMult));
   return { gold, shards, units: Math.round(units * 100) / 100 };
 }

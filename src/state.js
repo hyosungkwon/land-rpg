@@ -754,19 +754,16 @@ export function monsterStats(stage, isBoss, variant = 1) {
 }
 
 export function killReward(s, stage, isBoss, buffs, rng = Math.random) {
-  const rb = rebirthBonus(s);
+  const st = calcStats(s, buffs);
   const gold = Math.round(
-    stageGoldBase(stage) * (isBoss ? ECON.bossGoldMul : 1)
-      * (1 + (buffs?.goldPct || 0) / 100 + rb.goldPct / 100) * (0.92 + rng() * 0.16)
+    stageGoldBase(stage) * (isBoss ? ECON.bossGoldMul : 1) * st.goldMult * (0.92 + rng() * 0.16),
   );
   const exp = Math.round(
-    stageExpBase(stage) * (isBoss ? ECON.bossExpMul : 1) * (0.95 + rng() * 0.1)
-      * (1 + (Number(buffs?.synExpPct) || 0) / 100),
+    stageExpBase(stage) * (isBoss ? ECON.bossExpMul : 1) * (0.95 + rng() * 0.1) * st.expMult,
   );
   let shards = 0;
-  const dropPct = (buffs?.dropPct || 0) + rb.shardPct;
-  if (isBoss) shards = Math.round((ECON.bossShardBase + stage * ECON.bossShardPerStage) * (1 + dropPct / 100));
-  else if (rng() < ECON.shardDropChance * (1 + dropPct / 100)) shards = 1;
+  if (isBoss) shards = Math.round((ECON.bossShardBase + stage * ECON.bossShardPerStage) * st.dropMult);
+  else if (rng() < ECON.shardDropChance * st.dropMult) shards = 1;
 
   s.gold += gold;
   s.shards += shards;
@@ -808,12 +805,12 @@ export function offlineSummary(s, now = nowMs(), buffs = NO_BUFF) {
   const sec = Math.floor(ms / 1000);
   if (sec < 60) return { ms, sec, capped, gold: 0, exp: 0, shards: 0 };
   const kills = sec * ECON.offlineKillsPerSec;
-  const rb = rebirthBonus(s);
-  const goldPerKill = stageGoldBase(s.stage) * (1 + (buffs?.goldPct || 0) / 100 + rb.goldPct / 100);
-  const expPerKill = stageExpBase(s.stage) * (1 + (Number(buffs?.synExpPct) || 0) / 100);
+  const st = calcStats(s, buffs);
+  const goldPerKill = stageGoldBase(s.stage) * st.goldMult;
+  const expPerKill = stageExpBase(s.stage) * st.expMult;
   const gold = Math.floor(goldPerKill * kills * ECON.offlineRate);
   const exp = Math.floor(expPerKill * kills * ECON.offlineRate);
-  const shards = Math.floor((sec / 3600) * 3 * (1 + (buffs?.dropPct || 0) / 100 + rb.shardPct / 100));
+  const shards = Math.floor((sec / 3600) * 3 * st.dropMult);
   return { ms, sec, capped, gold, exp, shards };
 }
 

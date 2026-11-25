@@ -9,7 +9,7 @@
 //  · 한 경매당 한 번만 낙찰할 수 있고, 결과는 땅.land.auction 에 남는다(세이브 호환).
 //
 // 순수 계산만 담당(DOM/네트워크 의존 없음) — 헤드리스 검증 가능.
-import { CITIES, CITY_BY_KEY, priceInfo } from './land.js';
+import { CITIES, CITY_BY_KEY, priceInfo, portfolioOf } from './land.js';
 
 export const AUCTION = {
   everyMs: 20 * 60 * 1000, // 20분마다 새 경매
@@ -221,6 +221,13 @@ export function applyAuctionBid(state, now = Date.now()) {
     bonusText: lot.bonusText,
   });
   land.auction.log = log.slice(0, AUCTION.logMax);
+
+  const p = portfolioOf(s, now);
+  const history = Array.isArray(land.assetHistory) ? land.assetHistory.slice(-288) : [];
+  const lastT = history.length ? num(history[history.length - 1].t) : 0;
+  if (now - lastT >= 60000) history.push({ t: now, v: Math.floor(p.totalAsset) });
+  land.assetHistory = history;
+  land.bestAsset = Math.max(num(land.bestAsset), Math.floor(p.totalAsset));
 
   return {
     ok: true,

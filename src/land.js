@@ -516,7 +516,7 @@ export function buffProgress(state, now = Date.now()) {
     },
     crit: {
       pct: cap(Math.floor(buildings / B.critPerCities) * B.critPer, B.critCap),
-      next: `건물 ${citiesToNext}곳 → 치명타 +${B.critPer}%`,
+      next: Math.floor(buildings / B.critPerCities) * B.critPer >= B.critCap ? '최대치' : `건물 ${citiesToNext}곳 → 치명타 +${B.critPer}%`,
     },
     drop: {
       pct: cap(p.pyeong / B.dropPerPyeong, B.dropCap),
@@ -595,8 +595,9 @@ export function applyTrade(state, key, side, qty, now = Date.now()) {
     } else {
       delete land.owned[key];
       delete land.totalCost[key];
-      // 전량 매도 → 그 지역 랜드마크도 함께 정리(지역이 없으면 세울 수 없다)
+      // 전량 매도 → 그 지역 랜드마크·경매 특별 임대 계약도 함께 정리(지역이 없으면 유지되지 않는다)
       if (land.landmarks && typeof land.landmarks === 'object') delete land.landmarks[key];
+      if (land.lease && typeof land.lease === 'object') delete land.lease[key];
     }
   }
   land.taxPaid = num(land.taxPaid) + quote.fee;

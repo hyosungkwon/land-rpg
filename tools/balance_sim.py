@@ -11,15 +11,71 @@
 
 사용: python3 tools/balance_sim.py [--hours 2] [--scenario active]
 """
+import atexit
 import json
 import os
 import re
+import subprocess
 import sys
 
-import quickjs
+try:
+    import quickjs
+except ImportError:
+    _NODE_RUNNER = (
+        "const vm = require('vm');\n"
+        "const rl = require('readline').createInterface({ input: process.stdin });\n"
+        "const sandbox = { console, Math, Date, JSON, Number, String, Boolean, Array, Object, RegExp, Error, TypeError, RangeError, SyntaxError, Set, Map, WeakMap, WeakSet, Promise, Symbol, parseInt, parseFloat, isNaN, isFinite, encodeURIComponent, decodeURIComponent, setTimeout, clearTimeout };\n"
+        "sandbox.globalThis = sandbox;\n"
+        "const ctx = vm.createContext(sandbox);\n"
+        "rl.on('line', (line) => {\n"
+        "  if (!line) return;\n"
+        "  try {\n"
+        "    const msg = JSON.parse(line);\n"
+        "    const v = vm.runInContext(msg.code, ctx);\n"
+        "    const outVal = (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') ? v : null;\n"
+        "    process.stdout.write(JSON.stringify({ ok: true, val: outVal }) + '\\n');\n"
+        "  } catch (e) {\n"
+        "    process.stdout.write(JSON.stringify({ ok: false, err: String(e && (e.stack || e.message) || e) }) + '\\n');\n"
+        "  }\n"
+        "});\n"
+    )
+
+    class _NodeContext:
+        def __init__(self):
+            self._p = subprocess.Popen(
+                ["node", "-e", _NODE_RUNNER],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+            )
+            atexit.register(self.close)
+
+        def eval(self, code):
+            self._p.stdin.write(json.dumps({"code": code}) + "\n")
+            self._p.stdin.flush()
+            out = self._p.stdout.readline()
+            if not out:
+                raise RuntimeError(self._p.stderr.read() or "node context exited")
+            res = json.loads(out)
+            if not res.get("ok"):
+                raise RuntimeError(res.get("err", "js eval error"))
+            return res.get("val")
+
+        def close(self):
+            if self._p and self._p.poll() is None:
+                try:
+                    self._p.stdin.close()
+                    self._p.terminate()
+                except Exception:
+                    pass
+
+    class quickjs:  # type: ignore[no-redef]
+        Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/quests.js", "src/state.js", "src/combat.js"]
+FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js"]
 
 
 def strip_module(src):

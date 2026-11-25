@@ -4,7 +4,7 @@
 import { APP_VERSION, ECON, EQUIP, EQUIP_MAX_LV, SKILLS, SAVE_KEY, stageDef, RARITIES, RARITY_INDEX, spriteSrc, enhanceCost } from './src/data.js';
 import {
   loadState, saveState, offlineSummary, applyOffline, tryEnhance, tryUpgradeSkill,
-  exchangeShards, pullGear, recordNews, enhanceMaxCount, normalizeState, compareGear,
+  exchangeShards, pullGear, recordNews, enhanceMaxCount, normalizeState, compareGear, skillCdOf,
 } from './src/state.js';
 import {
   gearItem, gearIcon, gearOptionList, equippedItem, equippedRarity, gearOwned, gearOptionSummary,
@@ -838,11 +838,21 @@ class App {
   async cloudCheckRemote({ silent = true } = {}) {
     const r = await this.cloud.readSave();
     if (!r.ok || !r.loaded || !r.loaded.doc) return null;
-    const cmp = compareSaves(this.cloudSummary(), r.loaded.summary);
+    const loaded = r.loaded;
+    const cmp = compareSaves(this.cloudSummary(), loaded.summary);
     this._cloudCmp = cmp;
+    this._cloudLoad = loaded.restorable ? loaded : null;
+    cmp.restorable = !!loaded.restorable;
     this._cloudHold = cmp.action === 'download' || cmp.action === 'conflict';
-    if (silent && this._cloudHold) {
-      this.ui.toast('☁️ 클라우드에 더 앞선 세이브가 있습니다 — 설정 ☁️ 카드에서 불러올 수 있어요', 'gold');
+    this.ui.syncCloud();
+    if (silent) {
+      if (this._cloudHold) {
+        this.ui.toast('☁️ 클라우드에 더 앞선 세이브가 있습니다 — 설정 ☁️ 카드에서 불러올 수 있어요', 'gold');
+      }
+    } else if (cmp.action === 'same') {
+      this.ui.toast('☁️ 클라우드와 같은 진행도입니다');
+    } else {
+      this.openCloudSyncModal(cmp);
     }
     return cmp;
   }
@@ -1068,7 +1078,8 @@ class App {
       castSkill: (key) => {
         const ok = this.battle.castSkill(key, Date.now());
         if (!ok) {
-          const left = Math.max(0, this.s.skills[key].last + SKILLS[key].cd - Date.now());
+          const cd = skillCdOf(key, this.buffs) || SKILLS[key].cd;
+          const left = Math.max(0, this.s.skills[key].last + cd - Date.now());
           this.ui.toast(left > 0 ? `${SKILLS[key].name} 재사용 대기 ${(left / 1000).toFixed(1)}초` : '지금은 시전할 수 없습니다');
         }
       },

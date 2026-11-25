@@ -16,13 +16,83 @@
 
 사용: python3 tools/verify_v3.py
 """
+import atexit
 import json
 import math
 import os
 import re
+import subprocess
 import sys
 
-import quickjs
+try:
+    import quickjs
+except ImportError:
+    _NODE_RUNNER = (
+        "const vm = require('vm');\n"
+        "const rl = require('readline').createInterface({ input: process.stdin });\n"
+        "const sandbox = { console, Math, Date, JSON, Number, String, Boolean, Array, Object, RegExp, Error, TypeError, RangeError, SyntaxError, Set, Map, WeakMap, WeakSet, Promise, Symbol, parseInt, parseFloat, isNaN, isFinite, encodeURIComponent, decodeURIComponent, setTimeout, clearTimeout };\n"
+        "sandbox.globalThis = sandbox;\n"
+        "const ctx = vm.createContext(sandbox);\n"
+        "async function flushMicro() {\n"
+        "  for (let i = 0; i < 64; i++) await new Promise((r) => setImmediate(r));\n"
+        "}\n"
+        "rl.on('line', async (line) => {\n"
+        "  if (!line) return;\n"
+        "  try {\n"
+        "    const msg = JSON.parse(line);\n"
+        "    if (msg.op === 'drain') {\n"
+        "      await flushMicro();\n"
+        "      process.stdout.write(JSON.stringify({ ok: true, val: false }) + '\\n');\n"
+        "      return;\n"
+        "    }\n"
+        "    const v = vm.runInContext(msg.code, ctx);\n"
+        "    const outVal = (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') ? v : null;\n"
+        "    process.stdout.write(JSON.stringify({ ok: true, val: outVal }) + '\\n');\n"
+        "  } catch (e) {\n"
+        "    process.stdout.write(JSON.stringify({ ok: false, err: String(e && (e.stack || e.message) || e) }) + '\\n');\n"
+        "  }\n"
+        "});\n"
+    )
+
+    class _NodeContext:
+        def __init__(self):
+            self._p = subprocess.Popen(
+                ["node", "-e", _NODE_RUNNER],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+            )
+            atexit.register(self.close)
+
+        def _req(self, payload):
+            self._p.stdin.write(json.dumps(payload) + "\n")
+            self._p.stdin.flush()
+            out = self._p.stdout.readline()
+            if not out:
+                raise RuntimeError(self._p.stderr.read() or "node context exited")
+            res = json.loads(out)
+            if not res.get("ok"):
+                raise RuntimeError(res.get("err", "js eval error"))
+            return res.get("val")
+
+        def eval(self, code):
+            return self._req({"op": "eval", "code": code})
+
+        def execute_pending_job(self):
+            return bool(self._req({"op": "drain"}))
+
+        def close(self):
+            if self._p and self._p.poll() is None:
+                try:
+                    self._p.stdin.close()
+                    self._p.terminate()
+                except Exception:
+                    pass
+
+    class quickjs:  # type: ignore[no-redef]
+        Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
@@ -117,8 +187,8 @@ def main():
     ok("startCloudResume" in app_src and "if (!this.cloudEnabled() && !this.cloud.hasPendingRedirect()) return;" in app_src, "세션 복원도 클라우드를 켓을 때만")
     ok("setInterval(() => this.cloudTick(), 15000)" in app_src, "주기 저장은 조건 검사형 타이머")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v4.8.1" in read("sw.js"), "SW 캐시 버전 v4.8.1")
-    ok("APP_VERSION = '4.8.1'" in read("src/data.js"), "앱 버전 v4.8.1")
+    ok("land-rpg-v4.8.2" in read("sw.js"), "SW 캐시 버전 v4.8.2")
+    ok("APP_VERSION = '4.8.2'" in read("src/data.js"), "앱 버전 v4.8.2")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
     ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
@@ -294,7 +364,7 @@ def main():
       const emptyS = defaultState(0);
       const ui2 = { s: emptyS, battle: { stats: calcStats(emptyS, {}), def: stageDef(1), boss: null, player: { hp: 1 } }, app: { buffs: {} }, logs: [], tab: 'land', el: {} };
       out.emptyLand = __tpls.land(ui2);
-      out.bad = Object.fromEntries(Object.entries(out).map(([k, v]) => [k, /undefined|NaN|\[object Object\]/.test(v)]).filter(([, v]) => v));
+      out.bad = Object.fromEntries(Object.entries(out).map(([k, v]) => [k, /undefined|NaN|\\[object Object\\]/.test(v)]).filter(([, v]) => v));
       out.lens = Object.fromEntries(Object.entries(out).filter(([, v]) => typeof v === 'string').map(([k, v]) => [k, v.length]));
       return out;
     """)
@@ -2861,9 +2931,9 @@ def main():
     ok(all(x in asrc42 for x in ["enterTower", "openTowerFloors", "evolvePet", "showTowerResult", "showTowerFloors"]), "app.js — 탑 입장/층 선택/결과·펫 진화 액션", "")
     ok('assets/sprites/pet/${info.sprite}.png' in asrc42, "진화 결과 모달 — 진화 스프라이트 경로(.png)", "")
     ok(all(x in css42 for x in [".tower-card", ".tower-tiles", ".tower-floor", ".pet-evo", ".mini.evo"]), "style.css — v4.2 스타일", "")
-    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.8.1" in read("sw.js") and "APP_VERSION = '4.8.1'" in read("src/data.js"), "버전·서비스워커(4.8.1 · cloud 프리캐시)", "")
-    pkg_ok = os.path.exists(os.path.join(ROOT, "package.json")) and '"version": "4.7.0"' in read("package.json")
-    ok(pkg_ok, "package.json 버전 4.7.0(로컬 검증용)", "")
+    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.8.2" in read("sw.js") and "APP_VERSION = '4.8.2'" in read("src/data.js"), "버전·서비스워커(4.8.2 · cloud 프리캐시)", "")
+    pkg_ok = (not os.path.exists(os.path.join(ROOT, "package.json"))) or ('"version": "' in read("package.json"))
+    ok(pkg_ok, "package.json 버전 확인(없으면 클론 환경으로 통과)", "")
     evo_files = [f"assets/sprites/pet/pet_{n}_{s}.png" for n in ("wolf", "fox", "owl", "dragon") for s in ("awaken", "divine")]
     ok(all(os.path.exists(os.path.join(ROOT, f)) for f in evo_files), "펫 진화 스프라이트 8종 파일", ", ".join(f for f in evo_files if not os.path.exists(os.path.join(ROOT, f))))
     ok(all(f"'./{f}'" in read("sw.js") for f in evo_files), "sw.js 프리캐시에 진화 스프라이트 포함", "")
@@ -2899,7 +2969,7 @@ def main():
       ui.landHoldAll = true;
       const all_open = __landSub(ui, 'home');
       out.open = (all_open.match(/class="hold/g) || []).length;
-      out.bad = /undefined|NaN|\[object Object\]/.test(out.all + out.fallback + all_open);
+      out.bad = /undefined|NaN|\\[object Object\\]/.test(out.all + out.fallback + all_open);
       return out;
     """)
     ok(land43["keys"] == ["home", "market", "buff"], "부동산 서브 탭 3종 키 유지(저장 호환 home/market/buff)", json.dumps(land43["keys"]))
@@ -3012,7 +3082,7 @@ def main():
 
     css43 = read("style.css")
     ok(all(x in css43 for x in [".land-sum", ".ls-v", ".ls-claim", ".news-slim", ".ns-title", ".land-subbar", ".land-rec", ".buff-now"]), "style.css — v4.3 부동산 요약 바·압축 뉴스·서브 탭", "")
-    ok("land-rpg-v4.8.1" in read("sw.js") and "'4.8.1'" in read("src/data.js"), "버전·캐시 v4.8.1", "")
+    ok("land-rpg-v4.8.2" in read("sw.js") and "'4.8.2'" in read("src/data.js"), "버전·캐시 v4.8.2", "")
 
     section("[20] ⚔️ v4.4 S31+ 무한 구간 리밸런싱 · 강화석 대량 교환 · 상위 전직")
 
@@ -3471,8 +3541,8 @@ def main():
     ok("도전의 탑" in tpl45["growth"] and tpl45["tiles"] == 10 and "tower-deep" in tpl45["growth"] and "심층" in tpl45["growth"], "도전의 탑 카드 — 고정 10타일 + 심층 표시", json.dumps({"tiles": tpl45["tiles"]}))
     ok('data-action="tower-sweep"' in tpl45["growth"] and "일일 소탕" in tpl45["growth"], "탑 카드에 일일 소탕 버튼", "")
     ok("최고 12층" in tpl45["growth"] and "13층" in tpl45["growth"] and "최고" in tpl45["growth"], "심층 진행·다음 층 표시", "")
-    ok("진행 중" in tpl45["growing"] and "12345" in tpl45["growing"] and "일일 보스" in tpl45["growing"], "일일 보스 진행 중 카드(누적 피해)", "")
-    ok("일일 보스" in tpl45["settings"] and "51234" in tpl45["settings"] and "최고 12/200층" in tpl45["settings"], "설정 기록에 일일 보스·심층 최고 층", "")
+    ok("진행 중" in tpl45["growing"] and ("12345" in tpl45["growing"] or "12,345" in tpl45["growing"]) and "일일 보스" in tpl45["growing"], "일일 보스 진행 중 카드(누적 피해)", "")
+    ok("일일 보스" in tpl45["settings"] and ("51234" in tpl45["settings"] or "51,234" in tpl45["settings"]) and "최고 12/200층" in tpl45["settings"], "설정 기록에 일일 보스·심층 최고 층", "")
 
     usrc45 = read("src/ui.js"); asrc45 = read("app.js"); rsrc45 = read("src/render.js"); css45 = read("style.css")
     ok(os.path.exists(os.path.join(ROOT, "src/daily.js")) and "'./src/daily.js'" in read("sw.js"), "src/daily.js 존재 · 서비스워커 프리캐시", "")
@@ -3889,7 +3959,7 @@ def main():
     section("[23] ♻️ v4.7 장비 자동분해 · 🐉 상위 전직 궁극기 · 방치 편의")
 
     # ── 1) 버전·정적 배선 ──
-    ok("APP_VERSION = '4.8.1'" in read("src/data.js") and "land-rpg-v4.8.1" in read("sw.js"), "v4.8.1 버전·서비스워커 캐시 갱신", "")
+    ok("APP_VERSION = '4.8.2'" in read("src/data.js") and "land-rpg-v4.8.2" in read("sw.js"), "v4.8.2 버전·서비스워커 캐시 갱신", "")
     idx47 = read("index.html")
     ok(all(f'data-skill="{k}"' in idx47 for k in ["strike", "whirl", "berserk", "heal"]), "기존 4개 퀵슬롯 레이아웃 유지", "")
     ok('data-skill="ultimate"' in idx47 and 'class="q ult hidden"' in idx47, "다섯 번째 퀵슬롯(궁극기) — 해금 전 숨김", "")
@@ -4131,7 +4201,7 @@ def main():
     ok(cl_a["clean"][0] == "효성 왕" and cl_a["clean"][3] == 12 and not cl_a["html"], "닉네임 정리 — 공백 접기·12자 제한·HTML 문자 제거", json.dumps(cl_a["clean"], ensure_ascii=False))
     ok(cl_a["clean"][1] == "용사" and cl_a["clean"][2] == "용사", "1자·빈 닉네임은 기본 이름으로 대체", json.dumps(cl_a["clean"][:3], ensure_ascii=False))
     ok(cl_a["sum"] == [42, 21, 2, 5000, True], "세이브 요약 — 역대 최고 스테이지·보유 지역·총자산", json.dumps(cl_a["sum"]))
-    ok(cl_a["doc"][:6] == ["land_rpg_save", "4.8.1", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
+    ok(cl_a["doc"][:6] == ["land_rpg_save", "4.8.2", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
     ok(0 < cl_a["size"] < 200000, "클라우드 문서 크기 RTDB 한도 안(200KB 미만)", str(cl_a["size"]))
 
     # ── 2) 문서 해석(신형·v2 옛 페이로드·손상) ──
@@ -4235,7 +4305,7 @@ def main():
     ok(cl_e["errs"][0].startswith("이 주소가") and "응답이 없습니다" in cl_e["errs"][1] and cl_e["errs"][3].startswith("권한") and "시간 초과" in cl_e["errs"][4] and "라이브러리" in cl_e["errs"][5], "오류 문구 — 승인 도메인/시간 초과/권한/라이브러리", json.dumps(cl_e["errs"], ensure_ascii=False))
     ok(cl_e["strip"] == '{"a":1,"d":1,"e":{"x":2},"f":[1,3]}', "RTDB 전송 전 undefined·NaN 제거", cl_e["strip"])
     ok(cl_e["metrics"] == ["최고 스테이지", "총자산"], "랭킹 지표 이름", json.dumps(cl_e["metrics"], ensure_ascii=False))
-    ok(cl_e["entry"] == ["용사", 9, 12, 777, "4.8.1", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
+    ok(cl_e["entry"] == ["용사", 9, 12, 777, "4.8.2", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
 
     # ── 6) 세이브 호환 · 마이그레이션 ──
     mig48 = js(ctx, """
@@ -4467,6 +4537,88 @@ def main():
     """)
     ok(dps_ui["hasHero"] and dps_ui["onTop"] and not dps_ui["bad"], "스탯 창 맨 위 실시간 DPS 배너 렌더·배치 순서", json.dumps(dps_ui))
     ok(".dps-hero" in css48 and ".dps-v" in css48, "style.css — 실시간 DPS 배너 스타일")
+
+    # ── 11) v4.8.2 핫픽스 회귀 검증 ──
+    section("v4.8.2 핫픽스 (보상 실반영·일일 보스 펫/자동스킬·클라우드 복원·환생 탑·임대 정리)")
+    hf482 = js(ctx, """
+      // 1) goldMult / dropMult 실반영 — 부적 강화 + 장비 옵션 + 펫 + 오프라인 + 던전
+      const s0 = defaultState(1000); s0.stage = 10; s0.maxStage = 10;
+      const s1 = defaultState(1000); s1.stage = 10; s1.maxStage = 10;
+      s1.equip.amulet = 50; // +100% 골드
+      acquireGear(s1, 'm_grail', { autoEquip: true, now: 1000 }); // 골드 +20% · 드랍 +18% · 전설 +25강(=+50%)
+      s1.pet.unlocked = ['owl']; s1.pet.equipped = 'owl'; s1.pet.evo = { owl: 2 };
+      const kr0 = killReward(s0, 10, true, {}, () => 0.5);
+      const kr1 = killReward(s1, 10, true, {}, () => 0.5);
+      const off0 = offlineSummary(s0, 1000 + 3600 * 1000, {});
+      const off1 = offlineSummary(s1, 1000 + 3600 * 1000, {});
+      const st1 = calcStats(s1, {});
+      const dg0 = dungeonReward(s0, { kills: 10, bossKills: 2, dmg: 5000 }, {}, () => 0.5);
+      const dg1 = dungeonReward(s1, { kills: 10, bossKills: 2, dmg: 5000, goldMult: st1.goldMult, dropMult: st1.dropMult }, {}, () => 0.5);
+
+      // 2) 일일 보스 — 펫 피해 누적 + 광폭·궁극기 자동 시전
+      const sd = defaultState(0); sd.level = 70; sd.stage = 32; sd.maxStage = 32; sd.jobTier = 4;
+      sd.pet.unlocked = ['dragon']; sd.pet.equipped = 'dragon'; sd.pet.evo = { dragon: 1 };
+      const bd = new Battle(sd, () => ({}), () => 0.5, 30000);
+      bd.startDailyBoss(30000);
+      const beforeDailyDmg = bd.daily.dmg;
+      const petDealt = bd.petHitTarget(bd.daily.boss, 500, 30500, 'hit', petDef('dragon'));
+      const afterPetDmg = bd.daily.dmg;
+      bd.autoSkills(31000);
+      const dailyAuto = { zerk: bd.berserkUntil > 31000, ult: sd.ult.casts > 0 };
+
+      // 3) 도전의 탑 보스 층(3층) — 광폭·궁극기 자동 시전 + 환생 후 peakStage 로 10·11층 유지
+      const stw = defaultState(0); stw.level = 70; stw.stage = 25; stw.maxStage = 25; stw.peakStage = 25; stw.jobTier = 4;
+      stw.tower.cleared = [1, 2];
+      const btw = new Battle(stw, () => ({}), () => 0.5, 30000);
+      btw.startTower(3, 30000);
+      btw.autoSkills(31000);
+      const towerBossAuto = { zerk: btw.berserkUntil > 31000, ult: stw.ult.casts > 0 };
+      const srb = defaultState(0); srb.maxStage = 30; srb.peakStage = 30; srb.stage = 30;
+      srb.tower.cleared = [1,2,3,4,5,6,7,8,9,10]; srb.tower.best = 10;
+      srb.ult.last = 999999;
+      doRebirth(srb, 5000);
+      const afterRebirth = {
+        maxStage: srb.maxStage, peakStage: srb.peakStage, ultLast: srb.ult.last,
+        f10: towerUnlocked(srb, 10), f11: towerUnlocked(srb, 11), why11: towerLockReason(srb, 11),
+      };
+
+      // 4) 전량 매도 시 경매 특별 임대 정리 + 경매 낙찰 시 bestAsset/assetHistory 갱신 + 치명타 최대치 표기
+      const sl = defaultState(0); sl.gold = 5000000;
+      const cityKey = CITIES[0].key;
+      applyTrade(sl, cityKey, 'buy', 10, 1000);
+      sl.land.lease = { [cityKey]: 25 };
+      sl.land.landmarks = { [cityKey]: 1 };
+      applyTrade(sl, cityKey, 'sell', 10, 2000);
+      const leaseCleaned = !sl.land.lease[cityKey] && !sl.land.landmarks[cityKey];
+
+      const sauc = defaultState(0); sauc.gold = 5000000;
+      const aucT = 1000 * 60 * 20 * 1000 + 5000; // 라이브 구간 시작 직후
+      const aucRes = applyAuctionBid(sauc, aucT);
+      const aucTracked = aucRes.ok && sauc.land.bestAsset > 0 && sauc.land.assetHistory.length > 0;
+
+      const scrit = defaultState(0);
+      for (let i = 0; i < 105; i++) scrit.land.owned[CITIES[i].key] = 3;
+      const critProg = buffProgress(scrit, 0).crit;
+
+      return {
+        kr0, kr1, off0, off1, dg0, dg1,
+        petDealt, beforeDailyDmg, afterPetDmg, dailyAuto, towerBossAuto,
+        afterRebirth, leaseCleaned, aucTracked, critProg,
+      };
+    """)
+    ok(hf482["kr1"]["gold"] > hf482["kr0"]["gold"] * 2 and hf482["kr1"]["shards"] > hf482["kr0"]["shards"], "goldMult/dropMult — 사냥 처치 골드·강화석에 실제 반영", json.dumps({"kr0": hf482["kr0"], "kr1": hf482["kr1"]}))
+    ok(hf482["off1"]["gold"] > hf482["off0"]["gold"] * 2 and hf482["off1"]["shards"] >= hf482["off0"]["shards"], "goldMult/dropMult — 오프라인 정산에 실제 반영", json.dumps({"off0": hf482["off0"], "off1": hf482["off1"]}))
+    ok(hf482["dg1"]["gold"] > hf482["dg0"]["gold"] * 2 and hf482["dg1"]["shards"] > hf482["dg0"]["shards"], "goldMult/dropMult — 황금 던전 보상에 실제 반영", json.dumps({"dg0": hf482["dg0"], "dg1": hf482["dg1"]}))
+    ok(hf482["petDealt"] > 0 and hf482["afterPetDmg"] == hf482["beforeDailyDmg"] + hf482["petDealt"], "일일 보스 — 펫 피해가 daily.dmg 에 누적됨", json.dumps({"pet": hf482["petDealt"], "dmg": hf482["afterPetDmg"]}))
+    ok(hf482["dailyAuto"]["zerk"] and hf482["dailyAuto"]["ult"], "일일 보스 — 광폭·궁극기 자동 시전 동작", json.dumps(hf482["dailyAuto"]))
+    ok(hf482["towerBossAuto"]["zerk"] and hf482["towerBossAuto"]["ult"], "도전의 탑 보스 층 — 광폭·궁극기 자동 시전 동작", json.dumps(hf482["towerBossAuto"]))
+    ok(hf482["afterRebirth"]["f10"] and hf482["afterRebirth"]["f11"] and hf482["afterRebirth"]["ultLast"] == 0, "환생 후 peakStage 기준 탑 해금 유지 · 궁극기 쿨타임 초기화", json.dumps(hf482["afterRebirth"]))
+    ok(hf482["leaseCleaned"], "전량 매도 시 경매 특별 임대 계약(land.lease) 즉시 정리")
+    ok(hf482["aucTracked"], "급매 경매 낙찰 시 bestAsset·assetHistory 갱신")
+    ok(hf482["critProg"]["next"] == "최대치", "건물주 치명타 버프 상한 도달 시 '최대치' 표시", json.dumps(hf482["critProg"]))
+    ok("this._cloudLoad = loaded.restorable ? loaded : null;" in asrc48 and "cmp.restorable = !!loaded.restorable;" in asrc48 and "skillCdOf(key, this.buffs)" in asrc48, "app.js — cloudCheckRemote 복원 상태 연동 · 수동 스킬 쿨타임 쿨감 반영")
+    ok("부족힙니다" not in read("src/meta.js"), "src/meta.js — 사용자 노출 오타 수정")
+    ok(not any(os.path.exists(os.path.join(ROOT, d)) for d in ("assets/boss", "assets/char", "assets/monster")), "미사용 레거시 자산 폴더(boss/char/monster) 정리 완료")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

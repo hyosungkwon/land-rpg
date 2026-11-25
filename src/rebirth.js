@@ -306,6 +306,7 @@ export function doRebirth(state, now = Date.now(), opts = {}) {
       if (state.skills[k] && typeof state.skills[k] === 'object') state.skills[k].last = 0;
     }
   }
+  if (state.ult && typeof state.ult === 'object') state.ult.last = 0;
 
   return {
     ok: true,
