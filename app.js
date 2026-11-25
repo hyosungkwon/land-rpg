@@ -14,6 +14,10 @@ import {
 
 const GEAR_OPT_LABEL = (k) => (GEAR_OPTS[k] ? `${GEAR_OPTS[k].icon} ${GEAR_OPTS[k].name}` : k);
 import { encodeSave, decodeSave, summarizeSave } from './src/savecode.js';
+import {
+  CLOUD, CloudSync, buildCloudDoc, cloudSummary, compareSaves, rankEntryOf,
+  sanitizeNick, nickOf, formatAsset,
+} from './src/cloud.js';
 import { Battle } from './src/combat.js';
 import {
   computeBuffs, portfolioOf, accrueRent, claimRent, applyTrade, quoteTrade, maxBuyQty,
@@ -109,6 +113,14 @@ class App {
     // 💾 v3.6: 복원 직전에 보관해 둔 세이브(설정 탭 '직전 세이브로 복구')
     this.prevSave = this.readPrevSave();
     this._pendingSave = null;
+    // ☁️ v4.8 선택적 클라우드 세이브·랭킹 — 객체만 만들고 SDK 는 사용자가 켤 때 동적 로드한다
+    this.cloud = new CloudSync({ onChange: () => this.onCloudChange() });
+    this.lastCloudUpload = 0;
+    this._rankKey = '';
+    this._cloudCmp = null;
+    this._cloudBusy = false;
+    this._cloudAuthBusy = false;
+    this._cloudResumeStarted = false;
   }
 
   get prop() {
@@ -166,6 +178,8 @@ class App {
 
     this.bindLifecycle();
     this.registerSW();
+    // ☁️ v4.8: 클라우드를 켜 둔 사용자만 — 게스트 화면이 뜬 뒤에 조용히 세션을 되살린다
+    this.startCloudResume();
   }
 
   stageMonsterNames(stage) {
@@ -662,6 +676,373 @@ class App {
     }
   }
 
+  /* ───────────── ☁️ v4.8 클라우드 세이브 · 🏆 랭킹 ─────────────
+   * 게스트가 기본이다. 아래 코드는 사용자가 설정 탭에서 클라우드를 켰을 때만 실제로 돈다.
+   * 실패·오프라인·시간 초과는 상태 문구로만 남기고, 게스트 저장(localStorage)은 계속된다.
+   */
+  cloudEnabled() {
+    return !!(this.s && this.s.cloud && this.s.cloud.enabled === true);
+  }
+
+  cloudSummary(now = Date.now()) {
+    try {
+      return cloudSummary(this.s, now);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /** 클라우드 상태가 바뀌면 HUD 배지·설정 카드만 다시 그린다 */
+  onCloudChange() {
+    try {
+      this.ui.syncCloud();
+    } catch (e) { /* 부팅 중 UI 가 없을 수 있다 */ }
+  }
+
+  startCloudResume() {
+    // 주기 저장 타이머 — 조건(켜짐·로그인·온라인·60초)을 만족할 때만 실제 전송
+    this._cloudTimer = setInterval(() => this.cloudTick(), 15000);
+    if (!this.cloudEnabled() && !this.cloud.hasPendingRedirect()) return;
+    setTimeout(() => this.cloudResume(), CLOUD.resumeDelayMs);
+  }
+
+  /** 로그인 세션 복원 — 실패해도 게스트로 그대로 둔다(무한 로딩 없음) */
+  async cloudResume() {
+    if (this._cloudResumeStarted) return;
+    this._cloudResumeStarted = true;
+    const c = this.cloud;
+    try {
+      const done = await c.completeRedirect();
+      if (done && done.ok) {
+        await this.afterCloudLogin({ silent: false });
+        return;
+      }
+      if (!this.cloudEnabled()) { this.ui.syncCloud(); return; }
+      const ok = await c.restoreSession();
+      if (!ok) { this.ui.syncCloud(); return; }
+      this.s.cloud.uid = c.uid;
+      this.s.cloud.email = (c.user && c.user.email) || this.s.cloud.email || '';
+      this.save();
+      this.ui.syncCloud();
+      await this.cloudCheckRemote({ silent: true });
+    } catch (e) {
+      this.ui.syncCloud();
+    }
+  }
+
+  /** 60초 주기 저장 */
+  async cloudTick() {
+    const c = this.cloud;
+    if (!this.cloudEnabled() || !c.signedIn || c.busy || this._cloudBusy) return;
+    if (this.s.cloud && this.s.cloud.autoSync === false) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+    const now = Date.now();
+    if (now - Math.max(this.lastCloudUpload, (this.s.cloud && this.s.cloud.lastSync) || 0) < CLOUD.autoSyncMs) return;
+    await this.cloudUpload({ silent: true });
+  }
+
+  /** Google 로그인 — 팝업 → 차단되면 리다이렉트 */
+  async cloudSignIn() {
+    this.sound.unlock();
+    if (this._cloudAuthBusy) return;
+    this._cloudAuthBusy = true;
+    this.ui.syncCloud('connecting');
+    try {
+      let r = await this.cloud.signIn();
+      if (!r.ok && r.retryRedirect) {
+        this.ui.toast('로그인 창이 막혀 있어 이동식 로그인으로 바꿉니다', '');
+        const rd = await this.cloud.signInRedirect();
+        if (rd.ok) {
+          this.ui.toast('Google 로그인 화면으로 이동합니다…', 'gold');
+          return;
+        }
+        r = rd;
+      }
+      if (!r.ok) {
+        this.ui.toast(`로그인하지 못했습니다 — ${r.message}`, 'red');
+        this.ui.syncCloud();
+        return;
+      }
+      await this.afterCloudLogin({ silent: false });
+    } finally {
+      this._cloudAuthBusy = false;
+      this.ui.syncCloud();
+    }
+  }
+
+  async cloudSignOut() {
+    await this.cloud.signOut();
+    this.s.cloud.enabled = false;
+    this.s.cloud.lastSync = 0;
+    this.save(true);
+    this.lastCloudUpload = 0;
+    this._rankKey = '';
+    this._cloudResumeStarted = false;
+    this.ui.syncCloud();
+    this.ui.toast('☁️ 클라우드 연결을 끊었습니다 — 이 기기 저장은 그대로', '');
+  }
+
+  /** 로그인 직후 — 설정 저장 → 클라우드와 진행도 비교 → (비었으면) 조용히 올리기 */
+  async afterCloudLogin({ silent = false } = {}) {
+    const c = this.cloud;
+    this.s.cloud.enabled = true;
+    this.s.cloud.uid = c.uid;
+    this.s.cloud.email = (c.user && c.user.email) || this.s.cloud.email || '';
+    if (!nickOf(this.s)) this.s.cloud.nick = sanitizeNick('', c.uid);
+    this.save(true);
+    this.ui.syncCloud();
+    if (!silent) {
+      const who = c.user && (c.user.name || c.user.email) ? `${c.user.name || c.user.email} · ` : '';
+      this.ui.toast(`☁️ ${who}클라우드 연결됨`, 'green');
+    }
+    const r = await c.readSave();
+    if (!r.ok) {
+      if (!silent) this.ui.toast(`☁️ 클라우드를 읽지 못했습니다 — ${r.message}`, 'red');
+      return null;
+    }
+    const loaded = r.loaded || {};
+    if (!loaded.doc) {
+      // 클라우드가 비어 있다 → 잃을 것이 없으니 조용히 올린다
+      await this.cloudUpload({ silent });
+      return { action: 'upload', why: 'cloud-empty' };
+    }
+    const cmp = compareSaves(this.cloudSummary(), loaded.summary);
+    this._cloudCmp = cmp;
+    if (cmp.action === 'same') {
+      if (!silent) this.ui.toast('☁️ 클라우드와 같은 진행도입니다');
+      return cmp;
+    }
+    if (silent) {
+      if (cmp.action === 'download' || cmp.action === 'conflict') {
+        this.ui.toast('☁️ 클라우드에 더 앞선 세이브가 있습니다 — 설정 ☁️ 카드에서 불러올 수 있어요', 'gold');
+      }
+      return cmp;
+    }
+    this.openCloudSyncModal(cmp);
+    return cmp;
+  }
+
+  /** 처음 연결·세션이 복원된 뒤 — 덮어쓰지 않고 알리기만 한다 */
+  async cloudCheckRemote({ silent = true } = {}) {
+    const r = await this.cloud.readSave();
+    if (!r.ok || !r.loaded || !r.loaded.doc) return null;
+    const cmp = compareSaves(this.cloudSummary(), r.loaded.summary);
+    this._cloudCmp = cmp;
+    if (silent && (cmp.action === 'download' || cmp.action === 'conflict')) {
+      this.ui.toast('☁️ 클라우드에 더 앞선 세이브가 있습니다 — 설정 ☁️ 카드에서 불러올 수 있어요', 'gold');
+    }
+    return cmp;
+  }
+
+  /** 로컬·클라우드 비교 → 사용자가 고르는 모달(자동 덮어쓰기 없음) */
+  openCloudSyncModal(cmp) {
+    const cur = this.cloudSummary() || {};
+    const cl = (cmp && cmp.cloud) || {};
+    const rec = cmp && cmp.recommend === 'cloud' ? 'cloud' : 'local';
+    const row = (icon, label, a, b) => `<div class="sp-row"><span class="sp-k">${icon} ${label}</span><b class="sp-a">${a}</b><b class="sp-b">${b}</b></div>`;
+    const why = cmp && cmp.action === 'conflict'
+      ? '양쪽 모두 다른 시점에 플레이했습니다. 어느 쪽을 남길지 골라 주세요.'
+      : rec === 'cloud'
+        ? '클라우드 세이브가 더 앞서 있습니다.'
+        : '이 기기 세이브가 더 앞서 있습니다.';
+    this.ui.modal({
+      title: '☁️ 클라우드 세이브 확인',
+      sub: '이 기기 ↔ 클라우드 · 덮어쓰기 전에 한 번 확인합니다',
+      body: `<div class="save-preview">
+               <div class="sp-row sp-head"><span class="sp-k">항목</span><b class="sp-a">이 기기</b><b class="sp-b">클라우드</b></div>
+               ${row('⭐', '레벨', cur.level || 1, cl.level || 1)}
+               ${row('🏔️', '최고 스테이지', `S${cur.stage || 1}`, `S${cl.stage || 1}`)}
+               ${row('💰', '총자산', formatAsset(cur.totalAsset || 0), formatAsset(cl.totalAsset || 0))}
+               ${row('🏢', '보유 지역', `${cur.cities || 0}곳`, `${cl.cities || 0}곳`)}
+               ${row('♾️', '환생', `${cur.rebirth || 0}회`, `${cl.rebirth || 0}회`)}
+             </div>
+             <div class="note">${why}<br>어느 쪽을 골라도 지금 세이브는 <b>직전 세이브</b>로 보관되어 설정 탭에서 되돌릴 수 있습니다.</div>`,
+      actions: [
+        { label: '나중에', onClick: () => {} },
+        { label: '📥 클라우드 불러오기', style: rec === 'cloud' ? 'primary' : 'ghost', onClick: () => this.cloudRestore() },
+        { label: '📤 이 기기 세이브 올리기', style: rec === 'local' ? 'primary' : 'ghost', onClick: () => this.cloudUpload({ silent: false }) },
+      ],
+    });
+  }
+
+  /** 클라우드로 올리기 · 랭킹 갱신 */
+  async cloudUpload({ silent = false } = {}) {
+    const c = this.cloud;
+    if (!c.signedIn) {
+      if (!silent) this.ui.toast('먼저 Google 로그인을 해 주세요');
+      return { ok: false, code: 'no-user' };
+    }
+    if (this._cloudBusy) return { ok: false, code: 'busy' };
+    this._cloudBusy = true;
+    try {
+      this.save(true);
+      const doc = buildCloudDoc(this.s, { uid: c.uid, nick: nickOf(this.s), now: Date.now() });
+      const r = await c.writeSave(doc);
+      if (!r.ok) {
+        if (!silent) this.ui.toast(`☁️ 저장하지 못했습니다 — ${r.message}`, 'red');
+        this.ui.syncCloud();
+        return r;
+      }
+      this.lastCloudUpload = r.at || Date.now();
+      this.s.cloud.enabled = true;
+      this.s.cloud.uid = c.uid;
+      this.s.cloud.lastSync = this.lastCloudUpload;
+      this.save();
+      this.cloudPushRank({ silent: true });
+      if (!silent) this.ui.toast('☁️ 클라우드에 저장했습니다', 'green');
+      this.ui.syncCloud();
+      return r;
+    } finally {
+      this._cloudBusy = false;
+    }
+  }
+
+  /** 랭킹 참여 — 진행도가 바뀔 때만 쓴다 */
+  async cloudPushRank({ silent = true } = {}) {
+    const c = this.cloud;
+    if (!c.signedIn) return null;
+    const entry = rankEntryOf(this.s, { uid: c.uid, nick: nickOf(this.s), now: Date.now() });
+    const key = `${entry.name}|${entry.stage}|${entry.totalAsset}|${entry.level}`;
+    if (key === this._rankKey) return null;
+    this._rankKey = key;
+    const r = await c.writeRank(entry);
+    if (!r.ok) {
+      this._rankKey = '';
+      if (!silent) this.ui.toast(`🏆 랭킹 등록 실패 — ${r.message}`, 'red');
+      return r;
+    }
+    if (this.cloud.rank.all && this.cloud.rank.all.length) this.cloudRank(this.cloud.rank.key, { quiet: true });
+    return r;
+  }
+
+  /** 불러오기 — 확인 모달 → 복원(직전 세이브 보관) */
+  async openCloudLoad() {
+    if (!this.cloud.signedIn) {
+      this.ui.toast('클라우드 세이브를 불러오려면 Google 로그인이 필요합니다');
+      return;
+    }
+    if (this._cloudBusy) return;
+    this._cloudBusy = true;
+    this.cloud.emit('connecting');
+    let r;
+    try {
+      r = await this.cloud.readSave();
+    } finally {
+      this._cloudBusy = false;
+    }
+    this.cloud.emit(this.cloud.signedIn ? 'online' : 'guest');
+    if (!r || !r.ok) {
+      this.ui.toast(`☁️ 불러오지 못했습니다 — ${(r && r.message) || '알 수 없는 오류'}`, 'red');
+      this.ui.syncCloud();
+      return;
+    }
+    const loaded = r.loaded || {};
+    if (!loaded.doc) {
+      this.ui.toast('☁️ 클라우드에 저장된 세이브가 없습니다');
+      this.ui.syncCloud();
+      return;
+    }
+    if (!loaded.restorable) {
+      this.ui.toast('☁️ 예전 형식의 기록이라 복원할 수 없습니다', 'red');
+      return;
+    }
+    this._cloudLoad = loaded;
+    const cur = this.cloudSummary() || {};
+    const cl = loaded.summary || {};
+    const row = (icon, label, a, b) => `<div class="sp-row"><span class="sp-k">${icon} ${label}</span><b class="sp-a">${a}</b><b class="sp-b">${b}</b></div>`;
+    this.ui.modal({
+      title: '📥 클라우드 세이브 불러오기',
+      sub: '이 기기 진행도와 비교한 뒤 복원합니다',
+      body: `<div class="save-preview">
+               <div class="sp-row sp-head"><span class="sp-k">항목</span><b class="sp-a">이 기기</b><b class="sp-b">클라우드</b></div>
+               ${row('⭐', '레벨', cur.level || 1, cl.level || 1)}
+               ${row('🏔️', '최고 스테이지', `S${cur.stage || 1}`, `S${cl.stage || 1}`)}
+               ${row('💰', '총자산', formatAsset(cur.totalAsset || 0), formatAsset(cl.totalAsset || 0))}
+               ${row('🏢', '보유 지역', `${cur.cities || 0}곳`, `${cl.cities || 0}곳`)}
+               ${row('♾️', '환생', `${cur.rebirth || 0}회`, `${cl.rebirth || 0}회`)}
+             </div>
+             <div class="note">복원하면 지금 세이브는 <b>직전 세이브</b>로 보관됩니다. 클라우드 세이브는 지워지지 않습니다.</div>`,
+      actions: [
+        { label: '취소', onClick: () => {} },
+        { label: '📥 불러오기', style: 'primary', onClick: () => this.cloudRestore() },
+      ],
+    });
+  }
+
+  cloudRestore() {
+    const loaded = this._cloudLoad;
+    this._cloudLoad = null;
+    if (!loaded || !loaded.doc || !loaded.doc.save) {
+      this.ui.toast('불러올 클라우드 세이브가 없습니다', 'red');
+      return;
+    }
+    let next;
+    try {
+      next = normalizeState(loaded.doc.save, Date.now());
+    } catch (e) {
+      this.ui.toast('클라우드 세이브를 읽지 못했습니다', 'red');
+      return;
+    }
+    this.writePrevSave(JSON.parse(JSON.stringify(this.s)));
+    next.cloud = {
+      ...(next.cloud || {}),
+      enabled: true,
+      uid: this.cloud.uid || (loaded.doc.uid || ''),
+      email: this.s.cloud.email || '',
+      nick: (next.cloud && next.cloud.nick) || nickOf(this.s),
+      autoSync: this.s.cloud.autoSync !== false,
+      lastSync: Number(loaded.doc.ts) || Date.now(),
+    };
+    try {
+      saveState(STORAGE, next);
+    } catch (e) {
+      this.ui.toast('세이브를 저장하지 못했습니다 (저장 공간 부족)', 'red');
+      return;
+    }
+    this.prevSave = this.readPrevSave();
+    this.applySaveState(next);
+    this.lastCloudUpload = next.cloud.lastSync;
+    this._rankKey = '';
+    this.ui.toast(`☁️ 클라우드 세이브를 불러왔습니다 — Lv.${next.level} · S${Math.max(next.peakStage || 1, next.maxStage || 1)}`, 'green');
+    this.ui.syncCloud();
+  }
+
+  /** 랭킹 보기/새로고침 — 게스트도 볼 수 있는 공개 보드 */
+  async cloudRank(key = 'stage', opts = {}) {
+    const metric = key === 'asset' ? 'asset' : 'stage';
+    this.ui.syncCloud('connecting');
+    const r = await this.cloud.readRank(metric);
+    if (!r.ok) {
+      if (!opts.quiet) this.ui.toast(`🏆 랭킹을 불러오지 못했습니다 — ${r.message}`, 'red');
+      this.ui.syncCloud();
+      return r;
+    }
+    this.ui.syncCloud();
+    return r;
+  }
+
+  /** 랭킹 닉네임 저장 */
+  async cloudSaveNick() {
+    const el = document.getElementById('cloudNick');
+    const raw = el ? el.value : '';
+    const prev = nickOf(this.s);
+    const nick = sanitizeNick(raw, this.cloud.uid || this.s.cloud.uid || '');
+    this.s.cloud.nick = nick;
+    this.save(true);
+    this._rankKey = '';
+    this.ui.syncCloud();
+    const fallback = raw && raw.trim().length >= 2 ? '' : ' (2자 이상 입력하면 그 이름으로 바뀝니다)'; 
+    this.ui.toast(`🏆 랭킹 닉네임: ${nick}${fallback}`, 'gold');
+    if (this.cloud.signedIn && nick !== prev) { await this.cloudUpload({ silent: true }); }
+  }
+
+  cloudToggleAuto() {
+    this.s.cloud.autoSync = this.s.cloud.autoSync === false;
+    this.save();
+    this.ui.syncCloud();
+    this.ui.toast(this.s.cloud.autoSync ? '☁️ 60초 자동 저장 켜짐' : '☁️ 자동 저장 꺼짐 (수동 저장만)');
+  }
+
   /* ───────────── 사용자 액션 ───────────── */
   makeActions() {
     return {
@@ -1133,6 +1514,15 @@ class App {
           ],
         });
       },
+      /* ── v4.8 ☁️ 클라우드 세이브 · 🏆 랭킹 ── */
+      cloudSignIn: () => this.cloudSignIn(),
+      cloudSignOut: () => this.cloudSignOut(),
+      cloudSaveNow: () => this.cloudUpload({ silent: false }),
+      cloudLoadNow: () => this.openCloudLoad(),
+      cloudToggleAuto: () => this.cloudToggleAuto(),
+      cloudNickSave: () => this.cloudSaveNick(),
+      cloudRank: (key) => this.cloudRank(key),
+      cloudRankRefresh: () => this.cloudRank((this.cloud.rank && this.cloud.rank.key) || 'stage'),
     };
   }
 

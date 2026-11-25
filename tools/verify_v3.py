@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""land-rpg v4.7.0 검증 (QuickJS + 정적 검사)
+"""land-rpg v4.8.0 검증 (QuickJS + 정적 검사)
 
 1) 모든 JS 파일 문법(파싱) 검사
 2) 정적 검사 (Firebase/로그인 흔적 0, 저장 키 v3, sw 캐시 v3.5)
@@ -25,8 +25,8 @@ import sys
 import quickjs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/render.js", "src/ui.js", "src/sound.js"]
+FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -76,6 +76,16 @@ def js(ctx, expr):
     return json.loads(ctx.eval(f"JSON.stringify((function(){{ {expr} }})())"))
 
 
+def drain(ctx, rounds=2000):
+    """QuickJS 의 마이크로태스크 큐를 비운다(비동기 테스트용)"""
+    for _ in range(rounds):
+        try:
+            if not ctx.execute_pending_job():
+                break
+        except Exception:  # noqa: BLE001
+            break
+
+
 def main():
     ctx = quickjs.Context()
 
@@ -87,16 +97,29 @@ def main():
         except Exception as e:  # noqa: BLE001
             ok(False, f"문법 오류: {f}", str(e))
 
-    section("[2] 게스트 전용 정적 검사")
+    section("[2] 게스트 기본 · 선택적 클라우드 정적 검사")
     def strip_comments(src):
         return re.sub(r"//[^\n]*", "", re.sub(r"/\*.*?\*/", "", src, flags=re.S))
 
-    text_all = "\n".join(strip_comments(read(f)) for f in ALL_JS + ["index.html", "manifest.json"])
-    for bad in ["firebase", "signInWithPopup", "Google 로그인", "gstatic", "firebaseio", "googleapis"]:
-        ok(bad.lower() not in text_all.lower(), f"Firebase/로그인 흔적 없음: {bad}")
+    # 클라우드/Firebase 문자열은 src/cloud.js 한 곳에만 있어야 한다(부팅 경로 오염 방지)
+    guest_only = [f for f in ALL_JS if f != "src/cloud.js"] + ["index.html", "manifest.json"]
+    text_guest = "\n".join(strip_comments(read(f)) for f in guest_only)
+    for bad in ["firebase", "signInWithPopup", "gstatic", "firebaseio", "googleapis"]:
+        ok(bad.lower() not in text_guest.lower(), f"클라우드 밖에서 Firebase 흔적 없음: {bad}")
+    cloud_raw = read("src/cloud.js")
+    ok("gstatic.com/firebasejs" in cloud_raw and "firebase-database.js" in cloud_raw, "클라우드 코드는 cloud.js 안에서만 SDK 를 불러온다")
+    ok(
+        re.search(r"import\(`\$\{base\}/firebase-app\.js`\)", cloud_raw) is not None
+        and re.search(r"^import\s+[^;]*gstatic", cloud_raw, flags=re.M) is None,
+        "Firebase SDK 는 동적 import(부팅 경로에 없음)",
+    )
+    app_src = strip_comments(read("app.js"))
+    ok("startCloudResume" in app_src and "if (!this.cloudEnabled() && !this.cloud.hasPendingRedirect()) return;" in app_src, "세션 복원도 클라우드를 켓을 때만")
+    ok("setInterval(() => this.cloudTick(), 15000)" in app_src, "주기 저장은 조건 검사형 타이머")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v4.7.0" in read("sw.js"), "SW 캐시 버전 v4.7.0")
-    ok("APP_VERSION = '4.7.0'" in read("src/data.js"), "앱 버전 v4.7.0")
+    ok("land-rpg-v4.8.0" in read("sw.js"), "SW 캐시 버전 v4.8.0")
+    ok("APP_VERSION = '4.8.0'" in read("src/data.js"), "앱 버전 v4.8.0")
+    ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
     ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
     ok(os.path.exists(os.path.join(ROOT, "src/savecode.js")), "src/savecode.js 존재")
@@ -2838,7 +2861,7 @@ def main():
     ok(all(x in asrc42 for x in ["enterTower", "openTowerFloors", "evolvePet", "showTowerResult", "showTowerFloors"]), "app.js — 탑 입장/층 선택/결과·펫 진화 액션", "")
     ok('assets/sprites/pet/${info.sprite}.png' in asrc42, "진화 결과 모달 — 진화 스프라이트 경로(.png)", "")
     ok(all(x in css42 for x in [".tower-card", ".tower-tiles", ".tower-floor", ".pet-evo", ".mini.evo"]), "style.css — v4.2 스타일", "")
-    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.7.0" in read("sw.js") and "APP_VERSION = '4.7.0'" in read("src/data.js"), "버전·서비스워커(4.7.0 · gear/auto 프리캐시)", "")
+    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.8.0" in read("sw.js") and "APP_VERSION = '4.8.0'" in read("src/data.js"), "버전·서비스워커(4.8.0 · cloud 프리캐시)", "")
     pkg_ok = os.path.exists(os.path.join(ROOT, "package.json")) and '"version": "4.7.0"' in read("package.json")
     ok(pkg_ok, "package.json 버전 4.7.0(로컬 검증용)", "")
     evo_files = [f"assets/sprites/pet/pet_{n}_{s}.png" for n in ("wolf", "fox", "owl", "dragon") for s in ("awaken", "divine")]
@@ -2989,7 +3012,7 @@ def main():
 
     css43 = read("style.css")
     ok(all(x in css43 for x in [".land-sum", ".ls-v", ".ls-claim", ".news-slim", ".ns-title", ".land-subbar", ".land-rec", ".buff-now"]), "style.css — v4.3 부동산 요약 바·압축 뉴스·서브 탭", "")
-    ok("land-rpg-v4.7.0" in read("sw.js") and "'4.7.0'" in read("src/data.js"), "버전·캐시 v4.7.0", "")
+    ok("land-rpg-v4.8.0" in read("sw.js") and "'4.8.0'" in read("src/data.js"), "버전·캐시 v4.8.0", "")
 
     section("[20] ⚔️ v4.4 S31+ 무한 구간 리밸런싱 · 강화석 대량 교환 · 상위 전직")
 
@@ -3866,7 +3889,7 @@ def main():
     section("[23] ♻️ v4.7 장비 자동분해 · 🐉 상위 전직 궁극기 · 방치 편의")
 
     # ── 1) 버전·정적 배선 ──
-    ok("APP_VERSION = '4.7.0'" in read("src/data.js") and "land-rpg-v4.7.0" in read("sw.js"), "v4.7.0 버전·서비스워커 캐시 갱신", "")
+    ok("APP_VERSION = '4.8.0'" in read("src/data.js") and "land-rpg-v4.8.0" in read("sw.js"), "v4.8.0 버전·서비스워커 캐시 갱신", "")
     idx47 = read("index.html")
     ok(all(f'data-skill="{k}"' in idx47 for k in ["strike", "whirl", "berserk", "heal"]), "기존 4개 퀵슬롯 레이아웃 유지", "")
     ok('data-skill="ultimate"' in idx47 and 'class="q ult hidden"' in idx47, "다섯 번째 퀵슬롯(궁극기) — 해금 전 숨김", "")
@@ -4076,6 +4099,333 @@ def main():
 
     readme47 = read("README.md")
     ok(all(x in readme47 for x in ["v4.7.0", "자동분해", "궁극기", "용의 심판"]), "README — v4.7 자동분해·궁극기 반영", "")
+
+    # ══════════════════════════ [24] v4.8 ☁️ 클라우드 세이브 · 🏆 랭킹 ══════════════════════════
+    section("[24] ☁️ v4.8 선택적 클라우드 세이브 · 🏆 랭킹")
+
+    # ── 1) 닉네임 · 요약 · 문서 직렬화 ──
+    cl_a = js(ctx, """
+      const s = defaultState(1000);
+      s.level = 42; s.stage = 18; s.maxStage = 18; s.peakStage = 21;
+      s.gold = 123456;
+      s.land.owned[CITIES[0].key] = 30; s.land.owned[CITIES[1].key] = 12;
+      s.lastActiveAt = 5000;
+      s.cloud.nick = '효성왕';
+      const sum = cloudSummary(s, 5000);
+      const doc = buildCloudDoc(s, { uid: 'uid-abc', now: 7000 });
+      const before = s.gold;
+      doc.save.gold = 1;                    // 문서의 save 는 사본이어야 한다
+      const n1 = defaultNick('uid-abc'); const n2 = defaultNick('uid-abc');
+      const digits = n1.slice(2);
+      return {
+        nick: [n1, n1 === n2, n1.slice(0, 2), digits.length, String(Number(digits)) === digits],
+        clean: [sanitizeNick('  효성  왕  ', 'u'), sanitizeNick('a', 'u').slice(0, 2),
+                sanitizeNick('', 'u').slice(0, 2), sanitizeNick('가나다라마바사아자차카타파하', 'u').length],
+        html: /[<>&"']/.test(sanitizeNick('<b>효성</b> & "친구"', 'u')),
+        sum: [sum.level, sum.stage, sum.cities, sum.ts, sum.totalAsset > before],
+        doc: [doc.kind, doc.v, doc.uid, doc.nick, doc.level, doc.stage, doc.ts, doc.save.gold, before],
+        size: JSON.stringify(doc).length,
+      };
+    """)
+    ok(cl_a["nick"][0].startswith("용사") and cl_a["nick"][1] and cl_a["nick"][3] == 4 and cl_a["nick"][4], "기본 닉네임 — 같은 uid 는 같은 '용사####' (실명 미노출)", json.dumps(cl_a["nick"], ensure_ascii=False))
+    ok(cl_a["clean"][0] == "효성 왕" and cl_a["clean"][3] == 12 and not cl_a["html"], "닉네임 정리 — 공백 접기·12자 제한·HTML 문자 제거", json.dumps(cl_a["clean"], ensure_ascii=False))
+    ok(cl_a["clean"][1] == "용사" and cl_a["clean"][2] == "용사", "1자·빈 닉네임은 기본 이름으로 대체", json.dumps(cl_a["clean"][:3], ensure_ascii=False))
+    ok(cl_a["sum"] == [42, 21, 2, 5000, True], "세이브 요약 — 역대 최고 스테이지·보유 지역·총자산", json.dumps(cl_a["sum"]))
+    ok(cl_a["doc"][:6] == ["land_rpg_save", "4.8.0", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
+    ok(0 < cl_a["size"] < 200000, "클라우드 문서 크기 RTDB 한도 안(200KB 미만)", str(cl_a["size"]))
+
+    # ── 2) 문서 해석(신형·v2 옛 페이로드·손상) ──
+    cl_b = js(ctx, """
+      const s = defaultState(0); s.level = 9; s.stage = 3; s.maxStage = 3; s.peakStage = 7; s.gold = 900;
+      const doc = buildCloudDoc(s, { uid: 'u1', now: 1000, nick: '테스터' });
+      const a = readCloudDoc(JSON.parse(JSON.stringify(doc)));
+      const b = readCloudDoc({ level: 33, stage: 17, kills: 317, name: 'HyosungK', time: 1795426582912, uid: 'old' });
+      const c = readCloudDoc(null);
+      const d = readCloudDoc('nope');
+      const e = readCloudDoc({ save: { level: 5, stage: 4, gold: 10 } });
+      return {
+        a: [a.ok, a.restorable, a.summary.level, a.summary.stage, a.summary.nick, a.summary.totalAsset > 0],
+        b: [b.ok, b.restorable, b.summary.level, b.summary.stage, b.summary.ts],
+        c: [c.ok, c.doc === null, c.restorable],
+        d: d.ok, e: [e.ok, e.restorable, e.summary.stage],
+      };
+    """)
+    ok(cl_b["a"][:5] == [True, True, 9, 7, "테스터"] and cl_b["a"][5], "문서 읽기 — v4.8 형식은 요약·복원 가능", json.dumps(cl_b["a"], ensure_ascii=False))
+    ok(cl_b["b"] == [True, False, 33, 17, 1795426582912], "옛 rpg 기록(stage/level/time)도 읽어 랭킹용 요약으로 변환", json.dumps(cl_b["b"]))
+    ok(cl_b["c"] == [True, True, False] and cl_b["d"] is False, "빈 값은 정상(세이브 없음), 손상 값은 거부", json.dumps(cl_b))
+    ok(cl_b["e"] == [True, True, 4], "save 만 있는 예전 문서도 복원 가능", json.dumps(cl_b["e"]))
+
+    # ── 3) 진행도 비교 · 충돌 판정 ──
+    cl_c = js(ctx, """
+      const P = (stage, asset, level) => ({ stage: stage, totalAsset: asset, level: level || 1, ts: 0 });
+      const L = (o) => ({ stage: o.stage || 1, totalAsset: o.totalAsset || 0, level: o.level || 1, ts: o.ts || 0 });
+      const cp = [compareProgress(P(20, 100), P(18, 900)), compareProgress(P(18, 900), P(20, 100)),
+                  compareProgress(P(20, 1000), P(20, 1005)), compareProgress(P(20, 1000), P(20, 1200)),
+                  compareProgress(P(20, 1000, 9), P(20, 1000, 12))];
+      const empty = compareSaves(L({ stage: 5, totalAsset: 100, ts: 1000 }), null);
+      const same = compareSaves(L({ stage: 5, totalAsset: 100, ts: 1000 }), { stage: 5, totalAsset: 100, ts: 1000 });
+      const localAhead = compareSaves(L({ stage: 9, ts: 1000 }), { stage: 5, ts: 2000 });
+      const cloudAhead = compareSaves(L({ stage: 5, ts: 3000 }), { stage: 9, ts: 1000 });
+      const conflict = compareSaves(L({ stage: 5, ts: 900000 }), { stage: 9, ts: 1000 });
+      const cloudNewer = compareSaves(L({ stage: 5, ts: 1000 }), { stage: 5, ts: 300000 });
+      const localNewer = compareSaves(L({ stage: 5, ts: 900000 }), { stage: 5, ts: 1000 });
+      return {
+        cp: cp,
+        acts: [empty.action, empty.why, same.action, localAhead.action, cloudAhead.action, conflict.action, cloudNewer.action, localNewer.action],
+        rec: [conflict.why, cloudAhead.recommend, localAhead.recommend],
+        delta: [cloudAhead.delta.stage, cloudNewer.delta.stage],
+      };
+    """)
+    ok(cl_c["cp"] == [1, -1, 0, -1, -1], "진행도 비교 — 스테이지 → 총자산(1% 오차 무시) → 레벨", json.dumps(cl_c["cp"]))
+    ok(cl_c["acts"] == ["upload", "cloud-empty", "same", "upload", "download", "conflict", "download", "upload"], "충돌 판정 — 비었음/같음/로컬앞섬/클라우드앞섬/양쪽 플레이/최신 우선", json.dumps(cl_c["acts"]))
+    ok(cl_c["rec"] == ["cloud-ahead-but-local-newer", "cloud", "local"], "충돌 시 추천 — 더 앞선 쪽을 기본으로", json.dumps(cl_c["rec"]))
+    ok(cl_c["delta"] == [4, 0], "차이 요약(스테이지 단위)", json.dumps(cl_c["delta"]))
+
+    # ── 4) 랭킹 정렬·순위·표기 ──
+    cl_d = js(ctx, """
+      const map = {
+        a: { name: '알파', level: 70, stage: 40, totalAsset: 200, time: 10 },
+        b: { name: '베타', level: 60, stage: 30, totalAsset: 900, time: 20 },
+        c: { name: '감마', level: 65, stage: 30, totalAsset: 500, time: 30 },
+        d: { name: '델타', level: 10, stage: 5, totalAsset: 50, time: 5 },
+        old: { name: 'HyosungK', level: 33, stage: 17, kills: 317, time: 1795426582912 },
+        junk: { nope: 1 },
+      };
+      const byStage = rankRows(map, 'stage', { limit: 3 });
+      const byAsset = rankRows(map, 'asset', { limit: 3 });
+      const many = {};
+      for (let i = 0; i < 25; i += 1) many['u' + i] = { name: '유' + i, level: 1, stage: i + 1, totalAsset: i, time: i };
+      const top = rankRows(many, 'stage');
+      const me = rankOf(byStage.all, 'c');
+      return {
+        ranks: byStage.all.map((r) => r.rank + '/' + r.uid),
+        count: [byStage.count, top.rows.length, top.all.length],
+        assetFirst: byAsset.rows.map((r) => r.uid + ':' + r.value),
+        top1: top.rows[0].uid, topLast: top.rows[19].uid,
+        me: me ? [me.rank, me.name] : null,
+        old: normalizeRankRow(map.old, 'old'),
+        values: [rankValueText('stage', { stage: 24 }), rankValueText('asset', { totalAsset: 1.2e12 }), rankValueText('asset', { totalAsset: 5.5e8 })],
+        fmt: [formatAsset(1.2e12), formatAsset(5.5e8), formatAsset(1234)],
+      };
+    """)
+    ok(cl_d["ranks"] == ["1/a", "2/b", "2/c", "4/old", "5/d"], "랭킹 정렬 — 최고 스테이지 내림차순(동점은 같은 순위 1·2·2·4·5)", json.dumps(cl_d["ranks"], ensure_ascii=False))
+    ok(cl_d["count"] == [5, 20, 25], "랭킹 — 참가자 수는 전체, 표시는 TOP 20", json.dumps(cl_d["count"]))
+    ok(cl_d["assetFirst"] == ["b:900", "c:500", "a:200"], "총자산 정렬 — 금액 기준", json.dumps(cl_d["assetFirst"]))
+    ok(cl_d["top1"] == "u24" and cl_d["topLast"] == "u5", "25명 중 TOP 20 절단", json.dumps([cl_d["top1"], cl_d["topLast"]]))
+    ok(cl_d["me"] == [2, "감마"], "내 순위 조회(동점 포함 전체 기준)", json.dumps(cl_d["me"], ensure_ascii=False))
+    ok(cl_d["old"] == {"uid": "old", "name": "HyosungK", "level": 33, "stage": 17, "gold": 0, "totalAsset": 0, "cities": 0, "rebirth": 0, "time": 1795426582912}, "옛 랭킹 항목 정규화(없는 값은 0)", json.dumps(cl_d["old"], ensure_ascii=False))
+    ok(cl_d["values"] == ["S24", "💰1.20조", "💰5.50억"], "랭킹 값 표기 — S24 · 조/억 축약", json.dumps(cl_d["values"], ensure_ascii=False))
+    ok(cl_d["fmt"][:2] == ["1.20조", "5.50억"] and cl_d["fmt"][2].replace(",", "") == "1234", "총자산 포맷 — 조·억·원 단위", json.dumps(cl_d["fmt"], ensure_ascii=False))
+
+    # ── 5) 상태 문구 · 오류 문구 · 유틸 ──
+    cl_e = js(ctx, """
+      const st = ['guest', 'connecting', 'online', 'offline', 'error'].map((k) => cloudStatusText({ status: k }).label);
+      const errs = [describeAuthError('auth/unauthorized-domain'), describeAuthError('timeout'),
+                    describeAuthError('auth/popup-blocked'), describeNetError({ code: 'PERMISSION_DENIED' }),
+                    describeNetError({ code: 'timeout' }), describeNetError({ code: 'sdk' })];
+      const strip = stripUndefined({ a: 1, b: undefined, c: NaN, d: 1, e: { x: 2, y: undefined }, f: [1, undefined, 3] });
+      const s = defaultState(0); s.level = 12; s.stage = 5; s.maxStage = 5; s.peakStage = 9;
+      const entry = rankEntryOf(s, { uid: 'u1', now: 777 });
+      return { st, errs, strip: JSON.stringify(strip),
+               metrics: [rankMetricLabel('stage'), rankMetricLabel('asset')],
+               entry: [entry.name.slice(0, 2), entry.stage, entry.level, entry.time, entry.v, entry.uid] };
+    """)
+    ok(cl_e["st"] == ["게스트 (이 기기에만 저장)", "연결 중…", "클라우드 연결됨", "오프라인 — 게스트 저장 중", "클라우드 오류"], "상태 문구 — 게스트/연결중/연결됨/오프라인/오류", json.dumps(cl_e["st"], ensure_ascii=False))
+    ok(cl_e["errs"][0].startswith("이 주소가") and "응답이 없습니다" in cl_e["errs"][1] and cl_e["errs"][3].startswith("권한") and "시간 초과" in cl_e["errs"][4] and "라이브러리" in cl_e["errs"][5], "오류 문구 — 승인 도메인/시간 초과/권한/라이브러리", json.dumps(cl_e["errs"], ensure_ascii=False))
+    ok(cl_e["strip"] == '{"a":1,"d":1,"e":{"x":2},"f":[1,3]}', "RTDB 전송 전 undefined·NaN 제거", cl_e["strip"])
+    ok(cl_e["metrics"] == ["최고 스테이지", "총자산"], "랭킹 지표 이름", json.dumps(cl_e["metrics"], ensure_ascii=False))
+    ok(cl_e["entry"] == ["용사", 9, 12, 777, "4.8.0", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
+
+    # ── 6) 세이브 호환 · 마이그레이션 ──
+    mig48 = js(ctx, """
+      const v47 = { ver: 3, level: 44, stage: 26, maxStage: 26, peakStage: 31, gold: 777, soundOn: false };
+      const a = normalizeState(v47, 5000);
+      const b = normalizeState({ ...v47, cloud: { enabled: 'yes', nick: '가나다라마바사아자차카타파하', autoSync: 'no', lastSync: -50, uid: 5 } }, 5000);
+      const d = defaultState(0);
+      const raw = JSON.parse(JSON.stringify(a));
+      return { a: [a.cloud.enabled, a.cloud.autoSync, a.cloud.nick, a.level, a.peakStage, a.gold, a.soundOn],
+               b: [b.cloud.enabled, b.cloud.autoSync, b.cloud.nick.length, b.cloud.lastSync, b.cloud.uid],
+               d: [d.cloud.enabled, d.cloud.autoSync, d.cloud.nick],
+               key: SAVE_KEY, ver: raw.ver };
+    """)
+    ok(mig48["a"] == [False, True, "", 44, 31, 777, False], "v4.7 저장본 → 클라우드 기본 꺼짐, 기존 진행도 그대로", json.dumps(mig48["a"], ensure_ascii=False))
+    ok(mig48["b"] == [False, True, 12, 0, ""], "손상된 클라우드 설정 방어(문자·음수·타입)", json.dumps(mig48["b"], ensure_ascii=False))
+    ok(mig48["d"] == [False, True, ""] and mig48["key"] == "land_rpg_unified_v3" and mig48["ver"] == 3, "새 세이브는 게스트 기본값 · 저장 키/버전 유지", json.dumps(mig48, ensure_ascii=False))
+
+    # ── 7) CloudSync — 로그인·저장·랭킹·실패 경로(가짜 SDK) ──
+    ctx3 = quickjs.Context()
+    ctx3.eval(bundle(FILES))
+    ctx3.eval("""
+      globalThis.__out = {};
+      globalThis.__never = function () { return 0; };
+      globalThis.__nowTimer = function (fn) { fn(); return 0; };
+      globalThis.__sdk = function (store, opts) {
+        opts = opts || {};
+        const calls = [];
+        const sdk = {
+          auth: {}, db: {},
+          GoogleAuthProvider: function () { this.setCustomParameters = function () {}; },
+          onAuthStateChanged: function (auth, cb) { auth._cb = cb; },
+          signInWithPopup: async function (auth) {
+            if (opts.popupError) { const e = new Error('popup'); e.code = opts.popupError; throw e; }
+            const u = { uid: opts.uid || 'uid-1', displayName: '테스터', email: 't@example.com', photoURL: '' };
+            if (auth._cb) auth._cb(u);
+            return { user: u };
+          },
+          signInWithRedirect: async function () { calls.push('redirect'); },
+          getRedirectResult: async function () { return { user: { uid: 'uid-r', displayName: '복귀', email: 'r@e.com' } }; },
+          signOut: async function (auth) { if (auth._cb) auth._cb(null); },
+          ref: function (db, path) { return { path: path }; },
+          get: async function (r) {
+            calls.push(['get', r.path]);
+            if (opts.failGet) { const e = new Error('denied'); e.code = opts.failGet; throw e; }
+            if (opts.hangGet) return new Promise(function () {});
+            const v = store[r.path];
+            return { exists: function () { return v !== undefined && v !== null; }, val: function () { return v === undefined ? null : v; } };
+          },
+          set: async function (r, val) {
+            calls.push(['set', r.path, val]);
+            if (opts.failSet) { const e = new Error('denied'); e.code = opts.failSet; throw e; }
+            store[r.path] = val;
+            return true;
+          },
+          _calls: calls,
+        };
+        return sdk;
+      };
+    """)
+    ctx3.eval("""
+      const store1 = {};
+      __out.c1 = new CloudSync({ loadSdk: async () => __sdk(store1), setTimeout: __never, now: () => 1000 });
+      __out.c1.signIn().then((r) => { __out.signIn = [r.ok, __out.c1.status, __out.c1.uid, __out.c1.user.email]; });
+
+      __out.c2 = new CloudSync({ loadSdk: async () => __sdk({}, { popupError: 'auth/popup-blocked' }), setTimeout: __never });
+      __out.c2.signIn().then((r) => { __out.popup = [r.ok, !!r.retryRedirect, r.code, __out.c2.status, __out.c2.signedIn]; });
+
+      __out.c3 = new CloudSync({ loadSdk: async () => { throw new Error('Failed to fetch'); }, setTimeout: __never });
+      __out.c3.signIn().then((r) => { __out.sdkFail = [r.ok, __out.c3.status, __out.c3.signedIn, /라이브러리/.test(r.message)]; });
+
+      __out.c4 = new CloudSync({ loadSdk: async () => __sdk({}), setTimeout: __never });
+      __out.c4.readSave('uid-1').then((r) => { __out.emptySave = [r.ok, r.loaded.doc === null, r.loaded.restorable]; });
+
+      __out.c5 = new CloudSync({ loadSdk: async () => __sdk({}, { failGet: 'PERMISSION_DENIED' }), setTimeout: __never });
+      __out.c5.readSave('uid-1').then((r) => { __out.denied = [r.ok, /권한/.test(r.message), __out.c5.status]; });
+
+      const store6 = {};
+      __out.c6 = new CloudSync({ loadSdk: async () => __sdk(store6), setTimeout: __never, now: () => 5000 });
+      __out.c6.writeSave({ uid: 'u9', ts: 4, kind: 'land_rpg_save', level: 3 }).then((r) => {
+        __out.write = [r.ok, __out.c6.lastSync, __out.c6.status, store6['rpg/u9'].uid, store6['rpg/u9'].ts, store6['rpg/u9'].level];
+      });
+
+      __out.c7 = new CloudSync({ loadSdk: async () => __sdk({}), setTimeout: __never });
+      __out.c7.writeSave({}).then((r) => { __out.noUser = [r.ok, r.code]; });
+
+      const store8 = {};
+      __out.c8 = new CloudSync({ loadSdk: async () => __sdk(store8), setTimeout: __never });
+      __out.c8.writeRank({ uid: 'u8', name: '테스터', stage: 3 }).then(() => { __out.rank = store8['rpg_rankings/u8'].name; });
+
+      const store9 = { rpg_rankings: { a: { name: 'A', level: 5, stage: 10, totalAsset: 100, time: 1 }, b: { name: 'B', level: 3, stage: 7, totalAsset: 900, time: 2 } } };
+      __out.c9 = new CloudSync({ loadSdk: async () => __sdk(store9), setTimeout: __never });
+      __out.c9.readRank('asset').then((r) => { __out.rankBoard = [r.ok, __out.c9.rank.rows[0].uid, __out.c9.rank.count, __out.c9.rank.key]; });
+
+      __out.c10 = new CloudSync({ loadSdk: async () => __sdk({}, { failGet: 'boom' }), setTimeout: __never });
+      __out.c10.readRank('stage').then((r) => { __out.rankFail = [r.ok, __out.c10.rank.loading, !!__out.c10.rank.error]; });
+
+      __out.c11 = new CloudSync({ loadSdk: async () => __sdk({}), setTimeout: __never });
+      __out.c11.signIn().then(() => __out.c11.signOut()).then(() => { __out.signOut = [__out.c11.status, __out.c11.uid, __out.c11.signedIn]; });
+
+      let loads = 0;
+      __out.c12 = new CloudSync({ loadSdk: async () => { loads += 1; return __sdk({}); }, setTimeout: __never });
+      __out.c12.completeRedirect().then((r) => { __out.noPending = [r.ok, r.code, loads]; });
+
+      const flags = {};
+      const flagStore = { get: (k) => flags[k], set: (k, v) => { flags[k] = v; }, remove: (k) => { delete flags[k]; } };
+      __out.c13 = new CloudSync({ loadSdk: async () => __sdk({}), setTimeout: __never, flagStore: flagStore });
+      __out.c13.hasPendingRedirect() && (__out.badFlag = true);
+      __out.c13.signInRedirect().then(() => __out.c13.completeRedirect()).then((r) => {
+        __out.redirect = [r.ok, __out.c13.uid, __out.c13.hasPendingRedirect()];
+      });
+
+      __out.c14 = new CloudSync({ loadSdk: async () => { throw new Error('offline'); }, setTimeout: __never });
+      __out.c14.restoreSession(100).then((v) => { __out.restore = [v, __out.c14.signedIn]; });
+
+      __out.c15 = new CloudSync({ loadSdk: async () => __sdk({}, { hangGet: true }), setTimeout: __nowTimer });
+      __out.c15.readSave('u1').then((r) => { __out.hang = [r.ok, r.code, /시간 초과/.test(r.message), __out.c15.status]; });
+
+      let loadCount = 0;
+      __out.c16 = new CloudSync({ loadSdk: async () => { loadCount += 1; return __sdk({}); }, setTimeout: __never });
+      __out.guestOnly = [__out.c16.status, __out.c16.signedIn, loadCount];
+    """)
+    drain(ctx3)
+    cl_f = json.loads(ctx3.eval("JSON.stringify(__out)"))
+    ok(cl_f["signIn"] == [True, "online", "uid-1", "t@example.com"], "Google 로그인 성공 — online 상태·uid·계정 표시", json.dumps(cl_f["signIn"]))
+    ok(cl_f["popup"] == [False, True, "auth/popup-blocked", "error", False], "팝업 차단 — 리다이렉트 안내, 로그인 안 된 채 게스트 유지", json.dumps(cl_f["popup"]))
+    ok(cl_f["sdkFail"] == [False, "offline", False, True], "SDK 로드 실패(오프라인) — 게스트 폴백 + 안내 문구", json.dumps(cl_f["sdkFail"]))
+    ok(cl_f["emptySave"] == [True, True, False], "빈 클라우드 — 오류 아님(세이브 없음)", json.dumps(cl_f["emptySave"]))
+    ok(cl_f["denied"] == [False, True, "error"], "권한 거부 — 문장으로 안내(크래시 없음)", json.dumps(cl_f["denied"]))
+    ok(cl_f["write"] == [True, 5000, "online", "u9", 4, 3], "클라우드 저장 — rpg/{uid} 경로·타임스탬프 유지", json.dumps(cl_f["write"]))
+    ok(cl_f["noUser"] == [False, "no-user"], "로그인 없이 저장 시도 — 조용히 거부", json.dumps(cl_f["noUser"]))
+    ok(cl_f["rank"] == "테스터", "랭킹 쓰기 — rpg_rankings/{uid}", cl_f["rank"])
+    ok(cl_f["rankBoard"] == [True, "b", 2, "asset"], "랭킹 읽기 — 총자산 정렬·참가자 수", json.dumps(cl_f["rankBoard"]))
+    ok(cl_f["rankFail"] == [False, False, True], "랭킹 실패 — 로딩 종료 + 오류 문구", json.dumps(cl_f["rankFail"]))
+    ok(cl_f["signOut"] == ["guest", "", False], "로그아웃 — 게스트로 복귀", json.dumps(cl_f["signOut"]))
+    ok(cl_f["noPending"] == [False, "no-pending", 0], "리다이렉트 표시가 없으면 네트워크를 쓰지 않는다", json.dumps(cl_f["noPending"]))
+    ok(cl_f["redirect"] == [True, "uid-r", False], "이동식 로그인 복귀 — 표시 1회 소모 후 로그인 완료", json.dumps(cl_f["redirect"]))
+    ok(cl_f["restore"] == [False, False], "세션 복원 실패 — 무한 대기 없이 게스트 유지", json.dumps(cl_f["restore"]))
+    ok(cl_f["hang"] == [False, "timeout", True, "offline"], "응답 없는 서버 — 시간 초과로 끊고 게스트 유지(로딩 없음)", json.dumps(cl_f["hang"]))
+    ok(cl_f["guestOnly"] == ["guest", False, 0], "객체 생성만으로는 SDK·네트워크를 건드리지 않는다", json.dumps(cl_f["guestOnly"]))
+
+    # ── 8) 설정 탭 UI — 클라우드 카드 · 랭킹 카드 ──
+    ui48 = js(ctx2, """
+      const mk = (cloud) => { const s = defaultState(0); const buffs = computeBuffs(s, 0);
+        return { s, battle: { stats: calcStats(s, buffs), def: stageDef(s.stage), boss: null, player: { hp: 100 } },
+          app: { buffs, cloud }, logs: [], tab: 'settings', el: {}, install: { hidden: true } }; };
+      const guest = { status: 'guest', rank: { key: 'stage', rows: [], all: [], count: 0, at: 0, loading: false, error: '' } };
+      const g = __tpls.settings(mk(guest));
+      const rows = [
+        { rank: 1, uid: 'a', name: '강자', level: 70, stage: 40, totalAsset: 1.2e12, time: 1 },
+        { rank: 2, uid: 'uid-1', name: '나', level: 42, stage: 30, totalAsset: 5e8, time: 2 },
+        { rank: 2, uid: 'b', name: '동점', level: 41, stage: 30, totalAsset: 4e8, time: 3 },
+      ];
+      const on = { status: 'online', uid: 'uid-1', user: { name: '효성', email: 'h@e.com' }, lastSync: 1000,
+        rank: { key: 'stage', rows: rows, all: rows, count: 3, at: 5, loading: false, error: '' } };
+      const ui = mk(on);
+      ui.s.cloud.nick = '효성왕';
+      const o = __tpls.settings(ui);
+      const loading = __tpls.settings(mk({ status: 'connecting', rank: { key: 'asset', rows: [], all: [], count: 0, at: 0, loading: true, error: '' } }));
+      const err = __tpls.settings(mk({ status: 'error', lastError: '권한이 없습니다', rank: { key: 'stage', rows: [], all: [], count: 0, at: 1, loading: false, error: '권한이 없습니다' } }));
+      return {
+        guest: [g.includes('data-action=\"cloud-signin\"'), g.includes('게스트'), g.includes('Google로 클라우드 켜기'), g.includes('data-action=\"cloud-save\"')],
+        on: [o.includes('data-action=\"cloud-save\"'), o.includes('data-action=\"cloud-load\"'), o.includes('data-action=\"cloud-signout\"'),
+             o.includes('data-action=\"cloud-auto\"'), o.includes('id=\"cloudNick\"'), o.includes('value=\"효성왕\"'), o.includes('h@e.com')],
+        rank: [o.includes('🥇'), o.includes('rank-row me'), o.includes('내 순위'), o.includes('S40'), o.includes('data-action=\"cloud-rank\" data-value=\"asset\"')],
+        emptyGuest: [g.includes('🏆 랭킹 불러오기'), g.includes('data-action=\"cloud-rank-refresh\"')],
+        loading: loading.includes('불러오는 중'),
+        err: err.includes('다시 시도'),
+        order: g.indexOf('cloud-card') < g.indexOf('세이브 코드 백업'),
+        bad: /undefined|NaN/.test(g + o + loading + err),
+      };
+    """)
+    ok(ui48["guest"][:3] == [True, True, True] and ui48["guest"][3] is False, "설정 탭(게스트) — 로그인 유도만 있고 저장 버튼은 없다", json.dumps(ui48["guest"]))
+    ok(all(ui48["on"]), "설정 탭(연결됨) — 저장·불러오기·로그아웃·자동저장·닉네임 입력", json.dumps(ui48["on"]))
+    ok(all(ui48["rank"]), "랭킹 카드 — 메달·내 행 강조·내 순위·총자산·지표 전환", json.dumps(ui48["rank"]))
+    ok(all(ui48["emptyGuest"]) and ui48["loading"] and ui48["err"], "랭킹 카드 — 빈 목록/불러오는 중/오류 상태", json.dumps({"e": ui48["emptyGuest"], "l": ui48["loading"], "x": ui48["err"]}))
+    ok(ui48["order"], "클라우드 카드는 설정 탭 맨 위(상단 배지에서 바로 보임)")
+    ok(ui48["bad"] is False, "v4.8 설정 템플릿에 undefined/NaN 누출 없음")
+
+    # ── 9) 화면·서비스워커 · 문서 배선 ──
+    idx48 = read("index.html")
+    ok('id="cloudBtn"' in idx48 and 'aria-label="클라우드 세이브' in idx48, "HUD — ☁️ 클라우드 배지 버튼")
+    ok("gstatic" not in idx48 and "firebase" not in idx48.lower(), "index.html 에 외부 SDK 스크립트 없음(부팅 가벼움)")
+    sw48 = read("sw.js")
+    ok("'./src/cloud.js'" in sw48 and "firebase" not in sw48.lower(), "SW — cloud.js 만 프리캐시(Firebase CDN 은 캐시하지 않음)")
+    asrc48 = read("app.js")
+    ok(all(x in asrc48 for x in ["cloudUpload", "openCloudLoad", "cloudRestore", "cloudPushRank", "cloudTick", "cloudSignIn"]), "app.js — 저장·불러오기·복원·랭킹·주기 저장 배선")
+    ok("applySaveState(next)" in asrc48 and "writePrevSave" in asrc48, "클라우드 복원도 직전 세이브 보관 경로를 쓴다")
+    css48 = read("style.css")
+    ok(all(x in css48 for x in [".cloud-card", ".cloud-btn", ".rank-row", ".rank-me", ".cloud-nick-in"]), "style.css — v4.8 클라우드·랭킹 스타일")
+    readme48 = read("README.md")
+    ok(all(x in readme48 for x in ["v4.8.0", "클라우드", "랭킹", "rpg_rankings"]), "README — v4.8 클라우드·랭킹 문서화")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

@@ -2306,3 +2306,45 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .ls-tot-k { white-space: nowrap; }
 .syn-card .card-title { flex-wrap: wrap; }
 .syn-card .syn-n { max-width: 58%; overflow: hidden; text-overflow: ellipsis; }
+
+/* ───────────── v4.8 ☁️ 클라우드 세이브 · 🏆 랭킹 ───────────── */
+.cloud-btn.on { color: #8fd8ff; border-color: rgba(120, 200, 255, 0.5); background: rgba(120, 200, 255, 0.14); }
+.cloud-btn.warn { opacity: 1; animation: cloudPulse 1.1s ease-in-out infinite; }
+@keyframes cloudPulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+.cloud-card { border-color: rgba(120, 200, 255, 0.16); }
+.cloud-card.on { border-color: rgba(120, 200, 255, 0.34); box-shadow: inset 0 0 0 1px rgba(120, 200, 255, 0.08); }
+.cloud-card .card-title small { color: var(--sub); font-weight: 700; }
+
+.rank-card .chips { gap: 5px; }
+.rank-list { display: flex; flex-direction: column; gap: 2px; margin-top: 2px; }
+.rank-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 7px; border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid transparent;
+  font-size: 11.5px;
+}
+.rank-row:nth-child(odd) { background: rgba(255, 255, 255, 0.045); }
+.rank-row.me { border-color: rgba(255, 207, 92, 0.45); background: rgba(255, 207, 92, 0.1); }
+.rank-pos { flex: 0 0 26px; text-align: center; font-weight: 900; color: var(--sub); font-variant-numeric: tabular-nums; font-size: 11px; }
+.rank-pos.top { color: var(--gold); }
+.rank-name { flex: 1 1 auto; min-width: 0; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-name small { margin-left: 5px; font-size: 9px; font-weight: 700; color: var(--dim); }
+.rank-val { flex: 0 0 auto; font-weight: 900; color: var(--gold); font-variant-numeric: tabular-nums; font-size: 11.5px; }
+.rank-me {
+  margin-top: 7px; padding: 6px 8px; border-radius: 8px;
+  font-size: 10.5px; color: var(--dim); font-weight: 700; line-height: 1.5;
+  background: rgba(255, 255, 255, 0.03); border: 1px dashed var(--line-2);
+}
+.rank-me.on { color: var(--txt); border-style: solid; border-color: rgba(255, 207, 92, 0.35); background: rgba(255, 207, 92, 0.07); }
+.rank-me b { color: var(--gold); font-weight: 900; }
+
+.cloud-nick { display: flex; gap: 6px; margin-top: 8px; align-items: center; }
+.cloud-nick-in {
+  flex: 1 1 auto; min-width: 0;
+  height: 32px; padding: 0 10px;
+  border-radius: 9px; font-size: 12px; font-weight: 800; color: var(--txt);
+  background: rgba(0, 0, 0, 0.28); border: 1px solid var(--line-2);
+}
+.cloud-nick-in:focus { outline: none; border-color: rgba(120, 200, 255, 0.55); }

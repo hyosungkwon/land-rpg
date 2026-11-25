@@ -73,6 +73,8 @@ export function defaultState(now = nowMs()) {
     tower: { cleared: [], best: 0, runs: 0, fails: 0, last: null, sweep: { date: '', floor: 0, gold: 0, shards: 0, at: 0 } },
     // v4.5 🌟 일일 보스 — 날짜(KST)별 도전 횟수 · 최고 피해
     dailyBoss: defaultDailyState(),
+    // v4.8 ☁️ 선택적 클라우드 세이브·랭킹 — 기본은 꺼짐(게스트). 사용자가 켤 때만 서버로 나간다.
+    cloud: { enabled: false, nick: '', autoSync: true, uid: '', email: '', lastSync: 0 },
     // v3.3 수집 메타: 순차 미션 · 업적 수령 · 도감 기록
     quests: { idx: 0, claimed: [], done: 0, at: 0 },
     achievements: { claimed: [] },
@@ -146,6 +148,16 @@ export function normalizeState(raw, now = nowMs()) {
   if (!['roi', 'price', 'trend', 'name'].includes(s.land.sort)) s.land.sort = 'roi';
   s.land.q = typeof s.land.q === 'string' ? s.land.q.slice(0, 30) : '';
   s.records = { ...d.records, ...(raw.records || {}) };
+  // v4.8: 클라우드 설정 정규화 — 없는 저장본은 게스트(꺼짐)로 시작한다
+  const rawCloud = raw.cloud && typeof raw.cloud === 'object' ? raw.cloud : {};
+  s.cloud = {
+    enabled: rawCloud.enabled === true,
+    nick: typeof rawCloud.nick === 'string' ? rawCloud.nick.slice(0, 12) : '',
+    autoSync: rawCloud.autoSync !== false,
+    uid: typeof rawCloud.uid === 'string' ? rawCloud.uid.slice(0, 128) : '',
+    email: typeof rawCloud.email === 'string' ? rawCloud.email.slice(0, 120) : '',
+    lastSync: Math.max(0, num(rawCloud.lastSync, 0)),
+  };
 
   // v3.2: 펫/전직/던전 기본값 병합 (없는 저장본은 그대로 진행도 유지)
   const rawPet = raw.pet && typeof raw.pet === 'object' ? raw.pet : {};

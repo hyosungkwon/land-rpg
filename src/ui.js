@@ -45,6 +45,9 @@ import {
 import {
   REBIRTH, REBIRTH_TRAITS, rebirthStatus, rebirthBonus, traitLevel, traitCost, traitSummary,
 } from './rebirth.js';
+import {
+  CLOUD, cloudStatusText, rankOf, rankValueText, rankMetricLabel, sanitizeNick, nickOf,
+} from './cloud.js';
 
 const esc = (v) =>
   String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -92,6 +95,8 @@ export class UI {
       offlinePill: document.getElementById('offlinePill'),
       soundBtn: document.getElementById('soundBtn'),
       soundIco: document.getElementById('soundIco'),
+      cloudBtn: document.getElementById('cloudBtn'),
+      cloudIco: document.getElementById('cloudIco'),
       installBtn: document.getElementById('installBtn'),
       huntTabDot: document.getElementById('huntTabDot'),
       landTabDot: document.getElementById('landTabDot'),
@@ -147,6 +152,15 @@ export class UI {
       this.el.soundBtn.addEventListener('click', () => this.app.actions.toggleSound());
     }
     this.syncSound();
+
+    // ☁️ v4.8 상단 배지 → 설정 탭의 클라우드 카드로
+    if (this.el.cloudBtn) {
+      this.el.cloudBtn.addEventListener('click', () => {
+        this.setTab('settings');
+        this.el.panel.scrollTop = 0;
+      });
+    }
+    this.syncCloud();
 
     this.el.modalRoot.addEventListener('click', (e) => {
       if (e.target.closest('[data-modal-close]')) this.closeModal();
@@ -219,6 +233,15 @@ export class UI {
       case 'open-achievements': actions.openAchievements(); break;
       case 'reset': actions.resetGame(); break;
       case 'install': actions.install(); break;
+      /* ── v4.8 ☁️ 클라우드 세이브 · 🏆 랭킹 ── */
+      case 'cloud-signin': actions.cloudSignIn(); break;
+      case 'cloud-signout': actions.cloudSignOut(); break;
+      case 'cloud-save': actions.cloudSaveNow(); break;
+      case 'cloud-load': actions.cloudLoadNow(); break;
+      case 'cloud-auto': actions.cloudToggleAuto(); break;
+      case 'cloud-nick': actions.cloudNickSave(); break;
+      case 'cloud-rank': actions.cloudRank(v || 'stage'); break;
+      case 'cloud-rank-refresh': actions.cloudRankRefresh(); break;
       case 'close-modal': this.closeModal(); break;
       default: break;
     }
@@ -419,6 +442,21 @@ export class UI {
       btn.classList.toggle('prompt', this.install.canPrompt);
       btn.setAttribute('aria-hidden', this.install.hidden ? 'true' : 'false');
     }
+    if (this.tab === 'settings') this.render();
+  }
+
+  syncCloud(hint) {
+    const c = this.app && this.app.cloud;
+    if (!c) return;
+    const st = cloudStatusText(c);
+    const btn = this.el.cloudBtn;
+    if (btn) {
+      btn.classList.toggle('on', st.tone === 'on');
+      btn.classList.toggle('warn', st.tone === 'warn');
+      btn.classList.toggle('off', st.tone !== 'on' && st.tone !== 'warn');
+      btn.setAttribute('aria-label', `클라우드 · ${st.label}`);
+    }
+    if (this.el.cloudIco && this.el.cloudIco.textContent !== st.ico) this.el.cloudIco.textContent = st.ico;
     if (this.tab === 'settings') this.render();
   }
 
@@ -698,14 +736,15 @@ export class UI {
   render() {
     const scroll = this.el.panel.scrollTop;
     const active = document.activeElement;
-    const keep = active && active.id === 'landSearch'
-      ? { value: active.value, pos: active.selectionStart }
+    const keep = active && (active.id === 'landSearch' || active.id === 'cloudNick')
+      ? { id: active.id, value: active.value, pos: active.selectionStart }
       : null;
     this.el.panelInner.innerHTML = this.template();
     this.el.panel.scrollTop = scroll;
     if (keep) {
-      const n = document.getElementById('landSearch');
+      const n = document.getElementById(keep.id);
       if (n) {
+        n.value = keep.value;
         n.focus();
         try { n.setSelectionRange(keep.pos, keep.pos); } catch (e) { /* ignore */ }
       }
@@ -2297,6 +2336,126 @@ function installCard(ui) {
   </div>`;
 }
 
+/* ══════════════════════════ ☁️ v4.8 클라우드 세이브 · 🏆 랭킹 ══════════════════════════ */
+const relTime = (ts, now = Date.now()) => {
+  const t = Number(ts) || 0;
+  if (!t) return '아직 없음';
+  const d = Math.max(0, now - t);
+  if (d < 60000) return '방금 전';
+  if (d < 3600000) return `${Math.floor(d / 60000)}분 전`;
+  if (d < 86400000) return `${Math.floor(d / 3600000)}시간 전`;
+  return `${Math.floor(d / 86400000)}일 전`;
+};
+
+/** ☁️ 클라우드 세이브 카드 — 기본은 꺼짐(게스트). 켜고 싶은 사람만 로그인한다. */
+function cloudCard(ui) {
+  const app = ui.app || {};
+  const c = app.cloud || {};
+  const s = ui.s;
+  const st = cloudStatusText(c);
+  const signed = !!c.uid;
+  const uid = c.uid || (s.cloud && s.cloud.uid) || '';
+  const email = (c.user && (c.user.email || c.user.name)) || (s.cloud && s.cloud.email) || 'Google 계정';
+  const last = relTime((s.cloud && s.cloud.lastSync) || c.lastSync || 0);
+  const status = st.tone === 'on' ? 'gold' : 'dim';
+
+  if (signed) {
+    return `
+  <div class="card cloud-card on" id="cloudCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">☁️</span>클라우드 세이브<small>${esc(email)}</small></div>
+      <span class="tiny" style="color:var(--gold)">${st.label}</span>
+    </div>
+    <div class="kv"><span class="k">계정</span><span class="v">${esc(email)}</span></div>
+    <div class="kv"><span class="k">마지막 저장</span><span class="v">${last}</span></div>
+    <div class="kv"><span class="k">저장 위치</span><span class="v">rpg/${esc(String(uid).slice(0, 6))}… · 나만 보기</span></div>
+    <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
+      <span class="tiny">60초 자동 저장 <span class="dim">${(s.cloud && s.cloud.autoSync === false) ? '끔' : '켬'}</span></span>
+      <button class="switch ${(s.cloud && s.cloud.autoSync !== false) ? 'on' : ''}" data-action="cloud-auto" aria-label="자동 저장 전환"></button>
+    </div>
+    <div class="row gap6" style="margin-top:9px">
+      <button class="btn small blue wide" type="button" data-action="cloud-save">☁️ 지금 저장</button>
+      <button class="btn small ghost wide" type="button" data-action="cloud-load">📥 불러오기</button>
+    </div>
+    <button class="btn small ghost block" style="margin-top:6px" type="button" data-action="cloud-signout">로그아웃 (게스트로 계속)</button>
+  </div>`;
+  }
+
+  const connecting = st.tone === 'warn';
+  return `
+  <div class="card cloud-card" id="cloudCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">☁️</span>클라우드 세이브<small>선택 · 로그인 없이도 플레이</small></div>
+      <span class="tiny" style="color:var(--${status === 'gold' ? 'gold' : 'dim'})">${st.label}</span>
+    </div>
+    <div class="tiny muted">지금은 <b>게스트</b> — 진행도는 이 기기에만 저장됩니다. 원하면 Google 로그인으로 세이브를 클라우드에 백업하고 🏆 랭킹에 참여할 수 있습니다.</div>
+    <button class="btn small primary block" style="margin-top:9px" type="button" data-action="cloud-signin" ${connecting ? 'disabled' : ''}>${connecting ? '☁️ 연결 중…' : '☁️ Google로 클라우드 켜기'}</button>
+    <div class="tiny dim" style="margin-top:7px">로그인은 선택입니다. 로그인하지 않아도 게임은 그대로 저장되고, 로그인·연결이 실패해도 게스트 저장은 계속됩니다.</div>
+    ${st.tone === 'error' && c.lastError ? `<div class="note warn" style="margin-top:7px">⚠️ ${esc(c.lastError)}</div>` : ''}
+  </div>`;
+}
+
+/** 🏆 랭킹 카드 — 공개 노드라 로그인 없이도 볼 수 있고, 참여하려면 로그인이 필요하다. */
+function rankCard(ui) {
+  const app = ui.app || {};
+  const c = app.cloud || {};
+  const R = c.rank || { key: 'stage', rows: [], count: 0 };
+  const key = R.key === 'asset' ? 'asset' : 'stage';
+  const signed = !!c.uid;
+  const myUid = c.uid || '';
+  const my = myUid ? rankOf(R.all || R.rows || [], myUid) : null;
+  const count = R.count || (R.rows || []).length;
+  const rows = (R.rows || []).map((r) => {
+    const medal = r.rank === 1 ? '🥇' : r.rank === 2 ? '🥈' : r.rank === 3 ? '🥉' : '';
+    return `<div class="rank-row${r.uid === myUid ? ' me' : ''}">
+      <span class="rank-pos${r.rank <= 3 ? ' top' : ''}">${medal || r.rank}</span>
+      <span class="rank-name">${esc(r.name)}<small>Lv.${r.level}</small></span>
+      <span class="rank-val">${rankValueText(key, r)}</span>
+    </div>`;
+  }).join('');
+  const nickNow = sanitizeNick(nickOf(ui.s), myUid);
+  const loaded = !!R.at;
+
+  let body;
+  if (R.loading) {
+    body = '<div class="tiny muted" style="padding:9px 0">🏆 랭킹을 불러오는 중…</div>';
+  } else if (R.error) {
+    body = `<div class="note warn" style="margin-top:6px">⚠️ ${esc(R.error)}</div>
+      <button class="btn small ghost block" style="margin-top:7px" type="button" data-action="cloud-rank-refresh">🔄 다시 시도</button>`;
+  } else if (!rows) {
+    body = loaded
+      ? `<div class="tiny muted" style="padding:6px 0">아직 참가자가 없습니다 — 첫 기록의 주인공이 되어 보세요(☁️ 저장을 하면 자동 등록).</div>
+      <button class="btn small ghost block" style="margin-top:7px" type="button" data-action="cloud-rank-refresh">🔄 새로고침</button>`
+      : `<div class="tiny muted" style="padding:6px 0">${rankMetricLabel(key)} TOP ${CLOUD.topN}과 내 순위를 불러옵니다. 로그인 없이도 볼 수 있습니다.</div>
+      <button class="btn small ghost block" style="margin-top:7px" type="button" data-action="cloud-rank-refresh">🏆 랭킹 불러오기</button>`;
+  } else {
+    body = `<div class="rank-list">${rows}</div>
+      <div class="rank-me${my ? ' on' : ''}">${my
+        ? `내 순위 <b>${my.rank}위</b> / ${count}명 · ${esc(my.name)} · ${rankValueText(key, my)}`
+        : signed
+          ? '아직 랭킹 기록이 없습니다 — ☁️ 저장을 한 번 하면 등록됩니다'
+          : '로그인하면 랭킹에 참여할 수 있습니다'}</div>
+      <button class="btn small ghost block" style="margin-top:7px" type="button" data-action="cloud-rank-refresh">🔄 새로고침</button>`;
+  }
+
+  return `
+  <div class="card rank-card" id="rankCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🏆</span>랭킹<small>공개 · TOP ${CLOUD.topN}</small></div>
+      <span class="tiny dim">${count ? `${count}명 참가` : '참가자 없음'}</span>
+    </div>
+    <div class="chips" style="margin-bottom:6px">
+      <button class="chip${key === 'stage' ? ' on' : ''}" type="button" data-action="cloud-rank" data-value="stage">🏔️ 최고 스테이지</button>
+      <button class="chip${key === 'asset' ? ' on' : ''}" type="button" data-action="cloud-rank" data-value="asset">💰 총자산</button>
+    </div>
+    ${body}
+    ${signed ? `<div class="cloud-nick">
+      <input id="cloudNick" class="cloud-nick-in" type="text" maxlength="${CLOUD.nickMax}" value="${esc(nickNow)}" placeholder="랭킹 닉네임 (2~${CLOUD.nickMax}자)" aria-label="랭킹 닉네임" autocomplete="off" spellcheck="false">
+      <button class="btn small ghost" type="button" data-action="cloud-nick">저장</button>
+    </div>` : '<div class="tiny dim" style="margin-top:7px">랭킹 닉네임은 로그인 후 정할 수 있습니다 (실명이 그대로 노출되지 않도록 기본값은 무작위 이름입니다).</div>'}
+  </div>`;
+}
+
 function tplSettings(ui) {
   const s = ui.s;
   const mins = Math.floor((s.records.playMs || 0) / 60000);
@@ -2312,6 +2471,10 @@ function tplSettings(ui) {
   const petEvoCount = PETS.filter((d) => petEvo(s, d.id) > 0).length;
 
   return `
+  ${cloudCard(ui)}
+
+  ${rankCard(ui)}
+
   ${installCard(ui)}
 
   ${rebirthCard(ui)}
