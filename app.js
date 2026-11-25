@@ -12,6 +12,7 @@ import {
   normalizeAutoMode, autoDismantleLabel,
   saveGearPreset as saveGearPresetState, applyGearPreset as applyGearPresetState, awakenSlot as awakenSlotState,
   gearSetOf, gearSetStatus, gearSetBonusText, gearAffixInfo, gearReforgeCost, reforgeGear as reforgeGearState,
+  applyRecommendedBuild as applyRecommendedBuildState,
 } from './src/gear.js';
 
 const GEAR_OPT_LABEL = (k) => (GEAR_OPTS[k] ? `${GEAR_OPTS[k].icon} ${GEAR_OPTS[k].name}` : k);
@@ -1299,6 +1300,24 @@ class App {
         this.sound.ui();
         const miss = r.missing ? ` (미보유 ${r.missing}부위 제외)` : '';
         this.ui.toast(`🗂️ ${r.meta.icon} ${r.meta.name} 프리셋 장착! (${r.applied}부위${miss})`, 'gold');
+        this.ui.render();
+      },
+      applyRecommendedGear: (mode) => {
+        this.sound.unlock();
+        const r = applyRecommendedBuildState(this.s, mode);
+        if (!r.ok) {
+          this.ui.toast(r.reason || '추천 세팅을 적용할 수 없습니다', 'red');
+          return;
+        }
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.ui();
+        this.ui.toast(
+          r.changed > 0
+            ? `✨ ${r.meta.icon} ${r.meta.name} 추천 세팅 장착 (${r.changed}부위 변경)`
+            : `✨ 이미 최적의 ${r.meta.name} 세팅을 장착 중입니다`,
+          r.changed > 0 ? 'gold' : '',
+        );
         this.ui.render();
       },
       awakenGear: (slot) => {

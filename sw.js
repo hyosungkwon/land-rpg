@@ -1,5 +1,5 @@
 // land-rpg / sw.js — 오프라인 캐시 (게스트 전용: 네트워크가 없어도 처음부터 끝까지 플레이)
-const VERSION = 'land-rpg-v5.7.0';
+const VERSION = 'land-rpg-v5.8.0';
 // 같은 릴리스 안에서 자산을 고친 경우 BUILD 를 올린다 → 열린 탭이 새 캐시로 넘어온다.
 const BUILD = 'r1';
 const CACHE = `${VERSION}-${BUILD}`;
@@ -47,12 +47,14 @@ const CORE = [
   './assets/sprites/hero_idle.png',
   './assets/sprites/hero_attack.png',
   './assets/sprites/hero_skill.png',
-  // 🐾 동료 펫 4종 (v3.2)
+  // 🐾 동료 펫 6종 (v3.2: 4종 · v5.8: 크리스탈 골렘 · 천둥 매 추가)
   './assets/sprites/pet/pet_wolf.png',
   './assets/sprites/pet/pet_fox.png',
   './assets/sprites/pet/pet_owl.png',
   './assets/sprites/pet/pet_dragon.png',
-  // 🐾 펫 진화 스프라이트 8종 (v4.2 — 각성 4 · 신수 4)
+  './assets/sprites/pet/pet_golem.png',
+  './assets/sprites/pet/pet_hawk.png',
+  // 🐾 펫 진화 스프라이트 12종 (v4.2: 8종 · v5.8: 4종)
   './assets/sprites/pet/pet_wolf_awaken.png',
   './assets/sprites/pet/pet_wolf_divine.png',
   './assets/sprites/pet/pet_fox_awaken.png',
@@ -61,6 +63,10 @@ const CORE = [
   './assets/sprites/pet/pet_owl_divine.png',
   './assets/sprites/pet/pet_dragon_awaken.png',
   './assets/sprites/pet/pet_dragon_divine.png',
+  './assets/sprites/pet/pet_golem_awaken.png',
+  './assets/sprites/pet/pet_golem_divine.png',
+  './assets/sprites/pet/pet_hawk_awaken.png',
+  './assets/sprites/pet/pet_hawk_divine.png',
   // 몬스터 공격 이펙트 2종 (v3.7 — 추가 광원 합성용)
   './assets/sprites/fx/fx_claw.png',
   './assets/sprites/fx/fx_burst.png',

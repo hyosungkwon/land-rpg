@@ -985,6 +985,59 @@ export function gearPresetSummary(s, idx) {
   return { idx: i, ...meta, saved, owned, active: !!(g && g.activePreset === i) };
 }
 
+/* ────────────────────────────── v5.8.0 원탭 추천 장비 세팅 (사냥/보스/탑) ────────────────────────────── */
+export const GEAR_BUILD_MODES = [
+  { id: 'hunt', icon: '⚔️', name: '사냥·파밍', sets: ['storm', 'fortune'], weights: { atkSpd: 3.5, goldPct: 2.6, dropPct: 2.8, whirlDmg: 2.4, atkPct: 2, critPct: 2, critDmg: 1.5 } },
+  { id: 'boss', icon: '👑', name: '보스·딜', sets: ['dragon', 'storm'], weights: { bossDmg: 4, atkPct: 3, critDmg: 2.8, critPct: 2.6, atkSpd: 2.4, lifesteal: 2 } },
+  { id: 'tower', icon: '🗼', name: '탑·생존', sets: ['guardian', 'abyss'], weights: { dmgRed: 4, hpPct: 3.2, regen: 3.5, lifesteal: 3.5, whirlDmg: 2, atkPct: 1.5 } },
+];
+
+/** 보유 장비 중 해당 목적(hunt/boss/tower)에 가장 알맞은 부위별 장비 uid 추천 */
+export function recommendGearBuild(s, mode = 'hunt') {
+  const def = GEAR_BUILD_MODES.find((m) => m.id === mode) || GEAR_BUILD_MODES[0];
+  const owned = gearOwned(s);
+  const picks = {};
+  for (const slot of EQUIP_SLOTS) {
+    const cands = owned.filter((r) => r.def.slot === slot);
+    if (!cands.length) { picks[slot] = null; continue; }
+    let best = cands[0];
+    let bestScore = -1;
+    for (const r of cands) {
+      let sc = ridx(r.def.rarity) * 120;
+      if (def.sets.includes(r.def.set)) sc += 36;
+      for (const [k, v] of Object.entries(r.def.opts || {})) {
+        sc += (Number(v) || 0) * (def.weights[k] || 1);
+      }
+      const af = r.affix ? gearAffixInfo(r.affix) : null;
+      if (af) sc += af.val * (def.weights[af.key] || 1);
+      if (sc > bestScore) { bestScore = sc; best = r; }
+    }
+    picks[slot] = best;
+  }
+  return { mode: def.id, meta: def, picks };
+}
+
+/** 추천 장비 세팅 즉시 장착 */
+export function applyRecommendedBuild(s, mode = 'hunt') {
+  const g = s && s.gear;
+  if (!g || !Array.isArray(g.items) || !g.items.length) {
+    return { ok: false, reason: '보유 중인 장비가 없습니다.' };
+  }
+  const rec = recommendGearBuild(s, mode);
+  let equipped = 0;
+  let changed = 0;
+  for (const slot of EQUIP_SLOTS) {
+    const row = rec.picks[slot];
+    if (!row) continue;
+    if (g.equipped[slot] !== row.uid) changed += 1;
+    g.equipped[slot] = row.uid;
+    equipped += 1;
+  }
+  if (!equipped) return { ok: false, reason: '장착할 수 있는 장비가 없습니다.' };
+  syncGearRarity(s);
+  return { ok: true, mode: rec.mode, meta: rec.meta, equipped, changed };
+}
+
 /** 장착 중인 테마 세트별 발동 현황 */
 export function gearSetStatus(s) {
   const counts = {};

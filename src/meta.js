@@ -160,6 +160,59 @@ export const PETS = [
       active: { name: '화염 브레스', kind: 'breath', cdMs: 12000, hits: 1, mul: 2.4 },
     },
   },
+  // v5.8.0 신규 동료 펫 2종 (방어·드랍 특화 / 공속·치명피해 특화)
+  {
+    id: 'golem',
+    name: '크리스탈 골렘',
+    emoji: '💎',
+    sprite: 'pet_golem',
+    color: '#6ff0e8',
+    dmgPct: 0.95,
+    atkPct: 6,
+    goldPct: 4,
+    unlock: { type: 'pyeong', n: 500 },
+    cond: '보유 500평 이상',
+    desc: '단단한 수정 몸체로 방어와 보석을 끌어옵니다.',
+    evo: {
+      names: ['크리스탈 골렘', '사파이어 수호자', '다이아몬드 정령왕'],
+      sprites: ['pet_golem', 'pet_golem_awaken', 'pet_golem_divine'],
+      scale: [1, 1.18, 1.36],
+      colors: ['#6ff0e8', '#7cc4ff', '#d8f8ff'],
+    },
+    skill: {
+      name: '수정 갑옷',
+      icon: '💎',
+      type: 'guard',
+      desc: '동행 중 피해 감소와 강화석 드랍이 오르고, 가끔 수정 충격파를 터뜨립니다.',
+      active: { name: '수정 충격파', kind: 'splash', cdMs: 11000, hits: 1, mul: 1.9 },
+    },
+  },
+  {
+    id: 'hawk',
+    name: '천둥 매',
+    emoji: '🦅',
+    sprite: 'pet_hawk',
+    color: '#ffe36a',
+    dmgPct: 1.35,
+    atkPct: 10,
+    goldPct: 5,
+    unlock: { type: 'cities', n: 25 },
+    cond: '보유 지역 25곳 이상',
+    desc: '번개 날개로 누구보다 빠르게 적을 급습합니다.',
+    evo: {
+      names: ['천둥 매', '폭풍 매', '천공 뇌조'],
+      sprites: ['pet_hawk', 'pet_hawk_awaken', 'pet_hawk_divine'],
+      scale: [1, 1.18, 1.36],
+      colors: ['#ffe36a', '#9fe0ff', '#fff6c4'],
+    },
+    skill: {
+      name: '뇌전의 날개',
+      icon: '⚡',
+      type: 'storm',
+      desc: '동행 중 공격 속도와 치명타 피해가 오르고, 가끔 번개 4연격을 퍼붓습니다.',
+      active: { name: '번개 연격', kind: 'multi', cdMs: 9500, hits: 4, mul: 0.75 },
+    },
+  },
 ];
 
 export const PET_BY_ID = Object.fromEntries(PETS.map((p, i) => [p.id, { ...p, tier: i }]));
@@ -293,6 +346,10 @@ export const PET_SKILL_RULES = {
   splashPerStage: 1, // 마리
   goldPerStage: 15, // %
   bossPerStage: 8, // %
+  dmgRedPerStage: 4, // %p (v5.8 크리스탈 골렘)
+  dropPerStage: 10, // % (v5.8 크리스탈 골렘)
+  atkSpdPerStage: 6, // % (v5.8 천둥 매)
+  critDmgPerStage: 14, // % (v5.8 천둥 매)
   goldBurstDur: 8000,
 };
 
@@ -323,13 +380,15 @@ export function petSkillText(def, stage) {
   if (t === 'splash') return `광역 타격 ${1 + s}마리 · ${def.skill.active.name} (${Math.round(def.skill.active.cdMs / 1000)}초)`;
   if (t === 'gold') return `골드 +${PET_SKILL_RULES.goldPerStage * s}% · ${def.skill.active.name} ${Math.round(def.skill.active.durMs / 1000)}초 골드 2배`;
   if (t === 'boss') return `보스 추가 피해 +${PET_SKILL_RULES.bossPerStage * s}% · ${def.skill.active.name} (${Math.round(def.skill.active.cdMs / 1000)}초) 광역`;
+  if (t === 'guard') return `피해 감소 +${PET_SKILL_RULES.dmgRedPerStage * s}%p · 강화석 드랍 +${PET_SKILL_RULES.dropPerStage * s}% · ${def.skill.active.name}`;
+  if (t === 'storm') return `공격 속도 +${PET_SKILL_RULES.atkSpdPerStage * s}% · 치명 피해 +${PET_SKILL_RULES.critDmgPerStage * s}% · ${def.skill.active.name} 4연격`;
   return '';
 }
 
 /** 진화를 반영한 펫 패시브 스탯(calcStats·전투 공용) */
 export function petPassive(state, id) {
   const def = petDef(id);
-  if (!def) return { critPct: 0, goldPct: 0, splash: 1, bossDmgPct: 0, stage: 0 };
+  if (!def) return { critPct: 0, goldPct: 0, splash: 1, bossDmgPct: 0, dmgRedPct: 0, dropPct: 0, atkSpdPct: 0, critDmgPct: 0, stage: 0 };
   const stage = petEvo(state, id);
   const t = def.skill ? def.skill.type : '';
   const on = stage >= 1;
@@ -339,6 +398,10 @@ export function petPassive(state, id) {
     goldPct: on && t === 'gold' ? PET_SKILL_RULES.goldPerStage * stage : 0,
     splash: on && t === 'splash' ? 1 + PET_SKILL_RULES.splashPerStage * stage : 1,
     bossDmgPct: on && t === 'boss' ? PET_SKILL_RULES.bossPerStage * stage : 0,
+    dmgRedPct: on && t === 'guard' ? PET_SKILL_RULES.dmgRedPerStage * stage : 0,
+    dropPct: on && t === 'guard' ? PET_SKILL_RULES.dropPerStage * stage : 0,
+    atkSpdPct: on && t === 'storm' ? PET_SKILL_RULES.atkSpdPerStage * stage : 0,
+    critDmgPct: on && t === 'storm' ? PET_SKILL_RULES.critDmgPerStage * stage : 0,
   };
 }
 

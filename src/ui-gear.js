@@ -5,7 +5,7 @@ import {
   GEAR_ITEMS, GEAR_FILTERS, gearIcon, gearList, gearOwned, gearOptionList,
   equippedItem, equippedRow, equippedRarity, gearCollection, gearSlotCounts, dismantleValue,
   dismantleTargets, AUTO_DISMANTLE_MODES, autoDismantleLabel, normalizeAutoMode,
-  GEAR_PRESET_NAMES, GEAR_AWAKEN_BONUS_LV, awakenLevel, gearPresetSummary,
+  GEAR_PRESET_NAMES, GEAR_AWAKEN_BONUS_LV, awakenLevel, gearPresetSummary, GEAR_BUILD_MODES,
   GEAR_SETS, GEAR_SET_FILTERS, gearSetOf, gearSetStatus, gearSetBonusText, gearAffixInfo,
 } from './gear.js';
 import { esc, fmt } from './ui-fmt.js';
@@ -85,6 +85,10 @@ export function gearSlotCards(s) {
     ${setPills ? `<div class="gset-list">${setPills}</div>` : ''}
   </div>`;
 
+  const recBtns = GEAR_BUILD_MODES.map((m) =>
+    `<button class="chip rec-btn" type="button" data-action="gear-recommend" data-value="${m.id}">✨ ${m.icon} ${m.name} 추천</button>`,
+  ).join('');
+
   return `
   <div class="card">
     <div class="card-head">
@@ -92,6 +96,7 @@ export function gearSlotCards(s) {
       <span class="tiny dim">프리셋 1탭 전환 · 장비 눌러 비교</span>
     </div>
     <div class="gear-presets">${presets}</div>
+    <div class="chips rec-row">${recBtns}</div>
     ${setBar}
     <div class="gear-slots">${rows}</div>
   </div>`;

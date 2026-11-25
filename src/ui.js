@@ -188,6 +188,7 @@ export class UI {
       case 'gear-auto': actions.setGearAuto(v); break;
       case 'gear-preset-apply': actions.applyGearPreset(Number(v)); break;
       case 'gear-preset-save': actions.saveGearPreset(Number(v)); break;
+      case 'gear-recommend': actions.applyRecommendedGear(v); break;
       case 'gear-awaken': actions.awakenGear(slot || v); break;
       case 'cast-ult': actions.castUltimate(); break;
       case 'toggle-auto-skill': actions.toggleAutoSkill(); break;
