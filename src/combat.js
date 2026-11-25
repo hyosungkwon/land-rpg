@@ -11,7 +11,7 @@ import {
   effectiveBattleSpeed,
 } from './meta.js';
 import { TOWER_RULES, TOWER_MAX_FLOOR, towerFloor, towerStageDef, towerHas, towerReward, towerCleared, towerState, towerUnlocked, towerLockReason } from './tower.js';
-import { DAILY, dailyBossFor, dailyInfo, consumeDailyAttempt, dailyReward, recordDailyRun, dailyDpsCap } from './daily.js';
+import { DAILY, dailyBossFor, dailyInfo, consumeDailyAttempt, dailyReward, recordDailyRun, recordWeeklyBoss, dailyDpsCap } from './daily.js';
 import { codexMeet, codexKill, trackDailyQuest } from './quests.js';
 import { tryGearDrop, acquireGear } from './gear.js';
 
@@ -1384,6 +1384,7 @@ export class Battle {
       dmg, grade: reward.grade.id, how, gold: reward.gold, shards: reward.shards,
       points: reward.points, ratio: reward.ratio,
     }, now);
+    try { recordWeeklyBoss(this.s, dmg, reward.ratio, now); } catch (e) { /* ignore */ }
     // 몬스터 정리 후 원래 스테이지 사냥으로 복귀
     for (const m of this.monsters) {
       m.dead = true;

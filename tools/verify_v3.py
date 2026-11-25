@@ -187,8 +187,8 @@ def main():
     ok("startCloudResume" in app_src and "if (!this.cloudEnabled() && !this.cloud.hasPendingRedirect()) return;" in app_src, "세션 복원도 클라우드를 켓을 때만")
     ok("setInterval(() => this.cloudTick(), 15000)" in app_src, "주기 저장은 조건 검사형 타이머")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v5.3.0" in read("sw.js"), "SW 캐시 버전 v5.3.0")
-    ok("APP_VERSION = '5.3.0'" in read("src/data.js"), "앱 버전 v5.3.0")
+    ok("land-rpg-v5.4.0" in read("sw.js"), "SW 캐시 버전 v5.4.0")
+    ok("APP_VERSION = '5.4.0'" in read("src/data.js"), "앱 버전 v5.4.0")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
     ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
@@ -2935,7 +2935,7 @@ def main():
     ok(all(x in asrc42 for x in ["enterTower", "openTowerFloors", "evolvePet", "showTowerResult", "showTowerFloors"]), "app.js — 탑 입장/층 선택/결과·펫 진화 액션", "")
     ok('assets/sprites/pet/${info.sprite}.png' in asrc42, "진화 결과 모달 — 진화 스프라이트 경로(.png)", "")
     ok(all(x in css42 for x in [".tower-card", ".tower-tiles", ".tower-floor", ".pet-evo", ".mini.evo"]), "style.css — v4.2 스타일", "")
-    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v5.3.0" in read("sw.js") and "APP_VERSION = '5.3.0'" in read("src/data.js"), "버전·서비스워커(5.3.0 · cloud 프리캐시)", "")
+    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v5.4.0" in read("sw.js") and "APP_VERSION = '5.4.0'" in read("src/data.js"), "버전·서비스워커(5.4.0 · cloud 프리캐시)", "")
     pkg_ok = (not os.path.exists(os.path.join(ROOT, "package.json"))) or ('"version": "' in read("package.json"))
     ok(pkg_ok, "package.json 버전 확인(없으면 클론 환경으로 통과)", "")
     evo_files = [f"assets/sprites/pet/pet_{n}_{s}.png" for n in ("wolf", "fox", "owl", "dragon") for s in ("awaken", "divine")]
@@ -3086,7 +3086,7 @@ def main():
 
     css43 = read("style.css")
     ok(all(x in css43 for x in [".land-sum", ".ls-v", ".ls-claim", ".news-slim", ".ns-title", ".land-subbar", ".land-rec", ".buff-now"]), "style.css — v4.3 부동산 요약 바·압축 뉴스·서브 탭", "")
-    ok("land-rpg-v5.3.0" in read("sw.js") and "'5.3.0'" in read("src/data.js"), "버전·캐시 v5.3.0", "")
+    ok("land-rpg-v5.4.0" in read("sw.js") and "'5.4.0'" in read("src/data.js"), "버전·캐시 v5.4.0", "")
 
     section("[20] ⚔️ v4.4 S31+ 무한 구간 리밸런싱 · 강화석 대량 교환 · 상위 전직")
 
@@ -3963,7 +3963,7 @@ def main():
     section("[23] ♻️ v4.7 장비 자동분해 · 🐉 상위 전직 궁극기 · 방치 편의")
 
     # ── 1) 버전·정적 배선 ──
-    ok("APP_VERSION = '5.3.0'" in read("src/data.js") and "land-rpg-v5.3.0" in read("sw.js"), "v5.3.0 버전·서비스워커 캐시 갱신", "")
+    ok("APP_VERSION = '5.4.0'" in read("src/data.js") and "land-rpg-v5.4.0" in read("sw.js"), "v5.4.0 버전·서비스워커 캐시 갱신", "")
     idx47 = read("index.html")
     ok(all(f'data-skill="{k}"' in idx47 for k in ["strike", "whirl", "berserk", "heal"]), "기존 4개 퀵슬롯 레이아웃 유지", "")
     ok('data-skill="ultimate"' in idx47 and 'class="q ult hidden"' in idx47, "다섯 번째 퀵슬롯(궁극기) — 해금 전 숨김", "")
@@ -4205,7 +4205,7 @@ def main():
     ok(cl_a["clean"][0] == "효성 왕" and cl_a["clean"][3] == 12 and not cl_a["html"], "닉네임 정리 — 공백 접기·12자 제한·HTML 문자 제거", json.dumps(cl_a["clean"], ensure_ascii=False))
     ok(cl_a["clean"][1] == "용사" and cl_a["clean"][2] == "용사", "1자·빈 닉네임은 기본 이름으로 대체", json.dumps(cl_a["clean"][:3], ensure_ascii=False))
     ok(cl_a["sum"] == [42, 21, 2, 5000, True], "세이브 요약 — 역대 최고 스테이지·보유 지역·총자산", json.dumps(cl_a["sum"]))
-    ok(cl_a["doc"][:6] == ["land_rpg_save", "5.3.0", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
+    ok(cl_a["doc"][:6] == ["land_rpg_save", "5.4.0", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
     ok(0 < cl_a["size"] < 200000, "클라우드 문서 크기 RTDB 한도 안(200KB 미만)", str(cl_a["size"]))
 
     # ── 2) 문서 해석(신형·v2 옛 페이로드·손상) ──
@@ -4309,7 +4309,7 @@ def main():
     ok(cl_e["errs"][0].startswith("이 주소가") and "응답이 없습니다" in cl_e["errs"][1] and cl_e["errs"][3].startswith("권한") and "시간 초과" in cl_e["errs"][4] and "라이브러리" in cl_e["errs"][5], "오류 문구 — 승인 도메인/시간 초과/권한/라이브러리", json.dumps(cl_e["errs"], ensure_ascii=False))
     ok(cl_e["strip"] == '{"a":1,"d":1,"e":{"x":2},"f":[1,3]}', "RTDB 전송 전 undefined·NaN 제거", cl_e["strip"])
     ok(cl_e["metrics"] == ["최고 스테이지", "총자산"], "랭킹 지표 이름", json.dumps(cl_e["metrics"], ensure_ascii=False))
-    ok(cl_e["entry"] == ["용사", 9, 12, 777, "5.3.0", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
+    ok(cl_e["entry"] == ["용사", 9, 12, 777, "5.4.0", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
 
     # ── 6) 세이브 호환 · 마이그레이션 ──
     mig48 = js(ctx, """
@@ -4973,6 +4973,69 @@ def main():
       };
     """)
     ok(ui53["hasSpd"] and ui53["hasSubPet"] and not ui53["bad"], "사냥 스탯 배속 토글 · 펫 카드 보조 슬롯 UI 렌더", json.dumps(ui53))
+
+    # ── 18) v5.4.0 7일 출석 체크 · 주간 보스 챌린지 ──
+    section("v5.4.0 7일 출석 체크 · 주간 보스 챌린지")
+    d54 = js(ctx, """
+      const dayMs = 86400000;
+      // 2026-11-23 03:00 UTC = 2026-11-23 12:00 KST (월요일)
+      const mon = Date.UTC(2026, 10, 23, 3, 0, 0);
+      const s = defaultState(mon); s.stage = 10;
+      const r1 = claimAttendance(s, mon, () => 0.1);
+      const dup = claimAttendance(s, mon + 3600000, () => 0.1);
+      let r7 = null;
+      for (let i = 1; i <= 6; i++) {
+        r7 = claimAttendance(s, mon + i * dayMs, () => 0.2);
+      }
+      // 8일차에는 다시 1일차로 순환
+      const r8 = claimAttendance(s, mon + 7 * dayMs, () => 0.1);
+
+      // 주간 보스 챌린지: 같은 주 월~일 누적 → 마일스톤 수령 → 다음 주 월요일 자동 리셋
+      const sw = defaultState(mon); sw.stage = 12;
+      const wkMon = kstWeekKey(mon);
+      const wkSun = kstWeekKey(mon + 6 * dayMs);
+      const wkNext = kstWeekKey(mon + 7 * dayMs);
+      recordWeeklyBoss(sw, 50000, 1.6, mon);
+      const m0 = claimWeeklyMilestone(sw, 0, mon, () => 0.2);
+      const m0Dup = claimWeeklyMilestone(sw, 0, mon, () => 0.2);
+      const m3Early = claimWeeklyMilestone(sw, 3, mon, () => 0.2);
+      recordWeeklyBoss(sw, 300000, 3.0, mon + dayMs);
+      recordWeeklyBoss(sw, 300000, 3.0, mon + 2 * dayMs);
+      recordWeeklyBoss(sw, 300000, 3.0, mon + 3 * dayMs);
+      const m3 = claimWeeklyMilestone(sw, 3, mon + 3 * dayMs, () => 0.2);
+      const resetNext = weeklyBossInfo(sw, mon + 7 * dayMs);
+      return {
+        r1: r1.ok && r1.day === 1 && r1.gold > 0 && r1.shards > 0,
+        dup: dup.ok,
+        r7: r7 && r7.ok && r7.day === 7 && r7.item && r7.item.rarity === 'legend' && r7.points === 5,
+        r8: r8.ok && r8.day === 1 && r8.total === 8,
+        wkSame: wkMon === wkSun && wkMon !== wkNext,
+        m0: m0.ok && m0.shards > 0 && m0.points === 2,
+        m0Dup: m0Dup.ok,
+        m3Early: m3Early.ok,
+        m3: m3.ok && m3.item && m3.item.rarity === 'legend' && m3.points === 8,
+        resetNext: resetNext.runs === 0 && resetNext.totalRatio === 0 && resetNext.week === wkNext,
+      };
+    """)
+    ok(d54["r1"] and not d54["dup"] and d54["r7"] and d54["r8"], "7일 출석 체크 — 하루 1회 제한 · 7일차 전설 확정 · 8일차 1일차 순환", json.dumps(d54))
+    ok(d54["wkSame"] and d54["m0"] and not d54["m0Dup"] and not d54["m3Early"] and d54["m3"] and d54["resetNext"], "주간 보스 챌린지 — KST 월~일 누적 · 1~4단계 보상(최종 전설) · 차주 월요일 자동 리셋", json.dumps(d54))
+
+    ui54 = js(ctx2, """
+      const now = Date.UTC(2026, 10, 23, 3, 0, 0);
+      const s = defaultState(now); s.totalKills = 5;
+      recordWeeklyBoss(s, 99999, 2.0, now);
+      const buffs = computeBuffs(s, now);
+      const b = new Battle(s, () => buffs, () => 0.5, now);
+      const ui = { s, battle: b, app: { buffs }, logs: [], tab: 'hunt', huntSub: 'quest', el: {}, install: { hidden: true } };
+      const qHtml = __huntSub(ui, 'quest');
+      const gHtml = __huntSub(ui, 'growth');
+      return {
+        hasAtt: qHtml.includes('7일 출석 체크') && qHtml.includes('data-action="claim-attendance"') && qHtml.includes('7일차'),
+        hasWb: gHtml.includes('주간 보스 챌린지') && gHtml.includes('data-action="claim-weekly-milestone"'),
+        bad: /undefined|NaN|\\[object Object\\]/.test(qHtml + gHtml),
+      };
+    """)
+    ok(ui54["hasAtt"] and ui54["hasWb"] and not ui54["bad"], "미션·도감 탭 출석 카드 · 일일 보스 주간 챌린지 UI 렌더", json.dumps(ui54))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

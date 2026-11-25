@@ -42,7 +42,10 @@ import {
   towerGoalText, towerRewardText, towerUnlocked, towerGimmicks, towerLockReason,
   TOWER_FIXED_FLOOR, towerSweepClaim, towerSweepText, towerSweepInfo,
 } from './src/tower.js';
-import { DAILY, dailyInfo, dailyBossFor, dailyGradeText } from './src/daily.js';
+import {
+  DAILY, dailyInfo, dailyBossFor, dailyGradeText,
+  claimAttendance as claimAttendanceState, claimWeeklyMilestone as claimWeeklyMilestoneState,
+} from './src/daily.js';
 import {
   claimQuest as claimQuestState, claimAchievement as claimAchievementState,
   achievementStatus, claimedAchievementCount, codexStats, codexDetail, codexCity, codexGear,
@@ -1593,7 +1596,49 @@ class App {
       openRebirthTraits: () => this.showRebirthTraits(),
       upgradeRebirthTrait: (id) => this.doUpgradeRebirthTrait(id),
 
-      /* ── v3.3: 🎯 미션 · 🏆 업적 · 📖 도감 ── */
+      /* ── v3.3: 🎯 미션 · 🏆 업적 · 📖 도감 · v5.4 출석/주간 보스 ── */
+      claimAttendance: () => {
+        this.sound.unlock();
+        const r = claimAttendanceState(this.s, Date.now());
+        if (!r.ok) {
+          this.ui.toast(r.reason || '출석 보상을 받을 수 없습니다', 'red');
+          return;
+        }
+        if (r.acq && r.acq.equipped) this.battle.refreshStats();
+        this.save(true);
+        this.sound.fanfare();
+        const gains = [
+          r.item ? `👑 ${r.item.name}${r.acq && r.acq.duplicate ? ` (중복 → 💎${r.acq.shards})` : ''}` : '',
+          r.gold ? `💰${r.gold.toLocaleString()}` : '',
+          r.shards ? `💎${r.shards.toLocaleString()}` : '',
+          r.points ? `✨${r.points}P` : '',
+        ].filter(Boolean).join(' ');
+        this.ui.toast(`🗓️ ${r.day}일차 출석 보상 · ${gains}`, 'gold');
+        this.ui.addLog(`🗓️ <b>${r.day}일차 출석</b> 완료 · ${gains}`);
+        this.ui.render();
+      },
+
+      claimWeeklyMilestone: (idx) => {
+        this.sound.unlock();
+        const r = claimWeeklyMilestoneState(this.s, idx, Date.now());
+        if (!r.ok) {
+          this.ui.toast(r.reason || '주간 보상을 받을 수 없습니다', 'red');
+          return;
+        }
+        if (r.acq && r.acq.equipped) this.battle.refreshStats();
+        this.save(true);
+        this.sound.fanfare();
+        const gains = [
+          r.item ? `👑 ${r.item.name}${r.acq && r.acq.duplicate ? ` (중복 → 💎${r.acq.shards})` : ''}` : '',
+          r.gold ? `💰${r.gold.toLocaleString()}` : '',
+          r.shards ? `💎${r.shards.toLocaleString()}` : '',
+          r.points ? `✨${r.points}P` : '',
+        ].filter(Boolean).join(' ');
+        this.ui.toast(`🏆 주간 보스 ${r.label} 보상 · ${gains}`, 'gold');
+        this.ui.addLog(`🏆 <b>주간 보스 ${esc(r.label)}</b> 수령 · ${gains}`);
+        this.ui.render();
+      },
+
       claimQuest: (id) => {
         this.sound.unlock();
         const r = claimQuestState(this.s, id, Date.now());

@@ -160,6 +160,8 @@ export function compactSave(state) {
   }
   if (c.pet && typeof c.pet === 'object' && !c.pet.sub) delete c.pet.sub;
   if (!c.battleSpeed || Number(c.battleSpeed) <= 1) delete c.battleSpeed;
+  if (c.attendance && typeof c.attendance === 'object' && !c.attendance.total && !c.attendance.lastDate) delete c.attendance;
+  if (c.weeklyBoss && typeof c.weeklyBoss === 'object' && !c.weeklyBoss.runs && !c.weeklyBoss.totalDmg && !(Array.isArray(c.weeklyBoss.claimed) && c.weeklyBoss.claimed.length)) delete c.weeklyBoss;
   return c;
 }
 

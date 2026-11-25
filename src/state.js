@@ -25,7 +25,11 @@ import {
   defaultDailyQuests, normalizeDailyQuests,
 } from './quests.js';
 import { normalizeTowerState } from './tower.js';
-import { defaultDailyState, normalizeDailyState } from './daily.js';
+import {
+  defaultDailyState, normalizeDailyState,
+  defaultAttendance, normalizeAttendance,
+  defaultWeeklyBoss, normalizeWeeklyBoss,
+} from './daily.js';
 
 const nowMs = () => Date.now();
 
@@ -76,8 +80,10 @@ export function defaultState(now = nowMs()) {
     dungeon: { best: 0, runs: 0, last: null },
     // v4.2 🗼 도전의 탑 — 층별 클리어 기록 · 도전 횟수
     tower: { cleared: [], best: 0, runs: 0, fails: 0, last: null, sweep: { date: '', floor: 0, gold: 0, shards: 0, at: 0 } },
-    // v4.5 🌟 일일 보스 — 날짜(KST)별 도전 횟수 · 최고 피해
+    // v4.5 🌟 일일 보스 — 날짜(KST)별 도전 횟수 · 최고 피해 · v5.4 출석·주간 보스
     dailyBoss: defaultDailyState(),
+    attendance: defaultAttendance(),
+    weeklyBoss: defaultWeeklyBoss(now),
     // v4.8 ☁️ 선택적 클라우드 세이브·랭킹 — 기본은 꺼짐(게스트). 사용자가 켤 때만 서버로 나간다.
     cloud: { enabled: false, nick: '', autoSync: true, uid: '', email: '', lastSync: 0 },
     // v3.3 수집 메타: 순차 미션 · 업적 수령 · 도감 기록 · v4.9 일일 퀘스트
@@ -209,6 +215,9 @@ export function normalizeState(raw, now = nowMs()) {
   s.tower = normalizeTowerState(raw.tower);
   // v4.5: 일일 보스 기록 정규화(KST 날짜가 바뀌면 도전 횟수만 리셋 · 최고 기록 유지)
   s.dailyBoss = normalizeDailyState(raw.dailyBoss, now);
+  // v5.4: 7일 출석 체크 · 주간 보스 챌린지 정규화
+  s.attendance = normalizeAttendance(raw.attendance);
+  s.weeklyBoss = normalizeWeeklyBoss(raw.weeklyBoss, now);
 
   // v3.3: 미션/업적/도감 · v4.9 일일 퀘스트 기본값 병합 (없는 저장본은 그대로 진행도 유지)
   s.quests = normalizeQuestState(raw.quests);

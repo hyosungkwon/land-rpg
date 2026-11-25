@@ -33,6 +33,7 @@ import {
 } from './tower.js';
 import {
   DAILY, dailyInfo, dailyBossFor, dailyGradeText,
+  attendanceInfo, weeklyBossInfo,
 } from './daily.js';
 import {
   QUESTS, ACHIEVEMENTS, questStateOf, currentQuest, questProgress, codexStats,
@@ -217,6 +218,8 @@ export class UI {
       case 'tower-floors': actions.openTowerFloors(); break;
       case 'tower-sweep': actions.claimTowerSweep(); break;
       case 'daily': actions.enterDaily(); break;
+      case 'claim-attendance': actions.claimAttendance(); break;
+      case 'claim-weekly-milestone': actions.claimWeeklyMilestone(Number(v)); break;
       case 'claim-quest': actions.claimQuest(v); break;
       case 'claim-daily-quest': actions.claimDailyQuest(v); break;
       case 'claim-daily-quest-bonus': actions.claimDailyQuestBonus(); break;
@@ -975,6 +978,36 @@ function dailyBossCard(ui) {
           : '30초 동안 누적 피해로 등급 보상 — 패배해도 받은 피해만큼 지급'
     }</div>
     <div class="tiny dim ellip" style="margin-top:2px">${di.best > 0 ? `최고 ${esc(best)}` : '최고 기록 없음'} · 매일 00:00(KST) 횟수 리셋</div>
+    ${weeklyBossBox(s, now)}
+  </div>`;
+}
+
+/** 🌟 v5.4.0 주간 보스 챌린지(KST 월~일 누적 마일스톤) */
+function weeklyBossBox(s, now) {
+  const wb = weeklyBossInfo(s, now);
+  const daysLeft = Math.floor(wb.resetMs / 86400000);
+  const hrsLeft = Math.floor((wb.resetMs % 86400000) / 3600000);
+  const score = Math.round(wb.totalRatio * 100);
+  const maxScore = Math.round(wb.maxGoal * 100);
+  const pills = wb.milestones.map((m) => {
+    const rw = m.rarity === 'legend'
+      ? `👑전설 · 💎${m.shards} · ✨${m.points}P`
+      : `💰${formatGold(m.gold)} · 💎${m.shards} · ✨${m.points}P`;
+    const cls = m.claimed ? 'done' : m.claimable ? 'ready' : '';
+    const act = m.claimable ? ` data-action="claim-weekly-milestone" data-value="${m.idx}"` : ' disabled';
+    return `<button class="wb-ms ${cls}" type="button"${act}>
+      <span class="wb-t"><b>${m.label}</b><small>${Math.round(m.goal * 100)}점</small></span>
+      <span class="wb-r">${m.claimed ? '수령 완료 ✓' : m.claimable ? `🎁 받기 (${rw})` : rw}</span>
+    </button>`;
+  }).join('');
+  return `
+  <div class="wb-box${wb.readyCount ? ' ready' : ''}">
+    <div class="wb-head">
+      <span>🏆 주간 보스 챌린지 <small>${score}/${maxScore}점 (${wb.runs}회)</small></span>
+      <small class="dim">${daysLeft}일 ${hrsLeft}시간 후 리셋</small>
+    </div>
+    <div class="prog tiny-prog${wb.readyCount ? ' gold' : ''}" style="margin:5px 0 6px"><i style="width:${wb.pct * 100}%"></i></div>
+    <div class="wb-grid">${pills}</div>
   </div>`;
 }
 
@@ -1150,11 +1183,15 @@ function huntBadges(ui) {
   });
   // v4.2: 지금 진화시킬 수 있는 펫이 있으면 성장 배지에 함께 표시
   const petEvoReady = PETS.filter((d) => (s.pet && s.pet.unlocked && s.pet.unlocked.includes(d.id)) && petEvolveInfo(s, d.id).can).length;
+  // v5.4: 주간 보스 마일스톤 · 7일 출석 체크(새 게임 0초 시점에는 과도한 알림 방지)
+  const weeklyReady = weeklyBossInfo(s).readyCount;
+  const att = attendanceInfo(s);
+  const attReady = att.canClaim && (s.totalKills > 0 || att.total > 0) ? 1 : 0;
   // 던전 '무료 입장 가능'은 10분마다 계속 켜지므로 배지에서 뺀다(탭 안에서 바로 보임) — 상시 점등 방지
   return {
     skill: 0,
-    growth: (pr.canPromote ? 1 : 0) + (rb.can ? 1 : 0) + (traitReady ? 1 : 0) + (petEvoReady > 0 ? 1 : 0),
-    quest: (questReady ? 1 : 0) + dqReady + achReady,
+    growth: (pr.canPromote ? 1 : 0) + (rb.can ? 1 : 0) + (traitReady ? 1 : 0) + (petEvoReady > 0 ? 1 : 0) + weeklyReady,
+    quest: (questReady ? 1 : 0) + dqReady + achReady + attReady,
   };
 }
 
@@ -1449,8 +1486,37 @@ function codexCard(ui) {
   </div>`;
 }
 
+/* ───────────── 🗓️ 7일 출석 체크 (v5.4.0 · KST 자정 리셋) ───────────── */
+function attendanceCard(ui) {
+  const att = attendanceInfo(ui.s);
+  const h = Math.floor(att.resetMs / 3600000);
+  const m = Math.floor((att.resetMs % 3600000) / 60000);
+  const cells = att.days.map((d) => {
+    const rw = d.rarity === 'legend'
+      ? `👑전설<br>💎${d.shards} ✨${d.points}P`
+      : `💰${formatGold(d.gold)}<br>💎${d.shards}${d.points ? ` ✨${d.points}P` : ''}`;
+    const cls = `${d.done ? 'done' : ''}${d.current ? ' cur' : ''}${d.day === 7 ? ' big' : ''}`;
+    return `<div class="att-cell ${cls}">
+      <span class="att-day">${d.label}${d.done ? ' ✓' : ''}</span>
+      <span class="att-ico">${d.icon}</span>
+      <span class="att-rw">${rw}</span>
+    </div>`;
+  }).join('');
+  return `
+  <div class="card att-card${att.canClaim ? ' ready' : ''}">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🗓️</span>7일 출석 체크<small>누적 ${att.total}일 · 7일차 전설 확정</small></div>
+      <span class="tiny dim">${att.claimedToday ? `${h}시간 ${m}분 후 다음 출석` : `${att.nextDay}일차 수령 가능`}</span>
+    </div>
+    <div class="att-grid">${cells}</div>
+    <button class="btn block ${att.canClaim ? 'primary' : 'ghost'}" style="margin-top:8px" type="button" data-action="claim-attendance" ${att.canClaim ? '' : 'disabled'}>${
+      att.canClaim ? `🗓️ ${att.nextDay}일차 출석 보상 받기` : '✅ 오늘 출석 완료 · 내일 00:00(KST)에 다시'
+    }</button>
+  </div>`;
+}
+
 function tplHuntQuest(ui) {
-  return `${questCard(ui)}${dailyQuestCard(ui)}${codexCard(ui)}`;
+  return `${attendanceCard(ui)}${questCard(ui)}${dailyQuestCard(ui)}${codexCard(ui)}`;
 }
 
 /* ══════════════════════════ 사냥/스킬 (본문) ══════════════════════════ */
