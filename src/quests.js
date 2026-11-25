@@ -5,9 +5,12 @@
 //           현재 미션 하나만 진행되고, 완료하면 보상(💰 골드 / 💎 강화석)을 직접 수령한다.
 //   - 업적: 누적 조건(첫 매수·지역 수·전직·장비 등급·총 처치 …)을 달성하면 💎 또는 소폭 영구 스탯 보너스.
 //   - 도감: 몬스터/보스 · 부동산 지역 · 장비 등급 · 펫. 수집률 마일스톤이 calcStats 에 소폭 영구 보너스로 반영된다.
-import { MONSTERS, RARITIES, RARITY_IDS, RARITY_INDEX, EQUIP_SLOTS } from './data.js';
-import { CITIES, CITY_BY_KEY } from './land.js';
-import { PETS } from './meta.js';
+import { MONSTERS, RARITIES, RARITY_IDS, RARITY_INDEX, EQUIP_SLOTS, stageGoldBase } from './data.js';
+import { CITIES, CITY_BY_KEY, landmarkSummary } from './land.js';
+import { regionCompleteSynergy } from './synergy.js';
+import { GEAR_ITEMS, gearItem, gearCollection } from './gear.js';
+import { PETS, PET_EVO_MAX, petEvo, petStageInfo } from './meta.js';
+import { kstDateKey, kstResetMs } from './daily.js';
 
 const num = (v, d = 0) => (typeof v === 'number' && isFinite(v) ? v : Number(v) || d);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -35,6 +38,22 @@ export const QUESTS = [
   { id: 'm13', chapter: '도전', title: '100평', desc: '보유 100평 달성', type: 'pyeong', goal: 100, gold: 10000, shards: 0 },
   { id: 'm14', chapter: '도전', title: '전직', desc: '전직 1회 (왕국 기사)', type: 'job', goal: 1, gold: 0, shards: 20 },
   { id: 'm15', chapter: '도전', title: '스테이지 24', desc: '스테이지 24 도달', type: 'stage', goal: 24, gold: 30000, shards: 30 },
+  // v4.9.0 후반 메타 확장 (16~30단계)
+  { id: 'm16', chapter: '영지 전략', title: '첫 랜드마크', desc: '랜드마크 1개 건설', type: 'landmarks', goal: 1, gold: 40000, shards: 35 },
+  { id: 'm17', chapter: '초월', title: '첫 환생', desc: '환생(초월) 1회 달성', type: 'rebirth', goal: 1, gold: 0, shards: 50, points: 3 },
+  { id: 'm18', chapter: '도전의 탑', title: '탑 등반', desc: '도전의 탑 5층 클리어', type: 'towerBest', goal: 5, gold: 50000, shards: 45 },
+  { id: 'm19', chapter: '일일 보스', title: '타임어택', desc: '일일 보스 1회 도전', type: 'dailyRuns', goal: 1, gold: 60000, shards: 50 },
+  { id: 'm20', chapter: '동료 각성', title: '펫 진화', desc: '동료 펫 ★각성 진화 1회', type: 'petEvoTotal', goal: 1, gold: 80000, shards: 60 },
+  { id: 'm21', chapter: '급매 투자', title: '첫 낙찰', desc: '급매 경매 1회 낙찰', type: 'auctionBids', goal: 1, gold: 100000, shards: 65 },
+  { id: 'm22', chapter: '무한 구간', title: '무한 돌입', desc: '스테이지 31 도달 (∞)', type: 'stage', goal: 31, gold: 150000, shards: 80, points: 5 },
+  { id: 'm23', chapter: '도전의 탑', title: '탑의 정점', desc: '도전의 탑 10층 클리어', type: 'towerBest', goal: 10, gold: 200000, shards: 100, points: 6 },
+  { id: 'm24', chapter: '상위 전직', title: '드래곤 로드', desc: '5단계 드래곤 로드 전직', type: 'job', goal: 4, gold: 250000, shards: 120, points: 8 },
+  { id: 'm25', chapter: '영지 전략', title: '권역 완성', desc: '권역 세트 1곳 최대 단계 완성', type: 'completeSets', goal: 1, gold: 300000, shards: 130 },
+  { id: 'm26', chapter: '영지 전략', title: '메가 랜드마크', desc: 'Lv.3 메가 랜드마크 1개 건설', type: 'megaLandmarks', goal: 1, gold: 350000, shards: 150, points: 8 },
+  { id: 'm27', chapter: '심층 정복', title: '심층 25층', desc: '도전의 탑 25층 클리어', type: 'towerBest', goal: 25, gold: 500000, shards: 180, points: 10 },
+  { id: 'm28', chapter: '무한 구간', title: '스테이지 40', desc: '스테이지 40 도달', type: 'stage', goal: 40, gold: 700000, shards: 220, points: 12 },
+  { id: 'm29', chapter: '상위 전직', title: '용신 강림', desc: '6단계 용신 전직', type: 'job', goal: 5, gold: 1000000, shards: 280, points: 15 },
+  { id: 'm30', chapter: '전설의 영주', title: '스테이지 50', desc: '스테이지 50 도달', type: 'stage', goal: 50, gold: 1500000, shards: 350, points: 25 },
 ];
 
 export const QUEST_IDS = QUESTS.map((q) => q.id);
@@ -64,6 +83,24 @@ export const ACHIEVEMENTS = [
   { id: 'a_dungeon5', icon: '🔥', title: '던전 단골', desc: '황금 던전 5회 참여', type: 'dungeon', goal: 5, shards: 15 },
   { id: 'a_gacha50', icon: '🎁', title: '수집가', desc: '장비 뽑기 50회', type: 'gacha', goal: 50, shards: 15 },
   { id: 'a_codex50', icon: '📖', title: '도감 절반', desc: '도감 수집률 50%', type: 'codex', goal: 50, shards: 30, atkPct: 1 },
+  // v4.9.0 후반 메타 업적 17종
+  { id: 'a_stage40', icon: '♾️', title: '무한 개척자', desc: '스테이지 40 도달', type: 'stage', goal: 40, shards: 60, atkPct: 2 },
+  { id: 'a_stage60', icon: '🌌', title: '심연의 정복자', desc: '스테이지 60 도달', type: 'stage', goal: 60, shards: 100, atkPct: 2 },
+  { id: 'a_stage100', icon: '👑', title: '백층의 신화', desc: '스테이지 100 도달', type: 'stage', goal: 100, shards: 200, atkPct: 3, goldPct: 3 },
+  { id: 'a_job4', icon: '🐉', title: '드래곤 로드', desc: '상위 전직 5단계 달성', type: 'job', goal: 4, shards: 60, atkPct: 2 },
+  { id: 'a_job5', icon: '✨', title: '용신 강림', desc: '최종 전직 6단계 달성', type: 'job', goal: 5, shards: 120, atkPct: 3 },
+  { id: 'a_rebirth1', icon: '♻️', title: '초월의 첫걸음', desc: '환생 1회 달성', type: 'rebirth', goal: 1, shards: 40 },
+  { id: 'a_rebirth5', icon: '🌀', title: '윤회의 주인', desc: '환생 5회 달성', type: 'rebirth', goal: 5, shards: 90, goldPct: 2 },
+  { id: 'a_tower10', icon: '🗼', title: '탑의 정복자', desc: '도전의 탑 10층 클리어', type: 'towerBest', goal: 10, shards: 50, atkPct: 1 },
+  { id: 'a_tower30', icon: '🏔️', title: '심층 탐험가', desc: '도전의 탑 30층 클리어', type: 'towerBest', goal: 30, shards: 90, atkPct: 2 },
+  { id: 'a_tower100', icon: '⚡', title: '탑 100층 돌파', desc: '도전의 탑 100층 클리어', type: 'towerBest', goal: 100, shards: 180, atkPct: 3 },
+  { id: 'a_dailyS', icon: '🌟', title: '완벽한 화력', desc: '일일 보스 S등급 달성', type: 'dailyS', goal: 1, shards: 60, atkPct: 1 },
+  { id: 'a_petEvo1', icon: '🐾', title: '첫 각성', desc: '동료 펫 ★각성 진화', type: 'petEvoTotal', goal: 1, shards: 45 },
+  { id: 'a_petDivine', icon: '🦊', title: '신수의 주인', desc: '동료 펫 ★★신수 진화', type: 'petDivine', goal: 1, shards: 100, goldPct: 2 },
+  { id: 'a_landmark5', icon: '🏛️', title: '건축왕', desc: '랜드마크 5개 보유', type: 'landmarks', goal: 5, shards: 60, goldPct: 2 },
+  { id: 'a_setComplete', icon: '🗺️', title: '권역 제패', desc: '권역 세트 1곳 완성', type: 'completeSets', goal: 1, shards: 70, atkPct: 1 },
+  { id: 'a_auction5', icon: '🔨', title: '경매 큰손', desc: '급매 경매 5회 낙찰', type: 'auctionBids', goal: 5, shards: 60, goldPct: 2 },
+  { id: 'a_gearAll', icon: '⚔️', title: '무기고 완성', desc: '장비 35종 모두 수집', type: 'gearItems', goal: 35, shards: 150, atkPct: 2, goldPct: 2 },
 ];
 
 export const ACH_IDS = ACHIEVEMENTS.map((a) => a.id);
@@ -186,12 +223,20 @@ export function codexStats(state) {
   let milestone = null;
   for (const m of CODEX_MILESTONES) if (pct >= m.pct) milestone = m;
 
+  // v4.9.0 도감 v2 보조 집계: 35종 장비 카탈로그 · 12종 펫 진화 단계
+  const gearCol = gearCollection(s);
+  let petEvoSeen = 0;
+  for (const id of pets) petEvoSeen += 1 + petEvo(s, id); // 해금(1) + 각성(+1) + 신수(+1)
+  const petEvoTotal = PETS.length * (PET_EVO_MAX + 1);
+
   const total = MONSTER_IDS.length + CITIES.length + RARITY_IDS.length + PETS.length;
   return {
     monsters: { seen: monsterSeen, total: MONSTER_IDS.length, kills: monsterKills },
     cities: { seen: cityKeys.size, total: CITIES.length },
     gear: { seen: gearKeys.size, total: RARITY_IDS.length },
+    gearItems: { seen: gearCol.seen, total: gearCol.total },
     pets: { seen: pets.length, total: PETS.length },
+    petEvos: { seen: petEvoSeen, total: petEvoTotal },
     seen: monsterSeen + cityKeys.size + gearKeys.size + pets.length,
     total,
     pct,
@@ -274,6 +319,28 @@ export function questValue(state, type) {
     case 'cities': return landCounts(s).cities;
     case 'pyeong': return landCounts(s).pyeong;
     case 'codex': return codexStats(s).pct;
+    // v4.9.0 후반 메타 측정 항목
+    case 'landmarks': return landmarkSummary(s).count;
+    case 'megaLandmarks': return (landmarkSummary(s).levels || [0, 0, 0])[2] || 0;
+    case 'completeSets': return regionCompleteSynergy(s.land && s.land.owned).count;
+    case 'rebirth': return Math.max(0, Math.floor(num(s.rebirth && s.rebirth.count)));
+    case 'towerBest': return Math.max(0, Math.floor(num(s.tower && s.tower.best)));
+    case 'dailyRuns': return Math.max(0, Math.floor(num(s.dailyBoss && s.dailyBoss.runs)));
+    case 'dailyS': return s.dailyBoss && s.dailyBoss.bestGrade === 'S' ? 1 : 0;
+    case 'auctionBids': return Math.max(0, Math.floor(num(s.land && s.land.auction && s.land.auction.bids)));
+    case 'petEvoTotal': {
+      let sum = 0;
+      const unlocked = Array.isArray(s.pet && s.pet.unlocked) ? s.pet.unlocked : [];
+      for (const id of unlocked) sum += petEvo(s, id);
+      return sum;
+    }
+    case 'petDivine': {
+      let cnt = 0;
+      const unlocked = Array.isArray(s.pet && s.pet.unlocked) ? s.pet.unlocked : [];
+      for (const id of unlocked) if (petEvo(s, id) >= PET_EVO_MAX) cnt += 1;
+      return cnt;
+    }
+    case 'gearItems': return gearCollection(s).seen;
     default: return 0;
   }
 }
@@ -325,14 +392,22 @@ export function claimQuest(state, id, now = nowMs()) {
   if (!pr.done) return { ok: false, reason: '아직 목표를 달성하지 못했습니다.' };
   const gold = Math.max(0, Math.floor(num(cur.gold)));
   const shards = Math.max(0, Math.floor(num(cur.shards)));
+  const points = Math.max(0, Math.floor(num(cur.points)));
   state.gold = Math.floor(num(state.gold) + gold);
   state.shards = Math.floor(num(state.shards) + shards);
+  if (points > 0) {
+    if (!state.rebirth || typeof state.rebirth !== 'object') {
+      state.rebirth = { count: 0, points: 0, totalPoints: 0, traits: {}, bestStage: 1, at: 0 };
+    }
+    state.rebirth.points = Math.max(0, Math.floor(num(state.rebirth.points))) + points;
+    state.rebirth.totalPoints = Math.max(0, Math.floor(num(state.rebirth.totalPoints))) + points;
+  }
   st.claimed = st.claimed.concat([cur.id]);
   st.done = st.claimed.length;
   st.idx = Math.min(QUESTS.length, st.idx + 1);
   state.quests = { ...st, at: Math.max(0, num(now)) };
   ensureMonsters(state); // 상태 구조 유지
-  return { ok: true, quest: cur, gold, shards, next: QUESTS[st.idx] || null };
+  return { ok: true, quest: cur, gold, shards, points, next: QUESTS[st.idx] || null };
 }
 
 /* ══════════════════════════ 업적 수령 ══════════════════════════ */
@@ -511,15 +586,185 @@ export function codexDetail(state) {
     };
   });
 
-  const petList = PETS.map((p) => ({
-    id: p.id,
-    name: p.name,
-    emoji: p.emoji,
-    sprite: p.sprite,
-    cond: p.cond,
-    desc: p.desc,
-    unlocked: pets.includes(p.id),
-  }));
+  const seenMap = s.gear && s.gear.seen && typeof s.gear.seen === 'object' ? s.gear.seen : {};
+  const equippedIds = new Set();
+  if (s.gear && Array.isArray(s.gear.items) && s.gear.equipped) {
+    for (const slot of EQUIP_SLOTS) {
+      const uid = s.gear.equipped[slot];
+      const row = uid ? s.gear.items.find((x) => x.uid === uid) : null;
+      if (row) equippedIds.add(row.id);
+    }
+  }
+  const gearItems = GEAR_ITEMS.map((it) => {
+    const count = Math.max(0, Math.floor(num(seenMap[it.id])));
+    const equipped = equippedIds.has(it.id);
+    return {
+      id: it.id,
+      name: it.name,
+      slot: it.slot,
+      rarity: it.rarity,
+      count,
+      equipped,
+      got: count > 0 || equipped,
+    };
+  });
 
-  return { monsters, cities, gear, pets: petList };
+  const petList = PETS.map((p) => {
+    const unlocked = pets.includes(p.id);
+    const evo = unlocked ? petEvo(s, p.id) : 0;
+    const info = petStageInfo(s, p.id);
+    const stages = [0, 1, 2].map((st) => ({
+      stage: st,
+      name: (p.evo && p.evo.names && p.evo.names[st]) || p.name,
+      sprite: (p.evo && p.evo.sprites && p.evo.sprites[st]) || p.sprite,
+      unlocked: unlocked && evo >= st,
+    }));
+    return {
+      id: p.id,
+      name: unlocked ? info.name : p.name,
+      baseName: p.name,
+      emoji: p.emoji,
+      sprite: unlocked ? info.sprite : p.sprite,
+      cond: p.cond,
+      desc: p.desc,
+      unlocked,
+      evo,
+      stages,
+    };
+  });
+
+  return { monsters, cities, gear, gearItems, pets: petList };
+}
+
+/* ══════════════════════════ 📅 일일 퀘스트 (v4.9.0 · KST 자정 리셋) ══════════════════════════ */
+export const DAILY_QUESTS = [
+  { id: 'dq_kill', icon: '⚔️', title: '몬스터 사냥', desc: '몬스터 60마리 처치', key: 'kills', goal: 60, goldMul: 40, shards: 18 },
+  { id: 'dq_enhance', icon: '🔨', title: '장비 단련', desc: '장비 강화 3회', key: 'enhance', goal: 3, goldMul: 30, shards: 15 },
+  { id: 'dq_rent', icon: '💤', title: '임대 수령', desc: '임대수익 1회 수령', key: 'rent', goal: 1, goldMul: 35, shards: 15 },
+  { id: 'dq_challenge', icon: '🔥', title: '오늘의 도전', desc: '던전·탑·일일 보스 중 1회 참여', key: 'challenge', goal: 1, goldMul: 50, shards: 25 },
+  { id: 'dq_invest', icon: '🏢', title: '영지 투자', desc: '매수·경매·랜드마크 중 1회', key: 'invest', goal: 1, goldMul: 45, shards: 20 },
+];
+export const DAILY_QUEST_IDS = DAILY_QUESTS.map((d) => d.id);
+const DAILY_QUEST_BY_ID = Object.fromEntries(DAILY_QUESTS.map((d) => [d.id, d]));
+export const DAILY_QUEST_BONUS = { goldMul: 120, shards: 60, points: 3 };
+const DQ_KEYS = ['kills', 'enhance', 'rent', 'challenge', 'invest'];
+
+export function defaultDailyQuests(now = nowMs()) {
+  return {
+    date: kstDateKey(now),
+    progress: { kills: 0, enhance: 0, rent: 0, challenge: 0, invest: 0 },
+    claimed: [],
+    bonusClaimed: false,
+  };
+}
+
+export function normalizeDailyQuests(raw, now = nowMs()) {
+  const today = kstDateKey(now);
+  const base = defaultDailyQuests(now);
+  if (!raw || typeof raw !== 'object') return base;
+  const rawDate = typeof raw.date === 'string' ? raw.date.slice(0, 10) : '';
+  if (rawDate !== today) return base;
+  const srcProg = raw.progress && typeof raw.progress === 'object' ? raw.progress : {};
+  const progress = {};
+  for (const k of DQ_KEYS) progress[k] = Math.max(0, Math.floor(num(srcProg[k])));
+  const claimed = Array.isArray(raw.claimed)
+    ? raw.claimed.filter((id, i, arr) => DAILY_QUEST_IDS.includes(id) && arr.indexOf(id) === i)
+    : [];
+  return {
+    date: today,
+    progress,
+    claimed,
+    bonusClaimed: raw.bonusClaimed === true && claimed.length >= DAILY_QUESTS.length,
+  };
+}
+
+export function dailyQuestState(state, now = nowMs()) {
+  if (!state || typeof state !== 'object') return defaultDailyQuests(now);
+  state.dailyQuests = normalizeDailyQuests(state.dailyQuests, now);
+  return state.dailyQuests;
+}
+
+/** 일일 퀘스트 진행도 누적 (kills | enhance | rent | challenge | invest) */
+export function trackDailyQuest(state, key, add = 1, now = nowMs()) {
+  if (!state || !DQ_KEYS.includes(key)) return 0;
+  const n = Math.max(0, Math.floor(num(add, 1)));
+  if (!(n > 0)) return 0;
+  const dq = dailyQuestState(state, now);
+  dq.progress[key] = Math.min(999999, Math.max(0, Math.floor(num(dq.progress[key]))) + n);
+  return dq.progress[key];
+}
+
+/** 일일 퀘스트 전체 현황(UI·배지 공용) */
+export function dailyQuestStatus(state, now = nowMs()) {
+  const dq = dailyQuestState(state, now);
+  const stage = Math.max(1, Math.floor(num(state && state.stage, 1)));
+  const baseGold = stageGoldBase(stage);
+  const items = DAILY_QUESTS.map((def) => {
+    const cur = Math.max(0, Math.floor(num(dq.progress[def.key])));
+    const done = cur >= def.goal;
+    const claimed = dq.claimed.includes(def.id);
+    const gold = Math.max(100, Math.round(baseGold * def.goldMul));
+    return {
+      ...def,
+      cur,
+      done,
+      claimed,
+      claimable: done && !claimed,
+      pct: clamp(cur / def.goal, 0, 1),
+      gold,
+    };
+  });
+  const claimedCount = items.filter((x) => x.claimed).length;
+  const allClaimed = claimedCount >= DAILY_QUESTS.length;
+  const bonusGold = Math.max(300, Math.round(baseGold * DAILY_QUEST_BONUS.goldMul));
+  const bonusReady = allClaimed && !dq.bonusClaimed;
+  const readyCount = items.filter((x) => x.claimable).length + (bonusReady ? 1 : 0);
+  return {
+    date: dq.date,
+    items,
+    claimedCount,
+    total: DAILY_QUESTS.length,
+    allClaimed,
+    bonusClaimed: dq.bonusClaimed,
+    bonusReady,
+    bonus: { gold: bonusGold, shards: DAILY_QUEST_BONUS.shards, points: DAILY_QUEST_BONUS.points },
+    readyCount,
+    resetMs: kstResetMs(now),
+  };
+}
+
+/** 일일 퀘스트 개별 보상 수령 */
+export function claimDailyQuest(state, id, now = nowMs()) {
+  const def = DAILY_QUEST_BY_ID[id];
+  if (!def) return { ok: false, reason: '알 수 없는 일일 퀘스트입니다.' };
+  const st = dailyQuestStatus(state, now);
+  const row = st.items.find((x) => x.id === id);
+  if (!row) return { ok: false, reason: '알 수 없는 일일 퀘스트입니다.' };
+  if (row.claimed) return { ok: false, reason: '이미 수령했습니다.' };
+  if (!row.done) return { ok: false, reason: '아직 목표를 달성하지 못했습니다.' };
+  state.gold = Math.floor(num(state.gold) + row.gold);
+  state.shards = Math.floor(num(state.shards) + def.shards);
+  if (state.records) state.records.totalGold = num(state.records.totalGold) + row.gold;
+  state.dailyQuests.claimed = state.dailyQuests.claimed.concat([def.id]);
+  return { ok: true, quest: def, gold: row.gold, shards: def.shards };
+}
+
+/** 일일 퀘스트 올클리어 보너스 상자 수령 */
+export function claimDailyQuestBonus(state, now = nowMs()) {
+  const st = dailyQuestStatus(state, now);
+  if (st.bonusClaimed) return { ok: false, reason: '오늘 올클리어 보너스는 이미 받았습니다.' };
+  if (!st.allClaimed) return { ok: false, reason: `일일 퀘스트 ${st.total}개를 모두 수령해야 열립니다.` };
+  const { gold, shards, points } = st.bonus;
+  state.gold = Math.floor(num(state.gold) + gold);
+  state.shards = Math.floor(num(state.shards) + shards);
+  if (state.records) state.records.totalGold = num(state.records.totalGold) + gold;
+  if (points > 0) {
+    if (!state.rebirth || typeof state.rebirth !== 'object') {
+      state.rebirth = { count: 0, points: 0, totalPoints: 0, traits: {}, bestStage: 1, at: 0 };
+    }
+    state.rebirth.points = Math.max(0, Math.floor(num(state.rebirth.points))) + points;
+    state.rebirth.totalPoints = Math.max(0, Math.floor(num(state.rebirth.totalPoints))) + points;
+  }
+  state.dailyQuests.bonusClaimed = true;
+  return { ok: true, gold, shards, points };
 }

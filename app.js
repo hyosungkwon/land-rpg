@@ -42,6 +42,7 @@ import { DAILY, dailyInfo, dailyBossFor, dailyGradeText } from './src/daily.js';
 import {
   claimQuest as claimQuestState, claimAchievement as claimAchievementState,
   achievementStatus, claimedAchievementCount, codexStats, codexDetail, codexCity, codexGear,
+  trackDailyQuest, claimDailyQuest as claimDailyQuestState, claimDailyQuestBonus as claimDailyQuestBonusState,
 } from './src/quests.js';
 import {
   REBIRTH, REBIRTH_TRAITS, rebirthStatus, rebirthBonus, rebirthStartGold, rebirthPointsFor,
@@ -1172,6 +1173,7 @@ class App {
             'green',
           );
           this.battle.refreshStats();
+          trackDailyQuest(this.s, 'enhance', r.done);
           this.save();
           this.ui.render();
         } else {
@@ -1417,6 +1419,7 @@ class App {
           this.ui.toast(r.reason, 'red');
           return;
         }
+        trackDailyQuest(this.s, 'challenge', 1, now);
         this.save(true);
         this.sound.fanfare();
         this.renderer.onEvents([{ t: 'towerEnd', how: 'clear', n: r.floor }], Date.now());
@@ -1495,9 +1498,41 @@ class App {
         const gains = [
           r.gold ? `💰${r.gold.toLocaleString()}` : '',
           r.shards ? `💎${r.shards.toLocaleString()}` : '',
+          r.points ? `✨${r.points}P` : '',
         ].filter(Boolean).join(' ');
         this.ui.toast(`🎯 미션 완료 · ${gains}`, 'gold');
         this.ui.addLog(`🎯 <b>${esc(r.quest.title)}</b> 완료 · ${gains}${r.next ? ` → 다음: ${esc(r.next.title)}` : ' · 모든 미션 완료!'}`);
+        this.ui.render();
+      },
+
+      /* ── v4.9.0: 📅 일일 퀘스트 ── */
+      claimDailyQuest: (id) => {
+        this.sound.unlock();
+        const r = claimDailyQuestState(this.s, id, Date.now());
+        if (!r.ok) {
+          this.ui.toast(r.reason || '보상을 받을 수 없습니다', 'red');
+          return;
+        }
+        this.save(true);
+        this.sound.levelUp();
+        const gains = `💰${r.gold.toLocaleString()} 💎${r.shards}`;
+        this.ui.toast(`📅 일일 퀘스트 완료 · ${r.quest.title} (${gains})`, 'gold');
+        this.ui.addLog(`📅 <b>${esc(r.quest.title)}</b> 완료 · ${gains}`);
+        this.ui.render();
+      },
+
+      claimDailyQuestBonus: () => {
+        this.sound.unlock();
+        const r = claimDailyQuestBonusState(this.s, Date.now());
+        if (!r.ok) {
+          this.ui.toast(r.reason || '올클리어 보너스를 받을 수 없습니다', 'red');
+          return;
+        }
+        this.save(true);
+        this.sound.fanfare();
+        const gains = `💰${r.gold.toLocaleString()} 💎${r.shards} ✨${r.points}P`;
+        this.ui.toast(`🎁 일일 퀘스트 올클리어! · ${gains}`, 'gold');
+        this.ui.addLog(`🎁 <b>일일 퀘스트 올클리어</b> · ${gains}`);
         this.ui.render();
       },
 
@@ -1649,7 +1684,10 @@ class App {
     // 건물주 버프 즉시 반영
     this.buffs = computeBuffs(this.s);
     this.battle.refreshStats();
-    if (side === 'buy') codexCity(this.s, key, this.s.land.owned[key]); // 📖 지역 도감 기록(매도해도 유지)
+    if (side === 'buy') {
+      codexCity(this.s, key, this.s.land.owned[key]); // 📖 지역 도감 기록(매도해도 유지)
+      trackDailyQuest(this.s, 'invest', 1);
+    }
     this.save(true);
     this.ui.toast(
       `${side === 'buy' ? '🏠 매수' : '💰 매도'} ${city.emoji}${city.name} ${q.toLocaleString()}평 · 💰${r.quote.total.toLocaleString()}`,
@@ -1715,6 +1753,7 @@ class App {
     }
     this.buffs = computeBuffs(this.s);
     this.battle.refreshStats();
+    trackDailyQuest(this.s, 'invest', 1);
     this.save(true);
     this.sound.levelUp();
     const city = CITY_BY_KEY[key];
@@ -1767,6 +1806,7 @@ class App {
     this.buffs = computeBuffs(this.s);
     this.battle.refreshStats();
     try { codexCity(this.s, r.key, this.s.land.owned[r.key]); } catch (e) { /* ignore */ }
+    trackDailyQuest(this.s, 'invest', 1, now);
     this.save(true);
     try { this.sound.coin('gold'); } catch (e) { /* ignore */ }
     this.ui.toast(
@@ -1813,6 +1853,7 @@ class App {
       return;
     }
     this.s.records.totalRent = (this.s.records.totalRent || 0) + got;
+    trackDailyQuest(this.s, 'rent', 1);
     this.save(true);
     try { this.sound.coin('gold'); } catch (e) { /* ignore */ }
     this.ui.toast(
@@ -2338,7 +2379,17 @@ class App {
           <div class="note" style="margin-top:10px"><b>매도해도 도감 기록은 유지</b>되고, 역대 최대 보유 평수가 남습니다.</div>`
         : `<div class="empty">아직 매수한 지역이 없습니다.<br>부동산 탭에서 첫 매물을 사면 도감이 열립니다.</div>`}`;
     } else if (cur === 'gear') {
-      body = `<div class="codex-sum">장비 등급 ${c.gear.seen}/${c.gear.total}</div>
+      const itemCards = (d.gearItems || [])
+        .map((it) => {
+          const def = gearItem(it.id);
+          return `<div class="cx-g ${it.got ? '' : 'lock'} r-${it.rarity}">
+            <div class="cx-g-ico">${def ? gearIcon(def, 28) : '🎒'}</div>
+            <div class="cx-g-n">${it.got ? esc(it.name) : '???'}</div>
+            <div class="cx-g-k">${it.equipped ? '장착 중' : it.got ? `×${Math.max(1, it.count)}` : '미획득'}</div>
+          </div>`;
+        })
+        .join('');
+      body = `<div class="codex-sum">장비 등급 ${c.gear.seen}/${c.gear.total} · 카탈로그 ${c.gearItems.seen}/${c.gearItems.total}종</div>
         <div class="codex-gear">${d.gear
         .map(
           (g) => `<div class="kv"><span class="k"><span class="rb ${g.id}">${g.name}</span></span><span class="v">${
@@ -2348,18 +2399,23 @@ class App {
           }</span></div>`,
         )
         .join('')}</div>
-        <div class="note" style="margin-top:10px">장비 뽑기로 얻은 등급이 기록됩니다. 전설은 40회 안에 1개 확정(천장).</div>`;
+        <div class="cx-gear-grid" style="margin-top:9px">${itemCards}</div>
+        <div class="note" style="margin-top:10px">뽑기·사냥 드랍으로 획득한 35종 장비가 모두 기록됩니다. 전설은 40회 안에 1개 확정(천장).</div>`;
     } else {
-      body = `<div class="codex-sum">펫 ${c.pets.seen}/${c.pets.total}</div>
+      body = `<div class="codex-sum">펫 ${c.pets.seen}/${c.pets.total} · 진화 단계 ${c.petEvos.seen}/${c.petEvos.total}</div>
         <div class="codex-pets">${d.pets
         .map(
           (p) => `<div class="cx-pet ${p.unlocked ? '' : 'lock'}">
             <img src="assets/sprites/pet/${p.sprite}.png" alt="" loading="lazy">
-            <div class="cx-pet-mid"><b>${p.emoji} ${esc(p.name)}</b><span>${p.unlocked ? '해금 완료 · 동행 가능' : `🔒 ${esc(p.cond)}`}</span></div>
+            <div class="cx-pet-mid">
+              <b>${p.emoji} ${esc(p.name)}</b>
+              <span>${p.unlocked ? `진화 ${p.evo === 2 ? '★★ 신수' : p.evo === 1 ? '★ 각성' : '기본'} · 동행 가능` : `🔒 ${esc(p.cond)}`}</span>
+              <div class="cx-pet-stages">${(p.stages || []).map((st) => `<span class="cx-st ${st.unlocked ? 'on' : ''}">${st.stage === 0 ? '기본' : st.stage === 1 ? '★각성' : '★★신수'} ${esc(st.name)}</span>`).join('')}</div>
+            </div>
           </div>`,
         )
         .join('')}</div>
-        <div class="note" style="margin-top:10px">부동산 조건을 채우면 자동으로 해금됩니다(4종).</div>`;
+        <div class="note" style="margin-top:10px">부동산 조건으로 해금(4종)하고, 강화 Lv.5/Lv.10에서 ★각성·★★신수로 진화합니다(총 12단계).</div>`;
     }
 
     const milestone = c.milestone

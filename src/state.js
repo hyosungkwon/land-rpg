@@ -19,6 +19,7 @@ import { normalizeAuctionState } from './auction.js';
 import { PET_IDS, PET_MAX_LV, PET_EVO_MAX, JOB_MAX, jobOf, equippedPet, petLevel, petAtkPct, petEvo, petGoldPct, petPassive, petStageInfo } from './meta.js';
 import {
   collectionBonus, normalizeQuestState, normalizeAchievements, normalizeCodex, equipLevelSum,
+  defaultDailyQuests, normalizeDailyQuests,
 } from './quests.js';
 import { normalizeTowerState } from './tower.js';
 import { defaultDailyState, normalizeDailyState } from './daily.js';
@@ -75,8 +76,9 @@ export function defaultState(now = nowMs()) {
     dailyBoss: defaultDailyState(),
     // v4.8 ☁️ 선택적 클라우드 세이브·랭킹 — 기본은 꺼짐(게스트). 사용자가 켤 때만 서버로 나간다.
     cloud: { enabled: false, nick: '', autoSync: true, uid: '', email: '', lastSync: 0 },
-    // v3.3 수집 메타: 순차 미션 · 업적 수령 · 도감 기록
+    // v3.3 수집 메타: 순차 미션 · 업적 수령 · 도감 기록 · v4.9 일일 퀘스트
     quests: { idx: 0, claimed: [], done: 0, at: 0 },
+    dailyQuests: defaultDailyQuests(now),
     achievements: { claimed: [] },
     codex: { monsters: {}, cities: {}, gear: {} },
     // v3.4 부동산 전략: 호재 뉴스 기록(뉴스 자체는 시간 기반 결정론이라 저장하지 않는다)
@@ -194,8 +196,9 @@ export function normalizeState(raw, now = nowMs()) {
   // v4.5: 일일 보스 기록 정규화(KST 날짜가 바뀌면 도전 횟수만 리셋 · 최고 기록 유지)
   s.dailyBoss = normalizeDailyState(raw.dailyBoss, now);
 
-  // v3.3: 미션/업적/도감 기본값 병합 (없는 저장본은 그대로 진행도 유지)
+  // v3.3: 미션/업적/도감 · v4.9 일일 퀘스트 기본값 병합 (없는 저장본은 그대로 진행도 유지)
   s.quests = normalizeQuestState(raw.quests);
+  s.dailyQuests = normalizeDailyQuests(raw.dailyQuests, now);
   s.achievements = normalizeAchievements(raw.achievements);
   s.codex = normalizeCodex(raw.codex, s, now);
 

@@ -34,7 +34,7 @@ import {
 } from './daily.js';
 import {
   QUESTS, ACHIEVEMENTS, questStateOf, currentQuest, questProgress, codexStats,
-  achievementStatus, claimedAchievementCount,
+  achievementStatus, claimedAchievementCount, dailyQuestStatus,
 } from './quests.js';
 import {
   GEAR_ITEMS, GEAR_FILTERS, GEAR_OPTS, GEAR_DROP,
@@ -219,6 +219,8 @@ export class UI {
       case 'tower-sweep': actions.claimTowerSweep(); break;
       case 'daily': actions.enterDaily(); break;
       case 'claim-quest': actions.claimQuest(v); break;
+      case 'claim-daily-quest': actions.claimDailyQuest(v); break;
+      case 'claim-daily-quest-bonus': actions.claimDailyQuestBonus(); break;
       case 'claim-achievement': actions.claimAchievement(v); break;
       case 'open-codex': actions.openCodex(v || 'monster'); break;
       case 'open-achievements': actions.openAchievements(); break;
@@ -1077,7 +1079,11 @@ function questCard(ui) {
   }
 
   const pr = questProgress(s, q.id);
-  const reward = [q.gold ? `💰${q.gold.toLocaleString()}` : '', q.shards ? `💎${q.shards}` : ''].filter(Boolean).join(' ');
+  const reward = [
+    q.gold ? `💰${q.gold.toLocaleString()}` : '',
+    q.shards ? `💎${q.shards}` : '',
+    q.points ? `✨${q.points}P` : '',
+  ].filter(Boolean).join(' ');
   return `
   <div class="card quest-card ${pr.done ? 'ready' : ''}">
     <div class="card-head">
@@ -1117,6 +1123,7 @@ function huntBadges(ui) {
   const s = ui.s;
   const q = currentQuest(s);
   const questReady = !!(q && questProgress(s, q.id).done);
+  const dqReady = dailyQuestStatus(s).readyCount;
   const achReady = achievementStatus(s).filter((a) => a.claimable).length;
   const pr = jobProgress(s);
   const rb = rebirthStatus(s);
@@ -1130,7 +1137,7 @@ function huntBadges(ui) {
   return {
     skill: 0,
     growth: (pr.canPromote ? 1 : 0) + (rb.can ? 1 : 0) + (traitReady ? 1 : 0) + (petEvoReady > 0 ? 1 : 0),
-    quest: (questReady ? 1 : 0) + achReady,
+    quest: (questReady ? 1 : 0) + dqReady + achReady,
   };
 }
 
@@ -1348,6 +1355,43 @@ function tplHuntGrowth(ui) {
   return `${jobCard(ui)}${rebirthCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}${petLine(ui)}`;
 }
 
+/* ───────────── 📅 일일 퀘스트 (v4.9.0 · KST 자정 리셋) ───────────── */
+function dailyQuestCard(ui) {
+  const dq = dailyQuestStatus(ui.s);
+  const h = Math.floor(dq.resetMs / 3600000);
+  const m = Math.floor((dq.resetMs % 3600000) / 60000);
+  const rows = dq.items.map((it) => `
+    <div class="dq-row ${it.claimed ? 'done' : it.claimable ? 'ready' : ''}">
+      <div class="dq-ico">${it.icon}</div>
+      <div class="dq-mid">
+        <div class="dq-t">${esc(it.title)} <small>${Math.min(it.cur, it.goal)}/${it.goal}</small></div>
+        <div class="dq-d">${esc(it.desc)} · 💰${formatGold(it.gold)} 💎${it.shards}</div>
+        <div class="prog tiny-prog${it.claimable ? ' gold' : ''}"><i style="width:${it.pct * 100}%"></i></div>
+      </div>
+      <div class="dq-act">${
+        it.claimed
+          ? '<span class="tiny" style="color:var(--green)">완료 ✓</span>'
+          : it.claimable
+            ? `<button class="btn small primary" type="button" data-action="claim-daily-quest" data-value="${it.id}">수령</button>`
+            : '<span class="tiny dim">진행</span>'
+      }</div>
+    </div>`).join('');
+  const b = dq.bonus;
+  const bonusLabel = dq.bonusClaimed
+    ? '🎁 오늘 올클리어 보너스 수령 완료 ✓'
+    : dq.bonusReady
+      ? `🎁 올클리어 보너스 받기 · 💰${formatGold(b.gold)} 💎${b.shards} ✨${b.points}P`
+      : `🎁 올클리어 (${dq.claimedCount}/${dq.total}) · 💰${formatGold(b.gold)} 💎${b.shards} ✨${b.points}P`;
+  return `
+  <div class="card dq-card${dq.readyCount ? ' ready' : ''}">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">📅</span>일일 퀘스트<small>${dq.claimedCount}/${dq.total} · ${h}시간 ${m}분 후 리셋</small></div>
+    </div>
+    <div class="dq-list">${rows}</div>
+    <button class="btn block dq-bonus ${dq.bonusReady ? 'ready' : 'ghost'}" type="button" data-action="claim-daily-quest-bonus" ${dq.bonusReady ? '' : 'disabled'}>${bonusLabel}</button>
+  </div>`;
+}
+
 /* ───────────── 🎯 미션·도감 ───────────── */
 function codexCard(ui) {
   const s = ui.s;
@@ -1369,7 +1413,8 @@ function codexCard(ui) {
       ${cell('🎒', '장비', c.gear.seen, c.gear.total)}
       ${cell('🐾', '펫', c.pets.seen, c.pets.total)}
     </div>
-    <div class="tiny ellip" style="margin-top:7px;color:${next ? 'var(--sub)' : 'var(--gold)'}">${
+    <div class="tiny dim" style="margin-top:6px">⚔️ 장비 도감 <b style="color:var(--txt)">${c.gearItems.seen}/${c.gearItems.total}종</b> · 🌟 펫 진화 <b style="color:var(--txt)">${c.petEvos.seen}/${c.petEvos.total}단계</b></div>
+    <div class="tiny ellip" style="margin-top:4px;color:${next ? 'var(--sub)' : 'var(--gold)'}">${
       next
         ? `다음 마일스톤 <b style="color:var(--txt)">${next.pct}%</b> · 공격 +${next.atkPct}% · 골드 +${next.goldPct}%`
         : '모든 도감 마일스톤을 달성했습니다 🎉'
@@ -1379,7 +1424,7 @@ function codexCard(ui) {
 }
 
 function tplHuntQuest(ui) {
-  return `${questCard(ui)}${codexCard(ui)}`;
+  return `${questCard(ui)}${dailyQuestCard(ui)}${codexCard(ui)}`;
 }
 
 /* ══════════════════════════ 사냥/스킬 (본문) ══════════════════════════ */

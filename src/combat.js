@@ -8,7 +8,7 @@ import {
 import { DUNGEON, PET_ATTACK_MS, equippedPet, petDmgPct, dungeonReward, petEvo, petSkillOf, petPassive, petGoldPct } from './meta.js';
 import { TOWER_RULES, TOWER_MAX_FLOOR, towerFloor, towerStageDef, towerHas, towerReward, towerCleared, towerState, towerUnlocked, towerLockReason } from './tower.js';
 import { DAILY, dailyBossFor, dailyInfo, consumeDailyAttempt, dailyReward, recordDailyRun, dailyDpsCap } from './daily.js';
-import { codexMeet, codexKill } from './quests.js';
+import { codexMeet, codexKill, trackDailyQuest } from './quests.js';
 import { tryGearDrop, acquireGear } from './gear.js';
 
 const ATTACK_STOP_GAP = 380; // 보스가 멈추고 때리는 거리(캐릭터 스프라이트가 겹치지 않는 간격)
@@ -558,8 +558,9 @@ export class Battle {
     m.dying = now;
     m.windupAt = 0;
     m.moving = false;
-    // 📖 도감: 처치 수 기록(던전 몹 포함)
+    // 📖 도감: 처치 수 기록(던전 몹 포함) · v4.9 일일 퀘스트 처치 누적
     try { codexKill(this.s, m.name); } catch (e) { /* ignore */ }
+    try { trackDailyQuest(this.s, 'kills', 1, now); } catch (e) { /* ignore */ }
     // v4.5 🌟 일일 보스: 보스가 쓰러지면(이론상) 그 자리에서 종료 — 남은 시간은 버린다.
     if (this.daily) {
       this.emit({
@@ -949,6 +950,7 @@ export class Battle {
     this.monsters = [];
     this.bossReadyAt = 0;
     this.player.hp = this.stats.hpMax; // 입장 시 체력 완충
+    try { trackDailyQuest(this.s, 'challenge', 1, now); } catch (e) { /* ignore */ }
     this.emit({ t: 'dungeonStart', ends: this.dungeon.ends, duration: DUNGEON.durationMs });
     return { ok: true };
   }
@@ -1068,6 +1070,7 @@ export class Battle {
     this.bossReadyAt = 0;
     this.syncStage();
     this.player.hp = this.stats.hpMax; // 입장 시 체력 완충
+    try { trackDailyQuest(this.s, 'challenge', 1, now); } catch (e) { /* ignore */ }
     // 첫 웨이브 — 일반 층은 2마리, 보스 층은 보스 1마리
     this.spawnTowerMonster(now);
     if (!def.bossOnly) this.spawnTowerMonster(now - 300);
@@ -1290,6 +1293,7 @@ export class Battle {
     this.bossReadyAt = 0;
     this._def = def; // 배경·HUD 가 일일 보스 테마로 바뀐다
     this.player.hp = this.stats.hpMax; // 입장 시 체력 완충
+    try { trackDailyQuest(this.s, 'challenge', 1, now); } catch (e) { /* ignore */ }
     // 보스 한 마리 — 바로 앞(캐릭터 사거리 밖)에서 시작해 곧 붙는다
     const m = this.makeMonster(bd.key, true, now);
     const dps = Math.max(1, this.stats.dps || 1);

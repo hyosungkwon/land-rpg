@@ -187,8 +187,8 @@ def main():
     ok("startCloudResume" in app_src and "if (!this.cloudEnabled() && !this.cloud.hasPendingRedirect()) return;" in app_src, "세션 복원도 클라우드를 켓을 때만")
     ok("setInterval(() => this.cloudTick(), 15000)" in app_src, "주기 저장은 조건 검사형 타이머")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v4.8.2" in read("sw.js"), "SW 캐시 버전 v4.8.2")
-    ok("APP_VERSION = '4.8.2'" in read("src/data.js"), "앱 버전 v4.8.2")
+    ok("land-rpg-v4.9.0" in read("sw.js"), "SW 캐시 버전 v4.9.0")
+    ok("APP_VERSION = '4.9.0'" in read("src/data.js"), "앱 버전 v4.9.0")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
     ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
@@ -857,11 +857,11 @@ def main():
         petIds: PETS.map(p => p.id),
       };
     """)
-    ok(len(qdef["ids"]) == 15 and len(set(qdef["ids"])) == 15, "미션 15단계 정의(중복 없음)", str(len(qdef["ids"])))
+    ok(len(qdef["ids"]) == 30 and len(set(qdef["ids"])) == 30, "미션 30단계 정의(중복 없음)", str(len(qdef["ids"])))
     ok(set(qdef["types"]) >= {"kills", "stage", "equipLv", "gacha", "cities", "bossKills", "dungeon", "pyeong", "job"}, "미션에 사냥·강화·뽑기·매수·던전·전직 흐름 포함", json.dumps(sorted(set(qdef["types"]))))
     ok(all(p > 0 for p in qdef["pay"]) and all(g >= 1 for g in qdef["goals"]), "모든 미션에 1 이상 목표·골드/강화석 보상", json.dumps(qdef["pay"]))
     ok(any(v > 0 for v in qdef["golds"]) and any(v > 0 for v in qdef["shards"]), "미션 보상에 💰 골드·💎 강화석 모두 존재")
-    ok(len(qdef["achIds"]) == 19 and len(set(qdef["achIds"])) == 19, "업적 19종 정의(중복 없음)", str(len(qdef["achIds"])))
+    ok(len(qdef["achIds"]) == 36 and len(set(qdef["achIds"])) == 36, "업적 36종 정의(중복 없음)", str(len(qdef["achIds"])))
     ok(all(s > 0 for s in qdef["achShards"]) and qdef["achAtk"] >= 2 and qdef["achGold"] >= 2, "업적 보상 = 💎 + 영구 스탯 보너스", json.dumps({"atk": qdef["achAtk"], "gold": qdef["achGold"]}))
     ok(qdef["weights"] == [30, 40, 20, 10] and qdef["milestones"] == [10, 25, 50, 75, 100], "도감 가중치 합 100 · 마일스톤 5단계", json.dumps(qdef["weights"]))
     ok(qdef["monsters"] == 35 and qdef["bosses"] == 12 and qdef["petIds"] == ["wolf", "fox", "owl", "dragon"], "도감 몬스터 35종(보스 12)·펫 4종", json.dumps({"m": qdef["monsters"], "b": qdef["bosses"]}))
@@ -892,15 +892,19 @@ def main():
 
     chain = js(ctx, """
       const s = defaultState(0);
-      s.totalKills = 5000; s.maxStage = 30; s.stage = 30; s.bossKills = 40; s.level = 40;
+      s.totalKills = 5000; s.maxStage = 50; s.peakStage = 50; s.stage = 50; s.bossKills = 40; s.level = 90;
       s.equip.weapon = 40; s.equip.armor = 20;
-      s.gacha.total = 60; s.jobTier = 2;
+      s.gacha.total = 60; s.jobTier = 5;
       s.dungeon = { best: 1000, runs: 3, last: null };
+      s.rebirth.count = 1; s.tower.best = 25; s.dailyBoss.runs = 1; s.land.auction.bids = 1;
+      s.pet.unlocked = ['wolf']; s.pet.evo = { wolf: 1 };
       for (const c of CITIES.slice(0, 6)) s.land.owned[c.key] = 30;
+      for (const c of CITIES.filter(x => citySetId(x.key) === 'jeju')) s.land.owned[c.key] = 10;
+      s.land.landmarks[CITIES[0].key] = 3;
       const gold0 = s.gold, shards0 = s.shards;
       const claimed = [];
       const reasons = [];
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; i < 40; i++) {
         const q = currentQuest(s);
         if (!q) break;
         const r = claimQuest(s, q.id);
@@ -914,7 +918,7 @@ def main():
         payG, payS, allPay: QUESTS.reduce((a, q) => a + q.gold, 0), allPayS: QUESTS.reduce((a, q) => a + q.shards, 0),
       };
     """)
-    ok(chain["n"] == 15 and chain["cur"] is None and chain["reasons"] == [] and chain["done"] == 15, "조건이 차면 15단계 연속 수령 → 시즌 완료", json.dumps(chain, ensure_ascii=False))
+    ok(chain["n"] == 30 and chain["cur"] is None and chain["reasons"] == [] and chain["done"] == 30, "조건이 차면 30단계 연속 수령 → 시즌 완료", json.dumps(chain, ensure_ascii=False))
     ok(chain["payG"] == chain["allPay"] and chain["payS"] == chain["allPayS"], "미션 보상 합계 정확히 지급", json.dumps({"g": chain["payG"], "s": chain["payS"]}))
 
     ach = js(ctx, """
@@ -1036,7 +1040,7 @@ def main():
     """)
     ok(nq["level"] == 22 and nq["gold"] == 9000 and nq["quests"] == {"idx": 0, "claimed": [], "done": 0, "at": 0}, "v3.2 저장 호환 — 미션/업적 기본값 병합·진행도 유지", json.dumps(nq["quests"], ensure_ascii=False))
     ok(nq["codexCities"] == ["0_0_0"] and nq["codexGear"].get("hero") == 1 and nq["codexMonsters"] == {}, "도감 기본값 — 현재 보유 지역·장착 등급 반영", json.dumps({"c": nq["codexCities"], "g": nq["codexGear"]}))
-    ok(nq["badIdx"] == 15 and nq["badClaimed"] == ["m01"] and nq["badAch"] == ["a_land1"], "손상된 미션/업적 값 방어", json.dumps({"idx": nq["badIdx"], "c": nq["badClaimed"]}))
+    ok(nq["badIdx"] == 30 and nq["badClaimed"] == ["m01"] and nq["badAch"] == ["a_land1"], "손상된 미션/업적 값 방어", json.dumps({"idx": nq["badIdx"], "c": nq["badClaimed"]}))
     ok(nq["badMonsters"] == {"Slime": {"m": 1, "k": 0}} and nq["badCities"] == ["0_0_0"] and "legend" not in nq["badGear"] and "rare" not in nq["badGear"], "손상된 도감 값 방어(알 수 없는 키·음수 제거)", json.dumps({"m": nq["badMonsters"], "c": nq["badCities"], "g": nq["badGear"]}, ensure_ascii=False))
     ok(nq["stable"] is True and 5 <= nq["pct"] < 30, "정규화 반복해도 안정 · 보유 지역이 도감 수집률에 반영", f"pct={nq['pct']}")
 
@@ -1048,7 +1052,7 @@ def main():
       const hunt = __huntAll(ui);
       const settings = __tpls.settings(ui);
       const done = defaultState(0);
-      done.quests = { idx: 15, claimed: QUESTS.map(q => q.id), done: 15, at: 0 };
+      done.quests = { idx: QUESTS.length, claimed: QUESTS.map(q => q.id), done: QUESTS.length, at: 0 };
       const ui2 = { s: done, battle: { stats: calcStats(done, {}), def: stageDef(1), boss: null, player: { hp: 1 } }, app: { buffs: {} }, logs: [], tab: 'hunt', el: {}, install: { hidden: true } };
       const huntDone = __huntSub(ui2, 'quest');
       return {
@@ -2931,7 +2935,7 @@ def main():
     ok(all(x in asrc42 for x in ["enterTower", "openTowerFloors", "evolvePet", "showTowerResult", "showTowerFloors"]), "app.js — 탑 입장/층 선택/결과·펫 진화 액션", "")
     ok('assets/sprites/pet/${info.sprite}.png' in asrc42, "진화 결과 모달 — 진화 스프라이트 경로(.png)", "")
     ok(all(x in css42 for x in [".tower-card", ".tower-tiles", ".tower-floor", ".pet-evo", ".mini.evo"]), "style.css — v4.2 스타일", "")
-    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.8.2" in read("sw.js") and "APP_VERSION = '4.8.2'" in read("src/data.js"), "버전·서비스워커(4.8.2 · cloud 프리캐시)", "")
+    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.9.0" in read("sw.js") and "APP_VERSION = '4.9.0'" in read("src/data.js"), "버전·서비스워커(4.9.0 · cloud 프리캐시)", "")
     pkg_ok = (not os.path.exists(os.path.join(ROOT, "package.json"))) or ('"version": "' in read("package.json"))
     ok(pkg_ok, "package.json 버전 확인(없으면 클론 환경으로 통과)", "")
     evo_files = [f"assets/sprites/pet/pet_{n}_{s}.png" for n in ("wolf", "fox", "owl", "dragon") for s in ("awaken", "divine")]
@@ -3082,7 +3086,7 @@ def main():
 
     css43 = read("style.css")
     ok(all(x in css43 for x in [".land-sum", ".ls-v", ".ls-claim", ".news-slim", ".ns-title", ".land-subbar", ".land-rec", ".buff-now"]), "style.css — v4.3 부동산 요약 바·압축 뉴스·서브 탭", "")
-    ok("land-rpg-v4.8.2" in read("sw.js") and "'4.8.2'" in read("src/data.js"), "버전·캐시 v4.8.2", "")
+    ok("land-rpg-v4.9.0" in read("sw.js") and "'4.9.0'" in read("src/data.js"), "버전·캐시 v4.9.0", "")
 
     section("[20] ⚔️ v4.4 S31+ 무한 구간 리밸런싱 · 강화석 대량 교환 · 상위 전직")
 
@@ -3959,7 +3963,7 @@ def main():
     section("[23] ♻️ v4.7 장비 자동분해 · 🐉 상위 전직 궁극기 · 방치 편의")
 
     # ── 1) 버전·정적 배선 ──
-    ok("APP_VERSION = '4.8.2'" in read("src/data.js") and "land-rpg-v4.8.2" in read("sw.js"), "v4.8.2 버전·서비스워커 캐시 갱신", "")
+    ok("APP_VERSION = '4.9.0'" in read("src/data.js") and "land-rpg-v4.9.0" in read("sw.js"), "v4.9.0 버전·서비스워커 캐시 갱신", "")
     idx47 = read("index.html")
     ok(all(f'data-skill="{k}"' in idx47 for k in ["strike", "whirl", "berserk", "heal"]), "기존 4개 퀵슬롯 레이아웃 유지", "")
     ok('data-skill="ultimate"' in idx47 and 'class="q ult hidden"' in idx47, "다섯 번째 퀵슬롯(궁극기) — 해금 전 숨김", "")
@@ -4201,7 +4205,7 @@ def main():
     ok(cl_a["clean"][0] == "효성 왕" and cl_a["clean"][3] == 12 and not cl_a["html"], "닉네임 정리 — 공백 접기·12자 제한·HTML 문자 제거", json.dumps(cl_a["clean"], ensure_ascii=False))
     ok(cl_a["clean"][1] == "용사" and cl_a["clean"][2] == "용사", "1자·빈 닉네임은 기본 이름으로 대체", json.dumps(cl_a["clean"][:3], ensure_ascii=False))
     ok(cl_a["sum"] == [42, 21, 2, 5000, True], "세이브 요약 — 역대 최고 스테이지·보유 지역·총자산", json.dumps(cl_a["sum"]))
-    ok(cl_a["doc"][:6] == ["land_rpg_save", "4.8.2", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
+    ok(cl_a["doc"][:6] == ["land_rpg_save", "4.9.0", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
     ok(0 < cl_a["size"] < 200000, "클라우드 문서 크기 RTDB 한도 안(200KB 미만)", str(cl_a["size"]))
 
     # ── 2) 문서 해석(신형·v2 옛 페이로드·손상) ──
@@ -4305,7 +4309,7 @@ def main():
     ok(cl_e["errs"][0].startswith("이 주소가") and "응답이 없습니다" in cl_e["errs"][1] and cl_e["errs"][3].startswith("권한") and "시간 초과" in cl_e["errs"][4] and "라이브러리" in cl_e["errs"][5], "오류 문구 — 승인 도메인/시간 초과/권한/라이브러리", json.dumps(cl_e["errs"], ensure_ascii=False))
     ok(cl_e["strip"] == '{"a":1,"d":1,"e":{"x":2},"f":[1,3]}', "RTDB 전송 전 undefined·NaN 제거", cl_e["strip"])
     ok(cl_e["metrics"] == ["최고 스테이지", "총자산"], "랭킹 지표 이름", json.dumps(cl_e["metrics"], ensure_ascii=False))
-    ok(cl_e["entry"] == ["용사", 9, 12, 777, "4.8.2", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
+    ok(cl_e["entry"] == ["용사", 9, 12, 777, "4.9.0", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
 
     # ── 6) 세이브 호환 · 마이그레이션 ──
     mig48 = js(ctx, """
@@ -4619,6 +4623,85 @@ def main():
     ok("this._cloudLoad = loaded.restorable ? loaded : null;" in asrc48 and "cmp.restorable = !!loaded.restorable;" in asrc48 and "skillCdOf(key, this.buffs)" in asrc48, "app.js — cloudCheckRemote 복원 상태 연동 · 수동 스킬 쿨타임 쿨감 반영")
     ok("부족힙니다" not in read("src/meta.js"), "src/meta.js — 사용자 노출 오타 수정")
     ok(not any(os.path.exists(os.path.join(ROOT, d)) for d in ("assets/boss", "assets/char", "assets/monster")), "미사용 레거시 자산 폴더(boss/char/monster) 정리 완료")
+
+    # ── 12) v4.9.0 후반 메타(미션 30단계 · 업적 36종 · 도감 v2 · 일일 퀘스트) ──
+    section("v4.9.0 후반 메타 · 일일 퀘스트 · 도감 v2")
+    q49 = js(ctx, """
+      const s = defaultState(1000);
+      s.quests.idx = 16; // m17 첫 환생
+      s.quests.claimed = QUESTS.slice(0, 16).map(q => q.id);
+      s.rebirth.count = 1;
+      const m17 = claimQuest(s, 'm17', 2000);
+      const ptsAfterM17 = s.rebirth.points;
+
+      // 신규 업적 측정(탑/일일보스 S/펫 진화/장비 35종/경매/랜드마크/권역)
+      const sa = defaultState(1000);
+      sa.maxStage = 100; sa.peakStage = 100; sa.jobTier = 5; sa.rebirth.count = 5;
+      sa.tower.best = 100; sa.dailyBoss.bestGrade = 'S'; sa.land.auction.bids = 5;
+      sa.pet.unlocked = ['wolf', 'fox']; sa.pet.evo = { wolf: 2, fox: 1 };
+      for (const it of GEAR_ITEMS) sa.gear.seen[it.id] = 1;
+      const achList = achievementStatus(sa);
+      const newReady = ['a_stage100', 'a_job5', 'a_rebirth5', 'a_tower100', 'a_dailyS', 'a_petDivine', 'a_auction5', 'a_gearAll']
+        .every((id) => achList.find((x) => x.id === id && x.claimable));
+
+      // 도감 v2: 장비 35종 + 펫 진화 12단계
+      const cx = codexStats(sa);
+      const cd = codexDetail(sa);
+
+      // 일일 퀘스트 5종 진행 · 수령 · 올클리어 보너스 · 다음날 KST 리셋
+      const day1 = Date.UTC(2026, 10, 25, 3, 0, 0); // KST 12:00
+      const day2 = Date.UTC(2026, 10, 25, 16, 0, 0); // KST 다음날 01:00
+      const sdq = defaultState(day1); sdq.stage = 10;
+      trackDailyQuest(sdq, 'kills', 60, day1);
+      trackDailyQuest(sdq, 'enhance', 3, day1);
+      trackDailyQuest(sdq, 'rent', 1, day1);
+      trackDailyQuest(sdq, 'challenge', 1, day1);
+      trackDailyQuest(sdq, 'invest', 1, day1);
+      const stReady = dailyQuestStatus(sdq, day1);
+      const claimedOk = DAILY_QUEST_IDS.every((id) => claimDailyQuest(sdq, id, day1).ok);
+      const dupFail = !claimDailyQuest(sdq, 'dq_kill', day1).ok;
+      const bonusOk = claimDailyQuestBonus(sdq, day1);
+      const bonusDup = !claimDailyQuestBonus(sdq, day1).ok;
+      const resetNext = dailyQuestStatus(sdq, day2);
+
+      // v4.8 구버전 세이브 마이그레이션
+      const oldMigrated = normalizeState({ ver: 3, level: 20, stage: 12 }, day1);
+
+      return {
+        qCount: QUESTS.length, aCount: ACHIEVEMENTS.length,
+        m17Ok: m17.ok, m17Pts: m17.points, ptsAfterM17,
+        newReady,
+        gearItems: cx.gearItems, petEvos: cx.petEvos,
+        detailGearLen: cd.gearItems.length, detailPetStages: cd.pets[0].stages.length,
+        dqReadyCount: stReady.readyCount, claimedOk, dupFail,
+        bonusOk: bonusOk.ok && bonusOk.points === 3 && bonusOk.shards === 60, bonusDup,
+        resetCleared: resetNext.claimedCount === 0 && !resetNext.bonusClaimed && resetNext.items[0].cur === 0,
+        oldDqDate: oldMigrated.dailyQuests.date,
+      };
+    """)
+    ok(q49["qCount"] == 30 and q49["aCount"] == 36, "v4.9.0 미션 30단계 · 업적 36종 확장", json.dumps({"q": q49["qCount"], "a": q49["aCount"]}))
+    ok(q49["m17Ok"] and q49["m17Pts"] == 3 and q49["ptsAfterM17"] == 3, "후반 미션 초월석(✨) 보상 지급", json.dumps({"pts": q49["ptsAfterM17"]}))
+    ok(q49["newReady"], "후반 업적(S100·용신·환생·탑100·일일S·신수·경매·장비35종) 판정 정확")
+    ok(q49["gearItems"] == {"seen": 35, "total": 35} and q49["petEvos"] == {"seen": 5, "total": 12} and q49["detailGearLen"] == 35 and q49["detailPetStages"] == 3, "도감 v2 — 장비 35종 · 펫 진화 12단계 집계", json.dumps({"g": q49["gearItems"], "p": q49["petEvos"]}))
+    ok(q49["dqReadyCount"] == 5 and q49["claimedOk"] and q49["dupFail"] and q49["bonusOk"] and q49["bonusDup"], "일일 퀘스트 5종 수령 · 중복 거부 · 올클리어 보너스(💎60·✨3P)", json.dumps({"r": q49["dqReadyCount"], "b": q49["bonusOk"]}))
+    ok(q49["resetCleared"] and len(q49["oldDqDate"]) == 10, "일일 퀘스트 KST 자정 리셋 · 구버전 세이브 마이그레이션")
+
+    dq_ui = js(ctx2, """
+      const s = defaultState(Date.now());
+      trackDailyQuest(s, 'kills', 60);
+      const buffs = computeBuffs(s, 0);
+      const b = { stats: calcStats(s, buffs), def: stageDef(1), boss: null, player: { hp: 100 }, liveDps: () => 0, effectiveDps: () => 100 };
+      const ui = { s, battle: b, app: { buffs }, logs: [], tab: 'hunt', huntSub: 'quest', el: {}, install: { hidden: true } };
+      const h = __huntSub(ui, 'quest');
+      const badges = __badges(ui);
+      return {
+        hasDq: h.includes('일일 퀘스트') && h.includes('data-action="claim-daily-quest"') && h.includes('data-action="claim-daily-quest-bonus"'),
+        hasCodexV2: h.includes('장비 도감') && h.includes('펫 진화'),
+        badgeQuest: badges.quest,
+        bad: /undefined|NaN|\\[object Object\\]/.test(h),
+      };
+    """)
+    ok(dq_ui["hasDq"] and dq_ui["hasCodexV2"] and dq_ui["badgeQuest"] >= 1 and not dq_ui["bad"], "사냥→미션 탭 일일 퀘스트 카드·도감 v2 요약·알림 배지 렌더", json.dumps(dq_ui))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:
