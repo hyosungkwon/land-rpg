@@ -1975,6 +1975,12 @@ export class Renderer {
         grd.addColorStop(1, 'rgba(255,70,50,0)');
         ctx.fillStyle = grd;
         ctx.fillRect(x - h, auraY - h, h * 2, h * 2);
+      } else if (m.elite) {
+        const eg = ctx.createRadialGradient(x, auraY, 5, x, auraY, h * 0.78);
+        eg.addColorStop(0, hexA(m.elite.color || '#ffd76a', 0.34));
+        eg.addColorStop(1, hexA(m.elite.color || '#ffd76a', 0));
+        ctx.fillStyle = eg;
+        ctx.fillRect(x - h, auraY - h, h * 2, h * 2);
       }
       // 황금 던전 몬스터: 금빛 광휘 + 잔불
       if (m.gold) {
@@ -2022,10 +2028,10 @@ export class Renderer {
       }
       ctx.restore();
 
-      // 4) 체력바 — 무리가 많을 땐 다친 몬스터만 보여 화면이 지저분해지지 않게 한다
-      const showBar = m.isBoss || m.hp < m.maxHp || (now - (m.hitAt || 0) < 900);
+      // 4) 체력바 — 무리가 많을 땐 다친 몬스터만 보여 화면이 지저분해지지 않게 한다 (엘리트·보물 고블린은 상시 표시)
+      const showBar = m.isBoss || m.elite || m.treasure || m.hp < m.maxHp || (now - (m.hitAt || 0) < 900);
       if (!m.dying && showBar) {
-        const bw = (m.isBoss ? 96 : 44 * Math.max(0.8, crowdK)) * sc;
+        const bw = (m.isBoss ? 96 : (m.elite || m.treasure ? 58 : 44 * Math.max(0.8, crowdK))) * sc;
         const bh = m.isBoss ? 6 : 4;
         const bx = x + dx - bw / 2;
         const by = footY - h * ky - 9 - lane * 2;
@@ -2033,10 +2039,21 @@ export class Renderer {
         roundRect(ctx, bx - 1, by - 1, bw + 2, bh + 2, 2);
         ctx.fill();
         const pctv = Math.max(0, Math.min(1, m.hp / m.maxHp));
-        ctx.fillStyle = pctv > 0.5 ? '#4fd18b' : pctv > 0.22 ? '#f1c40f' : '#e74c3c';
+        ctx.fillStyle = m.treasure ? '#ffd76a' : m.elite ? (m.elite.color || '#ff9a3d') : (pctv > 0.5 ? '#4fd18b' : pctv > 0.22 ? '#f1c40f' : '#e74c3c');
         if (pctv > 0) {
           roundRect(ctx, bx, by, Math.max(1, bw * pctv), bh, 2);
           ctx.fill();
+        }
+        if (m.treasure || m.elite) {
+          ctx.save();
+          ctx.font = `900 ${Math.round(9 * Math.max(0.85, sc))}px ${FONT}`;
+          ctx.textAlign = 'center';
+          ctx.fillStyle = m.treasure ? '#ffd76a' : (m.elite.color || '#ffd76a');
+          const tag = m.treasure
+            ? `💰 보물 ${Math.max(1, Math.ceil(((m.fleeAt || now) - now) / 1000))}s`
+            : `${m.elite.icon} ${m.elite.name}`;
+          ctx.fillText(tag, x + dx, by - 4);
+          ctx.restore();
         }
       }
       ctx.restore();

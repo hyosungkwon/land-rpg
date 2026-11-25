@@ -2,7 +2,7 @@
 // 밸런스·몬스터·장비·스킬 정의. DOM 의존 없음(헤드리스 테스트 가능).
 // v3: 게스트 전용 통합 경제 — 골드 하나로 사냥과 부동산을 함께 굴린다.
 
-export const APP_VERSION = '5.6.0';
+export const APP_VERSION = '5.7.0';
 export const SAVE_KEY = 'land_rpg_unified_v3';
 export const SAVE_VERSION = 3;
 
@@ -184,7 +184,14 @@ export const MONSTERS = {
   //  · 심연 (v3.8 신규)
   ShadowWraith: { ko: '그림자 망령', boss: false },
   AbyssEye: { ko: '심연의 눈', boss: false },
-  // 보스 12종 (v3.8: 5종 신규)
+  //  · v5.7 신규 일반 몬스터 6종 (보물 고블린 포함)
+  TreasureGoblin: { ko: '보물 고블린', boss: false },
+  Lizardman: { ko: '리자드맨', boss: false },
+  Gargoyle: { ko: '가고일', boss: false },
+  DarkElf: { ko: '다크엘프', boss: false },
+  FrostGolem: { ko: '서리 골렘', boss: false },
+  AbyssKnight: { ko: '심연 기사', boss: false },
+  // 보스 16종 (v3.8: +5, v5.7: +4)
   SlimeKing: { ko: '슬라임 킹', boss: true },
   Troll: { ko: '트롤', boss: true },
   Cerberus: { ko: '케르베로스', boss: true },
@@ -197,6 +204,28 @@ export const MONSTERS = {
   Ifrit: { ko: '이프리트', boss: true },
   IceGiant: { ko: '아이스 자이언트', boss: true },
   AbyssLord: { ko: '아비스 로드', boss: true },
+  LichKing: { ko: '리치 킹', boss: true },
+  Phoenix: { ko: '피닉스', boss: true },
+  Kraken: { ko: '크라켄', boss: true },
+  Behemoth: { ko: '베히모스', boss: true },
+};
+
+/* ────────────────────────────── v5.7.0 엘리트 변종 · 보물 고블린 ────────────────────────────── */
+export const ELITE_CHANCE = 0.08;
+export const ELITE_TRAITS = [
+  { id: 'iron', name: '철갑', icon: '🛡️', color: '#7cc4ff', hpMul: 1.9, atkMul: 1.15, dmgReduce: 0.25, rewardMul: 3 },
+  { id: 'swift', name: '신속', icon: '⚡', color: '#ffe36a', hpMul: 1.5, atkMul: 1.25, speedMul: 1.35, rewardMul: 3 },
+  { id: 'frenzy', name: '광폭', icon: '🔥', color: '#ff6b57', hpMul: 1.65, atkMul: 1.45, rewardMul: 3.2 },
+  { id: 'regen', name: '재생', icon: '🩸', color: '#5ee1a3', hpMul: 1.8, atkMul: 1.15, regenPct: 0.03, rewardMul: 3.2 },
+];
+export const TREASURE_GOBLIN = {
+  name: 'TreasureGoblin',
+  chance: 0.025,
+  minStage: 2,
+  durationMs: 12000,
+  hpMul: 1.8,
+  goldMul: 12,
+  shards: 6,
 };
 
 /* ────────────────────────────── 몬스터 모션 (v3.7) ──────────────────────────────
@@ -245,6 +274,17 @@ export const MONSTER_MOTION = {
   CaveTroll: 'walker',
   IceGiant: 'walker',
   AbyssLord: 'walker',
+  // v5.7 신규 10종
+  TreasureGoblin: 'walker',
+  Lizardman: 'walker',
+  Gargoyle: 'flyer',
+  DarkElf: 'walker',
+  FrostGolem: 'walker',
+  AbyssKnight: 'walker',
+  LichKing: 'flyer',
+  Phoenix: 'flyer',
+  Kraken: 'slime',
+  Behemoth: 'walker',
 };
 
 /** 몬스터 이름 → 모션 아키타입(모르면 보행형) */
@@ -292,6 +332,17 @@ export const MONSTER_ATTACKS = {
   Ifrit: { kind: 'ranged', move: 'fire', proj: 'fire', color: '#ff7a2a' },
   IceGiant: { kind: 'melee', move: 'slam', color: '#a8e6ff' },
   AbyssLord: { kind: 'ranged', move: 'dark', proj: 'dark', color: '#c78fff' },
+  // v5.7 신규 10종
+  TreasureGoblin: { kind: 'melee', move: 'claw', color: '#ffd76a' },
+  Lizardman: { kind: 'melee', move: 'claw', color: '#5ee1a3' },
+  Gargoyle: { kind: 'ranged', move: 'dark', proj: 'dark', color: '#a8b6c8' },
+  DarkElf: { kind: 'ranged', move: 'dark', proj: 'dark', color: '#b98bff' },
+  FrostGolem: { kind: 'melee', move: 'slam', color: '#8fe3ff' },
+  AbyssKnight: { kind: 'melee', move: 'slam', color: '#9f78ff' },
+  LichKing: { kind: 'ranged', move: 'dark', proj: 'dark', color: '#7fd3ff' },
+  Phoenix: { kind: 'ranged', move: 'fire', proj: 'fire', color: '#ff8a3d' },
+  Kraken: { kind: 'ranged', move: 'acid', proj: 'acid', color: '#5ecbff' },
+  Behemoth: { kind: 'melee', move: 'slam', color: '#ff5a3d' },
 };
 
 /** 몬스터 이름 → 공격 정의(모르면 근접 할퀴기) */
@@ -345,21 +396,21 @@ export const STAGES = [
   // ・심연
   { normals: ['ShadowWraith', 'AbyssEye', 'Minotaur'], boss: 'VoidWalker' },
   // ・초원
-  { normals: ['Slime', 'Goblin', 'Cyclops'], boss: 'SlimeKing' },
+  { normals: ['Slime', 'Goblin', 'Lizardman'], boss: 'SlimeKing' },
   // ・고목림
-  { normals: ['Werewolf', 'Golem', 'Harpy'], boss: 'Troll' },
+  { normals: ['Werewolf', 'Lizardman', 'Harpy'], boss: 'Troll' },
   // ・폐허
-  { normals: ['Skeleton', 'Orc', 'Minotaur'], boss: 'Seraphim' },
+  { normals: ['Gargoyle', 'DarkElf', 'Minotaur'], boss: 'Seraphim' },
   // ・모래벌
-  { normals: ['Mummy', 'Scorpion', 'Sandworm'], boss: 'Anubis' },
+  { normals: ['Mummy', 'Scorpion', 'Lizardman'], boss: 'Behemoth' },
   // ・지하 동굴
-  { normals: ['CaveSpider', 'Batling', 'Golem'], boss: 'CaveTroll' },
+  { normals: ['CaveSpider', 'Gargoyle', 'Golem'], boss: 'Kraken' },
   // ・용암 지대
-  { normals: ['Drake', 'FireImp', 'MagmaGolem'], boss: 'Ifrit' },
+  { normals: ['Drake', 'FireImp', 'MagmaGolem'], boss: 'Phoenix' },
   // ・빙원
-  { normals: ['FrostWisp', 'IceWolf', 'Golem'], boss: 'IceGiant' },
+  { normals: ['FrostWisp', 'IceWolf', 'FrostGolem'], boss: 'LichKing' },
   // ・심연
-  { normals: ['AbyssEye', 'ShadowWraith', 'Zombie'], boss: 'AbyssLord' },
+  { normals: ['AbyssEye', 'DarkElf', 'AbyssKnight'], boss: 'AbyssLord' },
 ];
 
 /** 스테이지 번호(1부터) → 스테이지 정의. 21스테이지 이후는 순환하며 난이도만 계속 오른다. */

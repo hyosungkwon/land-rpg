@@ -421,6 +421,15 @@ class App {
         } else if (ev.next > 31 && ev.next % 10 === 0) {
           this.ui.toast(`♾️ S${ev.next} 돌파!`, 'gold');
         }
+      } else if (ev.t === 'treasureSpawn') {
+        this.ui.toast('💰 보물 고블린 출현! 도망치기 전에 처치하세요!', 'gold');
+        this.ui.addLog('💰 <b>보물 고블린</b> 출현 — 처치 시 대량 골드 · 💎강화석 · 확정 장비 드랍');
+      } else if (ev.t === 'treasureKill') {
+        this.sound.fanfare();
+        this.ui.toast(`💰 보물 고블린 처치! 💰${(ev.gold || 0).toLocaleString()} · 💎${ev.shards || 0}${ev.item ? ` · 🎒${ev.item}` : ''}`, 'gold');
+        this.ui.addLog(`💰 <b>보물 고블린</b> 처치 · 💰${(ev.gold || 0).toLocaleString()} 💎${ev.shards || 0}${ev.item ? ` · ${esc(ev.item)}` : ''}`);
+      } else if (ev.t === 'treasureFlee') {
+        this.ui.addLog('💨 보물 고블린이 황금을 들고 도망쳤습니다…');
       } else if (ev.t === 'bossStart') {
         this.ui.addLog(`⚔️ <b>${ev.ko}</b> 등장 — ${ECON.bossTimeLimitMs / 1000}초 제한`);
         this.ui.announce(`보스 등장 — ${ev.ko} · ${ECON.bossTimeLimitMs / 1000}초 제한`);

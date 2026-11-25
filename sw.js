@@ -1,5 +1,5 @@
 // land-rpg / sw.js — 오프라인 캐시 (게스트 전용: 네트워크가 없어도 처음부터 끝까지 플레이)
-const VERSION = 'land-rpg-v5.6.0';
+const VERSION = 'land-rpg-v5.7.0';
 // 같은 릴리스 안에서 자산을 고친 경우 BUILD 를 올린다 → 열린 탭이 새 캐시로 넘어온다.
 const BUILD = 'r1';
 const CACHE = `${VERSION}-${BUILD}`;
@@ -88,7 +88,14 @@ const CORE = [
   './assets/sprites/monster/FrostWisp.png',
   './assets/sprites/monster/ShadowWraith.png',
   './assets/sprites/monster/AbyssEye.png',
-  // 보스 12종 (v3.8: 5종 추가)
+  // v5.7 신규 일반 몬스터 6종
+  './assets/sprites/monster/TreasureGoblin.png',
+  './assets/sprites/monster/Lizardman.png',
+  './assets/sprites/monster/Gargoyle.png',
+  './assets/sprites/monster/DarkElf.png',
+  './assets/sprites/monster/FrostGolem.png',
+  './assets/sprites/monster/AbyssKnight.png',
+  // 보스 16종 (v3.8: +5, v5.7: +4)
   './assets/sprites/boss/SlimeKing.png',
   './assets/sprites/boss/Troll.png',
   './assets/sprites/boss/Cerberus.png',
@@ -100,7 +107,11 @@ const CORE = [
   './assets/sprites/boss/CaveTroll.png',
   './assets/sprites/boss/Ifrit.png',
   './assets/sprites/boss/IceGiant.png',
-  './assets/sprites/boss/AbyssLord.png'
+  './assets/sprites/boss/AbyssLord.png',
+  './assets/sprites/boss/LichKing.png',
+  './assets/sprites/boss/Phoenix.png',
+  './assets/sprites/boss/Kraken.png',
+  './assets/sprites/boss/Behemoth.png'
 ];
 
 self.addEventListener('install', (event) => {

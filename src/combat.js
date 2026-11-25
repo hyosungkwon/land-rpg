@@ -1,7 +1,10 @@
 // land-rpg / src/combat.js
 // 자동 전투 시뮬레이션. DOM·Canvas 의존 없음 → 헤드리스 검증 가능.
 // 렌더러는 이 객체의 엔티티를 읽고, UI는 events 큐를 소비한다.
-import { ECON, SKILLS, stageDef, monsterKo, monsterMotion, monsterAttack, THEMES, ultimateOf, ultLeftMs } from './data.js';
+import {
+  ECON, SKILLS, stageDef, monsterKo, monsterMotion, monsterAttack, THEMES, ultimateOf, ultLeftMs,
+  ELITE_TRAITS, ELITE_CHANCE, TREASURE_GOBLIN, stageGoldBase, RARITIES,
+} from './data.js';
 import {
   calcStats, currentHp, skillEffect, killReward, registerKill, clearStage, monsterStats, skillCdOf,
 } from './state.js';
@@ -13,7 +16,7 @@ import {
 import { TOWER_RULES, TOWER_MAX_FLOOR, towerFloor, towerStageDef, towerHas, towerReward, towerCleared, towerState, towerUnlocked, towerLockReason } from './tower.js';
 import { DAILY, dailyBossFor, dailyInfo, consumeDailyAttempt, dailyReward, recordDailyRun, recordWeeklyBoss, dailyDpsCap } from './daily.js';
 import { codexMeet, codexKill, trackDailyQuest } from './quests.js';
-import { tryGearDrop, acquireGear } from './gear.js';
+import { tryGearDrop, acquireGear, rollDropRarityIdx, randomItemOfRarity } from './gear.js';
 
 const ATTACK_STOP_GAP = 380; // 보스가 멈추고 때리는 거리(캐릭터 스프라이트가 겹치지 않는 간격)
 /* ── v3.8 다굴 슬롯 ──────────────────────────────────────────────
@@ -242,17 +245,47 @@ export class Battle {
 
   spawnInitial(now) {
     const n = 2;
-    for (let i = 0; i < n; i++) this.spawnNormal(now - (n - i) * 350);
+    for (let i = 0; i < n; i++) this.spawnNormal(now - (n - i) * 350, false);
     this.lastSpawn = now;
   }
 
-  spawnNormal(now) {
+  spawnNormal(now, allowSpecial = true) {
     if (this.boss) return;
     if (this.monsters.filter((m) => !m.dead && !m.dying).length >= ECON.maxMonsters) return;
+    // v5.7: 일반 사냥 중 확률적으로 💰 보물 고블린 또는 엘리트 변종 등장
+    const inField = allowSpecial && !this.tower && !this.daily && !this.dungeon && this.s.totalKills > 0;
+    if (
+      inField
+      && this.s.stage >= TREASURE_GOBLIN.minStage
+      && !this.monsters.some((x) => x.treasure && !x.dead && !x.dying)
+      && this.rng() < TREASURE_GOBLIN.chance
+    ) {
+      const tg = this.makeMonster(TREASURE_GOBLIN.name, false, now);
+      tg.treasure = true;
+      tg.gold = true;
+      tg.hp = Math.max(1, Math.round(tg.maxHp * TREASURE_GOBLIN.hpMul));
+      tg.maxHp = tg.hp;
+      tg.atk = 1;
+      tg.scale = 1.08;
+      tg.fleeAt = now + TREASURE_GOBLIN.durationMs;
+      this.monsters.push(tg);
+      this.emit({ t: 'treasureSpawn', id: tg.id, ko: tg.ko, durationMs: TREASURE_GOBLIN.durationMs });
+      return;
+    }
     const normals = this._def.normals;
     // 스테이지마다 처치 수 기준으로 몬스터 종류를 돌려가며 등장
     const pick = normals[(this.s.totalKills + this.monsters.length) % normals.length];
     const m = this.makeMonster(pick, false, now);
+    if (inField && this.s.stage >= 3 && this.rng() < ELITE_CHANCE) {
+      const trait = ELITE_TRAITS[Math.floor(this.rng() * ELITE_TRAITS.length) % ELITE_TRAITS.length];
+      m.elite = trait;
+      m.maxHp = Math.max(1, Math.round(m.maxHp * trait.hpMul));
+      m.hp = m.maxHp;
+      m.atk = Math.max(1, Math.round(m.atk * trait.atkMul));
+      m.scale = Math.round(m.scale * 1.22 * 100) / 100;
+      if (trait.speedMul) m.attackGap = Math.max(600, Math.round(ECON.monsterAttackMs / trait.speedMul));
+      this.emit({ t: 'eliteSpawn', id: m.id, ko: m.ko, trait: trait.name, icon: trait.icon, color: trait.color });
+    }
     this.monsters.push(m);
   }
 
@@ -345,6 +378,14 @@ export class Battle {
     const p = this.player;
     const alive = this.assignSlots();
     for (const m of alive) {
+      if (m.treasure && m.fleeAt && now >= m.fleeAt) {
+        m.dead = true;
+        this.emit({ t: 'treasureFlee', id: m.id, ko: m.ko });
+        continue;
+      }
+      if (m.elite && m.elite.regenPct > 0 && m.hp > 0 && m.hp < m.maxHp) {
+        m.hp = Math.min(m.maxHp, m.hp + (m.maxHp * m.elite.regenPct * dt) / 1000);
+      }
       if (!Number.isFinite(m.x)) m.x = ECON.spawnX;
       if (!Number.isFinite(m.hp)) m.hp = m.maxHp;
       if (!Number.isFinite(m.slotX)) m.slotX = p.x + ATTACK_STOP_GAP;
@@ -505,8 +546,9 @@ export class Battle {
       let dmg = rawDmg;
       if (m.isBoss && this.stats.bossDmgPct > 0) dmg = Math.round(dmg * (1 + this.stats.bossDmgPct));
       if (kind === 'whirl' && this.stats.whirlDmgPct > 0) dmg = Math.round(dmg * (1 + this.stats.whirlDmgPct));
-      // v4.2 도전의 탑 '철벽 진형' — 주는 피해가 45% 깎인다
+      // v4.2 도전의 탑 '철벽 진형' — 주는 피해가 45% 깎인다 · v5.7 철갑 엘리트 25% 경감
       if (this.tower && towerHas(this.tower.floor, 'guard')) dmg = Math.max(1, Math.round(dmg * (1 - TOWER_RULES.guardReduce)));
+      if (m.elite && m.elite.dmgReduce) dmg = Math.max(1, Math.round(dmg * (1 - m.elite.dmgReduce)));
       m.hp -= dmg;
       m.hitAt = now;
       m.knock = Math.min(30, (m.knock || 0) + (crit ? 18 : 10));
@@ -614,6 +656,24 @@ export class Battle {
       return;
     }
     const reward = killReward(this.s, this.s.stage, m.isBoss, this.buffs(), this.rng);
+    // v5.7 보물 고블린 / 엘리트 추가 보상
+    if (m.treasure) {
+      const bGold = Math.round(stageGoldBase(this.s.stage) * TREASURE_GOBLIN.goldMul * (this.stats.goldMult || 1));
+      const bShards = Math.max(1, Math.round(TREASURE_GOBLIN.shards * (this.stats.dropMult || 1)));
+      this.s.gold += bGold;
+      this.s.shards += bShards;
+      if (this.s.records) this.s.records.totalGold = (this.s.records.totalGold || 0) + bGold;
+      reward.gold += bGold;
+      reward.shards += bShards;
+    } else if (m.elite) {
+      const exGold = Math.round(reward.gold * Math.max(0, (m.elite.rewardMul || 3) - 1));
+      const exShards = 2;
+      this.s.gold += exGold;
+      this.s.shards += exShards;
+      if (this.s.records) this.s.records.totalGold = (this.s.records.totalGold || 0) + exGold;
+      reward.gold += exGold;
+      reward.shards += exShards;
+    }
     // v4.2 황금 부엉이 '황금비' — 잠시 골드 획득 2배
     if (this.petGoldUntil > now && reward.gold > 0) {
       const extra = Math.round(reward.gold * 1.0);
@@ -639,11 +699,23 @@ export class Battle {
       this.refreshStats(now);
       this.player.hp = this.stats.hpMax; // 레벨업 시 완충
     }
-    // v4.0: 사냥·보스 처치로 장비가 드랍된다(보스 우대) — 파밍의 재미
+    // v4.0: 사냥·보스 처치로 장비가 드랍된다(보스 우대) · v5.7 보물 고블린 확정 드랍 · 엘리트 3배
     try {
-      const drop = tryGearDrop(this.s, {
-        isBoss: m.isBoss, stage: this.s.stage, buffs: this.buffs(), dropMult: this.stats.dropMult, rng: this.rng, now,
-      });
+      let drop = null;
+      if (m.treasure) {
+        const rIdx = rollDropRarityIdx(this.s.stage, true, this.rng);
+        const it = randomItemOfRarity(RARITIES[rIdx].id, this.rng);
+        if (it) {
+          const acq = acquireGear(this.s, it.id, { autoEquip: true, now, source: 'drop', rollAffix: true, rng: this.rng });
+          if (acq.ok) drop = { ...acq, isBoss: false };
+        }
+        this.emit({ t: 'treasureKill', ko: m.ko, gold: reward.gold, shards: reward.shards, item: drop && drop.item ? drop.item.name : '' });
+      } else {
+        const mult = m.elite ? (this.stats.dropMult || 1) * 3 : this.stats.dropMult;
+        drop = tryGearDrop(this.s, {
+          isBoss: m.isBoss, stage: this.s.stage, buffs: this.buffs(), dropMult: mult, rng: this.rng, now,
+        });
+      }
       if (drop && drop.item) {
         this.emit({
           t: 'gearDrop',
@@ -708,8 +780,9 @@ export class Battle {
     let dmg = raw;
     let crit = false;
     if (target.isBoss && this.stats.bossDmgPct > 0) dmg *= 1 + this.stats.bossDmgPct; // 용의 숨결
-    // v4.2 철벽 진형은 펫 피해에도 똑같이 적용된다
+    // v4.2 철벽 진형은 펫 피해에도 똑같이 적용된다 · v5.7 철갑 엘리트 25% 경감
     if (this.tower && towerHas(this.tower.floor, 'guard')) dmg *= 1 - TOWER_RULES.guardReduce;
+    if (target.elite && target.elite.dmgReduce) dmg *= 1 - target.elite.dmgReduce;
     if (this.rng() < this.stats.crit) {
       crit = true;
       dmg *= this.stats.critDmg;

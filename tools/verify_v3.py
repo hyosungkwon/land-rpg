@@ -187,8 +187,8 @@ def main():
     ok("startCloudResume" in app_src and "if (!this.cloudEnabled() && !this.cloud.hasPendingRedirect()) return;" in app_src, "세션 복원도 클라우드를 켓을 때만")
     ok("setInterval(() => this.cloudTick(), 15000)" in app_src, "주기 저장은 조건 검사형 타이머")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v5.6.0" in read("sw.js"), "SW 캐시 버전 v5.6.0")
-    ok("APP_VERSION = '5.6.0'" in read("src/data.js"), "앱 버전 v5.6.0")
+    ok("land-rpg-v5.7.0" in read("sw.js"), "SW 캐시 버전 v5.7.0")
+    ok("APP_VERSION = '5.7.0'" in read("src/data.js"), "앱 버전 v5.7.0")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
     ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
@@ -866,7 +866,7 @@ def main():
     ok(len(qdef["achIds"]) == 36 and len(set(qdef["achIds"])) == 36, "업적 36종 정의(중복 없음)", str(len(qdef["achIds"])))
     ok(all(s > 0 for s in qdef["achShards"]) and qdef["achAtk"] >= 2 and qdef["achGold"] >= 2, "업적 보상 = 💎 + 영구 스탯 보너스", json.dumps({"atk": qdef["achAtk"], "gold": qdef["achGold"]}))
     ok(qdef["weights"] == [30, 40, 20, 10] and qdef["milestones"] == [10, 25, 50, 75, 100], "도감 가중치 합 100 · 마일스톤 5단계", json.dumps(qdef["weights"]))
-    ok(qdef["monsters"] == 35 and qdef["bosses"] == 12 and qdef["petIds"] == ["wolf", "fox", "owl", "dragon"], "도감 몬스터 35종(보스 12)·펫 4종", json.dumps({"m": qdef["monsters"], "b": qdef["bosses"]}))
+    ok(qdef["monsters"] == 45 and qdef["bosses"] == 16 and qdef["petIds"] == ["wolf", "fox", "owl", "dragon"], "도감 몬스터 45종(보스 16)·펫 4종", json.dumps({"m": qdef["monsters"], "b": qdef["bosses"]}))
 
     mq = js(ctx, """
       const s = defaultState(0);
@@ -990,7 +990,7 @@ def main():
     ok(cxr["pct0"] < 10 and cxr["met0"] == 0 and cxr["slime"] == {"m": 1, "k": 4}, "몬스터 도감 — 만남·처치 수 기록", json.dumps(cxr["slime"]))
     ok(cxr["ownedAfterSell"] == 0 and len(cxr["cityNames"]) == 1 and cxr["cityPyeong"] == 5, "부동산 도감 — 매도해도 지역·최대 평수 기록 유지", json.dumps(cxr["cityNames"], ensure_ascii=False))
     ok("legend" in cxr["gearGot"] and "common" in cxr["gearGot"], "장비 등급 도감 — 획득 등급 기록", json.dumps(cxr["gearGot"]))
-    ok(cxr["monsterTotal"] == 35 and cxr["monstersMet"] == 1 and cxr["petsUnlocked"] == 0, "도감 상세 목록(35종·펫 4종)", json.dumps({"met": cxr["monstersMet"]}))
+    ok(cxr["monsterTotal"] == 45 and cxr["monstersMet"] == 1 and cxr["petsUnlocked"] == 0, "도감 상세 목록(45종·펫 4종)", json.dumps({"met": cxr["monstersMet"]}))
 
     msb = js(ctx, """
       const s = defaultState(0);
@@ -1737,9 +1737,9 @@ def main():
         sprite: [spriteSrc('fx_claw'), spriteSrc('fx_burst'), spriteSrc('Slime'), spriteSrc('SlimeKing')],
       };
     """)
-    ok(mod["total"] == 35 and mod["missingMotion"] == [] and mod["missingAtk"] == [], "35종 몬스터 모두 이동/공격 모션 정의", json.dumps({"missing": mod["missingMotion"] + mod["missingAtk"]}))
-    ok(mod["arch"] == {"slime": 3, "flyer": 11, "walker": 21}, "슬라임 3 · 비행 11 · 보행 21 아키타입 분류", json.dumps(mod["arch"]))
-    ok(len(mod["ranged"]) == 14 and len(mod["melee"]) == 21 and mod["badProj"] == [], "원거리 14종(투사체 보유) · 근접 21종", json.dumps({"r": mod["ranged"], "bad": mod["badProj"]}, ensure_ascii=False))
+    ok(mod["total"] == 45 and mod["missingMotion"] == [] and mod["missingAtk"] == [], "45종 몬스터 모두 이동/공격 모션 정의", json.dumps({"missing": mod["missingMotion"] + mod["missingAtk"]}))
+    ok(mod["arch"] == {"slime": 4, "flyer": 14, "walker": 27}, "슬라임 4 · 비행 14 · 보행 27 아키타입 분류", json.dumps(mod["arch"]))
+    ok(len(mod["ranged"]) == 19 and len(mod["melee"]) == 26 and mod["badProj"] == [], "원거리 19종(투사체 보유) · 근접 26종", json.dumps({"r": mod["ranged"], "bad": mod["badProj"]}, ensure_ascii=False))
     ok(set(mod["moves"]) == {"claw", "slam", "bite", "fire", "feather", "dark", "holy", "acid", "ice", "sonic"}, "공격 모션 10종(할퀴기·내려찍기·물기·화염·깃털·암흑·신성·산성·얼음·음파)", json.dumps(mod["moves"]))
     ok(mod["fallback"] == ["walker", "melee", "claw"], "알 수 없는 이름은 보행·근접 할퀴기로 폴백", json.dumps(mod["fallback"]))
     ok(mod["sprite"] == ["assets/sprites/fx/fx_claw.png", "assets/sprites/fx/fx_burst.png", "assets/sprites/monster/Slime.png", "assets/sprites/boss/SlimeKing.png"], "이펙트/몬스터/보스 스프라이트 경로", json.dumps(mod["sprite"]))
@@ -1945,7 +1945,7 @@ def main():
       };
     """ % (json.dumps(NEW_MONSTERS), json.dumps(NEW_BOSSES)))
     ok(newmeta["inCatalog"] and newmeta["bossesIn"], "신규 일반 11종 + 보스 5종이 도감(MONSTERS)에 등록")
-    ok(newmeta["total"] == 35 and newmeta["bossesTotal"] == 12, "몬스터 총 35종(일반 23 · 보스 12)", json.dumps({"t": newmeta["total"], "b": newmeta["bossesTotal"]}))
+    ok(newmeta["total"] == 45 and newmeta["bossesTotal"] == 16, "몬스터 총 45종(일반 29 · 보스 16)", json.dumps({"t": newmeta["total"], "b": newmeta["bossesTotal"]}))
     ok(not newmeta["motion"] and not newmeta["atk"] and not newmeta["proj"], "신규 16종 모두 이동 모션·공격(투사체) 정의", json.dumps(newmeta["motion"] + newmeta["atk"] + newmeta["proj"]))
     ok(all(p.startswith("assets/sprites/monster/") for p in newmeta["paths"][:len(NEW_MONSTERS)]) and all(p.startswith("assets/sprites/boss/") for p in newmeta["paths"][len(NEW_MONSTERS):]), "스프라이트 경로가 일반/보스 폴더로 갈린다", json.dumps(newmeta["paths"][:2]))
 
@@ -2004,8 +2004,8 @@ def main():
     """)
     ok(stages["badNormals"] == 0 and stages["badBoss"] == 0, "모든 스테이지의 몬스터·보스가 도감에 존재", json.dumps(stages))
     ok(stages["aligned"] is True and stages["stagesPerTheme"] == 3, "8개 테마 × 3스테이지 = 24스테이지(테마 정렬)", json.dumps({"s": stages["stages"], "t": stages["themes"]}))
-    ok(stages["bossesUsed"] == 12, "12종 보스가 모두 스테이지에 등장", json.dumps({"bosses": stages["bossesUsed"]}))
-    ok(stages["uniqueNormals"] == 23, "23종 일반 몬스터가 모두 스테이지에 등장", json.dumps({"normals": stages["uniqueNormals"]}))
+    ok(stages["bossesUsed"] == 16, "16종 보스가 모두 스테이지에 등장", json.dumps({"bosses": stages["bossesUsed"]}))
+    ok(stages["uniqueNormals"] == 28, "28종 일반 필드 몬스터가 모두 스테이지에 등장(보물 고블린은 이벤트 스폰)", json.dumps({"normals": stages["uniqueNormals"]}))
 
     codex_new = js(ctx, """
       const s = defaultState(0);
@@ -2566,11 +2566,11 @@ def main():
         const { s, b } = mk(floor, clearedUpto, opts);
         const r0 = b.startTower(floor, 1000);
         const gold0 = s.gold, shards0 = s.shards, items0 = s.gear.items.length;
-        let t = 1000, ev = null, stageAtEnd = null, goldAtEnd = null, shardsAtEnd = null, minPct = 100, maxAlive = 0, themeAtEnd = null, themeInTower = b.def.theme.id;
+        let t = 1000, ev = null, stageAtEnd = null, goldAtEnd = null, shardsAtEnd = null, itemsAtEnd = 0, minPct = 100, maxAlive = 0, themeAtEnd = null, themeInTower = b.def.theme.id;
         for (let i = 0; i < (ticks || 2200); i++) {
           t += 50; b.tick(50, t);
           for (const e of b.drainEvents()) if (e.t === 'towerEnd') {
-            ev = e; stageAtEnd = s.stage; goldAtEnd = s.gold - gold0; shardsAtEnd = s.shards - shards0; themeAtEnd = b.def.theme.id;
+            ev = e; stageAtEnd = s.stage; goldAtEnd = s.gold - gold0; shardsAtEnd = s.shards - shards0; itemsAtEnd = s.gear.items.length - items0; themeAtEnd = b.def.theme.id;
           }
           if (b.tower) {
             minPct = Math.min(minPct, 100 * b.player.hp / b.stats.hpMax);
@@ -2580,7 +2580,7 @@ def main():
         return {
           ok: r0.ok, reason: r0.reason, how: s.tower.last && s.tower.last.how,
           ev: ev, stageAtEnd, goldAtEnd, shardsAtEnd, minPct: Math.round(minPct), maxAlive, themeInTower, themeAtEnd,
-          towerNull: b.tower === null, monsters: b.monsters.length, itemsDelta: s.gear.items.length - items0,
+          towerNull: b.tower === null, monsters: b.monsters.length, itemsDelta: itemsAtEnd,
           cleared: s.tower.cleared, best: s.tower.best, runs: s.tower.runs, fails: s.tower.fails,
           points: ev && ev.points, item: ev && ev.item, next: ev && ev.next, first: ev && ev.first,
           gold: ev && ev.gold, shards: ev && ev.shards,
@@ -2937,7 +2937,7 @@ def main():
     ok(all(x in asrc42 for x in ["enterTower", "openTowerFloors", "evolvePet", "showTowerResult", "showTowerFloors"]), "app.js — 탑 입장/층 선택/결과·펫 진화 액션", "")
     ok('assets/sprites/pet/${info.sprite}.png' in asrc42, "진화 결과 모달 — 진화 스프라이트 경로(.png)", "")
     ok(all(x in css42 for x in [".tower-card", ".tower-tiles", ".tower-floor", ".pet-evo", ".mini.evo"]), "style.css — v4.2 스타일", "")
-    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v5.6.0" in read("sw.js") and "APP_VERSION = '5.6.0'" in read("src/data.js"), "버전·서비스워커(5.6.0 · cloud 프리캐시)", "")
+    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v5.7.0" in read("sw.js") and "APP_VERSION = '5.7.0'" in read("src/data.js"), "버전·서비스워커(5.7.0 · cloud 프리캐시)", "")
     pkg_ok = (not os.path.exists(os.path.join(ROOT, "package.json"))) or ('"version": "' in read("package.json"))
     ok(pkg_ok, "package.json 버전 확인(없으면 클론 환경으로 통과)", "")
     evo_files = [f"assets/sprites/pet/pet_{n}_{s}.png" for n in ("wolf", "fox", "owl", "dragon") for s in ("awaken", "divine")]
@@ -3088,7 +3088,7 @@ def main():
 
     css43 = read("style.css")
     ok(all(x in css43 for x in [".land-sum", ".ls-v", ".ls-claim", ".news-slim", ".ns-title", ".land-subbar", ".land-rec", ".buff-now"]), "style.css — v4.3 부동산 요약 바·압축 뉴스·서브 탭", "")
-    ok("land-rpg-v5.6.0" in read("sw.js") and "'5.6.0'" in read("src/data.js"), "버전·캐시 v5.6.0", "")
+    ok("land-rpg-v5.7.0" in read("sw.js") and "'5.7.0'" in read("src/data.js"), "버전·캐시 v5.7.0", "")
 
     section("[20] ⚔️ v4.4 S31+ 무한 구간 리밸런싱 · 강화석 대량 교환 · 상위 전직")
 
@@ -3965,7 +3965,7 @@ def main():
     section("[23] ♻️ v4.7 장비 자동분해 · 🐉 상위 전직 궁극기 · 방치 편의")
 
     # ── 1) 버전·정적 배선 ──
-    ok("APP_VERSION = '5.6.0'" in read("src/data.js") and "land-rpg-v5.6.0" in read("sw.js"), "v5.6.0 버전·서비스워커 캐시 갱신", "")
+    ok("APP_VERSION = '5.7.0'" in read("src/data.js") and "land-rpg-v5.7.0" in read("sw.js"), "v5.7.0 버전·서비스워커 캐시 갱신", "")
     idx47 = read("index.html")
     ok(all(f'data-skill="{k}"' in idx47 for k in ["strike", "whirl", "berserk", "heal"]), "기존 4개 퀵슬롯 레이아웃 유지", "")
     ok('data-skill="ultimate"' in idx47 and 'class="q ult hidden"' in idx47, "다섯 번째 퀵슬롯(궁극기) — 해금 전 숨김", "")
@@ -4207,7 +4207,7 @@ def main():
     ok(cl_a["clean"][0] == "효성 왕" and cl_a["clean"][3] == 12 and not cl_a["html"], "닉네임 정리 — 공백 접기·12자 제한·HTML 문자 제거", json.dumps(cl_a["clean"], ensure_ascii=False))
     ok(cl_a["clean"][1] == "용사" and cl_a["clean"][2] == "용사", "1자·빈 닉네임은 기본 이름으로 대체", json.dumps(cl_a["clean"][:3], ensure_ascii=False))
     ok(cl_a["sum"] == [42, 21, 2, 5000, True], "세이브 요약 — 역대 최고 스테이지·보유 지역·총자산", json.dumps(cl_a["sum"]))
-    ok(cl_a["doc"][:6] == ["land_rpg_save", "5.6.0", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
+    ok(cl_a["doc"][:6] == ["land_rpg_save", "5.7.0", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
     ok(0 < cl_a["size"] < 200000, "클라우드 문서 크기 RTDB 한도 안(200KB 미만)", str(cl_a["size"]))
 
     # ── 2) 문서 해석(신형·v2 옛 페이로드·손상) ──
@@ -4311,7 +4311,7 @@ def main():
     ok(cl_e["errs"][0].startswith("이 주소가") and "응답이 없습니다" in cl_e["errs"][1] and cl_e["errs"][3].startswith("권한") and "시간 초과" in cl_e["errs"][4] and "라이브러리" in cl_e["errs"][5], "오류 문구 — 승인 도메인/시간 초과/권한/라이브러리", json.dumps(cl_e["errs"], ensure_ascii=False))
     ok(cl_e["strip"] == '{"a":1,"d":1,"e":{"x":2},"f":[1,3]}', "RTDB 전송 전 undefined·NaN 제거", cl_e["strip"])
     ok(cl_e["metrics"] == ["최고 스테이지", "총자산"], "랭킹 지표 이름", json.dumps(cl_e["metrics"], ensure_ascii=False))
-    ok(cl_e["entry"] == ["용사", 9, 12, 777, "5.6.0", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
+    ok(cl_e["entry"] == ["용사", 9, 12, 777, "5.7.0", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
 
     # ── 6) 세이브 호환 · 마이그레이션 ──
     mig48 = js(ctx, """
@@ -5099,6 +5099,58 @@ def main():
     """)
     ok(g56["total"] == 55 and g56["iconsUnique"] == 55 and g56["allSetsHaveLegend"], "장비 55종(전부 고유 SVG) · 5종 테마 모두 전설 2부위 이상 보유", json.dumps(g56))
     ok(g56["af1Ok"] and g56["rfOk"] and g56["normClamp"] == 13, "잠재 접두사 롤·gearMods 반영·재련 리롤(강화석 차감)·저장 정규화", json.dumps(g56))
+
+    # ── 21) v5.7.0 몬스터 45종(신규 10종 스프라이트) · 엘리트 4종 · 보물 고블린 ──
+    section("v5.7.0 몬스터 45종 · 엘리트 4종 · 보물 고블린")
+    m57 = js(ctx, """
+      const s = defaultState(1000); s.stage = 10; s.maxStage = 10; s.level = 30; s.totalKills = 5;
+      // rng = 0.01 → 보물 고블린 확정 출현
+      const b1 = new Battle(s, () => ({}), () => 0.01, 0);
+      b1.monsters = [];
+      b1.spawnNormal(1000);
+      const tg = b1.monsters[0];
+      const gold0 = s.gold, shards0 = s.shards, items0 = s.gear.items.length;
+      b1.killMonster(tg, 2000);
+      const tgKillEv = b1.drainEvents().find((e) => e.t === 'treasureKill');
+      // 보물 고블린 시간 초과 도주 테스트
+      b1.monsters = [];
+      b1.spawnNormal(5000);
+      b1.updateMonsters(100, 5000 + TREASURE_GOBLIN.durationMs + 50, 1);
+      const tgFlee = b1.drainEvents().some((e) => e.t === 'treasureFlee');
+      // rng = 0.05 → 보물 고블린(0.025) 스킵, 엘리트(0.08) 확정 출현
+      const b2 = new Battle(s, () => ({}), () => 0.05, 0);
+      b2.monsters = [];
+      b2.spawnNormal(1000);
+      const el = b2.monsters[0];
+      return {
+        tgOk: !!(tg && tg.treasure && tg.name === 'TreasureGoblin'),
+        tgReward: !!(tgKillEv && s.gold > gold0 && s.shards > shards0 && (s.gear.items.length > items0 || s.shards >= shards0 + TREASURE_GOBLIN.shards)),
+        tgFlee,
+        elOk: !!(el && el.elite && ELITE_TRAITS.some((t) => t.id === el.elite.id)),
+        traitsCount: ELITE_TRAITS.length,
+      };
+    """)
+    ok(m57["tgOk"] and m57["tgReward"] and m57["tgFlee"], "보물 고블린 출현 · 처치 대량 보상/확정 드랍 · 시간 초과 도주", json.dumps(m57))
+    ok(m57["elOk"] and m57["traitsCount"] == 4, "엘리트 몬스터 4종(철갑/신속/광폭/재생) 스폰·능력 강화", json.dumps(m57))
+    new_m_files = [
+        ("assets/sprites/monster/TreasureGoblin.png", (256, 256)),
+        ("assets/sprites/monster/Lizardman.png", (256, 256)),
+        ("assets/sprites/monster/Gargoyle.png", (256, 256)),
+        ("assets/sprites/monster/DarkElf.png", (256, 256)),
+        ("assets/sprites/monster/FrostGolem.png", (256, 256)),
+        ("assets/sprites/monster/AbyssKnight.png", (256, 256)),
+        ("assets/sprites/boss/LichKing.png", (384, 384)),
+        ("assets/sprites/boss/Phoenix.png", (384, 384)),
+        ("assets/sprites/boss/Kraken.png", (384, 384)),
+        ("assets/sprites/boss/Behemoth.png", (384, 384)),
+    ]
+    sw57 = read("sw.js")
+    ok(all(os.path.exists(os.path.join(ROOT, f)) and f"'./{f}'" in sw57 for f, _ in new_m_files), "신규 몬스터/보스 10종 PNG 존재 · sw.js 프리캐시 동기화")
+    try:
+        from PIL import Image
+        ok(all(Image.open(os.path.join(ROOT, f)).size == sz and Image.open(os.path.join(ROOT, f)).getextrema()[3][0] == 0 for f, sz in new_m_files), "신규 몬스터 256px · 보스 384px 투명 RGBA PNG 검증")
+    except Exception as e:
+        ok(False, "신규 스프라이트 이미지 검사", str(e))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:
