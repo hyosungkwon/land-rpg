@@ -3879,6 +3879,7 @@ def main():
     ok("ultUntil" in read("src/combat.js") and "ultBonus" in read("src/combat.js"), "combat.js — 궁극기 발동 뒤 공격력 버프", "")
     ok(all(x in read("src/render.js") for x in ["ev.t === 'ultimate'", "f.key === 'ultimate'", "drawFx"]), "render.js — 궁극기 연출(빛기둥·회전 문양·파동)", "")
     ok(all(x in read("app.js") for x in ["setGearAuto", "castUltimate", "toggleAutoUlt", "toggleAutoSkill", "시간당 골드", "정산 비율"]), "app.js — 자동분해/궁극기 액션·방치 보상 요약", "")
+    ok("autoItem" in read("src/combat.js") and "autoItem" in read("app.js") and "autoShards" in read("src/combat.js"), "도전의 탑 보상 장비도 자동분해되면 결과 화면에 강화석으로 표시", "")
 
     # ── 2) 자동분해: 등급별 필터링·제외 규칙 ──
     au47 = js(ctx, """

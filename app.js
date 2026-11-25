@@ -446,7 +446,7 @@ class App {
         this.save(true);
         if (ev.how === 'clear') {
           this.sound.fanfare();
-          const gains = [ev.gold ? `💰+${ev.gold.toLocaleString()}` : '', ev.shards ? `💎+${ev.shards}` : '', ev.points ? `✨+${ev.points}P` : '', ev.item ? `🎒${ev.item.name}` : '']
+          const gains = [ev.gold ? `💰+${ev.gold.toLocaleString()}` : '', ev.shards ? `💎+${ev.shards}` : '', ev.points ? `✨+${ev.points}P` : '', ev.item ? `🎒${ev.item.name}` : '', ev.autoItem ? `♻️${ev.autoItem}` : '']
             .filter(Boolean).join(' ');
           this.ui.addLog(`🗼 <b>${ev.n}층 클리어</b>${ev.first ? ' (최초)' : ''} · ${gains}`);
           this.showTowerResult(ev);
@@ -2217,6 +2217,8 @@ class App {
     ];
     if (ev.points) rw.push({ e: '✨', v: `+${ev.points}P`, k: '초월석' });
     if (ev.item) rw.push({ e: '🎒', v: ev.item.name, k: '장비' });
+    // v4.7: 자동분해 기준 이하 장비는 이름 대신 변환된 강화석을 보여 준다
+    if (ev.autoItem) rw.push({ e: '♻️', v: `${ev.autoItem} +💎`, k: '자동분해' });
     rw.push({ e: '🗼', v: `${ev.n}층`, k: ev.first ? '최초 클리어' : '재도전' });
     this.ui.modal({
       title: `🗼 ${ev.n}층 클리어!`,

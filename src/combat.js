@@ -1112,6 +1112,7 @@ export class Battle {
     this.tower = null;
     const first = how === 'clear' && !towerCleared(this.s, t.n);
     let reward = null;
+    let autoDust = 0; // v4.7: 탑 보상 장비가 자동분해 기준 이하일 때 받은 강화석
     if (how === 'clear') {
       reward = towerReward(this.s, t.n, { first, rng: this.rng });
       if (reward) {
@@ -1126,7 +1127,10 @@ export class Battle {
           this.s.rebirth.totalPoints = Math.max(0, Math.floor(this.s.rebirth.totalPoints || 0)) + reward.points;
         }
         if (reward.item) {
-          try { acquireGear(this.s, reward.item.id, { autoEquip: true, now, source: 'tower' }); } catch (e) { /* 보상 실패가 복귀를 막지 않게 */ }
+          try {
+            const acq = acquireGear(this.s, reward.item.id, { autoEquip: true, now, source: 'tower' });
+            if (acq && acq.auto) autoDust = acq.shards || 0;
+          } catch (e) { /* 보상 실패가 복귀를 막지 않게 */ }
         }
       }
     }
@@ -1175,9 +1179,11 @@ export class Battle {
       bossKills: t.bossKills,
       dmg: Math.round(t.dmg),
       gold: reward ? reward.gold : 0,
-      shards: reward ? reward.shards : 0,
+      shards: reward ? reward.shards + autoDust : 0,
       points: reward ? reward.points : 0,
-      item: reward && reward.item ? { id: reward.item.id, name: reward.item.name, rarity: reward.item.rarity, slot: reward.item.slot } : null,
+      item: reward && reward.item && !autoDust ? { id: reward.item.id, name: reward.item.name, rarity: reward.item.rarity, slot: reward.item.slot } : null,
+      autoItem: autoDust && reward && reward.item ? reward.item.name : '',  // v4.7 자동분해된 보상 장비
+      autoShards: autoDust,
       next: how === 'clear' && t.n < TOWER_MAX_FLOOR ? t.n + 1 : 0,
     });
     return reward;
