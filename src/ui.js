@@ -2339,11 +2339,13 @@ function cloudCard(ui) {
   const c = app.cloud || {};
   const s = ui.s;
   const st = cloudStatusText(c);
-  const signed = !!c.uid;
+  // 게스트가 기본 — '켜짐'은 이 앱에서 사용자가 켠 경우(s.cloud.enabled)만 뜻한다.
+  const enabled = !!(s.cloud && s.cloud.enabled === true);
+  const signed = enabled && !!c.uid;
+  const hasSession = !enabled && !!c.uid; // 예전에 로그인한 Google 세션이 브라우저에 남아 있는 경우
   const uid = c.uid || (s.cloud && s.cloud.uid) || '';
   const email = (c.user && (c.user.email || c.user.name)) || (s.cloud && s.cloud.email) || 'Google 계정';
   const last = relTime((s.cloud && s.cloud.lastSync) || c.lastSync || 0);
-  const status = st.tone === 'on' ? 'gold' : 'dim';
 
   if (signed) {
     return `
@@ -2367,15 +2369,17 @@ function cloudCard(ui) {
   </div>`;
   }
 
-  const connecting = st.tone === 'warn';
+  const connecting = !hasSession && st.tone === 'warn';
+  const btnLabel = hasSession ? '☁️ 이어서 클라우드 켜기' : connecting ? '☁️ 연결 중…' : '☁️ Google로 클라우드 켜기';
   return `
   <div class="card cloud-card" id="cloudCard">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">☁️</span>클라우드 세이브<small>선택</small></div>
-      <span class="tiny" style="color:var(--${status === 'gold' ? 'gold' : 'dim'})">${st.label}</span>
+      <span class="tiny" style="color:var(--dim)">${hasSession ? '게스트 (로그인 대기)' : '게스트 (이 기기에만 저장)'}</span>
     </div>
     <div class="tiny muted">지금은 <b>게스트</b> — 진행도는 이 기기에만 저장됩니다. 원하면 Google 로그인으로 세이브를 클라우드에 백업하고 🏆 랭킹에 참여할 수 있습니다.</div>
-    <button class="btn small primary block" style="margin-top:9px" type="button" data-action="cloud-signin" ${connecting ? 'disabled' : ''}>${connecting ? '☁️ 연결 중…' : '☁️ Google로 클라우드 켜기'}</button>
+    ${hasSession ? '<div class="note" style="margin-top:7px">이 브라우저에 <b>Google 로그인 세션</b>이 남아 있습니다. 켜면 다시 로그인하지 않고 바로 연결됩니다.</div>' : ''}
+    <button class="btn small primary block" style="margin-top:9px" type="button" data-action="cloud-signin" ${connecting ? 'disabled' : ''}>${btnLabel}</button>
     <div class="tiny dim" style="margin-top:7px">로그인은 선택입니다. 로그인하지 않아도 게임은 그대로 저장되고, 로그인·연결이 실패해도 게스트 저장은 계속됩니다.</div>
     ${st.tone === 'error' && c.lastError ? `<div class="note warn" style="margin-top:7px">⚠️ ${esc(c.lastError)}</div>` : ''}
   </div>`;
@@ -2388,6 +2392,7 @@ function rankCard(ui) {
   const R = c.rank || { key: 'stage', rows: [], count: 0 };
   const key = R.key === 'asset' ? 'asset' : 'stage';
   const signed = !!c.uid;
+  const enabled = !!(ui.s.cloud && ui.s.cloud.enabled === true);
   const myUid = c.uid || '';
   const my = myUid ? rankOf(R.all || R.rows || [], myUid) : null;
   const count = R.count || (R.rows || []).length;
@@ -2418,9 +2423,9 @@ function rankCard(ui) {
     body = `<div class="rank-list">${rows}</div>
       <div class="rank-me${my ? ' on' : ''}">${my
         ? `내 순위 <b>${my.rank}위</b> / ${count}명 · ${esc(my.name)} · ${rankValueText(key, my)}`
-        : signed
+        : signed && enabled
           ? '아직 랭킹 기록이 없습니다 — ☁️ 저장을 한 번 하면 등록됩니다'
-          : '로그인하면 랭킹에 참여할 수 있습니다'}</div>
+          : '☁️ 클라우드를 켜고 저장하면 내 기록도 랭킹에 올라갑니다'}</div>
       <button class="btn small ghost block" style="margin-top:7px" type="button" data-action="cloud-rank-refresh">🔄 새로고침</button>`;
   }
 
@@ -2435,10 +2440,10 @@ function rankCard(ui) {
       <button class="chip${key === 'asset' ? ' on' : ''}" type="button" data-action="cloud-rank" data-value="asset">💰 총자산</button>
     </div>
     ${body}
-    ${signed ? `<div class="cloud-nick">
+    ${signed && enabled ? `<div class="cloud-nick">
       <input id="cloudNick" class="cloud-nick-in" type="text" maxlength="${CLOUD.nickMax}" value="${esc(nickNow)}" placeholder="랭킹 닉네임 (2~${CLOUD.nickMax}자)" aria-label="랭킹 닉네임" autocomplete="off" spellcheck="false">
       <button class="btn small ghost" type="button" data-action="cloud-nick">저장</button>
-    </div>` : '<div class="tiny dim" style="margin-top:7px">랭킹 닉네임은 로그인 후 정할 수 있습니다 (실명이 그대로 노출되지 않도록 기본값은 무작위 이름입니다).</div>'}
+    </div>` : '<div class="tiny dim" style="margin-top:7px">랭킹 닉네임은 클라우드를 켠 뒤 정할 수 있습니다 (실명이 그대로 노출되지 않도록 기본값은 무작위 이름입니다).</div>'}
   </div>`;
 }
 

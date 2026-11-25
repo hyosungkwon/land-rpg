@@ -748,6 +748,11 @@ class App {
     this._cloudAuthBusy = true;
     this.ui.syncCloud('connecting');
     try {
+      // 이미 이 브라우저에 Google 세션이 남아 있으면 팝업 없이 바로 이어 붙인다
+      if (this.cloud.signedIn) {
+        await this.afterCloudLogin({ silent: false });
+        return;
+      }
       let r = await this.cloud.signIn();
       if (!r.ok && r.retryRedirect) {
         this.ui.toast('로그인 창이 막혀 있어 이동식 로그인으로 바꿉니다', '');
@@ -808,6 +813,9 @@ class App {
     }
     const cmp = compareSaves(this.cloudSummary(), loaded.summary);
     this._cloudCmp = cmp;
+    // 비교 모달에서 바로 복원할 수 있게 읽어 둔 세이브를 보관(복원 가능할 때만)
+    this._cloudLoad = loaded.restorable ? loaded : null;
+    cmp.restorable = !!loaded.restorable;
     if (cmp.action === 'same') {
       if (!silent) this.ui.toast('☁️ 클라우드와 같은 진행도입니다');
       return cmp;
@@ -845,6 +853,13 @@ class App {
       : rec === 'cloud'
         ? '클라우드 세이브가 더 앞서 있습니다.'
         : '이 기기 세이브가 더 앞서 있습니다.';
+    const canLoad = !!(cmp && cmp.restorable && this._cloudLoad);
+    const noteLoad = canLoad ? '' : '<br><b>클라우드 기록은 예전 형식이라 불러올 수 없습니다</b> — 이 기기 세이브를 올리면 대체됩니다.';
+    const actions = [{ label: '나중에', onClick: () => {} }];
+    if (canLoad) {
+      actions.push({ label: '📥 클라우드 불러오기', style: rec === 'cloud' ? 'primary' : 'ghost', onClick: () => this.cloudRestore() });
+    }
+    actions.push({ label: '📤 이 기기 세이브 올리기', style: rec === 'local' || !canLoad ? 'primary' : 'ghost', onClick: () => this.cloudUpload({ silent: false }) });
     this.ui.modal({
       title: '☁️ 클라우드 세이브 확인',
       sub: '이 기기 ↔ 클라우드 · 덮어쓰기 전에 한 번 확인합니다',
@@ -856,12 +871,8 @@ class App {
                ${row('🏢', '보유 지역', `${cur.cities || 0}곳`, `${cl.cities || 0}곳`)}
                ${row('♾️', '환생', `${cur.rebirth || 0}회`, `${cl.rebirth || 0}회`)}
              </div>
-             <div class="note">${why}<br>어느 쪽을 골라도 지금 세이브는 <b>직전 세이브</b>로 보관되어 설정 탭에서 되돌릴 수 있습니다.</div>`,
-      actions: [
-        { label: '나중에', onClick: () => {} },
-        { label: '📥 클라우드 불러오기', style: rec === 'cloud' ? 'primary' : 'ghost', onClick: () => this.cloudRestore() },
-        { label: '📤 이 기기 세이브 올리기', style: rec === 'local' ? 'primary' : 'ghost', onClick: () => this.cloudUpload({ silent: false }) },
-      ],
+             <div class="note">${why}<br>어느 쪽을 골라도 지금 세이브는 <b>직전 세이브</b>로 보관되어 설정 탭에서 되돌릴 수 있습니다.${noteLoad}</div>`,
+      actions,
     });
   }
 

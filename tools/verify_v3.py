@@ -4391,7 +4391,11 @@ def main():
         rank: { key: 'stage', rows: rows, all: rows, count: 3, at: 5, loading: false, error: '' } };
       const ui = mk(on);
       ui.s.cloud.nick = '효성왕';
+      ui.s.cloud.enabled = true;
       const o = __tpls.settings(ui);
+      // 세션만 남고 이 앱에서 클라우드를 끔(게스트) 상태 — '연결됨'으로 보이면 안 된다
+      const sessionOnly = __tpls.settings(mk({ status: 'online', uid: 'uid-9', user: { email: 'x@e.com' },
+        rank: { key: 'stage', rows: [], all: [], count: 0, at: 0, loading: false, error: '' } }));
       const loading = __tpls.settings(mk({ status: 'connecting', rank: { key: 'asset', rows: [], all: [], count: 0, at: 0, loading: true, error: '' } }));
       const err = __tpls.settings(mk({ status: 'error', lastError: '권한이 없습니다', rank: { key: 'stage', rows: [], all: [], count: 0, at: 1, loading: false, error: '권한이 없습니다' } }));
       return {
@@ -4401,6 +4405,7 @@ def main():
         rank: [o.includes('🥇'), o.includes('rank-row me'), o.includes('내 순위'), o.includes('S40'), o.includes('data-action=\"cloud-rank\" data-value=\"asset\"')],
         emptyGuest: [g.includes('🏆 랭킹 불러오기'), g.includes('data-action=\"cloud-rank-refresh\"')],
         loading: loading.includes('불러오는 중'),
+        sessionOnly: [sessionOnly.includes('이어서 클라우드 켜기'), sessionOnly.includes('로그인 세션'), sessionOnly.includes('data-action=\"cloud-save\"'), sessionOnly.includes('id=\"cloudNick\"')],
         err: err.includes('다시 시도'),
         order: g.indexOf('cloud-card') < g.indexOf('세이브 코드 백업'),
         bad: /undefined|NaN/.test(g + o + loading + err),
@@ -4411,6 +4416,7 @@ def main():
     ok(all(ui48["rank"]), "랭킹 카드 — 메달·내 행 강조·내 순위·총자산·지표 전환", json.dumps(ui48["rank"]))
     ok(all(ui48["emptyGuest"]) and ui48["loading"] and ui48["err"], "랭킹 카드 — 빈 목록/불러오는 중/오류 상태", json.dumps({"e": ui48["emptyGuest"], "l": ui48["loading"], "x": ui48["err"]}))
     ok(ui48["order"], "클라우드 카드는 설정 탭 맨 위(상단 배지에서 바로 보임)")
+    ok(ui48["sessionOnly"] == [True, True, False, False], "세션만 남은 브라우저 — 게스트 카드 + '이어서 켜기'(저장 버튼·닉네임 없음)", json.dumps(ui48["sessionOnly"]))
     ok(ui48["bad"] is False, "v4.8 설정 템플릿에 undefined/NaN 누출 없음")
 
     # ── 9) 화면·서비스워커 · 문서 배선 ──
