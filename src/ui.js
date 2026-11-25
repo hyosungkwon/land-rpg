@@ -450,11 +450,12 @@ export class UI {
       } else if (k === 'tower-run') {
         const t = b && b.tower;
         const last = s.tower && s.tower.last;
+        const bestN = Math.max(0, Math.floor(Number(s.tower && s.tower.best) || 0));
         el.textContent = t
           ? `진행 중 · ${(Math.max(0, t.ends - now) / 1000).toFixed(1)}초`
           : last
             ? (last.how === 'clear' ? `최근 ${last.n}층 클리어` : `최근 ${last.n}층 ${last.how === 'dead' ? '패배' : '시간 초과'}`)
-            : '1층부터 도전';
+            : bestN > 0 ? `최고 ${bestN}층` : '1층부터 도전';
       } else if (k === 'tower-last') {
         const t = b && b.tower;
         const last = s.tower && s.tower.last;
@@ -798,7 +799,7 @@ function towerCard(ui) {
   <div class="card tower-card${tp.allCleared ? ' done' : ''}">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🗼</span>도전의 탑<small>최고 ${tp.best}층 · ♾️ ${tp.max}층까지</small></div>
-      <span class="tiny" style="color:var(--blue)" data-live="tower-run">${running ? `진행 중 · ${(Math.max(0, running.ends - now) / 1000).toFixed(1)}초` : last ? (last.how === 'clear' ? `최근 ${last.n}층 클리어` : `최근 ${last.n}층 ${last.how === 'dead' ? '패배' : '시간 초과'}`) : '1층부터 도전'}</span>
+      <span class="tiny" style="color:var(--blue)" data-live="tower-run">${running ? `진행 중 · ${(Math.max(0, running.ends - now) / 1000).toFixed(1)}초` : last ? (last.how === 'clear' ? `최근 ${last.n}층 클리어` : `최근 ${last.n}층 ${last.how === 'dead' ? '패배' : '시간 초과'}`) : tp.best > 0 ? `최고 ${tp.best}층` : '1층부터 도전'}</span>
     </div>
     <div class="tower-tiles">${tiles}</div>
     <div class="tower-deep${deep ? ' on' : ''}">
@@ -834,7 +835,7 @@ function dailyBossCard(ui) {
   const d = b && b.daily;
   const last = di.last;
   const boss = di.boss;
-  const best = di.best > 0 ? `${di.grade.icon} ${di.bestGrade} · ${fmt(di.best)}` : '기록 없음';
+  const best = di.best > 0 ? `${di.grade.icon} ${di.bestGrade} · ${fmt(di.best)} 피해` : '기록 없음';
   return `
   <div class="card daily-card">
     <div class="card-head">
@@ -855,7 +856,7 @@ function dailyBossCard(ui) {
           ? `최근 ${esc(dailyGradeText(last.grade, last.ratio))} · 피해 ${fmt(last.dmg)} · 💰${fmt(last.gold)} 💎${fmt(last.shards)}${last.points ? ` ✨${last.points}P` : ''}`
           : '30초 동안 누적 피해로 등급 보상 — 패배해도 받은 피해만큼 지급'
     }</div>
-    <div class="tiny dim ellip" style="margin-top:2px">최고 ${esc(best)} 피해 · 매일 00:00(KST) 횟수 리셋</div>
+    <div class="tiny dim ellip" style="margin-top:2px">${di.best > 0 ? `최고 ${esc(best)}` : '최고 기록 없음'} · 매일 00:00(KST) 횟수 리셋</div>
   </div>`;
 }
 
