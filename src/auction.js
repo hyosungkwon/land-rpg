@@ -124,7 +124,8 @@ export function auctionStatus(state, now = Date.now()) {
     : lot.marketValue;
   const discountPct = Math.round((1 - price / lot.marketValue) * 100);
   const leftMs = live ? Math.max(0, AUCTION.liveMs - elapsed) : 0;
-  const nextMs = live ? 0 : Math.max(0, AUCTION.everyMs - elapsed);
+  // 다음 경매(다음 20분 블록)까지 — 낙찰 완료·준비 시간 모두 같은 기준으로 센다
+  const nextMs = Math.max(0, AUCTION.everyMs - elapsed);
   return {
     block: lot.block,
     lot,

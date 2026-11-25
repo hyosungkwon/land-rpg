@@ -3673,6 +3673,7 @@ def main():
         midPhase: mid.phase, midPrice: mid.price, midProg: mid.progress, midDisc: mid.discountPct,
         latePrice: late.price, gapPhase: gap.phase, gapPrice: gap.price, gapNext: gap.nextMs, gapLive: gap.live,
         donePhase: done.phase, doneCan: done.canBid, left0: at0.leftMs, canBid0: at0.canBid,
+        doneNext: done.nextMs, gapNext2: gap.nextMs, at0Next: at0.nextMs,
       };
     """)
     ok(phase46["phase0"] == "live" and phase46["canBid0"] is True and phase46["price0"] == phase46["startBid"] and phase46["left0"] == 720000, "경매 시작 — 최저 입찰가로 열리고 12분 남음", json.dumps({k: phase46[k] for k in ["phase0", "price0", "startBid", "left0"]}))
@@ -3680,6 +3681,7 @@ def main():
     ok(phase46["latePrice"] > phase46["midPrice"] and phase46["midDisc"] < 45, "늦게 낙찰할수록 비싸다(할인 감소)", json.dumps({"mid": phase46["midPrice"], "late": phase46["latePrice"]}))
     ok(phase46["gapPhase"] == "gap" and phase46["gapLive"] is False and phase46["gapPrice"] == phase46["market"] and 0 < phase46["gapNext"] <= 480000, "입찰 종료 후 준비 시간 — 다음 경매까지 카운트다운", json.dumps({k: phase46[k] for k in ["gapNext", "gapPrice"]}))
     ok(phase46["donePhase"] == "done" and phase46["doneCan"] is False, "이번 경매 낙찰 후에는 입찰 불가", json.dumps({"phase": phase46["donePhase"]}))
+    ok(phase46["at0Next"] == 1200000 and 0 < phase46["doneNext"] < 1200000 and phase46["gapNext"] <= 480000, "낙찰 완료·준비 시간에도 '다음 경매' 카운트다운이 남는다(0:00 고정 없음)", json.dumps({"at0": phase46["at0Next"], "done": phase46["doneNext"], "gap": phase46["gapNext"]}))
 
     # ── 10) 입찰 견적 거부 사유 ──
     quote46 = js(ctx, """
