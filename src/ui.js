@@ -41,6 +41,8 @@ import {
   gearIcon, gearItem, gearList, gearOwned, gearOptionList, gearOptionSummary,
   equippedItem, equippedRarity, gearCollection, gearSlotCounts, dismantleValue,
   dismantleTargets, AUTO_DISMANTLE_MODES, autoDismantleIdx, autoDismantleLabel, normalizeAutoMode,
+  GEAR_PRESET_NAMES, GEAR_AWAKEN_MAX, GEAR_AWAKEN_BONUS_LV, GEAR_AWAKEN_OPT_PCT,
+  awakenLevel, awakenCost, gearPresetSummary,
 } from './gear.js';
 import {
   REBIRTH, REBIRTH_TRAITS, rebirthStatus, rebirthBonus, traitLevel, traitCost, traitSummary,
@@ -186,6 +188,9 @@ export class UI {
       case 'gear-dismantle': actions.dismantleGearItem(Number(v)); break;
       case 'gear-bulk': actions.bulkDismantleGear(v); break;
       case 'gear-auto': actions.setGearAuto(v); break;
+      case 'gear-preset-apply': actions.applyGearPreset(Number(v)); break;
+      case 'gear-preset-save': actions.saveGearPreset(Number(v)); break;
+      case 'gear-awaken': actions.awakenGear(slot || v); break;
       case 'cast-ult': actions.castUltimate(); break;
       case 'toggle-auto-skill': actions.toggleAutoSkill(); break;
       case 'toggle-auto-ult': actions.toggleAutoUlt(); break;
@@ -1456,21 +1461,30 @@ const optChips = (item, max = 3) => {
   return list.slice(0, max).map((o) => `<span class="opt">${esc(o.text)}</span>`).join('');
 };
 
-/** ⚔️ 현재 장착 중인 5부위 슬롯 카드 */
+/** ⚔️ 현재 장착 중인 5부위 슬롯 카드 + v4.10 원탭 프리셋 3슬롯 */
 function gearSlotCards(s) {
+  const presets = GEAR_PRESET_NAMES.map((m) => {
+    const ps = gearPresetSummary(s, m.id);
+    return `<div class="gp-slot${ps.active ? ' on' : ''}">
+      <button class="gp-apply" type="button" data-action="gear-preset-apply" data-value="${m.id}" ${ps.saved ? '' : 'disabled'}>${m.icon} ${m.name}<small>${ps.saved ? `${ps.owned}/${ps.saved}` : '비어있음'}</small></button>
+      <button class="gp-save" type="button" data-action="gear-preset-save" data-value="${m.id}" title="현재 장착을 ${m.name} 프리셋에 저장">💾</button>
+    </div>`;
+  }).join('');
+
   const rows = EQUIP_SLOTS.map((slot) => {
     const def = EQUIP[slot];
     const it = equippedItem(s, slot);
     const rid = equippedRarity(s, slot);
     const lv = s.equip[slot];
+    const awk = awakenLevel(s, slot);
     const uid = slotUid(s, slot);
     const idAttr = it && uid ? ` data-action="gear-item" data-value="${uid}"` : ' disabled';
     return `
       <button class="gslot${it ? ' on' : ' empty'}" type="button"${idAttr}>
         <span class="gs-ico">${it ? gearIcon(it, 40) : `<b class="gs-none">${def.icon}</b>`}</span>
         <span class="gs-mid">
-          <span class="gs-name">${it ? esc(it.name) : `${def.name} 없음`}${rarityBadge(rid)}</span>
-          <span class="gs-sub">${def.icon} ${def.name} <b class="lv">+${lv}</b>${it ? '' : ' · 뽑기·사냥으로 획득'}</span>
+          <span class="gs-name">${it ? esc(it.name) : `${def.name} 없음`}${rarityBadge(rid)}${awk > 0 ? `<span class="awk-badge">🔥★${awk}</span>` : ''}</span>
+          <span class="gs-sub">${def.icon} ${def.name} <b class="lv">+${lv}</b>${awk > 0 ? ` · 각성 +${awk * GEAR_AWAKEN_BONUS_LV}강` : ''}${it ? '' : ' · 뽑기·사냥으로 획득'}</span>
           <span class="gs-opts">${it ? optChips(it, 2) : '<span class="opt dim">장착하면 고유 옵션이 붙습니다</span>'}</span>
         </span>
       </button>`;
@@ -1479,8 +1493,9 @@ function gearSlotCards(s) {
   <div class="card">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">⚔️</span>장착 중 <small>5부위</small></div>
-      <span class="tiny dim">장비를 눌러 비교·교체</span>
+      <span class="tiny dim">프리셋 1탭 전환 · 장비 눌러 비교</span>
     </div>
+    <div class="gear-presets">${presets}</div>
     <div class="gear-slots">${rows}</div>
   </div>`;
 }
@@ -1639,21 +1654,34 @@ function tplGear(ui) {
       const rid = equippedRarity(s, slot);
       const it = equippedItem(s, slot);
       const bonus = rarityBonusLv(rid);
+      const awk = awakenLevel(s, slot);
+      const awkBonus = awk * GEAR_AWAKEN_BONUS_LV;
       const maxed = lv >= EQUIP_MAX_LV;
       const cost = enhanceCost(lv);
-      const effLv = lv + bonus;
+      const effLv = lv + bonus + awkBonus;
       const cur = def.per * effLv;
       const next = def.per * (effLv + 1);
       const maxN = maxed ? 0 : enhanceMaxCount(s, slot);
       const unitText = (v) => (slot === 'ring' ? `${v.toFixed(1)}%` : slot === 'amulet' ? `+${Math.round(v)}%` : `+${fmt(v)}`);
+      // v4.10 부위 각성 (+100강 도달 시 해금 · 환생 후에도 유지)
+      const ac = awakenCost(awk);
+      const canAwk = maxed && ac && s.shards >= ac.shards && s.gold >= ac.gold;
+      const awkRow = maxed || awk > 0
+        ? `<div class="g-awk">
+            <span class="tiny">${awk > 0 ? `<b style="color:var(--gold)">🔥 각성 ★${awk}/${GEAR_AWAKEN_MAX}</b> · 부위 +${awkBonus}강 · 옵션 +${awk * GEAR_AWAKEN_OPT_PCT}%` : '🔥 +100강 도달 — 부위 각성 가능 (환생 유지)'}</span>
+            ${ac
+              ? `<button class="btn small ${canAwk ? 'primary' : 'ghost'}" type="button" data-action="gear-awaken" data-slot="${slot}" ${canAwk ? '' : 'disabled'}>🔥 각성 💎${fmt(ac.shards)} 💰${formatGold(ac.gold)}</button>`
+              : '<span class="tiny" style="color:var(--gold)">최종 각성 MAX</span>'}
+          </div>`
+        : '';
       return `
       <div class="gear-row">
         <div class="g-top">
           <div class="g-ico">${it ? gearIcon(it, 38) : def.icon}</div>
           <div class="g-mid">
-            <div class="g-name">${it ? esc(it.name) : def.name}${rarityBadge(rid)}<span class="lv">+${lv}</span></div>
+            <div class="g-name">${it ? esc(it.name) : def.name}${rarityBadge(rid)}<span class="lv">+${lv}</span>${awk > 0 ? `<span class="awk-badge">★${awk}</span>` : ''}</div>
             <div class="g-stat">${def.stat} ${unitText(cur)}${maxed ? ' · 최대' : ` → <b style="color:var(--green)">${unitText(next)}</b>`}</div>
-            ${bonus > 0 ? `<div class="g-rar">등급 보정 +${bonus}강 상당</div>` : ''}
+            ${(bonus > 0 || awkBonus > 0) ? `<div class="g-rar">${[bonus > 0 ? `등급 보정 +${bonus}강` : '', awkBonus > 0 ? `각성 +${awkBonus}강` : ''].filter(Boolean).join(' · ')}</div>` : ''}
           </div>
         </div>
         <div class="g-acts">
@@ -1664,6 +1692,7 @@ function tplGear(ui) {
           <button class="btn small ghost" data-action="enhance10" data-slot="${slot}" ${maxN < 1 ? 'disabled' : ''}>+10</button>
           <button class="btn small ghost g-max" data-action="enhancemax" data-slot="${slot}" ${maxN < 1 ? 'disabled' : ''}>최대${maxN > 0 ? ` +${maxN}` : ''}</button>
         </div>
+        ${awkRow}
       </div>`;
     })
     .join('');

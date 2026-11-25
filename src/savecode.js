@@ -136,7 +136,16 @@ export function compactSave(state) {
     delete c.land.sort;
   }
   if (c.news && typeof c.news === 'object') c.news.log = [];
-  if (c.gear && typeof c.gear === 'object') delete c.gear.filter; // 화면 필터는 담지 않는다
+  if (c.gear && typeof c.gear === 'object') {
+    delete c.gear.filter; // 화면 필터는 담지 않는다
+    if (Array.isArray(c.gear.presets) && !c.gear.presets.some((p) => p && Object.values(p).some(Boolean))) {
+      delete c.gear.presets;
+      delete c.gear.activePreset;
+    }
+    if (c.gear.awaken && !Object.values(c.gear.awaken).some((v) => Number(v) > 0)) {
+      delete c.gear.awaken;
+    }
+  }
   // v4.9: 일일 퀘스트는 진행·수령 기록이 없으면 생략해 코드 길이를 줄인다
   if (c.dailyQuests && typeof c.dailyQuests === 'object') {
     const p = c.dailyQuests.progress && typeof c.dailyQuests.progress === 'object' ? c.dailyQuests.progress : {};

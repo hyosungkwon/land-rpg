@@ -2413,3 +2413,34 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .cx-st { font-size: 9.5px; padding: 1px 5px; border-radius: 5px; background: rgba(255,255,255,0.04); color: var(--dim); border: 1px solid var(--line-2); }
 .cx-st.on { color: var(--gold); border-color: rgba(255, 207, 92, 0.4); background: rgba(255, 207, 92, 0.09); }
 
+/* ══════════════ v4.10.0 장비 프리셋 · 부위 각성 ══════════════ */
+.gear-presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 9px; }
+.gp-slot {
+  display: flex; align-items: stretch; border-radius: 9px; overflow: hidden;
+  border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.03);
+}
+.gp-slot.on { border-color: rgba(255, 207, 92, 0.55); background: rgba(255, 207, 92, 0.09); }
+.gp-apply {
+  flex: 1 1 auto; min-width: 0; border: 0; background: transparent; color: var(--txt);
+  padding: 5px 6px; text-align: left; cursor: pointer;
+  display: flex; flex-direction: column; gap: 1px; font-size: 11px; font-weight: 800;
+}
+.gp-apply small { font-size: 9px; color: var(--dim); font-weight: 700; }
+.gp-apply:disabled { opacity: 0.48; cursor: default; }
+.gp-save {
+  flex: 0 0 28px; border: 0; border-left: 1px solid var(--line-2);
+  background: rgba(255, 255, 255, 0.04); color: var(--sub);
+  cursor: pointer; font-size: 12px; display: grid; place-items: center;
+}
+.gp-save:active { background: rgba(255, 207, 92, 0.2); }
+.awk-badge {
+  display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 6px;
+  font-size: 9.5px; font-weight: 900; color: #1a1004;
+  background: linear-gradient(135deg, #ffd76a, #ff7a3d);
+}
+.g-awk {
+  margin-top: 7px; padding-top: 7px; border-top: 1px dashed var(--line-2);
+  display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap;
+}
+
+

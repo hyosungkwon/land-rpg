@@ -359,6 +359,24 @@ export function autoDismantleLabel(s) {
 export const GEAR_MAX_ITEMS = 120; // 인벤토리 상한 — 넘치면 가장 약한(미장착) 장비부터 자동 분해
 export const GEAR_FILTERS = ['all', ...EQUIP_SLOTS];
 
+/* ────────────────────────────── v4.10.0 장비 프리셋 · 부위 각성 ────────────────────────────── */
+export const GEAR_PRESET_NAMES = [
+  { id: 0, icon: '⚔️', name: '사냥' },
+  { id: 1, icon: '👑', name: '보스' },
+  { id: 2, icon: '🗼', name: '탑' },
+];
+export const GEAR_PRESET_COUNT = GEAR_PRESET_NAMES.length;
+export const GEAR_AWAKEN_MAX = 10;
+export const GEAR_AWAKEN_BONUS_LV = 5; // 각성 1단계당 부위 강화 +5강 상당
+export const GEAR_AWAKEN_OPT_PCT = 8;  // 각성 1단계당 장착 장비 고유 옵션 +8% 증폭
+
+export function emptyPreset() {
+  return { weapon: null, armor: null, helmet: null, ring: null, amulet: null };
+}
+export function emptyAwaken() {
+  return { weapon: 0, armor: 0, helmet: 0, ring: 0, amulet: 0 };
+}
+
 export function newGearState() {
   return {
     items: [],                       // [{ uid, id, at }]
@@ -370,6 +388,9 @@ export function newGearState() {
     bulk: 0,                         // 일괄 분해로 정리한 수
     autoDismantle: 'off',            // v4.7 자동분해 등급 기준
     auto: { count: 0, shards: 0 },   // v4.7 자동분해 누적(건수 · 강화석)
+    presets: [emptyPreset(), emptyPreset(), emptyPreset()], // v4.10 장비 프리셋 3슬롯
+    activePreset: -1,                // 마지막 적용 프리셋(-1 = 없음)
+    awaken: emptyAwaken(),           // v4.10 부위 각성 레벨(0~10, 환생 시 영구 유지)
   };
 }
 
@@ -416,6 +437,27 @@ export function normalizeGear(raw, legacyRarity, now = 0) {
     count: Math.max(0, Math.floor(Number(rawAuto.count) || 0)),
     shards: Math.max(0, Math.floor(Number(rawAuto.shards) || 0)),
   };
+  // v4.10: 장비 프리셋 3슬롯 정규화
+  const rawPresets = Array.isArray(src.presets) ? src.presets : [];
+  g.presets = [];
+  for (let i = 0; i < GEAR_PRESET_COUNT; i++) {
+    const p = rawPresets[i] && typeof rawPresets[i] === 'object' ? rawPresets[i] : {};
+    const clean = emptyPreset();
+    for (const slot of EQUIP_SLOTS) {
+      const id = typeof p[slot] === 'string' ? p[slot] : null;
+      const def = id ? gearItem(id) : null;
+      clean[slot] = def && def.slot === slot ? def.id : null;
+    }
+    g.presets.push(clean);
+  }
+  const ap = Math.floor(Number(src.activePreset));
+  g.activePreset = Number.isFinite(ap) && ap >= 0 && ap < GEAR_PRESET_COUNT ? ap : -1;
+  // v4.10: 부위 각성 레벨(0~10) 정규화
+  const rawAwk = src.awaken && typeof src.awaken === 'object' ? src.awaken : {};
+  g.awaken = emptyAwaken();
+  for (const slot of EQUIP_SLOTS) {
+    g.awaken[slot] = Math.max(0, Math.min(GEAR_AWAKEN_MAX, Math.floor(Number(rawAwk[slot]) || 0)));
+  }
 
   // v3 → v4 마이그레이션: 등급만 있던 저장본을 '그 등급의 장비'로 바꿔 끼운다.
   // (강화 레벨 s.equip 은 부위에 남아 있으므로 그대로 이어진다)
@@ -622,7 +664,109 @@ export function bulkDismantle(s, mode = 'low') {
   return { ok: true, count: targets.length, shards, items: targets.map((row) => row.def) };
 }
 
-/** 장착 아이템 옵션 합계 — calcStats 가 읽는다 */
+/** 부위 각성 레벨(0~10) */
+export function awakenLevel(s, slot) {
+  const v = s && s.gear && s.gear.awaken && s.gear.awaken[slot];
+  return Math.max(0, Math.min(GEAR_AWAKEN_MAX, Math.floor(Number(v) || 0)));
+}
+
+/** 각성 1단계 비용(강화석 + 골드) — 최대치면 null */
+export function awakenCost(lv) {
+  const cur = Math.max(0, Math.floor(Number(lv) || 0));
+  if (cur >= GEAR_AWAKEN_MAX) return null;
+  return {
+    shards: Math.round(120 * Math.pow(1.45, cur)),
+    gold: Math.round(50000 * Math.pow(1.65, cur)),
+  };
+}
+
+/** 부위 각성 실행 — +100강 도달 부위만 가능(각성 레벨은 환생 후에도 영구 유지) */
+export function awakenSlot(s, slot, maxEquipLv = 100) {
+  if (!s || !EQUIP_SLOTS.includes(slot)) return { ok: false, reason: '알 수 없는 부위입니다.' };
+  if (!s.gear) s.gear = newGearState();
+  if (!s.gear.awaken || typeof s.gear.awaken !== 'object') s.gear.awaken = emptyAwaken();
+  const eqLv = Math.max(0, Math.floor(Number((s.equip || {})[slot]) || 0));
+  if (eqLv < maxEquipLv) return { ok: false, reason: `강화 +${maxEquipLv}강 달성 후 각성할 수 있습니다.` };
+  const lv = awakenLevel(s, slot);
+  if (lv >= GEAR_AWAKEN_MAX) return { ok: false, reason: '이미 최종 각성 단계입니다.', max: true };
+  const cost = awakenCost(lv);
+  if (Math.floor(Number(s.shards) || 0) < cost.shards) {
+    return { ok: false, reason: `강화석이 부족합니다. (필요 💎${cost.shards.toLocaleString()})`, cost };
+  }
+  if (Math.floor(Number(s.gold) || 0) < cost.gold) {
+    return { ok: false, reason: `골드가 부족합니다. (필요 💰${cost.gold.toLocaleString()})`, cost };
+  }
+  s.shards = Math.floor(s.shards - cost.shards);
+  s.gold = Math.floor(s.gold - cost.gold);
+  s.gear.awaken[slot] = lv + 1;
+  return { ok: true, slot, lv: lv + 1, spent: cost, max: lv + 1 >= GEAR_AWAKEN_MAX };
+}
+
+/** 프리셋에 현재 장착 장비 5부위 저장 */
+export function saveGearPreset(s, idx) {
+  const i = Math.floor(Number(idx));
+  if (!s || !Number.isFinite(i) || i < 0 || i >= GEAR_PRESET_COUNT) return { ok: false, reason: '잘못된 프리셋 슬롯입니다.' };
+  if (!s.gear) s.gear = newGearState();
+  if (!Array.isArray(s.gear.presets)) s.gear.presets = [emptyPreset(), emptyPreset(), emptyPreset()];
+  while (s.gear.presets.length < GEAR_PRESET_COUNT) s.gear.presets.push(emptyPreset());
+  const snap = emptyPreset();
+  let count = 0;
+  for (const slot of EQUIP_SLOTS) {
+    const it = equippedItem(s, slot);
+    snap[slot] = it ? it.id : null;
+    if (it) count += 1;
+  }
+  if (count === 0) return { ok: false, reason: '장착 중인 장비가 없습니다.' };
+  s.gear.presets[i] = snap;
+  s.gear.activePreset = i;
+  return { ok: true, idx: i, count, preset: snap, meta: GEAR_PRESET_NAMES[i] };
+}
+
+/** 프리셋 원탭 적용 — 보유 중인 장비 일괄 장착 */
+export function applyGearPreset(s, idx) {
+  const i = Math.floor(Number(idx));
+  if (!s || !Number.isFinite(i) || i < 0 || i >= GEAR_PRESET_COUNT) return { ok: false, reason: '잘못된 프리셋 슬롯입니다.' };
+  const g = s.gear;
+  const snap = g && Array.isArray(g.presets) ? g.presets[i] : null;
+  if (!snap || !EQUIP_SLOTS.some((slot) => !!snap[slot])) {
+    return { ok: false, reason: '저장된 프리셋이 비어 있습니다. 먼저 💾 저장을 눌러 주세요.' };
+  }
+  let applied = 0;
+  let missing = 0;
+  for (const slot of EQUIP_SLOTS) {
+    const wantId = snap[slot];
+    if (!wantId) continue;
+    const row = (g.items || []).find((x) => x.id === wantId);
+    if (!row) {
+      missing += 1;
+      continue;
+    }
+    g.equipped[slot] = row.uid;
+    applied += 1;
+  }
+  if (applied === 0) return { ok: false, reason: '프리셋에 저장된 장비를 현재 보유하고 있지 않습니다.' };
+  g.activePreset = i;
+  syncGearRarity(s);
+  return { ok: true, idx: i, applied, missing, meta: GEAR_PRESET_NAMES[i] };
+}
+
+/** 프리셋 슬롯 요약(UI용) */
+export function gearPresetSummary(s, idx) {
+  const i = Math.floor(Number(idx));
+  const meta = GEAR_PRESET_NAMES[i] || GEAR_PRESET_NAMES[0];
+  const g = s && s.gear;
+  const snap = g && Array.isArray(g.presets) && g.presets[i] ? g.presets[i] : emptyPreset();
+  let saved = 0;
+  let owned = 0;
+  for (const slot of EQUIP_SLOTS) {
+    if (!snap[slot]) continue;
+    saved += 1;
+    if ((g.items || []).some((x) => x.id === snap[slot])) owned += 1;
+  }
+  return { idx: i, ...meta, saved, owned, active: !!(g && g.activePreset === i) };
+}
+
+/** 장착 아이템 옵션 합계 — calcStats 가 읽는다 (v4.10 부위 각성 +8%/Lv 증폭 포함) */
 export function gearMods(s) {
   const out = {};
   for (const k of GEAR_OPT_KEYS) out[k] = 0;
@@ -630,9 +774,10 @@ export function gearMods(s) {
   for (const slot of EQUIP_SLOTS) {
     const it = equippedItem(s, slot);
     if (!it || !it.opts) continue;
+    const mul = 1 + (awakenLevel(s, slot) * GEAR_AWAKEN_OPT_PCT) / 100;
     for (const k of GEAR_OPT_KEYS) {
       const v = Number(it.opts[k]);
-      if (isFinite(v) && v > 0) out[k] += v;
+      if (isFinite(v) && v > 0) out[k] += Math.round(v * mul * 10) / 10;
     }
   }
   return out;

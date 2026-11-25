@@ -12,7 +12,7 @@ import {
 } from './rebirth.js';
 import {
   newGearState, normalizeGear, syncGearRarity, gearMods, acquireGear, equippedRarity,
-  shouldAutoEquip, randomItemOfRarity, gearItem, GEAR_BY_RARITY,
+  shouldAutoEquip, randomItemOfRarity, gearItem, GEAR_BY_RARITY, awakenLevel, GEAR_AWAKEN_BONUS_LV,
 } from './gear.js';
 import { defaultLand } from './land.js';
 import { normalizeAuctionState } from './auction.js';
@@ -351,8 +351,8 @@ export function calcStats(s, buffs = NO_BUFF) {
   const L = s.level;
   const e = s.equip;
   const gr = s.gearRarity || {};
-  // 등급 보정: 장비 강화 레벨에 등급 환산 레벨을 더한다(전설 +25강 상당).
-  const eLv = (slot) => e[slot] + rarityBonusLv(gr[slot]);
+  // 등급 보정 + v4.10 부위 각성 보정(각성 1단계당 +5강 상당, 환생 후에도 영구 유지)
+  const eLv = (slot) => e[slot] + rarityBonusLv(gr[slot]) + awakenLevel(s, slot) * GEAR_AWAKEN_BONUS_LV;
   // v4.0: 장착 장비의 고유 옵션 합계(흡혈·공속·보스 추뎀·치명타·방어·회복·골드·드랍·범위 베기)
   const gm = gearMods(s);
   const job = jobOf(s);

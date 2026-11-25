@@ -10,6 +10,7 @@ import {
   gearItem, gearIcon, gearOptionList, equippedItem, equippedRarity, gearOwned, gearOptionSummary,
   equipGear, dismantleGear, bulkDismantle, dismantleTargets, dismantleValue, itemScore, GEAR_OPTS,
   normalizeAutoMode, autoDismantleLabel,
+  saveGearPreset as saveGearPresetState, applyGearPreset as applyGearPresetState, awakenSlot as awakenSlotState,
 } from './src/gear.js';
 
 const GEAR_OPT_LABEL = (k) => (GEAR_OPTS[k] ? `${GEAR_OPTS[k].icon} ${GEAR_OPTS[k].name}` : k);
@@ -1243,6 +1244,49 @@ class App {
           m === 'off' ? '♻️ 자동분해 꺼짐 — 새 장비는 모두 보관됩니다' : `♻️ 자동분해 — ${autoDismantleLabel(this.s)} 장비는 즉시 💎`,
           m === 'off' ? '' : 'green',
         );
+        this.ui.render();
+      },
+
+      /* ── 🗂️🔥 v4.10 장비 프리셋 · 부위 각성 ── */
+      saveGearPreset: (idx) => {
+        this.sound.unlock();
+        const r = saveGearPresetState(this.s, idx);
+        if (!r.ok) {
+          this.ui.toast(r.reason || '프리셋을 저장할 수 없습니다', 'red');
+          return;
+        }
+        this.save(true);
+        this.sound.ui();
+        this.ui.toast(`💾 ${r.meta.icon} ${r.meta.name} 프리셋 저장 (${r.count}부위)`, 'green');
+        this.ui.render();
+      },
+      applyGearPreset: (idx) => {
+        this.sound.unlock();
+        const r = applyGearPresetState(this.s, idx);
+        if (!r.ok) {
+          this.ui.toast(r.reason || '프리셋을 적용할 수 없습니다', 'red');
+          return;
+        }
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.ui();
+        const miss = r.missing ? ` (미보유 ${r.missing}부위 제외)` : '';
+        this.ui.toast(`🗂️ ${r.meta.icon} ${r.meta.name} 프리셋 장착! (${r.applied}부위${miss})`, 'gold');
+        this.ui.render();
+      },
+      awakenGear: (slot) => {
+        this.sound.unlock();
+        const r = awakenSlotState(this.s, slot, EQUIP_MAX_LV);
+        if (!r.ok) {
+          this.ui.toast(r.reason || '각성할 수 없습니다', 'red');
+          return;
+        }
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.fanfare();
+        const def = EQUIP[slot];
+        this.ui.toast(`🔥 ${def.icon} ${def.name} 각성 ★${r.lv}! (💎${r.spent.shards.toLocaleString()} · 💰${formatGold(r.spent.gold)})`, 'gold');
+        this.ui.addLog(`🔥 <b>${def.name} 각성 ★${r.lv}</b> — 부위 강화 +5강 · 고유 옵션 +8%`);
         this.ui.render();
       },
 
