@@ -38,6 +38,8 @@ export const REGION_SETS = [
       { need: 6, buffs: { rentPct: 16 } },
       { need: 10, buffs: { rentPct: 26 } },
     ],
+    // v4.6 권역 완성(최대 단계) — 전투 시너지
+    master: { critDmgPct: 6 },
   },
   {
     id: 'gyeonggi', name: '경기·인천권', icon: '🏭', color: '#5ee1a3',
@@ -47,6 +49,7 @@ export const REGION_SETS = [
       { need: 6, buffs: { atkPct: 8 } },
       { need: 10, buffs: { atkPct: 14 } },
     ],
+    master: { atkPct: 5 },
   },
   {
     id: 'gangwon', name: '강원권', icon: '⛰️', color: '#a8e6ff',
@@ -56,6 +59,7 @@ export const REGION_SETS = [
       { need: 4, buffs: { dropPct: 10 } },
       { need: 7, buffs: { dropPct: 18 } },
     ],
+    master: { dropPct: 6 },
   },
   {
     id: 'chungcheong', name: '충청권', icon: '🌾', color: '#ffcf5c',
@@ -65,6 +69,7 @@ export const REGION_SETS = [
       { need: 6, buffs: { goldPct: 8 } },
       { need: 10, buffs: { goldPct: 14 } },
     ],
+    master: { goldPct: 5 },
   },
   {
     id: 'jeolla', name: '전라권', icon: '🌿', color: '#7fe08a',
@@ -74,6 +79,7 @@ export const REGION_SETS = [
       { need: 6, buffs: { rentPct: 10 } },
       { need: 10, buffs: { rentPct: 18 } },
     ],
+    master: { expPct: 5 },
   },
   {
     id: 'gyeongsang', name: '경상권', icon: '🚢', color: '#ff9a7a',
@@ -83,6 +89,7 @@ export const REGION_SETS = [
       { need: 6, buffs: { atkPct: 6 } },
       { need: 12, buffs: { atkPct: 12 } },
     ],
+    master: { bossDmgPct: 6 },
   },
   {
     id: 'jeju', name: '제주권', icon: '🏝️', color: '#ffd76a',
@@ -91,6 +98,7 @@ export const REGION_SETS = [
       { need: 1, buffs: { goldPct: 3, rentPct: 4 } },
       { need: 2, buffs: { goldPct: 7, rentPct: 10 } },
     ],
+    master: { cdrPct: 4 },
   },
 ];
 
@@ -103,14 +111,21 @@ const BUFF_LABELS = {
   hpPct: '최대 체력',
   critPct: '치명타',
   dropPct: '드롭률',
+  // v4.6 부동산 → 전투 시너지(랜드마크 · 권역 완성)
+  critDmgPct: '치명타 피해',
+  cdrPct: '스킬 쿨감',
+  bossDmgPct: '보스 피해',
+  expPct: '경험치',
 };
+// 쿨타임 감소는 '줄어든다'는 뜻이라 '-'로 적는다(스킬 쿨감 -4%)
+const BUFF_NEGATIVE = { cdrPct: true };
 
 /** { rentPct: 8, atkPct: 4 } → "임대수익 +8% · 공격력 +4%" */
 export function buffText(b) {
   if (!b || typeof b !== 'object') return '';
   return Object.keys(BUFF_LABELS)
     .filter((k) => Number(b[k]) > 0)
-    .map((k) => `${BUFF_LABELS[k]} +${b[k]}%`)
+    .map((k) => `${BUFF_LABELS[k]} ${BUFF_NEGATIVE[k] ? '-' : '+'}${b[k]}%`)
     .join(' · ');
 }
 
@@ -196,6 +211,8 @@ export function regionSetStatus(owned) {
     for (let i = 0; i < def.levels.length; i++) if (held >= def.levels[i].need) level = i + 1;
     const cur = level > 0 ? def.levels[level - 1] : null;
     const next = level < def.levels.length ? def.levels[level] : null;
+    const maxLevel = def.levels.length;
+    const complete = level >= maxLevel;
     return {
       id: def.id,
       name: def.name,
@@ -205,13 +222,19 @@ export function regionSetStatus(owned) {
       held,
       total: def.keyList.length,
       level,
-      maxLevel: def.levels.length,
+      maxLevel,
+      // v4.6: 완성(=최대 단계)까지 필요한 지역 수 — 진행 안내용
+      maxNeed: def.levels[maxLevel - 1] ? def.levels[maxLevel - 1].need : 0,
+      complete,
       need: next ? next.need : null,
       nextNeed: next ? next.need : null,
       buffs: cur ? { ...cur.buffs } : {},
       nextBuffs: next ? { ...next.buffs } : null,
       buffText: buffText(cur ? cur.buffs : null),
       nextText: next ? `${next.need}곳 → ${buffText(next.buffs)}` : (cur ? '최대 달성' : ''),
+      // v4.6: 권역 완성 보너스(최대 단계에서만 적용) — synergy.js 가 합산한다
+      masterBuffs: def.master ? { ...def.master } : {},
+      masterText: buffText(def.master),
     };
   });
 }

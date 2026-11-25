@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""land-rpg v4.5.0 검증 (QuickJS + 정적 검사)
+"""land-rpg v4.6.0 검증 (QuickJS + 정적 검사)
 
 1) 모든 JS 파일 문법(파싱) 검사
 2) 정적 검사 (Firebase/로그인 흔적 0, 저장 키 v3, sw 캐시 v3.5)
@@ -25,8 +25,8 @@ import sys
 import quickjs
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/land.js", "src/rebirth.js", "src/meta.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/render.js", "src/ui.js", "src/sound.js"]
+FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/render.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -95,8 +95,10 @@ def main():
     for bad in ["firebase", "signInWithPopup", "Google 로그인", "gstatic", "firebaseio", "googleapis"]:
         ok(bad.lower() not in text_all.lower(), f"Firebase/로그인 흔적 없음: {bad}")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v4.5.0" in read("sw.js"), "SW 캐시 버전 v4.5.0")
-    ok("APP_VERSION = '4.5.0'" in read("src/data.js"), "앱 버전 v4.5.0")
+    ok("land-rpg-v4.6.0" in read("sw.js"), "SW 캐시 버전 v4.6.0")
+    ok("APP_VERSION = '4.6.0'" in read("src/data.js"), "앱 버전 v4.6.0")
+    ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
+    ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
     ok(os.path.exists(os.path.join(ROOT, "src/savecode.js")), "src/savecode.js 존재")
     ok("'./src/savecode.js'" in read("sw.js"), "sw.js 프리캐시에 savecode.js 포함")
     ok("'./src/gear.js'" in read("sw.js"), "sw.js 프리캐시에 gear.js 포함")
@@ -2346,7 +2348,7 @@ def main():
     ok(all(x in read("src/state.js") for x in ["gearMods", "normalizeGear", "syncGearRarity", "compareGear"]), "상태에 장비 옵션·마이그레이션·비교 반영(state.js)")
     css4 = read("style.css")
     ok(all(x in css4 for x in [".gear-slots", ".gslot", ".inv-grid", ".inv-card", ".cmp-vs", ".cmp-opts", ".cmp-stats", ".iv-eq", ".gsvg"]), "v4 장비 UI CSS(슬롯·그리드·비교 모달)")
-    ok("장비 시스템" in read("README.md") and "4.5.0" in read("README.md"), "README v4.5.0 반영")
+    ok("장비 시스템" in read("README.md") and "4.6.0" in read("README.md"), "README v4.6.0 반영")
 
     # ══════════════════════════════════════════════════════════════════════
     section("[17] 🖼️ v4.1 테마 배경 · ♾️ 환생 중간 스테이지 점프")
@@ -2836,9 +2838,9 @@ def main():
     ok(all(x in asrc42 for x in ["enterTower", "openTowerFloors", "evolvePet", "showTowerResult", "showTowerFloors"]), "app.js — 탑 입장/층 선택/결과·펫 진화 액션", "")
     ok('assets/sprites/pet/${info.sprite}.png' in asrc42, "진화 결과 모달 — 진화 스프라이트 경로(.png)", "")
     ok(all(x in css42 for x in [".tower-card", ".tower-tiles", ".tower-floor", ".pet-evo", ".mini.evo"]), "style.css — v4.2 스타일", "")
-    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.5.0" in read("sw.js") and "APP_VERSION = '4.5.0'" in read("src/data.js"), "버전·서비스워커(4.5.0 · tower.js 프리캐시)", "")
-    pkg_ok = os.path.exists(os.path.join(ROOT, "package.json")) and '"version": "4.5.0"' in read("package.json")
-    ok(pkg_ok, "package.json 버전 4.5.0(로컬 검증용)", "")
+    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.6.0" in read("sw.js") and "APP_VERSION = '4.6.0'" in read("src/data.js"), "버전·서비스워커(4.6.0 · tower.js 프리캐시)", "")
+    pkg_ok = os.path.exists(os.path.join(ROOT, "package.json")) and '"version": "4.6.0"' in read("package.json")
+    ok(pkg_ok, "package.json 버전 4.6.0(로컬 검증용)", "")
     evo_files = [f"assets/sprites/pet/pet_{n}_{s}.png" for n in ("wolf", "fox", "owl", "dragon") for s in ("awaken", "divine")]
     ok(all(os.path.exists(os.path.join(ROOT, f)) for f in evo_files), "펫 진화 스프라이트 8종 파일", ", ".join(f for f in evo_files if not os.path.exists(os.path.join(ROOT, f))))
     ok(all(f"'./{f}'" in read("sw.js") for f in evo_files), "sw.js 프리캐시에 진화 스프라이트 포함", "")
@@ -2987,7 +2989,7 @@ def main():
 
     css43 = read("style.css")
     ok(all(x in css43 for x in [".land-sum", ".ls-v", ".ls-claim", ".news-slim", ".ns-title", ".land-subbar", ".land-rec", ".buff-now"]), "style.css — v4.3 부동산 요약 바·압축 뉴스·서브 탭", "")
-    ok("land-rpg-v4.5.0" in read("sw.js") and "'4.5.0'" in read("src/data.js"), "버전·캐시 v4.5.0", "")
+    ok("land-rpg-v4.6.0" in read("sw.js") and "'4.6.0'" in read("src/data.js"), "버전·캐시 v4.6.0", "")
 
     section("[20] ⚔️ v4.4 S31+ 무한 구간 리밸런싱 · 강화석 대량 교환 · 상위 전직")
 
@@ -3461,6 +3463,403 @@ def main():
 
     readme44 = read("README.md")
     ok(all(x in readme44 for x in ["v4.5.0", "드래곤 로드", "용신", "×100", "심층", "일일 보스", "일일 소탕"]) and "×1.08" in readme44, "README — v4.5 심층·일일 보스·소탕 + v4.4 내용 유지", "")
+
+    section("[22] 🏛️ v4.6 부동산 전투 시너지 · 🔨 급매 경매")
+
+    # ── 1) 상수 ──
+    syn46 = js(ctx, """
+      const lv = LAND_SYNERGY;
+      return {
+        every: AUCTION.everyMs, live: AUCTION.liveMs,
+        per: lv.perLevel, caps: lv.caps, mega: lv.mega, megaCaps: lv.megaCaps,
+        discount: [AUCTION.discountMin, AUCTION.discountMax],
+      };
+    """)
+    ok(syn46["every"] == 1200000 and syn46["live"] == 720000, "급매 경매 20분 주기 · 입찰 12분", json.dumps([syn46["every"], syn46["live"]]))
+    ok(syn46["per"] == {"critDmgPct": 1, "cdrPct": 0.8, "bossDmgPct": 0.8} and syn46["caps"] == {"critDmgPct": 24, "cdrPct": 12, "bossDmgPct": 16}, "랜드마크 레벨당 상승치·상한", json.dumps(syn46["per"]))
+    ok(syn46["mega"] == {"expPct": 4} and syn46["megaCaps"] == {"expPct": 20}, "메가 랜드마크 1개당 경험치 +4%(최대 20%)", json.dumps(syn46["mega"]))
+    ok(syn46["discount"] == [0.3, 0.45], "경매 최저 입찰 할인 30~45%", json.dumps(syn46["discount"]))
+
+    # ── 2) 랜드마크 전투 시너지 ──
+    lm46 = js(ctx, """
+      const mk = (levels, qty = 10) => {
+        const s = defaultState(0);
+        const cs = CITIES.slice(0, 20);
+        levels.forEach((lv, i) => { s.land.owned[cs[i].key] = qty; s.land.landmarks[cs[i].key] = lv; });
+        return landmarkSynergy(s);
+      };
+      const none = landmarkSynergy(defaultState(0));
+      const a = mk([3, 2]);
+      const b = mk([3, 3, 1]);
+      const c = mk([2]);
+      // 보유 0평이면 랜드마크는 집계되지 않는다
+      const ghost = defaultState(0);
+      ghost.land.landmarks[CITIES[5].key] = 3;
+      const ghostSyn = landmarkSynergy(ghost);
+      // 상한 — Lv.3 10개(레벨 합 30)
+      const capS = defaultState(0);
+      CITIES.slice(0, 10).forEach((cc) => { capS.land.owned[cc.key] = 5; capS.land.landmarks[cc.key] = 3; });
+      const cap = landmarkSynergy(capS);
+      return { none, a, b, c, ghost: ghostSyn, cap };
+    """)
+    ok(lm46["none"]["levels"] == 0 and lm46["none"]["critDmgPct"] == 0 and lm46["none"]["expPct"] == 0, "랜드마크 없으면 전투 시너지 0")
+    ok(lm46["a"]["levels"] == 5 and lm46["a"]["count"] == 2 and lm46["a"]["mega"] == 1 and lm46["a"]["critDmgPct"] == 5 and lm46["a"]["cdrPct"] == 4 and lm46["a"]["bossDmgPct"] == 4 and lm46["a"]["expPct"] == 4, "메가+타워(레벨 합 5) → 치명피해 +5% · 쿨감 -4% · 보스 +4% · 경험치 +4%", json.dumps(lm46["a"]))
+    ok(lm46["b"]["levels"] == 7 and lm46["b"]["mega"] == 2 and lm46["b"]["critDmgPct"] == 7 and lm46["b"]["cdrPct"] == 5.6 and lm46["b"]["expPct"] == 8, "메가 2개+상가 → 레벨 합 7 · 경험치 +8%", json.dumps(lm46["b"]))
+    ok(lm46["c"]["levels"] == 2 and lm46["c"]["mega"] == 0 and lm46["c"]["expPct"] == 0 and lm46["c"]["critDmgPct"] == 2, "타워(Lv.2)만 있으면 경험치 보너스 없음(치명피해만)", json.dumps(lm46["c"]))
+    ok(lm46["ghost"]["levels"] == 0 and lm46["ghost"]["count"] == 0, "보유 0평 지역의 랜드마크는 집계 제외")
+    ok(lm46["cap"]["levels"] == 30 and lm46["cap"]["critDmgPct"] == 24 and lm46["cap"]["cdrPct"] == 12 and lm46["cap"]["bossDmgPct"] == 16 and lm46["cap"]["expPct"] == 20, "레벨 합 30 — 치명피해 24 · 쿨감 12 · 보스 16 · 경험치 20 상한", json.dumps(lm46["cap"]))
+
+    # ── 3) 권역 완성 시너지 ──
+    rg46 = js(ctx, """
+      const owned = (setId, n) => {
+        const s = defaultState(0);
+        CITIES.filter((c) => citySetId(c.key) === setId).slice(0, n).forEach((c) => { s.land.owned[c.key] = 5; });
+        return s;
+      };
+      const seoul10 = owned('seoul', 10);
+      const seoul3 = owned('seoul', 3);
+      const jeju2 = owned('jeju', 2);
+      const both = defaultState(0);
+      Object.assign(both.land.owned, seoul10.land.owned, jeju2.land.owned);
+      const rs = regionCompleteSynergy(seoul10.land.owned);
+      const rp = regionCompleteSynergy(seoul3.land.owned);
+      const rj = regionCompleteSynergy(jeju2.land.owned);
+      const rb = regionCompleteSynergy(both.land.owned);
+      const status = regionSetStatus(seoul10.land.owned).find((x) => x.id === 'seoul');
+      const gy = owned('gyeonggi', 10);
+      const rg = regionCompleteSynergy(gy.land.owned);
+      const ga = owned('gangwon', 7);
+      const gd = regionCompleteSynergy(ga.land.owned);
+      const gs = owned('gyeongsang', 12);
+      const gb = regionCompleteSynergy(gs.land.owned);
+      const cc = owned('chungcheong', 10);
+      const gc = regionCompleteSynergy(cc.land.owned);
+      const jl = owned('jeolla', 10);
+      const gj = regionCompleteSynergy(jl.land.owned);
+      return { seoul: rs, partial: rp, jeju: rj, both: rb,
+               complete: status.complete, master: status.masterBuffs, masterText: status.masterText,
+               all: { gyeonggi: rg.buffs, gangwon: gd.buffs, gyeongsang: gb.buffs, chungcheong: gc.buffs, jeolla: gj.buffs } };
+    """)
+    ok(rg46["seoul"]["count"] == 1 and rg46["seoul"]["ids"] == ["seoul"] and rg46["seoul"]["buffs"] == {"critDmgPct": 6}, "서울권 완성 → 치명타 피해 +6%", json.dumps(rg46["seoul"]["buffs"]))
+    ok(rg46["partial"]["count"] == 0 and rg46["partial"]["buffs"] == {}, "서울 3곳(Lv.1)로는 완성 보너스 없음")
+    ok(rg46["jeju"]["count"] == 1 and rg46["jeju"]["buffs"] == {"cdrPct": 4}, "제주권 완성(2곳) → 스킬 쿨감 -4%", json.dumps(rg46["jeju"]["buffs"]))
+    ok(rg46["both"]["count"] == 2 and rg46["both"]["buffs"] == {"critDmgPct": 6, "cdrPct": 4} and "치명타 피해 +6%" in rg46["both"]["text"], "두 권역 완성 → 시너지 합산", json.dumps(rg46["both"]["buffs"]))
+    ok(rg46["complete"] is True and rg46["master"] == {"critDmgPct": 6} and "치명타 피해" in rg46["masterText"], "세트 현황이 완성 여부·완성 보너스를 알려 준다", json.dumps(rg46["masterText"], ensure_ascii=False))
+    allm = rg46["all"]
+    ok(allm["gyeonggi"] == {"atkPct": 5} and allm["gangwon"] == {"dropPct": 6} and allm["gyeongsang"] == {"bossDmgPct": 6} and allm["chungcheong"] == {"goldPct": 5} and allm["jeolla"] == {"expPct": 5}, "권역별 완성 시너지(경기 공격·강원 드롭·경상 보스·충청 골드·전라 경험치)", json.dumps(allm))
+
+    # ── 4) 합계 · 텍스트 ──
+    tot46 = js(ctx, """
+      const s = defaultState(0);
+      const seoul = CITIES.filter((c) => citySetId(c.key) === 'seoul').slice(0, 10);
+      seoul.forEach((c, i) => { s.land.owned[c.key] = 10; s.land.landmarks[c.key] = i < 2 ? 3 : 2; });
+      const syn = landSynergy(s);
+      return {
+        crit: syn.critDmgPct, cdr: syn.cdrPct, boss: syn.bossDmgPct, exp: syn.expPct, atk: syn.atkPct,
+        text: syn.text, active: syn.active, parts: syn.parts.length,
+        lmLevels: syn.landmark.levels, mega: syn.landmark.mega, complete: syn.region.count, count: syn.count,
+      };
+    """)
+    ok(tot46["lmLevels"] == 22 and tot46["mega"] == 2 and tot46["complete"] == 1, "랜드마크 레벨 합 22 · 메가 2 · 완성 권역 1", json.dumps({k: tot46[k] for k in ["lmLevels", "mega", "complete"]}))
+    ok(tot46["crit"] == 28 and tot46["cdr"] == 12 and tot46["boss"] == 16 and tot46["exp"] == 8, "랜드마크 상한(24) + 서울권 완성(6) = 치명피해 28 · 쿨감 12 · 보스 16 · 경험치 8", json.dumps({k: tot46[k] for k in ["crit", "cdr", "boss", "exp"]}))
+    ok(tot46["active"] is True and tot46["parts"] == 3 and "치명타 피해 +28%" in tot46["text"] and "스킬 쿨감 -12%" in tot46["text"] and "보스 피해 +16%" in tot46["text"] and "경험치 +8%" in tot46["text"], "시너지 한 줄 요약 문구", tot46["text"])
+
+    # ── 5) computeBuffs · calcStats 반영 ──
+    st46 = js(ctx, """
+      const base = defaultState(0); base.level = 40;
+      const baseS = calcStats(base, {});
+      const g = defaultState(0); g.level = 40;
+      CITIES.filter((c) => citySetId(c.key) === 'gyeonggi').slice(0, 10).forEach((c) => { g.land.owned[c.key] = 5; });
+      const gb = computeBuffs(g, 0);
+      const gs = calcStats(g, gb);
+      const l = defaultState(0); l.level = 40;
+      const c0 = CITIES[3];
+      l.land.owned[c0.key] = 10; l.land.landmarks[c0.key] = 3; l.land.landmarks[CITIES[4].key] = 3; l.land.owned[CITIES[4].key] = 5;
+      const lb = computeBuffs(l, 0);
+      const ls = calcStats(l, lb);
+      const plain = calcStats(l, {});
+      const noSyn = computeBuffs(base, 0);
+      return {
+        base: { atk: baseS.atk, critDmg: baseS.critDmg, boss: baseS.bossDmgPct, cdr: baseS.skillCdr, exp: baseS.expMult },
+        g: { synAtk: gb.synAtkPct, setAtk: gb.setAtkPct, complete: gb.synCompleteSets, text: gb.synText, active: gb.active, atk0: baseS.atk, atk1: gs.atk },
+        l: { levels: lb.synLandmarkLevels, mega: lb.synMega, crit: lb.synCritDmgPct, cdr: lb.synCdrPct, boss: lb.synBossDmgPct, exp: lb.synExpPct, text: lb.synText },
+        ls: { critDmg: ls.critDmg, boss: ls.bossDmgPct, cdr: ls.skillCdr, exp: ls.expMult, synCrit: ls.synCritDmgPct, synBoss: ls.synBossDmgPct, synAtk: ls.synAtkPct, atk: ls.atk, atkPlain: plain.atk },
+        noSyn: { active: noSyn.active, crit: noSyn.synCritDmgPct, text: noSyn.synText },
+      };
+    """)
+    ok(st46["g"]["synAtk"] == 5 and st46["g"]["complete"] == 1 and st46["g"]["active"] is True, "경기권 완성 → 부동산 시너지 공격력 +5%", json.dumps(st46["g"], ensure_ascii=False))
+    ok(st46["g"]["atk1"] > st46["g"]["atk0"], "완성 시너지가 실제 공격력에 반영", json.dumps({"before": st46["g"]["atk0"], "after": st46["g"]["atk1"]}))
+    ok(st46["l"]["levels"] == 6 and st46["l"]["mega"] == 2 and st46["l"]["crit"] == 6 and st46["l"]["cdr"] == 4.8 and st46["l"]["boss"] == 4.8 and st46["l"]["exp"] == 8, "메가 2개(레벨 합 6) → 치명피해 6 · 쿨감 4.8 · 보스 4.8 · 경험치 8", json.dumps(st46["l"]))
+    ok(abs(st46["ls"]["critDmg"] - 2.06) < 1e-9 and abs(st46["ls"]["boss"] - 0.048) < 1e-9 and abs(st46["ls"]["cdr"] - 0.048) < 1e-9 and abs(st46["ls"]["exp"] - 1.08) < 1e-9, "calcStats — 치명타 피해 ×2.06 · 보스 +4.8% · 쿨감 4.8% · 경험치 ×1.08", json.dumps(st46["ls"]))
+    ok(st46["noSyn"]["active"] is False and st46["noSyn"]["crit"] == 0 and st46["noSyn"]["text"] == "", "부동산이 없으면 시너지 0(기존 밸런스 불변)")
+
+    # ── 6) 경험치 시너지 — 사냥 보상·오프라인 정산 ──
+    exp46 = js(ctx, """
+      const mk = () => { const s = defaultState(0); s.level = 20; s.gold = 0; s.records = { totalGold: 0 }; return s; };
+      const a = mk(); const b = mk();
+      const r0 = killReward(a, 10, false, {}, () => 0.5);
+      const r1 = killReward(b, 10, false, { synExpPct: 8 }, () => 0.5);
+      const off = mk(); off.stage = 5; off.lastActiveAt = 0;
+      const o0 = offlineSummary(off, 3600 * 1000, {});
+      const o1 = offlineSummary(off, 3600 * 1000, { synExpPct: 8 });
+      return { e0: r0.exp, e1: r1.exp, g0: r0.gold, g1: r1.gold,
+               off0: o0.exp, off1: o1.exp, offGold0: o0.gold, offGold1: o1.gold };
+    """)
+    ok(exp46["e1"] == round(exp46["e0"] * 1.08) and exp46["g1"] == exp46["g0"], "경험치 +8% 시너지가 처치 보상 경험치에만 적용(골드는 그대로)", json.dumps(exp46))
+    ok(exp46["off1"] == math.floor(exp46["off0"] * 1.08) or abs(exp46["off1"] - exp46["off0"] * 1.08) <= 1, "오프라인 정산 경험치에도 같은 시너지", json.dumps({"a": exp46["off0"], "b": exp46["off1"]}))
+    ok(exp46["offGold1"] == exp46["offGold0"], "오프라인 골드는 시너지와 무관", json.dumps({"a": exp46["offGold0"], "b": exp46["offGold1"]}))
+
+    # ── 7) 스킬 쿨감 — 계산·실제 전투 ──
+    cd46 = js(ctx, """
+      const base = skillCdOf('strike', {});
+      const cdr = skillCdOf('strike', { synCdrPct: 12 });
+      const cap = skillCdOf('strike', { synCdrPct: 90 });
+      const heal = SKILLS.heal.cd;
+      const elapsed = Math.round(heal * 0.9);
+      const s1 = defaultState(0); s1.level = 30; s1.stage = 5; s1.skills.heal.last = -elapsed;
+      const s2 = defaultState(0); s2.level = 30; s2.stage = 5; s2.skills.heal.last = -elapsed;
+      const b1 = new Battle(s1, () => ({ synCdrPct: 12 }), () => 0.5, 0);
+      const b2 = new Battle(s2, () => ({}), () => 0.5, 0);
+      const withCdr = b1.castSkill('heal', 0);
+      const without = b2.castSkill('heal', 0);
+      return { base, cdr, cap, strike: SKILLS.strike.cd, heal, elapsed, withCdr, without,
+               statsCdr: calcStats(s1, { synCdrPct: 12 }).skillCdr };
+    """)
+    ok(abs(cd46["cdr"] - cd46["base"] * 0.88) < 1e-9 and cd46["base"] == cd46["strike"], "쿨감 12% → 스킬 쿨타임 88%", json.dumps({k: cd46[k] for k in ["base", "cdr", "strike"]}))
+    ok(abs(cd46["cap"] - cd46["base"] * 0.6) < 1e-9, "쿨감은 40%에서 멈춘다", json.dumps({"base": cd46["base"], "cap": cd46["cap"]}))
+    ok(cd46["withCdr"] is True and cd46["without"] is False, "실제 전투 — 쿨감이 있으면 90% 시점에 시전 가능, 없으면 불가", json.dumps({"with": cd46["withCdr"], "without": cd46["without"]}))
+    ok(abs(cd46["statsCdr"] - 0.12) < 1e-9, "전투 스탯에 쿨감이 실린다", json.dumps({"cdr": cd46["statsCdr"]}))
+
+    # ── 8) 경매 매물 결정론·구성 ──
+    lot46 = js(ctx, """
+      const a = auctionLot(0), a2 = auctionLot(5000);
+      const b = auctionLot(AUCTION.everyMs + 1000);
+      const kinds = {}; const bad = [];
+      let minQ = 1e9, maxQ = 0;
+      for (let i = 1; i <= 200; i++) {
+        const t = i * AUCTION.everyMs + 1000;
+        const lot = auctionLot(t);
+        if (!CITY_BY_KEY[lot.key] || lot.block !== i) bad.push('key' + i);
+        if (!(lot.qty >= 1 && lot.qty <= (AUCTION.qtyByTier[lot.city.tier] || 20))) bad.push('qty' + i);
+        if (!(lot.startBid > 0 && lot.startBid < lot.marketValue)) bad.push('bid' + i);
+        if (lot.discountPct < 28 || lot.discountPct > 47) bad.push('disc' + i);
+        if (!BONUS_KINDS.includes(lot.bonusKind) || !lot.bonusText) bad.push('kind' + i);
+        if (lot.endsAt - lot.start !== AUCTION.liveMs) bad.push('live' + i);
+        kinds[lot.bonusKind] = (kinds[lot.bonusKind] || 0) + 1;
+        minQ = Math.min(minQ, lot.qty); maxQ = Math.max(maxQ, lot.qty);
+      }
+      return { same: a.key === a2.key && a.qty === a2.qty && a.startBid === a2.startBid && a.marketValue === a2.marketValue,
+               nextBlock: b.block, nextDiff: b.key !== a.key || b.qty !== a.qty || b.startBid !== a.startBid,
+               first: { block: a.block, qty: a.qty, mv: a.marketValue, bid: a.startBid, disc: a.discountPct, kind: a.bonusKind, text: a.bonusText, tier: a.city.tier },
+               bad: bad.slice(0, 5), kinds, minQ, maxQ };
+    """)
+    ok(lot46["same"] is True and lot46["nextBlock"] == 1 and lot46["nextDiff"] is True, "같은 20분 블록은 같은 매물 · 다음 블록은 새 매물", json.dumps({"same": lot46["same"], "next": lot46["nextBlock"]}))
+    ok(not lot46["bad"], "200개 매물 모두 유효(지역·평수·입찰가·할인·보너스·시간)", json.dumps(lot46["bad"]))
+    ok(all(k in lot46["kinds"] for k in ["lease", "shards", "cash"]) and sum(lot46["kinds"].values()) == 200, "세 가지 특별 보너스가 모두 등장", json.dumps(lot46["kinds"]))
+    ok(lot46["first"]["bid"] < lot46["first"]["mv"] and lot46["first"]["disc"] >= 28, "최저 입찰가는 시세보다 싸다", json.dumps(lot46["first"], ensure_ascii=False))
+
+    # ── 9) 경매 단계·입찰가 상승 ──
+    phase46 = js(ctx, """
+      const s = defaultState(0);
+      const block = 12345, t0 = block * AUCTION.everyMs;
+      const at0 = auctionStatus(s, t0);
+      const mid = auctionStatus(s, t0 + AUCTION.liveMs / 2);
+      const late = auctionStatus(s, t0 + AUCTION.liveMs - 1000);
+      const gap = auctionStatus(s, t0 + AUCTION.liveMs + 60000);
+      const doneS = defaultState(0); doneS.land.auction.done = block;
+      const done = auctionStatus(doneS, t0 + 60000);
+      return {
+        phase0: at0.phase, price0: at0.price, startBid: at0.lot.startBid, market: at0.lot.marketValue,
+        midPhase: mid.phase, midPrice: mid.price, midProg: mid.progress, midDisc: mid.discountPct,
+        latePrice: late.price, gapPhase: gap.phase, gapPrice: gap.price, gapNext: gap.nextMs, gapLive: gap.live,
+        donePhase: done.phase, doneCan: done.canBid, left0: at0.leftMs, canBid0: at0.canBid,
+      };
+    """)
+    ok(phase46["phase0"] == "live" and phase46["canBid0"] is True and phase46["price0"] == phase46["startBid"] and phase46["left0"] == 720000, "경매 시작 — 최저 입찰가로 열리고 12분 남음", json.dumps({k: phase46[k] for k in ["phase0", "price0", "startBid", "left0"]}))
+    ok(phase46["midPhase"] == "live" and phase46["midPrice"] > phase46["startBid"] and phase46["midPrice"] < phase46["market"] and 0 < phase46["midProg"] < 1, "중반 — 입찰가가 시세 쪽으로 오른다", json.dumps({k: phase46[k] for k in ["midPrice", "market"]}))
+    ok(phase46["latePrice"] > phase46["midPrice"] and phase46["midDisc"] < 45, "늦게 낙찰할수록 비싸다(할인 감소)", json.dumps({"mid": phase46["midPrice"], "late": phase46["latePrice"]}))
+    ok(phase46["gapPhase"] == "gap" and phase46["gapLive"] is False and phase46["gapPrice"] == phase46["market"] and 0 < phase46["gapNext"] <= 480000, "입찰 종료 후 준비 시간 — 다음 경매까지 카운트다운", json.dumps({k: phase46[k] for k in ["gapNext", "gapPrice"]}))
+    ok(phase46["donePhase"] == "done" and phase46["doneCan"] is False, "이번 경매 낙찰 후에는 입찰 불가", json.dumps({"phase": phase46["donePhase"]}))
+
+    # ── 10) 입찰 견적 거부 사유 ──
+    quote46 = js(ctx, """
+      const s = defaultState(0);
+      const t = 12345 * AUCTION.everyMs + 1000;
+      const lot = auctionLot(t);
+      const poor = bidQuote(s, t);
+      const rich = defaultState(0); rich.gold = 1e9;
+      const okq = bidQuote(rich, t);
+      const closed = bidQuote(rich, t + AUCTION.liveMs + 1000);
+      const doneS = defaultState(0); doneS.gold = 1e9; doneS.land.auction.done = lot.block;
+      const doneQ = bidQuote(doneS, t);
+      const supS = defaultState(0); supS.gold = 1e9; supS.land.owned[lot.key] = lot.city.supply;
+      const supQ = bidQuote(supS, t);
+      return { poor: { ok: poor.ok, reason: poor.reason, need: poor.need, gold: poor.gold, price: poor.price },
+               okq: { ok: okq.ok, price: okq.price, after: okq.after, gold: okq.gold },
+               closed: { ok: closed.ok, closed: closed.closed, reason: closed.reason },
+               done: { ok: doneQ.ok, done: doneQ.done },
+               supply: { ok: supQ.ok, reason: supQ.reason } };
+    """)
+    ok(quote46["poor"]["ok"] is False and "골드가 부족" in quote46["poor"]["reason"] and quote46["poor"]["need"] == quote46["poor"]["price"], "골드 부족 → 필요 금액 안내", json.dumps(quote46["poor"], ensure_ascii=False))
+    ok(quote46["okq"]["ok"] is True and quote46["okq"]["after"] == quote46["okq"]["gold"] - quote46["okq"]["price"], "충분한 골드 → 낙찰가·낙찰 후 골드 계산")
+    ok(quote46["closed"]["ok"] is False and quote46["closed"]["closed"] is True, "경매 시간이 아니면 낙찰 불가")
+    ok(quote46["done"]["ok"] is False and quote46["done"]["done"] is True, "이미 낙찰한 경매는 다시 낙찰 불가")
+    ok(quote46["supply"]["ok"] is False and "공급" in quote46["supply"]["reason"], "잔여 공급이 없으면 낙찰 불가", quote46["supply"]["reason"])
+
+    # ── 11) 낙찰 실행 — 매물·보너스·기록 ──
+    bid46 = js(ctx, """
+      const findBlock = (kind) => {
+        for (let i = 1; i <= 5000; i++) {
+          if (auctionLot(i * AUCTION.everyMs + 1000).bonusKind === kind) return i;
+        }
+        return -1;
+      };
+      const run = (kind) => {
+        const block = findBlock(kind);
+        const t = block * AUCTION.everyMs + 1000;
+        const lot = auctionLot(t);
+        const s = defaultState(0); s.gold = 1e9; s.shards = 0;
+        const q = bidQuote(s, t);
+        const r = applyAuctionBid(s, t);
+        const again = applyAuctionBid(s, t);
+        const p = portfolioOf(s, t);
+        return {
+          kind, block, ok: r.ok, price: r.price, market: r.marketValue, saved: r.saved,
+          goldAfter: s.gold, goldExpect: 1e9 - q.price, shards: s.shards, bonusValue: lot.bonusValue,
+          owned: s.land.owned[lot.key], qty: lot.qty, held: r.held,
+          bids: s.land.auction.bids, spend: s.land.auction.spend, savedTotal: s.land.auction.saved,
+          done: s.land.auction.done, logN: s.land.auction.log.length, logKey: s.land.auction.log[0].key,
+          logPrice: s.land.auction.log[0].price, logSaved: s.land.auction.log[0].saved,
+          lease: s.land.lease[lot.key] || 0, trade: s.land.tradeCount, cost: s.land.totalCost[lot.key],
+          againOk: again.ok, againReason: again.reason,
+          holdingIncome: p.holdings.filter((h) => h.key === lot.key).map((h) => Math.round(h.incomePerHour)),
+          bonusGiven: r.bonusGiven, bonusText: r.bonusText,
+        };
+      };
+      const lease = run('lease'), shards = run('shards'), cash = run('cash');
+      // 특별 임대 계약이 실제 임대수익에 반영되는지
+      const key = CITIES[0].key;
+      const s1 = defaultState(0); s1.land.owned[key] = 5; s1.land.lease[key] = 25;
+      const s2 = defaultState(0); s2.land.owned[key] = 5;
+      const withLease = cityRentMul(s1, key, 0), noLease = cityRentMul(s2, key, 0);
+      return { lease, shards, cash, leaseRatio: withLease / noLease };
+    """)
+    lmb = bid46["lease"]
+    ok(lmb["ok"] is True and lmb["owned"] == lmb["qty"] and lmb["held"] == lmb["qty"] and lmb["trade"] == 1, "낙찰 → 평수가 즉시 내 것이 된다", json.dumps({k: lmb[k] for k in ["owned", "qty", "trade"]}))
+    ok(lmb["goldAfter"] == lmb["goldExpect"] and lmb["spend"] == lmb["price"] and lmb["cost"] == lmb["price"], "낙찰가만큼 골드 차감(거래세 없음)", json.dumps({k: lmb[k] for k in ["goldAfter", "price"]}))
+    ok(lmb["done"] == lmb["block"] and lmb["bids"] == 1 and lmb["logN"] == 1 and lmb["logKey"] and lmb["logPrice"] == lmb["price"] and lmb["logSaved"] == lmb["saved"], "경매 기록 — 1건·낙찰가·아낀 골드", json.dumps({k: lmb[k] for k in ["done", "bids", "logSaved"]}))
+    ok(lmb["saved"] == lmb["market"] - lmb["price"] and lmb["savedTotal"] == lmb["saved"], "아낀 골드 = 시세 − 낙찰가", json.dumps({"saved": lmb["saved"], "market": lmb["market"]}))
+    ok(lmb["againOk"] is False and "이미 낙찰" in (lmb["againReason"] or ""), "같은 경매 두 번 낙찰 불가", lmb["againReason"])
+    ok(lmb["kind"] == "lease" and lmb["lease"] == 25 and abs(bid46["leaseRatio"] - 1.25) < 1e-9, "특별 임대 계약 +25% → 그 지역 임대수익 1.25배", json.dumps({"lease": lmb["lease"], "ratio": round(bid46["leaseRatio"], 4)}))
+    smb = bid46["shards"]
+    ok(smb["kind"] == "shards" and smb["shards"] == smb["bonusValue"] and smb["lease"] == 0, "강화석 보너스 매물 → 강화석 즉시 지급", json.dumps({"shards": smb["shards"], "bonus": smb["bonusValue"]}))
+    cmb = bid46["cash"]
+    ok(cmb["kind"] == "cash" and cmb["goldAfter"] == cmb["goldExpect"] + round(cmb["price"] * 0.15), "캐시백 매물 → 낙찰가의 15% 즉시 환급", json.dumps({"gold": cmb["goldAfter"], "expect": cmb["goldExpect"], "price": cmb["price"]}))
+
+    # ── 12) 저장 호환 · 정규화 ──
+    nv46 = js(ctx, """
+      const oldSave = normalizeState({ ver: 3, level: 12, gold: 900, land: { owned: { [CITIES[0].key]: 7 } } });
+      const none = normalizeState({ ver: 3, level: 1 });
+      const junk = normalizeState({ ver: 3, land: {
+        owned: { [CITIES[0].key]: 2, [CITIES[1].key]: 0 },
+        auction: { done: -7, bids: -3, spend: 'x', saved: -9, log: [
+          { key: 'bogus/key' }, null,
+          { at: 5, block: 3, key: CITIES[0].key, qty: '4', price: 100, market: 200, saved: 100, bonusKind: 'nonsense', bonusText: 'x' },
+        ] },
+        lease: { [CITIES[0].key]: 999, [CITIES[1].key]: 20, bogus: 5 },
+      } });
+      const s = defaultState(0); s.gold = 1e9;
+      const t = 777 * AUCTION.everyMs + 1000;
+      applyAuctionBid(s, t);
+      const back = normalizeState(JSON.parse(JSON.stringify(s)));
+      return {
+        old: { auction: oldSave.land.auction, lease: oldSave.land.lease, owned: oldSave.land.owned[CITIES[0].key] },
+        none: { auction: none.land.auction, lease: none.land.lease },
+        junk: { auction: junk.land.auction, lease: junk.land.lease },
+        round: { done: back.land.auction.done, bids: back.land.auction.bids, logN: back.land.auction.log.length,
+                 logKey: back.land.auction.log[0] && back.land.auction.log[0].key, price: back.land.auction.log[0] && back.land.auction.log[0].price,
+                 sameDone: back.land.auction.done === s.land.auction.done,
+                 ownedBack: back.land.owned[Object.keys(s.land.owned)[0]], ownedRaw: s.land.owned[Object.keys(s.land.owned)[0]],
+                 gold: back.gold === s.gold },
+        names: { city0: CITIES[0].name, key0: CITIES[0].key },
+      };
+    """)
+    ok(nv46["old"]["auction"] == {"done": -1, "bids": 0, "spend": 0, "saved": 0, "log": []} and nv46["old"]["lease"] == {} and nv46["old"]["owned"] == 7, "v4.5 세이브 → 경매·임대 필드 기본값 마이그레이션(보유 매물 유지)", json.dumps(nv46["old"], ensure_ascii=False))
+    ok(nv46["none"]["auction"]["done"] == -1 and nv46["none"]["lease"] == {}, "새 게임 기본값", json.dumps(nv46["none"], ensure_ascii=False))
+    jk = nv46["junk"]
+    ok(jk["auction"]["done"] == -1 and jk["auction"]["bids"] == 0 and jk["auction"]["spend"] == 0 and jk["auction"]["saved"] == 0, "손상된 경매 기록 정규화(음수·문자)", json.dumps(jk["auction"], ensure_ascii=False))
+    nm = nv46["names"]
+    ok(len(jk["auction"]["log"]) == 1 and jk["auction"]["log"][0]["name"] == nm["city0"] and jk["auction"]["log"][0]["qty"] == 4 and jk["auction"]["log"][0]["bonusKind"] == "lease", "경매 로그 — 잘못된 항목 제거·지역명 복원", json.dumps(jk["auction"]["log"], ensure_ascii=False))
+    ok(jk["lease"] == {nm["key0"]: 60}, "특별 임대 계약 정규화 — 보유 지역만, 상한 60%", json.dumps(jk["lease"], ensure_ascii=False))
+    ok(nv46["round"]["sameDone"] is True and nv46["round"]["bids"] == 1 and nv46["round"]["logN"] == 1 and nv46["round"]["logKey"] and nv46["round"]["gold"] is True and nv46["round"]["ownedBack"] == nv46["round"]["ownedRaw"], "낙찰 후 세이브 저장·복원(경매 기록·평수 유지)", json.dumps(nv46["round"], ensure_ascii=False))
+
+    # ── 13) 화면 — 경매 카드 · 시너지 카드 · 사냥 탭 합계 ──
+    tpl46 = js(ctx2, """
+      const realNow = Date.now;
+      const block = 12345, start = block * AUCTION.everyMs;
+      const build = (extra) => {
+        const s = defaultState(0);
+        s.gold = 100000000; s.level = 40; s.stage = 20; s.maxStage = 22;
+        const seoul = CITIES.filter((c) => citySetId(c.key) === 'seoul').slice(0, 10);
+        seoul.forEach((c, i) => { s.land.owned[c.key] = 10; s.land.landmarks[c.key] = i < 2 ? 3 : 1; });
+        if (extra) extra(s);
+        return s;
+      };
+      const mkUi = (s) => {
+        const buffs = computeBuffs(s, start);
+        return { s, battle: { stats: calcStats(s, buffs), def: stageDef(20), boss: null, dungeon: null, tower: null, daily: null, player: { hp: 100 } },
+                 app: { buffs }, logs: [], tab: 'land', el: {}, install: { hidden: true }, landHoldAll: false };
+      };
+      Date.now = () => start + 1000;
+      const liveS = build();
+      const liveUi = mkUi(liveS);
+      const home = __landSub(liveUi, 'home');
+      const buffTab = __landSub(liveUi, 'buff');
+      const hunt = __huntSub(liveUi, 'skill');
+      const a = auctionStatus(liveS, start + 1000);
+      const priceText = a.price.toLocaleString('ko-KR');
+      const lotName = a.lot.city.name;
+      Date.now = () => start + AUCTION.liveMs + 60000;
+      const gapUi = mkUi(build());
+      const gap = __landSub(gapUi, 'home');
+      Date.now = () => start + 60000;
+      const doneUi = mkUi(build((s) => { s.land.auction.done = block; }));
+      const done = __landSub(doneUi, 'home');
+      Date.now = realNow;
+      return {
+        home, buffTab, hunt, gap, done, priceText, lotName,
+        buy: (home.match(/data-action="auction-bid"/g) || []).length,
+        gapBuy: (gap.match(/data-action="auction-bid"/g) || []).length,
+        doneBuy: (done.match(/data-action="auction-bid"/g) || []).length,
+        synRows: (buffTab.match(/class="syn-row"/g) || []).length,
+        bad: /undefined|NaN|\\[object Object\\]/.test(home + buffTab + hunt + gap + done),
+      };
+    """)
+    ok('data-action="auction-bid"' in tpl46["home"] and "급매 경매" in tpl46["home"] and tpl46["buy"] == 1, "부동산 홈 — 급매 경매 카드와 낙찰 버튼 1개", str(tpl46["buy"]))
+    ok(tpl46["lotName"] in tpl46["home"] and tpl46["priceText"] in tpl46["home"] and "시세 -" in tpl46["home"] and "auc-prog" in tpl46["home"], "경매 카드 — 매물·현재 입찰가·할인율·진행 바", json.dumps({"lot": tpl46["lotName"], "price": tpl46["priceText"]}, ensure_ascii=False))
+    ok("다음 매물 예고" in tpl46["gap"] and "다음 경매" in tpl46["gap"] and tpl46["gapBuy"] == 0, "준비 시간 — 다음 매물 예고·카운트다운(낙찰 버튼 없음)", "")
+    ok("낙찰 완료" in tpl46["done"] and tpl46["doneBuy"] == 0, "낙찰 후 — 완료 표시·추가 낙찰 버튼 없음", "")
+    ok("부동산 전투 시너지" in tpl46["buffTab"] and "권역 완성" in tpl46["buffTab"] and "부동산 전투 버프 합계" in tpl46["buffTab"] and tpl46["synRows"] == 4, "부동산 버프 탭 — 시너지 카드(4개 지표·권역 완성·합계)", json.dumps({"rows": tpl46["synRows"]}))
+    ok("부동산 버프 합계" in tpl46["hunt"] and "치명타 피해" in tpl46["hunt"], "사냥 탭 스탯 카드 — 부동산 전투 버프 합계 한 줄", "")
+    ok(tpl46["bad"] is False, "v4.6 템플릿에 undefined/NaN 누출 없음")
+
+    # ── 14) 배선·스타일 ──
+    usrc46 = read("src/ui.js"); asrc46 = read("app.js"); css46 = read("style.css")
+    stsrc46 = read("src/state.js"); csrc46 = read("src/combat.js"); lsrc46 = read("src/land.js")
+    ausrc46 = read("src/auction.js"); sysrc46 = read("src/synergy.js"); rgsrc46 = read("src/region.js")
+    ok(all(x in usrc46 for x in ["auctionCard", "landSynergyCard", "data-action=\"auction-bid\"", "'auction-info'", "syn-row", "ls-tot", "landBuffTotalsText"]), "ui.js — 경매 카드·시너지 카드·합계 줄", "")
+    ok(all(x in asrc46 for x in ["openAuctionBid", "doAuctionBid", "openAuctionInfo", "auctionBid:", "auctionInfo:", "applyAuctionBid"]), "app.js — 낙찰 확인·실행·내역 액션", "")
+    ok(all(x in css46 for x in [".auc-card", ".auc-prog", ".auc-price", ".auc-bid", ".syn-card", ".syn-row", ".syn-chip", ".syn-total", ".ls-tot", ".tag.lease", ".btn.gold"]), "style.css — 경매·시너지 스타일", "")
+    ok(all(x in stsrc46 for x in ["normalizeAuctionState", "sanitizeLease", "s.land.auction", "skillCdOf", "synCritDmgPct", "synExpPct"]), "state.js — 경매/임대 정규화·시너지 스탯 반영", "")
+    ok(all(x in csrc46 for x in ["skillCdOf", "skillCdOf(key, this.buffs())"]), "combat.js — 스킬 쿨감을 실제 쿨타임에 적용", "")
+    ok(all(x in lsrc46 for x in ["landSynergy", "leasePctOf", "synText", "auction: {", "lease: {}"]), "land.js — 시너지·특별 임대를 버프·기본값에 포함", "")
+    ok(all(x in ausrc46 for x in ["AUCTION", "auctionLot", "auctionStatus", "bidQuote", "applyAuctionBid", "normalizeAuctionState", "defaultAuctionState"]), "auction.js — 경매 엔진", "")
+    ok(all(x in sysrc46 for x in ["LAND_SYNERGY", "landmarkSynergy", "regionCompleteSynergy", "landSynergy", "landBuffTotals", "nextLandmarkStep"]), "synergy.js — 시너지 계산", "")
+    ok(all(x in rgsrc46 for x in ["master:", "masterBuffs", "masterText", "critDmgPct", "bossDmgPct"]) and "cdrPct: 4" in rgsrc46, "region.js — 권역 완성 보너스 정의", "")
+
+    readme46 = read("README.md")
+    ok(all(x in readme46 for x in ["v4.6.0", "부동산 전투 시너지", "급매 경매", "특별 임대"]) and "4.6.0" in readme46, "README — v4.6 시너지·경매 반영", "")
+
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

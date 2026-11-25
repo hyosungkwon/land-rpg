@@ -19,6 +19,7 @@ import {
   CITY_BY_KEY, formatGold, LAND, LANDMARK, landmarkQuote, buildLandmark as buildLandmarkState,
 } from './src/land.js';
 import { activeNews, newsCovers } from './src/region.js';
+import { AUCTION, auctionStatus, bidQuote, applyAuctionBid } from './src/auction.js';
 import { Renderer } from './src/render.js';
 import { UI } from './src/ui.js';
 import { GameSound } from './src/sound.js';
@@ -822,6 +823,8 @@ class App {
       },
       claimRent: () => this.claimRentNow(),
       rentInfo: () => this.openClaimRent(),
+      auctionBid: () => this.openAuctionBid(),
+      auctionInfo: () => this.openAuctionInfo(),
       saveExport: () => this.openSaveExport(),
       saveImport: () => this.openSaveImport(),
       saveUndo: () => this.openSaveUndo(),
@@ -1240,6 +1243,84 @@ class App {
     this.ui.toast(`🏛️ ${nm} Lv.${r.level} ${r.name} 건설 · 임대수익 +${r.rentPct}% (💰${r.spent.toLocaleString()})`, 'gold');
     this.ui.addLog(`🏛️ <b>${nm}</b> Lv.${r.level} ${r.name} · 임대수익 +${r.rentPct}%`);
     this.ui.render();
+  }
+
+  /* ───────────── 🔨 급매 경매 (v4.6) ───────────── */
+  /** 낙찰 확인 모달 — 현재 입찰가·보너스·규칙을 보여 주고 결정하게 한다 */
+  openAuctionBid() {
+    const now = Date.now();
+    const q = bidQuote(this.s, now);
+    const a = auctionStatus(this.s, now);
+    const lot = q.lot || a.lot;
+    const city = lot.city;
+    const body = `
+      <div class="tsum">
+        <div><span>매물</span><b>${city.emoji} ${esc(city.name)} ${lot.qty.toLocaleString()}평</b></div>
+        <div><span>현재 입찰가</span><b class="gold">💰${q.price.toLocaleString()}</b></div>
+        <div><span>시세</span><b>💰${lot.marketValue.toLocaleString()} (-${a.discountPct}%)</b></div>
+        <div><span>보너스</span><b>${lot.bonusText}</b></div>
+      </div>
+      <div class="note" style="margin-top:9px">${
+        q.ok
+          ? `낙찰하면 <b>${lot.qty.toLocaleString()}평</b>이 바로 내 것이 되고, 임대수익이 즉시 붙습니다.<br>낙찰 후 골드 <b>💰${q.after.toLocaleString()}</b> · 거래세 없음`
+          : `<span style="color:var(--red)">${esc(q.reason || '')}</span>`
+      }<br><span class="dim">입찰가는 <b>${AUCTION.liveMs / 60000}분</b> 동안 시세까지 오릅니다 — 지금 낙찰할수록 쌉니다.</span></div>`;
+    this.ui.modal({
+      title: '🔨 급매 경매 낙찰',
+      sub: `${city.name} ${lot.qty}평 · 💰${q.price.toLocaleString()} · 남은 ${Math.max(0, Math.ceil(a.leftMs / 1000))}초`,
+      body,
+      actions: [
+        { label: '취소', onClick: () => {} },
+        { label: q.ok ? `낙찰 · 💰${q.price.toLocaleString()}` : '낙찰 불가', style: 'primary', onClick: () => this.doAuctionBid() },
+      ],
+    });
+  }
+
+  doAuctionBid() {
+    this.sound.unlock();
+    const now = Date.now();
+    const r = applyAuctionBid(this.s, now);
+    if (!r.ok) {
+      this.ui.toast(r.reason || '낙찰할 수 없습니다', 'red');
+      this.ui.render();
+      return;
+    }
+    this.buffs = computeBuffs(this.s);
+    this.battle.refreshStats();
+    try { codexCity(this.s, r.key, this.s.land.owned[r.key]); } catch (e) { /* ignore */ }
+    this.save(true);
+    try { this.sound.coin('gold'); } catch (e) { /* ignore */ }
+    this.ui.toast(
+      `🔨 낙찰! ${r.city.emoji}${r.city.name} ${r.qty.toLocaleString()}평 · 💰${r.price.toLocaleString()} (시세 -${r.discountPct}%)`,
+      'gold',
+    );
+    if (r.bonusGiven) this.ui.toast(`🎁 ${r.bonusGiven}`, 'green');
+    this.ui.addLog(`🔨 <b>${r.city.name}</b> ${r.qty.toLocaleString()}평 낙찰 · 💰${r.price.toLocaleString()} · ${r.bonusText}`);
+    this.checkPets();
+    this.ui.render();
+  }
+
+  /** 경매 규칙 + 낙찰 내역 */
+  openAuctionInfo() {
+    const a = auctionStatus(this.s, Date.now());
+    const log = Array.isArray(a.log) ? a.log : [];
+    const rows = log.length
+      ? log
+        .map((e) => `<div class="kv"><span class="k">🏠 ${esc(e.name || (CITY_BY_KEY[e.key] || {}).name || '지역')} ${Math.floor(Number(e.qty) || 0).toLocaleString()}평</span><span class="v">💰${formatGold(e.price)} <span class="dim">(시세 -${Math.round((1 - (e.price / Math.max(1, e.market))) * 100)}%)</span></span></div>`)
+        .join('')
+      : '<div class="empty">아직 낙찰한 매물이 없습니다.</div>';
+    this.ui.modal({
+      title: '🔨 급매 경매 내역',
+      sub: `낙찰 ${a.totals.bids}건 · 아낀 골드 💰${formatGold(a.totals.saved)} · 사용 💰${formatGold(a.totals.spend)}`,
+      body: `<div class="note">
+        <b>${AUCTION.everyMs / 60000}분마다</b> 새 매물이 열리고, 앞 <b>${AUCTION.liveMs / 60000}분</b>만 입찰할 수 있습니다.
+        입찰가는 시간이 지나면 시세까지 오르므로 <b>일찍 낙찰할수록 유리</b>합니다.
+        한 경매당 <b>1회</b>만 낙찰할 수 있고, 거래세는 붙지 않습니다.
+        매물마다 <b>특별 보너스</b>(특별 임대 계약 · 강화석 · 캐시백)가 따라옵니다.
+      </div>
+      <div style="margin-top:8px">${rows}</div>`,
+      actions: [{ label: '확인', style: 'primary', onClick: () => {} }],
+    });
   }
 
   /* ───────────── 💤 임대수익 (v3.6: 원탭 일괄 수령) ───────────── */

@@ -5,11 +5,17 @@ import {
   APP_VERSION, ECON, EQUIP, EQUIP_SLOTS, EQUIP_MAX_LV, SKILLS, SKILL_UPGRADE_MAX, skillCost, enhanceCost,
   RARITIES, RARITY_INDEX, GACHA, gachaCost, rarityBonusLv,
 } from './data.js';
-import { expNeed, skillEffect, shardPrice, enhanceMaxCount, maxShardsBuy, SHARD_BULK } from './state.js';
+import { expNeed, skillEffect, shardPrice, enhanceMaxCount, maxShardsBuy, SHARD_BULK, skillCdOf } from './state.js';
 import {
   CITIES, LAND, portfolioOf, computeBuffs, buffProgress, formatGold, priceInfo,
-  CITY_BY_KEY, LANDMARK, landmarkLevel, landmarkQuote, landmarkSummary, landmarkRentMul,
+  CITY_BY_KEY, LANDMARK, landmarkLevel, landmarkQuote, landmarkSummary, landmarkRentMul, leasePctOf,
 } from './land.js';
+import {
+  AUCTION, auctionStatus, auctionLot, auctionBonusText,
+} from './auction.js';
+import {
+  LAND_SYNERGY, landSynergy, landBuffTotals, landBuffTotalsText, nextLandmarkStep,
+} from './synergy.js';
 import {
   activeNews, newsCovers, newsForCity, regionSetStatus, regionSetBuffs, buffText, citySetId, NEWS_INTERVAL_MS,
 } from './region.js';
@@ -182,6 +188,8 @@ export class UI {
       case 'land-tier': actions.landTier(v); break;
       case 'claim-rent': actions.claimRent(); break;
       case 'rent-info': actions.rentInfo(); break;
+      case 'auction-bid': actions.auctionBid(); break;
+      case 'auction-info': actions.auctionInfo(); break;
       case 'save-export': actions.saveExport(); break;
       case 'save-import': actions.saveImport(); break;
       case 'save-undo': actions.saveUndo(); break;
@@ -336,10 +344,10 @@ export class UI {
     // 퀵 스킬 쿨타임
     [...this.el.quick.querySelectorAll('.q')].forEach((q) => {
       const key = q.dataset.skill;
-      const def2 = SKILLS[key];
+      const cd = skillCdOf(key, this.app.buffs) || SKILLS[key].cd;
       const sk = s.skills[key];
-      const left = Math.max(0, (sk.last + def2.cd) - now);
-      const ratio = left / def2.cd;
+      const left = Math.max(0, (sk.last + cd) - now);
+      const ratio = left / cd;
       q.querySelector('.q-cd').style.height = `${ratio * 100}%`;
       q.classList.toggle('ready', left <= 0);
     });
@@ -414,6 +422,8 @@ export class UI {
     const s = this.s;
     const b = this.battle;
     const p = portfolioOf(s);
+    // 🔨 경매 카드용 — 이번 틱에 한 번만 계산해 data-live 여러 요소가 함께 쓴다
+    const aucNow = this.tab === 'land' ? auctionStatus(s, now) : null;
     document.querySelectorAll('[data-live]').forEach((el) => {
       const k = el.dataset.live;
       if (k === 'gold') el.textContent = fmt(s.gold);
@@ -424,11 +434,13 @@ export class UI {
       else if (k === 'kill') el.textContent = String(Math.min(ECON.normalKillsPerStage, s.killsInStage));
       else if (k.startsWith('cd-')) {
         const key = k.slice(3);
-        const left = Math.max(0, s.skills[key].last + SKILLS[key].cd - now);
-        el.style.width = `${(left / SKILLS[key].cd) * 100}%`;
+        const cd = skillCdOf(key, this.app.buffs) || SKILLS[key].cd;
+        const left = Math.max(0, s.skills[key].last + cd - now);
+        el.style.width = `${(left / cd) * 100}%`;
       } else if (k.startsWith('cast-')) {
         const key = k.slice(5);
-        const left = Math.max(0, s.skills[key].last + SKILLS[key].cd - now);
+        const cd = skillCdOf(key, this.app.buffs) || SKILLS[key].cd;
+        const left = Math.max(0, s.skills[key].last + cd - now);
         el.textContent = left > 0 ? `${(left / 1000).toFixed(1)}초` : '시전';
         el.disabled = left > 0;
       } else if (k === 'dps') {
@@ -510,6 +522,18 @@ export class UI {
       } else if (k === 'news-own') {
         const n = activeNews(now);
         el.textContent = newsOwnShort(s, n);
+      } else if (k === 'auc-price') {
+        if (!aucNow) return;
+        el.textContent = `💰${fmt(aucNow.price)}`;
+      } else if (k === 'auc-disc') {
+        if (!aucNow) return;
+        el.textContent = `시세 -${aucNow.discountPct}%`;
+      } else if (k === 'auc-left') {
+        if (!aucNow) return;
+        el.textContent = mmss(aucNow.phase === 'live' ? aucNow.leftMs : aucNow.nextMs);
+      } else if (k === 'auc-prog') {
+        if (!aucNow) return;
+        el.style.width = `${Math.round(aucNow.progress * 100)}%`;
       }
     });
     // 임대수령 버튼은 적립액에 따라 실시간으로 활성/문구가 바뀐다
@@ -525,6 +549,15 @@ export class UI {
       }
     }
 
+    // 🔨 경매 입찰 버튼은 입찰가·골드에 따라 실시간으로 문구/활성화가 바뀐다
+    const aucBtn = document.querySelector('[data-live="auc-btn"]');
+    if (aucBtn && aucNow) {
+      const on = aucNow.canBid && s.gold >= aucNow.price;
+      if (aucBtn.disabled === on) aucBtn.disabled = !on;
+      const label = on ? `🔨 지금 낙찰 · 💰${fmt(aucNow.price)}` : (aucNow.canBid ? `골드 부족 · 💰${fmt(aucNow.price)}` : '경매 마감');
+      if (aucBtn.textContent !== label) aucBtn.textContent = label;
+    }
+
     // 📰 3분마다 호재가 바뀌면 부동산 탭을 다시 그린다(배지·시세·임대수익 갱신)
     if (this.tab === 'land') {
       const news = activeNews(now);
@@ -532,6 +565,13 @@ export class UI {
         const had = this._newsKey !== undefined;
         this._newsKey = news.key;
         if (had) this.render();
+      }
+      // 🔨 경매 시간이 열리거나 닫히면 카드를 다시 그린다(버튼·매물 교체)
+      const aucKey = `${aucNow.block}:${aucNow.phase}`;
+      if (this._aucKey !== aucKey) {
+        const hadAuc = this._aucKey !== undefined;
+        this._aucKey = aucKey;
+        if (hadAuc) this.render();
       }
     }
   }
@@ -1043,19 +1083,17 @@ function huntStatsCard(ui) {
     <div class="stat ${cls}"><div class="k">${k}</div><div class="v">${v}${unit ? `<small>${unit}</small>` : ''}</div></div>`;
 
   const buffParts = [];
-  if (buffs.active) {
+  // v4.6: 건물주 + 권역 세트 + 랜드마크 + 시너지 '합계'를 한 줄로 — 어느 탭에서든 같은 숫자
+  const tot = landBuffTotals(buffs);
+  const hasLand = buffs.active || tot.atkPct || tot.goldPct || tot.critDmgPct || tot.cdrPct || tot.bossDmgPct || tot.expPct;
+  if (hasLand) {
+    const own = `🏢 건물주 ${buffs.buildings || 0}곳 · 🗺️ 세트 ${buffs.setCount || 0}/${buffs.setTotal || 7} · 🏛️ 랜드마크 ${buffs.landmarkCount || 0}개`;
     buffParts.push(
-      `🏢 공격 +${buffs.atkPct}% · 골드 +${buffs.goldPct}% · 체력 +${buffs.hpPct}% · 치명 +${Math.round((buffs.critPct || 0) * 10) / 10}% · 드롭 +${buffs.dropPct}%`,
+      `<span style="color:var(--green)">🏘️ 부동산 버프 합계 · ${landBuffTotalsText(buffs)}</span><br><span class="dim">${own}</span>`,
     );
   }
-  if (buffs.setAtkPct || buffs.setGoldPct || buffs.setDropPct) {
-    buffParts.push(`🗺️ 세트 ${buffs.setCount || 0}곳 공격 +${buffs.setAtkPct || 0}% · 골드 +${buffs.setGoldPct || 0}% · 드롭 +${buffs.setDropPct || 0}%`);
-  }
-  if (buffs.landmarkCount > 0) {
-    buffParts.push(`🏛️ 랜드마크 ${buffs.landmarkCount}개 공격 +${buffs.landmarkAtkPct || 0}% · 골드 +${buffs.landmarkGoldPct || 0}%`);
-  }
   const buffLine = buffParts.length
-    ? `<div class="tiny ellip" style="margin-top:6px;color:var(--green)">${buffParts.join(' · ')}</div>`
+    ? `<div class="tiny" style="margin-top:6px;line-height:1.5;color:var(--green)">${buffParts.join('<br>')}</div>`
     : `<div class="tiny ellip dim" style="margin-top:6px">🏢 부동산을 사면 영구 버프 — <b style="color:var(--gold)">부동산 탭 → 매물 투자</b></div>`;
 
   const newsNow = activeNews(Date.now());
@@ -1078,6 +1116,10 @@ function huntStatsCard(ui) {
       ${stat('gold', '골드 획득', `+${Math.round((st.goldMult - 1) * 100)}`, '%')}
       ${stat('', '강화석 드롭', `+${Math.round((st.dropMult - 1) * 100)}`, '%')}
       ${stat('', '공격 속도', (1000 / st.attackMs).toFixed(2), '회/초')}
+      ${st.critDmg > 2 ? stat('crit', '치명타 피해', `×${st.critDmg.toFixed(2)}`, '') : ''}
+      ${st.skillCdr > 0 ? stat('', '스킬 쿨감', `${Math.round(st.skillCdr * 100)}`, '%') : ''}
+      ${st.bossDmgPct > 0 ? stat('', '보스 피해', `+${Math.round(st.bossDmgPct * 100)}`, '%') : ''}
+      ${st.expMult > 1 ? stat('', '경험치 획득', `+${Math.round((st.expMult - 1) * 100)}`, '%') : ''}
     </div>
     ${buffLine}
     ${newsLine}
@@ -1615,13 +1657,13 @@ function regionSetCard(ui) {
       const need = st.nextNeed;
       const w = need ? Math.min(100, (st.held / need) * 100) : 100;
       const buffLine = on
-        ? `${buffText(st.buffs)}${st.nextNeed ? ` <span class="dim">· 다음 ${st.nextNeed}곳</span>` : ' <span class="dim">· 최대</span>'}`
+        ? `${buffText(st.buffs)}${st.complete ? ` <b style="color:var(--gold)">· 완성 ${st.masterText}</b>` : st.nextNeed ? ` <span class="dim">· 다음 ${st.nextNeed}곳</span>` : ' <span class="dim">· 최대</span>'}`
         : `${st.nextNeed}곳 모으면 ${buffText(st.nextBuffs)}`;
       return `
       <div class="set-row ${on ? 'on' : ''}">
         <div class="set-ico" style="--sc:${st.color}">${st.icon}</div>
         <div class="set-mid">
-          <div class="set-name">${esc(st.name)}<span class="set-cnt">${st.held}곳${need ? ` / ${need}곳` : ''}</span>${on ? `<span class="set-lv">Lv.${st.level}</span>` : ''}</div>
+          <div class="set-name">${esc(st.name)}<span class="set-cnt">${st.held}곳${need ? ` / ${need}곳` : ''}</span>${on ? `<span class="set-lv">Lv.${st.level}</span>` : ''}${st.complete ? '<span class="set-lv" style="color:var(--gold)">완성</span>' : ''}</div>
           <div class="prog tiny-prog" style="margin-top:4px"><i style="width:${w}%;background:linear-gradient(90deg,#2c6ea8,${st.color})"></i></div>
           <div class="set-buff">${buffLine}</div>
         </div>
@@ -1727,6 +1769,12 @@ function landTabBar(ui) {
 function landSummaryBar(ui) {
   const p = portfolioOf(ui.s);
   const claimable = p.accruedRent >= 1;
+  const buffs = (ui.app && ui.app.buffs) || computeBuffs(ui.s);
+  const tot = landBuffTotals(buffs);
+  const hasBuff = buffs.active || tot.atkPct || tot.goldPct || tot.critDmgPct || tot.cdrPct || tot.bossDmgPct || tot.expPct;
+  const totLine = hasBuff
+    ? `<div class="ls-tot"><span class="ls-tot-k">🏘️ 전투 버프</span><span class="ls-tot-v">${landBuffTotalsText(buffs)}</span></div>`
+    : '<div class="ls-tot"><span class="ls-tot-k">🏘️ 전투 버프</span><span class="ls-tot-v dim">매물을 사면 사냥에 영구 버프가 붙습니다</span></div>';
   return `
   <div class="card land-sum${claimable ? ' ready' : ''}">
     <div class="ls-top">
@@ -1742,6 +1790,120 @@ function landSummaryBar(ui) {
         ${claimable ? '💤 일괄 수령' : '적립 중…'}
       </button>
     </div>
+    ${totLine}
+  </div>`;
+}
+
+/* ───────────── 🔨 급매 경매 (v4.6) ─────────────
+ * 20분마다 한 건, 앞 12분이 입찰 시간. 입찰가는 시간이 지나면 시세 쪽으로 오른다.
+ * 한 경매당 한 번만 낙찰할 수 있고, 낙찰가에는 거래세가 붙지 않는다.
+ */
+function auctionCard(ui) {
+  const now = Date.now();
+  const a = auctionStatus(ui.s, now);
+  const live = a.live && !a.done;
+  // 경매 중·낙찰 완료 → 이번 매물 / 준비 시간 → 다음 매물 예고
+  const lot = live || a.done ? a.lot : auctionLot(now + Math.max(1000, a.nextMs + 1000));
+  const c = lot.city;
+  const affordable = ui.s.gold >= a.price;
+  const phase = a.done ? 'done' : live ? 'live' : 'gap';
+  const tag = live ? '<span class="tag hot">🔨 입찰 중</span>' : a.done ? '<span class="tag lm">✅ 낙찰</span>' : '<span class="tag">🕐 준비</span>';
+  const timer = live
+    ? `마감까지 <b data-live="auc-left">${mmss(a.leftMs)}</b>`
+    : `다음 경매 <b data-live="auc-left">${mmss(a.nextMs)}</b>`;
+
+  const lotRow = `
+    <div class="auc-lot">
+      <div class="auc-ico">${c.emoji}</div>
+      <div class="auc-mid">
+        <div class="auc-name">${esc(c.name)}<span class="auc-region">${esc(c.region)} · ${esc(c.tierLabel)}</span>${tag}</div>
+        <div class="auc-line"><b>${fmt(lot.qty)}평</b> · 시세 💰${fmt(lot.marketValue)} · <span class="auc-off">최저 -${lot.discountPct}%</span></div>
+        <div class="auc-bonus">${lot.bonusText}</div>
+      </div>
+    </div>`;
+
+  let body = '';
+  if (live) {
+    body = `
+    ${lotRow}
+    <div class="prog auc-prog"><i data-live="auc-prog" style="width:${Math.round(a.progress * 100)}%"></i></div>
+    <div class="auc-price">
+      <span class="k">현재 입찰가</span>
+      <b class="v" data-live="auc-price">💰${fmt(a.price)}</b>
+      <span class="auc-disc" data-live="auc-disc">시세 -${a.discountPct}%</span>
+    </div>
+    <button class="btn small gold block auc-bid" type="button" data-action="auction-bid" data-live="auc-btn" ${affordable ? '' : 'disabled'}>🔨 지금 낙찰 · 💰${fmt(a.price)}</button>
+    <div class="tiny dim" style="margin-top:5px">늦게 낙찰할수록 입찰가가 시세 쪽으로 오릅니다 · 1건당 1회 낙찰 · 거래세 없음</div>`;
+  } else if (a.done) {
+    const last = a.log[0];
+    body = `
+    ${lotRow}
+    <div class="auc-done">✅ 이번 경매 낙찰 완료${last ? ` · 💰${fmt(last.price)} (시세 -${Math.round((1 - last.price / Math.max(1, last.market)) * 100)}%)` : ''}</div>
+    <div class="tiny dim" style="margin-top:5px">다음 매물은 새 경매가 열릴 때 공개됩니다.</div>`;
+  } else {
+    body = `
+    <div class="auc-next">다음 매물 예고 · ${esc(c.name)} ${fmt(lot.qty)}평 · 시세 -${lot.discountPct}%</div>
+    ${lotRow}
+    <div class="tiny dim" style="margin-top:5px">경매는 매 20분, 앞 12분만 열립니다. 골드를 모아 두세요.</div>`;
+  }
+
+  const saved = a.totals.saved;
+  return `
+  <div class="card auc-card ${phase}" id="auctionCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🔨</span>급매 경매<small>20분마다 · 거래세 없음</small></div>
+      <span class="tiny ${live ? 'auc-live' : 'dim'}">${timer}</span>
+    </div>
+    ${body}
+    <div class="auc-foot">
+      <span class="tiny dim">낙찰 ${fmt(a.totals.bids)}건 · 아낀 골드 💰${formatGold(saved)}</span>
+      <button class="mini ghost" type="button" data-action="auction-info">내역</button>
+    </div>
+  </div>`;
+}
+
+/* ───────────── 🏛️ 부동산 전투 시너지 카드 (v4.6) ───────────── */
+function landSynergyCard(ui) {
+  const buffs = (ui.app && ui.app.buffs) || computeBuffs(ui.s);
+  const syn = buffs.syn || landSynergy(ui.s);
+  const lm = syn.landmark;
+  const rg = syn.region;
+  const step = nextLandmarkStep(ui.s);
+  const tot = landBuffTotals(buffs);
+  const row = (icon, label, val, next, unit = '%', sign = '+') => `
+    <div class="syn-row">
+      <span class="syn-k">${icon} ${label}</span>
+      <b class="syn-v">${sign}${val}${unit}</b>
+      <span class="syn-n">${next > 0 ? `랜드마크 레벨 +1 → ${sign}${next}${unit}` : '상한'}</span>
+    </div>`;
+  const sets = regionSetStatus(ui.s.land.owned);
+  const done = sets.filter((st) => st.complete);
+  const closest = sets
+    .filter((st) => !st.complete)
+    .sort((a, b) => (b.held / Math.max(1, b.maxNeed)) - (a.held / Math.max(1, a.maxNeed)))
+    .slice(0, 2);
+  return `
+  <div class="card syn-card" id="synergyCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🏛️</span>부동산 전투 시너지<small>랜드마크 · 권역 완성</small></div>
+      <span class="tiny" style="color:${syn.active ? 'var(--green)' : 'var(--dim)'}">${syn.active ? syn.parts.join(' · ') : '미적용'}</span>
+    </div>
+    <div class="tiny muted">랜드마크 레벨 합계 <b>${lm.levels}</b> → 치명타 피해 · 쿨감 · 보스 피해. Lv.3 <b>메가 랜드마크</b> 1개당 경험치 +${LAND_SYNERGY.mega.expPct}%. 권역을 최대 단계까지 채우면 권역별 시너지가 열립니다.</div>
+    ${row('💥', '치명타 피해', tot.critDmgPct, step.critDmgPct)}
+    ${row('⏱️', '스킬 쿨감', tot.cdrPct, step.cdrPct, '%', '-')}
+    ${row('👹', '보스 피해', tot.bossDmgPct, step.bossDmgPct)}
+    ${row('📈', '경험치 획득', tot.expPct, step.expPct)}
+    <div class="syn-set">
+      <div class="syn-set-h">🗺️ 권역 완성 <b>${rg.count}/${rg.total}</b></div>
+      ${done.length
+        ? `<div class="syn-chips">${done.map((st) => `<span class="syn-chip" style="--sc:${st.color}">${st.icon} ${esc(st.name)} · ${st.masterText}</span>`).join('')}</div>`
+        : '<div class="tiny dim">아직 완성한 권역이 없습니다.</div>'}
+      ${closest.length
+        ? `<div class="tiny dim" style="margin-top:5px">${closest.map((st) => `${st.name} ${st.held}/${st.maxNeed}곳 → 완성 시 ${st.masterText}`).join('<br>')}</div>`
+        : ''}
+    </div>
+    <div class="syn-total"><span>🏘️ 부동산 전투 버프 합계</span><b>${landBuffTotalsText(buffs) || '없음'}</b></div>
+    <button class="btn small ghost block" style="margin-top:8px" type="button" data-action="land-sub" data-value="market">🛒 매물·랜드마크 더 사러 가기</button>
   </div>`;
 }
 
@@ -1773,11 +1935,12 @@ function tplLandHome(ui) {
             ? `<button class="lm-chip ${lm ? 'on' : ''}" type="button" data-action="landmark" data-value="${h.city.key}">${lm ? `${LANDMARK.levels[lm - 1].icon} Lv.${lm}` : '🏛️ 랜드마크'}</button>`
             : '';
           const newsTag = h.news ? '<span class="tag hot">📈 호재</span>' : '';
+          const leaseTag = h.leasePct > 0 ? `<span class="tag lease">🏷️ 임대 +${h.leasePct}%</span>` : '';
           const mulTag = h.rentMul > 1.001 ? `<span class="up">임대 ×${h.rentMul.toFixed(2)}</span>` : '';
           return `<div class="hold${h.news ? ' hot' : ''}">
             <div class="h-ico">${h.city.emoji}</div>
             <div class="h-mid">
-              <div class="h-name">${esc(h.city.name)}<span class="h-region">${esc(h.city.region)}</span>${traitBadge(h.city.trait)}${newsTag}${lmBtn}</div>
+              <div class="h-name">${esc(h.city.name)}<span class="h-region">${esc(h.city.region)}</span>${traitBadge(h.city.trait)}${newsTag}${lmBtn}${leaseTag}</div>
               <div class="h-line"><b>${fmt(h.qty)}평</b><span class="dim"> · 평가 💰${formatGold(h.value)}</span>${mulTag ? ` · ${mulTag}` : ''}</div>
               <div class="h-line dim">시간 +💰${formatGold(h.incomePerHour)} · 회수 ${paybackText(payback)} · ${trendHtml(h.trend)}</div>
             </div>
@@ -1797,6 +1960,8 @@ function tplLandHome(ui) {
     : '';
 
   return `
+  ${auctionCard(ui)}
+
   ${regionSetMini(ui)}
 
   <div class="card hold-card">
@@ -1824,6 +1989,12 @@ function tplLandHome(ui) {
       <div class="stat"><div class="k">최고 자산</div><div class="v">${formatGold(Math.max(p.land.bestAsset || 0, p.totalAsset))}</div></div>
     </div>
     <div class="tiny dim" style="margin-top:7px">임대수익은 접속 중 <b>100%</b> · 앱을 닫아둔 동안은 <b>${Math.round(LAND.rentOfflineRate * 100)}%</b>(최대 ${LAND.rentCapHours}시간) 적립 — 요약 바의 <b>일괄 수령</b>으로 받습니다.</div>
+    ${(() => {
+    const auc = (s.land && s.land.auction) || {};
+    const bids = Math.max(0, Math.floor(Number(auc.bids) || 0));
+    if (!bids) return '';
+    return `<div class="kv" style="margin-top:7px"><span class="k">🔨 급매 경매 낙찰</span><span class="v">${bids}건 · 아낀 골드 💰${formatGold(Math.max(0, Number(auc.saved) || 0))}</span></div>`;
+  })()}
   </div>`;
 }
 
@@ -1849,7 +2020,8 @@ function buildMarketList(ui) {
     const lm = landmarkLevel(s, c.key);
     const setId = citySetId(c.key);
     const setPct = setId ? (setB.rentBySet[setId] || 0) : 0;
-    const rentMul = (1 + setPct / 100) * landmarkRentMul(lm) * (info.news ? 1 + info.news.rentPct / 100 : 1);
+    const rentMul = (1 + setPct / 100) * landmarkRentMul(lm) * (1 + leasePctOf(s, c.key) / 100)
+      * (info.news ? 1 + info.news.rentPct / 100 : 1);
     const hourlyPerPyeong = c.rentPerMin * 60 * rentMul;
     rows.push({ c, info, held, hourlyPerPyeong, lm, rentMul, payback: hourlyPerPyeong > 0 ? info.price / hourlyPerPyeong : 0 });
   }
@@ -1872,11 +2044,13 @@ function buildMarketList(ui) {
           const onePyeongIncome = c.rentPerMin * 60 * (rentMul || 1);
           const newsTag = info.news ? '<span class="tag hot">📈 호재</span>' : '';
           const lmTag = lm > 0 ? `<span class="tag lm">${LANDMARK.levels[lm - 1].icon} Lv.${lm}</span>` : '';
+          const lease = leasePctOf(s, c.key);
+          const leaseTag = lease > 0 ? `<span class="tag lease">🏷️ 임대 +${lease}%</span>` : '';
           const mulTag = rentMul > 1.001 ? ` · <b class="up">임대 ×${rentMul.toFixed(2)}</b>` : '';
           return `<div class="mkt${info.news ? ' hot' : ''}">
             <div class="m-ico">${c.emoji}</div>
             <div class="m-mid">
-              <div class="m-name">${esc(c.name)}<span class="m-region">${esc(c.region)}</span>${traitBadge(c.trait)}${seasonal}${newsTag}${lmTag}</div>
+              <div class="m-name">${esc(c.name)}<span class="m-region">${esc(c.region)}</span>${traitBadge(c.trait)}${seasonal}${newsTag}${lmTag}${leaseTag}</div>
               <div class="m-line"><b>💰${fmt(info.price)}</b><span class="dim">/평</span> ${trendHtml(info.trend)}</div>
               <div class="m-line dim">평당 시간 +💰${fmt(onePyeongIncome)} · 회수 ${paybackText(c.base / hourlyPerPyeong)}${held > 0 ? ` · <b class="own">보유 ${fmt(held)}평</b>` : ''}${mulTag}</div>
               <div class="m-line dim">잔여 ${fmt(remain)}평${!affordable ? ' · <span style="color:var(--dim)">골드 부족</span>' : ''}</div>
@@ -1988,6 +2162,8 @@ function tplLandBuff(ui) {
   ${regionSetCard(ui)}
 
   ${landmarkCard(ui)}
+
+  ${landSynergyCard(ui)}
 
   <div class="card buff-now">
     <div class="card-head">

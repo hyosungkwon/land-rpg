@@ -3,7 +3,7 @@
 // 렌더러는 이 객체의 엔티티를 읽고, UI는 events 큐를 소비한다.
 import { ECON, SKILLS, stageDef, monsterKo, monsterMotion, monsterAttack, THEMES } from './data.js';
 import {
-  calcStats, currentHp, skillEffect, killReward, registerKill, clearStage, monsterStats,
+  calcStats, currentHp, skillEffect, killReward, registerKill, clearStage, monsterStats, skillCdOf,
 } from './state.js';
 import { DUNGEON, PET_ATTACK_MS, equippedPet, petDmgPct, dungeonReward, petEvo, petSkillOf, petPassive, petGoldPct } from './meta.js';
 import { TOWER_RULES, TOWER_MAX_FLOOR, towerFloor, towerStageDef, towerHas, towerReward, towerCleared, towerState, towerUnlocked, towerLockReason } from './tower.js';
@@ -687,21 +687,23 @@ export class Battle {
   autoSkills(now) {
     const sk = this.s.skills;
     const alive = this.targets();
+    // v4.6 부동산 시너지(쿨감)를 반영한 실효 쿨타임
+    const cd = (key) => skillCdOf(key, this.buffs());
     // 회복: 체력 65% 이하
-    if (now - sk.heal.last >= SKILLS.heal.cd && this.player.hp / this.stats.hpMax < 0.65) this.castSkill('heal', now);
+    if (now - sk.heal.last >= cd('heal') && this.player.hp / this.stats.hpMax < 0.65) this.castSkill('heal', now);
     // 광폭: 보스전 또는 적 2마리 이상
-    if (now - sk.berserk.last >= SKILLS.berserk.cd && (this.boss || alive.length >= 2)) this.castSkill('berserk', now);
+    if (now - sk.berserk.last >= cd('berserk') && (this.boss || alive.length >= 2)) this.castSkill('berserk', now);
     // 범위 베기: 적 2마리 이상
-    if (now - sk.whirl.last >= SKILLS.whirl.cd && alive.length >= 2) this.castSkill('whirl', now);
+    if (now - sk.whirl.last >= cd('whirl') && alive.length >= 2) this.castSkill('whirl', now);
     // 강격: 적이 사거리 안에 있을 때
-    if (now - sk.strike.last >= SKILLS.strike.cd && alive.some((m) => m.x - this.player.x <= ECON.playerRange)) this.castSkill('strike', now);
+    if (now - sk.strike.last >= cd('strike') && alive.some((m) => m.x - this.player.x <= ECON.playerRange)) this.castSkill('strike', now);
   }
 
   castSkill(key, now = Date.now()) {
     const def = SKILLS[key];
     const sk = this.s.skills[key];
     if (!def || !sk) return false;
-    if (now - sk.last < def.cd) return false;
+    if (now - sk.last < skillCdOf(key, this.buffs())) return false;
     if (this.player.dead) return false;
     const alive = this.targets();
     if (key === 'heal') {

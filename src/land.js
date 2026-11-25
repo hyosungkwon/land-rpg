@@ -14,6 +14,7 @@ import { PROP_BUFFS } from './data.js';
 import {
   activeNews, newsForCity, citySetId, regionSetBuffs, regionSetStatus, buffText,
 } from './region.js';
+import { landSynergy } from './synergy.js';
 
 export const LAND = {
   priceScale: 0.1, // 원본 시세(원/평) → 골드/평 (10분의 1)
@@ -27,6 +28,7 @@ export const LAND = {
   floorOfBase: 0.3, // 초기가의 30% 절대 하한
   rentOfflineRate: 0.25, // 오프라인 임대 수익 = 접속 중의 25%(실제 시간당 2.1~4.5%)
   rentCapHours: 12,
+  leaseCapPct: 60, // 경매 특별 임대 계약 상한(한 지역 누적, v4.6)
   seasonMs: 6 * 3600 * 1000, // 계절 특성 6시간 로테이션
   seasonChance: 0.2,
 };
@@ -218,7 +220,17 @@ export function cityRentMul(state, key, now = Date.now(), setBuffs = null, news 
   const setPct = setId && sb.rentBySet ? (sb.rentBySet[setId] || 0) : 0;
   const lm = landmarkRentMul(landmarkLevel(state, key));
   const newsMul = news ? 1 + (news.rentPct || 0) / 100 : 1;
-  return (1 + setPct / 100) * lm * newsMul;
+  const leaseMul = 1 + leasePctOf(state, key) / 100; // v4.6 경매 특별 임대
+  return (1 + setPct / 100) * lm * newsMul * leaseMul;
+}
+
+/* ─────────────── 🏷️ 경매 특별 임대 계약 (v4.6) ─────────────── */
+/** 경매로 얻은 특별 임대 계약(%) — 그 지역 임대수익에 영구 가산된다 */
+export function leasePctOf(state, key) {
+  const m = state && state.land && state.land.lease;
+  if (!m || typeof m !== 'object' || !key) return 0;
+  const v = Number(m[key]);
+  return isFinite(v) && v > 0 ? Math.min(LAND.leaseCapPct, v) : 0;
 }
 
 /* ─────────────── 🏛️ 랜드마크 ─────────────── */
@@ -313,6 +325,9 @@ export function defaultLand(now = Date.now()) {
     totalCost: {}, // { cityKey: 골드 }
     landmarks: {}, // { cityKey: Lv.1~3 } — v3.4.0
     landmarkSpend: 0, // 랜드마크 누적 투자(골드)
+    // v4.6: 경매 특별 임대 계약 { cityKey: % } · 급매 경매 기록
+    lease: {},
+    auction: { done: -1, bids: 0, spend: 0, saved: 0, log: [] },
     accruedRent: 0, // 미수령 임대수익(골드)
     rentAt: now, // 마지막 임대 적립 시각
     bestAsset: 0, // 최고 부동산 평가액
@@ -361,7 +376,9 @@ export function portfolioOf(state, now = Date.now()) {
     const setId = citySetId(key);
     const setRentPct = setId ? (setBuffs.rentBySet[setId] || 0) : 0;
     const news = info.news || null;
-    const rentMul = (1 + setRentPct / 100) * landmarkRentMul(lm) * (news ? 1 + (news.rentPct || 0) / 100 : 1);
+    const leasePct = leasePctOf(s, key);
+    const rentMul = (1 + setRentPct / 100) * landmarkRentMul(lm)
+      * (news ? 1 + (news.rentPct || 0) / 100 : 1) * (1 + leasePct / 100);
     const income = incomePerMinOf(city, qty, qty, now, rentMul);
     const v = qty * info.price;
     const cost = num(totalCost[key]);
@@ -383,6 +400,7 @@ export function portfolioOf(state, now = Date.now()) {
       landmark: lm,
       setId,
       setRentPct,
+      leasePct,
       rentMul,
       news,
     });
@@ -423,6 +441,8 @@ export function computeBuffs(state, now = Date.now()) {
   // v3.4.0: 권역 세트 · 랜드마크 보너스는 '건물주 버프'와 별도 항목으로 가산된다.
   const sets = p.setBuffs || regionSetBuffs(p.land && p.land.owned);
   const lm = landmarkSummary(state);
+  // v4.6: 랜드마크·권역 완성 → 전투 시너지(치명타 피해·쿨감·보스 피해·경험치·공/골드/드롭)
+  const syn = landSynergy(state, p.land && p.land.owned);
   const setAtkPct = sets.atkPct || 0;
   const setGoldPct = sets.goldPct || 0;
   const setDropPct = sets.dropPct || 0;
@@ -453,8 +473,22 @@ export function computeBuffs(state, now = Date.now()) {
     landmarkAtkPct: lm.atkPct,
     landmarkGoldPct: lm.goldPct,
     landmarkLevels: lm.levels,
+    // v4.6 부동산 전투 시너지(랜드마크 + 권역 완성) — 사냥 탭·부동산 탭 공통 표시
+    syn,
+    synAtkPct: syn.atkPct,
+    synGoldPct: syn.goldPct,
+    synDropPct: syn.dropPct,
+    synCritDmgPct: syn.critDmgPct,
+    synCdrPct: syn.cdrPct,
+    synBossDmgPct: syn.bossDmgPct,
+    synExpPct: syn.expPct,
+    synText: syn.text,
+    synLandmarkLevels: syn.landmark.levels,
+    synMega: syn.landmark.mega,
+    synCompleteSets: syn.region.count,
     active: atkPct + hpPct + goldPct + critPct + dropPct > 0
-      || setAtkPct + setGoldPct + setDropPct + setHpPct + setCritPct > 0 || lm.count > 0,
+      || setAtkPct + setGoldPct + setDropPct + setHpPct + setCritPct > 0 || lm.count > 0
+      || syn.active,
   };
 }
 

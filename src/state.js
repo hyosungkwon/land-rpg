@@ -15,6 +15,7 @@ import {
   shouldAutoEquip, randomItemOfRarity, gearItem, GEAR_BY_RARITY,
 } from './gear.js';
 import { defaultLand } from './land.js';
+import { normalizeAuctionState } from './auction.js';
 import { PET_IDS, PET_MAX_LV, PET_EVO_MAX, JOB_MAX, jobOf, equippedPet, petLevel, petAtkPct, petEvo, petGoldPct, petPassive, petStageInfo } from './meta.js';
 import {
   collectionBonus, normalizeQuestState, normalizeAchievements, normalizeCodex, equipLevelSum,
@@ -114,6 +115,9 @@ export function normalizeState(raw, now = nowMs()) {
   s.land.totalCost = sanitizeOwned(s.land.totalCost);
   s.land.landmarks = sanitizeLandmarks(s.land.landmarks, s.land.owned);
   s.land.landmarkSpend = Math.max(0, num(s.land.landmarkSpend, 0));
+  // v4.6: 경매 특별 임대 계약 · 급매 경매 기록(없는 저장본은 빈 값)
+  s.land.lease = sanitizeLease(s.land.lease, s.land.owned);
+  s.land.auction = normalizeAuctionState(s.land.auction);
   s.land.accruedRent = Math.max(0, num(s.land.accruedRent, 0));
   s.land.rentAt = num(s.land.rentAt, now);
   s.land.bestAsset = Math.max(0, num(s.land.bestAsset, 0));
@@ -232,6 +236,19 @@ function sanitizeLandmarks(v, owned) {
   return out;
 }
 
+/** 경매 특별 임대 계약: 보유한 지역의 0~60% 만 남긴다 */
+function sanitizeLease(v, owned) {
+  const out = {};
+  if (!v || typeof v !== 'object') return out;
+  const held = owned && typeof owned === 'object' ? owned : {};
+  for (const [k, raw] of Object.entries(v)) {
+    if (!(Math.floor(num(held[k], 0)) > 0)) continue;
+    const pct = Math.min(60, Math.max(0, num(raw, 0)));
+    if (pct > 0) out[k] = Math.round(pct * 10) / 10;
+  }
+  return out;
+}
+
 /** 호재 뉴스 기록(최근 8건 · 본 뉴스 id 목록) 정규화 */
 function normalizeNews(v) {
   const raw = v && typeof v === 'object' ? v : {};
@@ -293,11 +310,16 @@ export function calcStats(s, buffs = NO_BUFF) {
   const b = { ...NO_BUFF, ...(buffs || {}) };
   const add = (v) => (typeof v === 'number' && isFinite(v) ? v : 0);
   // v3.4.0: 권역 세트 · 랜드마크 보너스는 건물주 버프와 별도로 더해진다.
-  const extraAtk = add(b.setAtkPct) + add(b.landmarkAtkPct);
-  const extraGold = add(b.setGoldPct) + add(b.landmarkGoldPct);
+  const extraAtk = add(b.setAtkPct) + add(b.landmarkAtkPct) + add(b.synAtkPct);
+  const extraGold = add(b.setGoldPct) + add(b.landmarkGoldPct) + add(b.synGoldPct);
   const extraHp = add(b.setHpPct);
   const extraCrit = add(b.setCritPct);
-  const extraDrop = add(b.setDropPct);
+  const extraDrop = add(b.setDropPct) + add(b.synDropPct);
+  // v4.6 부동산 전투 시너지 — 치명타 피해 · 스킬 쿨감 · 보스 추가 피해 · 경험치
+  const synCritDmg = add(b.synCritDmgPct) / 100;
+  const skillCdr = Math.min(0.4, Math.max(0, add(b.synCdrPct)) / 100);
+  const synBoss = add(b.synBossDmgPct) / 100;
+  const expMult = 1 + add(b.synExpPct) / 100;
   const L = s.level;
   const e = s.equip;
   const gr = s.gearRarity || {};
@@ -327,7 +349,7 @@ export function calcStats(s, buffs = NO_BUFF) {
     (150 + 30 * L + EQUIP.armor.per * eLv('armor') + EQUIP.helmet.per * eLv('helmet'))
     * (1 + (b.hpPct + extraHp + gm.hpPct) / 100) * jobHpMul * rbHpMul;
   const crit = Math.min(0.5, 0.05 + (EQUIP.ring.per / 100) * eLv('ring') + (b.critPct + extraCrit + gm.critPct + (petPas.critPct || 0)) / 100);
-  const critDmg = 2.0 + rb.critDmgAdd + gm.critDmg / 100;
+  const critDmg = 2.0 + rb.critDmgAdd + gm.critDmg / 100 + synCritDmg;
   // v3.8 방어·회복 — 다굴에서 버티는 힘. 갑옷/투구 강화(등급 환산 포함) + 환생 '수호' 특성 + v4 장비 옵션
   const defFromGear = EQUIP.armor.defPer * eLv('armor') + EQUIP.helmet.defPer * eLv('helmet');
   const dmgReduce = Math.min(DEF.cap, (defFromGear + (rb.guardPct || 0) + gm.dmgRed) / 100);
@@ -340,7 +362,7 @@ export function calcStats(s, buffs = NO_BUFF) {
   const attackMs = Math.max(300, (ECON.playerAttackMs - L * 2) * (1 - Math.min(0.4, gm.atkSpd / 100)));
   const lifesteal = Math.min(0.2, gm.lifesteal / 100); // 흡혈 상한 20%
   const petBossDmgPct = (petPas.bossDmgPct || 0) / 100; // v4.2 용의 숨결
-  const bossDmgPct = gm.bossDmg / 100 + petBossDmgPct;
+  const bossDmgPct = gm.bossDmg / 100 + petBossDmgPct + synBoss;
   const whirlDmgPct = gm.whirlDmg / 100;
   const dps = (atk / (attackMs / 1000)) * (1 + crit * (critDmg - 1));
   return {
@@ -357,6 +379,15 @@ export function calcStats(s, buffs = NO_BUFF) {
     bossDmgPct,
     whirlDmgPct,
     dps: Math.round(dps),
+    // v4.6 부동산 시너지 표시·전투 적용값
+    skillCdr,
+    expMult,
+    synCritDmgPct: Math.round(synCritDmg * 1000) / 10,
+    synBossDmgPct: Math.round(synBoss * 1000) / 10,
+    synAtkPct: add(b.synAtkPct),
+    synGoldPct: add(b.synGoldPct),
+    synDropPct: add(b.synDropPct),
+    synExpPct: add(b.synExpPct),
     jobTier: job.tier,
     petId: pet ? pet.id : null,
     // v4.2 펫 진화·고유 스킬 표시용
@@ -668,6 +699,14 @@ export function tryUpgradeSkill(s, key) {
   return { ok: true, lv: sk.lv, spent: cost };
 }
 
+/** 스킬 쿨타임 실효값 — 부동산 시너지(쿨감)를 반영한다(상한 40%) */
+export function skillCdOf(key, buffs) {
+  const def = SKILLS[key];
+  if (!def) return 0;
+  const cdr = Math.min(0.4, Math.max(0, Number((buffs || {}).synCdrPct) || 0) / 100);
+  return def.cd * (1 - cdr);
+}
+
 export function skillEffect(key, lv) {
   const def = SKILLS[key];
   const p = skillPowerMul(lv);
@@ -696,6 +735,7 @@ export function killReward(s, stage, isBoss, buffs, rng = Math.random) {
   );
   const exp = Math.round(
     stageExpBase(stage) * (isBoss ? ECON.bossExpMul : 1) * (0.95 + rng() * 0.1)
+      * (1 + (Number(buffs?.synExpPct) || 0) / 100),
   );
   let shards = 0;
   const dropPct = (buffs?.dropPct || 0) + rb.shardPct;
@@ -744,7 +784,7 @@ export function offlineSummary(s, now = nowMs(), buffs = NO_BUFF) {
   const kills = sec * ECON.offlineKillsPerSec;
   const rb = rebirthBonus(s);
   const goldPerKill = stageGoldBase(s.stage) * (1 + (buffs?.goldPct || 0) / 100 + rb.goldPct / 100);
-  const expPerKill = stageExpBase(s.stage);
+  const expPerKill = stageExpBase(s.stage) * (1 + (Number(buffs?.synExpPct) || 0) / 100);
   const gold = Math.floor(goldPerKill * kills * ECON.offlineRate);
   const exp = Math.floor(expPerKill * kills * ECON.offlineRate);
   const shards = Math.floor((sec / 3600) * 3 * (1 + (buffs?.dropPct || 0) / 100 + rb.shardPct / 100));

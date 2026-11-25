@@ -2163,3 +2163,56 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .buff-card .buff-head span { font-size: 11.5px; }
 .buff-card .buff-next { font-size: 9px; margin-top: 2px; }
 .buff-now .stat-grid.four { margin-top: 2px; }
+
+/* ───────────── v4.6 부동산 전투 시너지 · 🔨 급매 경매 ───────────── */
+/* 요약 바 아래 전투 버프 합계 한 줄 — 부동산 탭 어디서든 같은 숫자 */
+.ls-tot { display: flex; gap: 5px; margin-top: 5px; padding-top: 5px; border-top: 1px dashed rgba(255, 255, 255, 0.08); font-size: 9.5px; line-height: 1.45; }
+.ls-tot-k { flex: 0 0 auto; color: var(--dim); font-weight: 800; }
+.ls-tot-v { flex: 1 1 auto; min-width: 0; color: var(--green); font-weight: 700; }
+
+/* 🔨 급매 경매 카드 */
+.auc-card { background: linear-gradient(160deg, rgba(255, 138, 80, 0.14), rgba(18, 26, 42, 0.96) 60%); border-color: rgba(255, 138, 80, 0.28); }
+.auc-card.done { background: linear-gradient(160deg, rgba(94, 225, 163, 0.1), rgba(18, 26, 42, 0.96) 60%); border-color: rgba(94, 225, 163, 0.32); }
+.auc-card.gap { background: linear-gradient(160deg, rgba(105, 192, 255, 0.08), rgba(18, 26, 42, 0.96) 60%); border-color: var(--line-2); }
+.auc-live { color: var(--gold); font-weight: 800; }
+.auc-live b { color: var(--gold); font-variant-numeric: tabular-nums; }
+.auc-lot { display: flex; align-items: center; gap: 9px; }
+.auc-ico { flex: 0 0 38px; height: 38px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 20px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line-2); }
+.auc-mid { flex: 1 1 auto; min-width: 0; }
+.auc-name { font-size: 13px; font-weight: 900; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.auc-region { font-size: 9px; color: var(--dim); font-weight: 700; }
+.auc-line { font-size: 10.5px; color: var(--sub); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.auc-line b { color: var(--txt); font-size: 11.5px; }
+.auc-off { color: #ffb08a; font-weight: 800; }
+.auc-bonus { font-size: 10px; margin-top: 2px; color: var(--gold); font-weight: 800; }
+.auc-prog { margin: 7px 0 5px; height: 5px; }
+.auc-prog i { background: linear-gradient(90deg, #a9791a, var(--gold)); }
+.auc-price { display: flex; align-items: baseline; gap: 6px; }
+.auc-price .k { font-size: 10px; color: var(--dim); font-weight: 700; }
+.auc-price .v { font-size: 17px; font-weight: 900; color: var(--gold); font-variant-numeric: tabular-nums; letter-spacing: -0.3px; }
+.auc-disc { margin-left: auto; font-size: 10px; font-weight: 800; color: #ffb08a; }
+.auc-bid { margin-top: 6px; min-height: 36px; font-size: 12.5px; }
+.auc-bid:disabled { opacity: 0.45; }
+.auc-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 7px; padding-top: 6px; border-top: 1px dashed rgba(255, 255, 255, 0.08); }
+.auc-next { font-size: 10px; font-weight: 800; color: var(--blue); margin-bottom: 5px; }
+.auc-done { font-size: 11.5px; font-weight: 800; color: var(--green); margin-top: 7px; }
+
+/* 🏛️ 부동산 전투 시너지 카드 */
+.syn-card { background: linear-gradient(160deg, rgba(185, 139, 255, 0.1), rgba(18, 26, 42, 0.96) 62%); border-color: rgba(185, 139, 255, 0.24); }
+.syn-row { display: flex; align-items: baseline; gap: 6px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.syn-row:last-of-type { border-bottom: 0; }
+.syn-k { flex: 0 0 auto; font-size: 10.5px; color: var(--sub); font-weight: 700; }
+.syn-v { font-size: 13px; font-weight: 900; color: var(--purple); font-variant-numeric: tabular-nums; }
+.syn-n { margin-left: auto; font-size: 9px; color: var(--dim); font-weight: 700; white-space: nowrap; }
+.syn-set { margin-top: 7px; padding-top: 6px; border-top: 1px dashed rgba(255, 255, 255, 0.08); }
+.syn-set-h { font-size: 10.5px; font-weight: 800; color: var(--sub); }
+.syn-set-h b { color: var(--txt); font-variant-numeric: tabular-nums; }
+.syn-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+.syn-chip { font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 6px; color: var(--txt); background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line-2); box-shadow: inset 2px 0 0 var(--sc, var(--blue)); }
+.syn-total { margin-top: 7px; padding-top: 6px; border-top: 1px dashed rgba(255, 255, 255, 0.08); display: flex; flex-wrap: wrap; gap: 3px; }
+.syn-total span { flex: 1 1 100%; font-size: 9.5px; color: var(--dim); font-weight: 800; }
+.syn-total b { flex: 1 1 100%; font-size: 10px; color: var(--green); font-weight: 700; line-height: 1.5; }
+
+/* 경매 특별 임대 계약 배지 */
+.tag.lease { color: #ffe0c2; background: rgba(255, 190, 120, 0.14); border-color: rgba(255, 190, 120, 0.36); }
+.btn.gold { background: linear-gradient(135deg, #ffd76a, #dfa11e); color: #241a02; border-color: rgba(255, 224, 150, 0.45); font-weight: 900; }
