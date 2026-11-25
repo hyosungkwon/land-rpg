@@ -1748,6 +1748,34 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .stats-card { padding: 9px 10px; }
 .stats-card .card-head { margin-bottom: 6px; }
 .stats-card .card-title small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 232px; }
+/* v4.8.1 실시간 DPS(초당 공격력) 상단 배너 */
+.dps-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 9px;
+  margin-bottom: 6px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, rgba(255, 160, 120, 0.12), rgba(255, 209, 102, 0.06));
+  border: 1px solid rgba(255, 180, 130, 0.24);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.dps-hero.boost {
+  border-color: rgba(255, 196, 86, 0.58);
+  box-shadow: 0 0 12px rgba(255, 160, 70, 0.18);
+}
+.dps-left { min-width: 0; }
+.dps-k { font-size: 9.5px; font-weight: 800; color: var(--sub); display: flex; align-items: center; gap: 3px; line-height: 1.1; }
+.dps-k small { font-size: 8.5px; font-weight: 700; color: var(--dim); }
+.dps-v { display: flex; align-items: baseline; gap: 2px; margin-top: 2px; font-variant-numeric: tabular-nums; line-height: 1.05; }
+.dps-v b { font-size: 17px; font-weight: 900; color: var(--gold); letter-spacing: -0.3px; }
+.dps-v small { font-size: 10px; font-weight: 700; color: var(--sub); }
+.dps-buffs { margin-left: 5px; font-size: 9.5px; font-weight: 800; color: #ffcf70; background: rgba(255, 150, 60, 0.18); border: 1px solid rgba(255, 180, 80, 0.35); border-radius: 999px; padding: 1px 5px; line-height: 1.25; }
+.dps-right { flex: 0 0 auto; text-align: right; font-variant-numeric: tabular-nums; }
+.dps-base { font-size: 10px; font-weight: 700; color: var(--sub); line-height: 1.2; }
+.dps-base b { color: #ffb4a2; font-weight: 800; }
+.dps-src { font-size: 8.5px; font-weight: 700; color: var(--dim); margin-top: 2px; line-height: 1.1; }
 .stat-grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; }
 .stat-grid.four .stat { padding: 4px; border-radius: 8px; }
 .stat-grid.four .stat .k { font-size: 8.5px; letter-spacing: -0.4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

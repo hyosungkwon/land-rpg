@@ -469,6 +469,8 @@ export class UI {
     const p = portfolioOf(s);
     // 🔨 경매 카드용 — 이번 틱에 한 번만 계산해 data-live 여러 요소가 함께 쓴다
     const aucNow = this.tab === 'land' ? auctionStatus(s, now) : null;
+    // ⚡ 실시간 DPS(초당 공격력) — 이번 틱에 한 번만 계산
+    const dpsNow = this.tab === 'hunt' ? dpsSnapshot(b, now) : null;
     document.querySelectorAll('[data-live]').forEach((el) => {
       const k = el.dataset.live;
       if (k === 'gold') el.textContent = fmt(s.gold);
@@ -502,7 +504,21 @@ export class UI {
           el.disabled = left > 0;
         }
       } else if (k === 'dps') {
-        el.textContent = fmt(b ? b.stats.dps : 0);
+        const d = dpsNow || dpsSnapshot(b, now);
+        el.textContent = fmt(d.base);
+      } else if (k === 'live-dps') {
+        const d = dpsNow || dpsSnapshot(b, now);
+        el.textContent = fmt(d.value);
+      } else if (k === 'dps-src') {
+        const d = dpsNow || dpsSnapshot(b, now);
+        el.textContent = d.src;
+      } else if (k === 'dps-buffs') {
+        const d = dpsNow || dpsSnapshot(b, now);
+        el.textContent = d.buffText;
+        el.classList.toggle('hidden', !d.buffText);
+      } else if (k === 'dps-hero') {
+        const d = dpsNow || dpsSnapshot(b, now);
+        el.classList.toggle('boost', d.boost);
       } else if (k === 'dungeon-cd') {
         const ds = dungeonState(s, now);
         el.textContent = ds.ready ? '무료 입장 가능' : `무료까지 ${mmss(ds.leftMs)}`;
@@ -1134,11 +1150,28 @@ function huntSubBar(ui) {
 }
 
 /* ───────────── 💪 스킬·스탯 ───────────── */
+/** v4.8.1 실시간 DPS(초당 공격력) 스냅샷 — 실측(최근 5초) + 기본 이론치 + 활성 버프 */
+function dpsSnapshot(b, now = Date.now()) {
+  const base = b
+    ? (typeof b.effectiveDps === 'function' ? b.effectiveDps(now) : (b.stats ? Number(b.stats.dps) || 0 : 0))
+    : 0;
+  const measured = b && typeof b.liveDps === 'function' ? b.liveDps(now) : 0;
+  const dead = !!(b && b.player && b.player.dead);
+  const hasLive = measured > 0;
+  const value = hasLive ? measured : (dead ? 0 : base);
+  const src = hasLive ? '최근 5초 실측' : (dead ? '전투 불능' : '기본 기준');
+  const buffs = [];
+  if (b && b.berserkUntil > now) buffs.push('🔥광폭');
+  if (b && b.ultUntil > now) buffs.push('⚡궁극');
+  return { value, base, src, hasLive, boost: buffs.length > 0, buffText: buffs.join(' ') };
+}
+
 function huntStatsCard(ui) {
   const s = ui.s;
   const b = ui.battle;
   const st = b.stats;
   const buffs = ui.app.buffs || {};
+  const dps = dpsSnapshot(b, Date.now());
 
   const stat = (cls, k, v, unit = '') => `
     <div class="stat ${cls}"><div class="k">${k}</div><div class="v">${v}${unit ? `<small>${unit}</small>` : ''}</div></div>`;
@@ -1165,8 +1198,18 @@ function huntStatsCard(ui) {
   return `
   <div class="card stats-card">
     <div class="card-head">
-      <div class="card-title"><span class="t-ico">📊</span>전투 스탯<small>${esc(b.def.themeName)} · S${s.stage}${b.def.infinite ? '<span class="inf-badge">∞</span>' : ''} · DPS <b data-live="dps" style="color:var(--sub)">${fmt(st.dps)}</b></small></div>
+      <div class="card-title"><span class="t-ico">📊</span>전투 스탯<small>${esc(b.def.themeName)} · S${s.stage}${b.def.infinite ? '<span class="inf-badge">∞</span>' : ''}</small></div>
       <button class="switch sm ${s.autoBoss ? 'on' : ''}" data-action="toggle-auto" aria-label="자동 보스 전환"></button>
+    </div>
+    <div class="dps-hero${dps.boost ? ' boost' : ''}" data-live="dps-hero">
+      <div class="dps-left">
+        <div class="dps-k">⚡ 실시간 DPS <small>(초당 공격력)</small></div>
+        <div class="dps-v"><b data-live="live-dps">${fmt(dps.value)}</b><small>/초</small><span class="dps-buffs${dps.buffText ? '' : ' hidden'}" data-live="dps-buffs">${esc(dps.buffText)}</span></div>
+      </div>
+      <div class="dps-right">
+        <div class="dps-base">기본 <b data-live="dps">${fmt(dps.base)}</b>/초</div>
+        <div class="dps-src" data-live="dps-src">${dps.src}</div>
+      </div>
     </div>
     <div class="stat-grid four">
       ${stat('atk', '공격력', fmt(st.atk))}

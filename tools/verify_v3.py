@@ -117,8 +117,8 @@ def main():
     ok("startCloudResume" in app_src and "if (!this.cloudEnabled() && !this.cloud.hasPendingRedirect()) return;" in app_src, "세션 복원도 클라우드를 켓을 때만")
     ok("setInterval(() => this.cloudTick(), 15000)" in app_src, "주기 저장은 조건 검사형 타이머")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v4.8.0" in read("sw.js"), "SW 캐시 버전 v4.8.0")
-    ok("APP_VERSION = '4.8.0'" in read("src/data.js"), "앱 버전 v4.8.0")
+    ok("land-rpg-v4.8.1" in read("sw.js"), "SW 캐시 버전 v4.8.1")
+    ok("APP_VERSION = '4.8.1'" in read("src/data.js"), "앱 버전 v4.8.1")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
     ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
@@ -2861,7 +2861,7 @@ def main():
     ok(all(x in asrc42 for x in ["enterTower", "openTowerFloors", "evolvePet", "showTowerResult", "showTowerFloors"]), "app.js — 탑 입장/층 선택/결과·펫 진화 액션", "")
     ok('assets/sprites/pet/${info.sprite}.png' in asrc42, "진화 결과 모달 — 진화 스프라이트 경로(.png)", "")
     ok(all(x in css42 for x in [".tower-card", ".tower-tiles", ".tower-floor", ".pet-evo", ".mini.evo"]), "style.css — v4.2 스타일", "")
-    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.8.0" in read("sw.js") and "APP_VERSION = '4.8.0'" in read("src/data.js"), "버전·서비스워커(4.8.0 · cloud 프리캐시)", "")
+    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v4.8.1" in read("sw.js") and "APP_VERSION = '4.8.1'" in read("src/data.js"), "버전·서비스워커(4.8.1 · cloud 프리캐시)", "")
     pkg_ok = os.path.exists(os.path.join(ROOT, "package.json")) and '"version": "4.7.0"' in read("package.json")
     ok(pkg_ok, "package.json 버전 4.7.0(로컬 검증용)", "")
     evo_files = [f"assets/sprites/pet/pet_{n}_{s}.png" for n in ("wolf", "fox", "owl", "dragon") for s in ("awaken", "divine")]
@@ -3012,7 +3012,7 @@ def main():
 
     css43 = read("style.css")
     ok(all(x in css43 for x in [".land-sum", ".ls-v", ".ls-claim", ".news-slim", ".ns-title", ".land-subbar", ".land-rec", ".buff-now"]), "style.css — v4.3 부동산 요약 바·압축 뉴스·서브 탭", "")
-    ok("land-rpg-v4.8.0" in read("sw.js") and "'4.8.0'" in read("src/data.js"), "버전·캐시 v4.8.0", "")
+    ok("land-rpg-v4.8.1" in read("sw.js") and "'4.8.1'" in read("src/data.js"), "버전·캐시 v4.8.1", "")
 
     section("[20] ⚔️ v4.4 S31+ 무한 구간 리밸런싱 · 강화석 대량 교환 · 상위 전직")
 
@@ -3889,7 +3889,7 @@ def main():
     section("[23] ♻️ v4.7 장비 자동분해 · 🐉 상위 전직 궁극기 · 방치 편의")
 
     # ── 1) 버전·정적 배선 ──
-    ok("APP_VERSION = '4.8.0'" in read("src/data.js") and "land-rpg-v4.8.0" in read("sw.js"), "v4.8.0 버전·서비스워커 캐시 갱신", "")
+    ok("APP_VERSION = '4.8.1'" in read("src/data.js") and "land-rpg-v4.8.1" in read("sw.js"), "v4.8.1 버전·서비스워커 캐시 갱신", "")
     idx47 = read("index.html")
     ok(all(f'data-skill="{k}"' in idx47 for k in ["strike", "whirl", "berserk", "heal"]), "기존 4개 퀵슬롯 레이아웃 유지", "")
     ok('data-skill="ultimate"' in idx47 and 'class="q ult hidden"' in idx47, "다섯 번째 퀵슬롯(궁극기) — 해금 전 숨김", "")
@@ -4131,7 +4131,7 @@ def main():
     ok(cl_a["clean"][0] == "효성 왕" and cl_a["clean"][3] == 12 and not cl_a["html"], "닉네임 정리 — 공백 접기·12자 제한·HTML 문자 제거", json.dumps(cl_a["clean"], ensure_ascii=False))
     ok(cl_a["clean"][1] == "용사" and cl_a["clean"][2] == "용사", "1자·빈 닉네임은 기본 이름으로 대체", json.dumps(cl_a["clean"][:3], ensure_ascii=False))
     ok(cl_a["sum"] == [42, 21, 2, 5000, True], "세이브 요약 — 역대 최고 스테이지·보유 지역·총자산", json.dumps(cl_a["sum"]))
-    ok(cl_a["doc"][:6] == ["land_rpg_save", "4.8.0", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
+    ok(cl_a["doc"][:6] == ["land_rpg_save", "4.8.1", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
     ok(0 < cl_a["size"] < 200000, "클라우드 문서 크기 RTDB 한도 안(200KB 미만)", str(cl_a["size"]))
 
     # ── 2) 문서 해석(신형·v2 옛 페이로드·손상) ──
@@ -4235,7 +4235,7 @@ def main():
     ok(cl_e["errs"][0].startswith("이 주소가") and "응답이 없습니다" in cl_e["errs"][1] and cl_e["errs"][3].startswith("권한") and "시간 초과" in cl_e["errs"][4] and "라이브러리" in cl_e["errs"][5], "오류 문구 — 승인 도메인/시간 초과/권한/라이브러리", json.dumps(cl_e["errs"], ensure_ascii=False))
     ok(cl_e["strip"] == '{"a":1,"d":1,"e":{"x":2},"f":[1,3]}', "RTDB 전송 전 undefined·NaN 제거", cl_e["strip"])
     ok(cl_e["metrics"] == ["최고 스테이지", "총자산"], "랭킹 지표 이름", json.dumps(cl_e["metrics"], ensure_ascii=False))
-    ok(cl_e["entry"] == ["용사", 9, 12, 777, "4.8.0", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
+    ok(cl_e["entry"] == ["용사", 9, 12, 777, "4.8.1", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
 
     # ── 6) 세이브 호환 · 마이그레이션 ──
     mig48 = js(ctx, """
@@ -4437,6 +4437,36 @@ def main():
     ok(all(x in css48 for x in [".cloud-card", ".rank-row", ".rank-pos", ".rank-me", ".cloud-nick-in"]), "style.css — v4.8 클라우드·랭킹 스타일")
     readme48 = read("README.md")
     ok(all(x in readme48 for x in ["v4.8.0", "클라우드", "랭킹", "rpg_rankings"]), "README — v4.8 클라우드·랭킹 문서화")
+
+    # ── 10) v4.8.1 스탯 창 상단 실시간 DPS(초당 공격력) ──
+    dps481 = js(ctx, """
+      const s = defaultState(0); s.level = 15; s.stage = 5; s.maxStage = 5;
+      const b = new Battle(s, () => ({}), () => 0.5, 0);
+      const base0 = b.effectiveDps(0);
+      const live0 = b.liveDps(0);
+      let t = 0;
+      for (let i = 0; i < 120; i++) { t += 50; b.tick(50, t); }
+      const liveCombat = b.liveDps(t);
+      b.berserkUntil = t + 5000;
+      const baseZerk = b.effectiveDps(t + 100);
+      const expired = b.liveDps(t + 6000);
+      return { base0, live0, liveCombat, baseZerk, expired };
+    """)
+    ok(dps481["live0"] == 0 and dps481["liveCombat"] > 0 and dps481["expired"] == 0, "실시간 DPS — 전투 중 실측 집계 · 5초 경과 후 만료", json.dumps(dps481))
+    ok(dps481["baseZerk"] > dps481["base0"], "기본 DPS — 광폭 활성 시 즉시 반영", json.dumps(dps481))
+    dps_ui = js(ctx2, """
+      const s = defaultState(0); const buffs = computeBuffs(s, 0);
+      const b = { stats: calcStats(s, buffs), def: stageDef(1), boss: null, player: { hp: 100 }, liveDps: () => 1234, effectiveDps: () => 567, berserkUntil: 0, ultUntil: 0 };
+      const ui = { s, battle: b, app: { buffs }, logs: [], tab: 'hunt', huntSub: 'skill', el: {}, install: { hidden: true } };
+      const h = __tpls.hunt(ui);
+      return {
+        hasHero: h.includes('class="dps-hero"') && h.includes('실시간 DPS') && h.includes('초당 공격력') && h.includes('data-live="live-dps"') && h.includes('1,234') && h.includes('567'),
+        onTop: 0 <= h.indexOf('dps-hero') && h.indexOf('dps-hero') < h.indexOf('stat-grid four'),
+        bad: /undefined|NaN/.test(h),
+      };
+    """)
+    ok(dps_ui["hasHero"] and dps_ui["onTop"] and not dps_ui["bad"], "스탯 창 맨 위 실시간 DPS 배너 렌더·배치 순서", json.dumps(dps_ui))
+    ok(".dps-hero" in css48 and ".dps-v" in css48, "style.css — 실시간 DPS 배너 스타일")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

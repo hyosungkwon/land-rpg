@@ -44,6 +44,7 @@ const WINDUP_MELEE_MS = 300;
 const WINDUP_RANGED_MS = 470;
 const WINDUP_BOSS_EXTRA_MS = 90;
 const HEAVY_EVERY = 3; // 보스는 3번째 공격마다 강공격 모션(피해량은 동일)
+const DPS_WINDOW_MS = 5000; // 실시간 DPS(초당 공격력) 슬라이딩 윈도우(5초)
 
 /** 몬스터 공격 전조 길이(ms) */
 function windupFor(m) {
@@ -82,6 +83,9 @@ export class Battle {
     this.ultUntil = 0;
     this.ultBonus = 0;
     this.lastHitDealt = 0;
+    // v4.8.1 실시간 DPS 추적(최근 5초간 입힌 실제 피해 슬라이딩 윈도우)
+    this.dmgLog = [];
+    this.dpsStartAt = 0;
     this.lastSpawn = 0;
     this.lastRegen = 0;
     this.lastStatsAt = 0;
@@ -503,7 +507,50 @@ export class Battle {
       }
     }
     this.lastHitDealt = dealt;
+    if (dealt > 0) this.recordDamage(dealt, now);
     return hits;
+  }
+
+  /** v4.8.1 실시간 DPS 집계용 피해 기록(최근 5초 슬라이딩 윈도우) */
+  recordDamage(dmg, now = Date.now()) {
+    const v = Number(dmg);
+    if (!(v > 0) || !Number.isFinite(v)) return;
+    if (!Array.isArray(this.dmgLog)) this.dmgLog = [];
+    const cutoff = now - DPS_WINDOW_MS;
+    while (this.dmgLog.length && this.dmgLog[0].t < cutoff) this.dmgLog.shift();
+    if (!this.dmgLog.length) this.dpsStartAt = now;
+    this.dmgLog.push({ t: now, d: v });
+  }
+
+  /** 현재 활성 공격 버프(광폭·궁극기)가 반영된 기본 이론 DPS */
+  effectiveDps(now = Date.now()) {
+    let dps = this.stats ? Number(this.stats.dps) || 0 : 0;
+    if (this.berserkUntil > now && this.s && this.s.skills && this.s.skills.berserk) {
+      dps *= 1 + skillEffect('berserk', this.s.skills.berserk.lv);
+    }
+    if (this.ultUntil > now && this.ultBonus > 0) {
+      dps *= 1 + this.ultBonus;
+    }
+    return Math.max(0, dps);
+  }
+
+  /** 최근 5초간 실제 입힌 피해(스킬·치명타·펫·버프 포함) 기준 실시간 DPS */
+  liveDps(now = Date.now()) {
+    if (!Array.isArray(this.dmgLog) || !this.dmgLog.length) {
+      this.dpsStartAt = 0;
+      return 0;
+    }
+    const cutoff = now - DPS_WINDOW_MS;
+    while (this.dmgLog.length && this.dmgLog[0].t < cutoff) this.dmgLog.shift();
+    if (!this.dmgLog.length) {
+      this.dpsStartAt = 0;
+      return 0;
+    }
+    let sum = 0;
+    for (let i = 0; i < this.dmgLog.length; i++) sum += this.dmgLog[i].d;
+    const baseAt = this.dpsStartAt || this.dmgLog[0].t;
+    const spanMs = Math.min(DPS_WINDOW_MS, Math.max(1000, now - baseAt));
+    return sum / (spanMs / 1000);
   }
 
   killMonster(m, now) {
@@ -638,6 +685,7 @@ export class Battle {
     target.knock = Math.min(30, (target.knock || 0) + (crit ? 14 : 8));
     if (this.dungeon) this.dungeon.dmg += dmg;
     if (this.tower) this.tower.dmg += dmg;
+    if (dmg > 0) this.recordDamage(dmg, now);
     this.emit({ t: 'petHit', id: target.id, dmg, crit, x: target.x, pet: pet.id, ko: pet.name, color: pet.color, kind: kind || 'hit' });
     if (target.hp <= 0) this.killMonster(target, now);
     return dmg;
