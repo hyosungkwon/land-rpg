@@ -1842,7 +1842,7 @@ function auctionCard(ui) {
     <div class="tiny dim" style="margin-top:5px">다음 매물은 새 경매가 열릴 때 공개됩니다.</div>`;
   } else {
     body = `
-    <div class="auc-next">다음 매물 예고 · ${esc(c.name)} ${fmt(lot.qty)}평 · 시세 -${lot.discountPct}%</div>
+    <div class="auc-next">🔔 다음 매물 예고</div>
     ${lotRow}
     <div class="tiny dim" style="margin-top:5px">경매는 매 20분, 앞 12분만 열립니다. 골드를 모아 두세요.</div>`;
   }
@@ -1870,11 +1870,11 @@ function landSynergyCard(ui) {
   const rg = syn.region;
   const step = nextLandmarkStep(ui.s);
   const tot = landBuffTotals(buffs);
-  const row = (icon, label, val, next, unit = '%', sign = '+') => `
+  const row = (icon, label, val, next, unit = '%', sign = '+', nextText = '랜드마크 레벨 +1') => `
     <div class="syn-row">
       <span class="syn-k">${icon} ${label}</span>
       <b class="syn-v">${sign}${val}${unit}</b>
-      <span class="syn-n">${next > 0 ? `랜드마크 레벨 +1 → ${sign}${next}${unit}` : '상한'}</span>
+      <span class="syn-n">${next > 0 ? `${nextText} → ${sign}${next}${unit}` : '상한'}</span>
     </div>`;
   const sets = regionSetStatus(ui.s.land.owned);
   const done = sets.filter((st) => st.complete);
@@ -1886,13 +1886,13 @@ function landSynergyCard(ui) {
   <div class="card syn-card" id="synergyCard">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🏛️</span>부동산 전투 시너지<small>랜드마크 · 권역 완성</small></div>
-      <span class="tiny" style="color:${syn.active ? 'var(--green)' : 'var(--dim)'}">${syn.active ? syn.parts.join(' · ') : '미적용'}</span>
+      <span class="tiny" style="color:${syn.active ? 'var(--green)' : 'var(--dim)'};white-space:nowrap">${syn.active ? `🏛️ ${lm.count}개 · 완성 ${rg.count}/${rg.total}` : '미적용'}</span>
     </div>
-    <div class="tiny muted">랜드마크 레벨 합계 <b>${lm.levels}</b> → 치명타 피해 · 쿨감 · 보스 피해. Lv.3 <b>메가 랜드마크</b> 1개당 경험치 +${LAND_SYNERGY.mega.expPct}%. 권역을 최대 단계까지 채우면 권역별 시너지가 열립니다.</div>
+    <div class="tiny muted">랜드마크 레벨 합계 <b>${lm.levels}</b>${lm.mega > 0 ? ` (메가 ${lm.mega}개)` : ''} → 치명타 피해 · 쿨감 · 보스 피해. Lv.3 <b>메가 랜드마크</b> 1개당 경험치 +${LAND_SYNERGY.mega.expPct}%. 권역을 최대 단계까지 채우면 권역별 시너지가 열립니다.</div>
     ${row('💥', '치명타 피해', tot.critDmgPct, step.critDmgPct)}
     ${row('⏱️', '스킬 쿨감', tot.cdrPct, step.cdrPct, '%', '-')}
     ${row('👹', '보스 피해', tot.bossDmgPct, step.bossDmgPct)}
-    ${row('📈', '경험치 획득', tot.expPct, step.expPct)}
+    ${row('📈', '경험치 획득', tot.expPct, step.expPct, '%', '+', '메가 랜드마크 +1')}
     <div class="syn-set">
       <div class="syn-set-h">🗺️ 권역 완성 <b>${rg.count}/${rg.total}</b></div>
       ${done.length

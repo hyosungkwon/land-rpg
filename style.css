@@ -2216,3 +2216,6 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 /* 경매 특별 임대 계약 배지 */
 .tag.lease { color: #ffe0c2; background: rgba(255, 190, 120, 0.14); border-color: rgba(255, 190, 120, 0.36); }
 .btn.gold { background: linear-gradient(135deg, #ffd76a, #dfa11e); color: #241a02; border-color: rgba(255, 224, 150, 0.45); font-weight: 900; }
+.ls-tot-k { white-space: nowrap; }
+.syn-card .card-title { flex-wrap: wrap; }
+.syn-card .syn-n { max-width: 58%; overflow: hidden; text-overflow: ellipsis; }
