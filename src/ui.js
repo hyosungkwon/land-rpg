@@ -2436,7 +2436,7 @@ function rankCard(ui) {
   <div class="card rank-card" id="rankCard">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🏆</span>랭킹<small>공개 · TOP ${CLOUD.topN}</small></div>
-      <span class="tiny dim">${count ? `${count}명 참가` : '참가자 없음'}</span>
+      <span class="tiny dim">${R.at ? (count ? `${count}명 참가` : '참가자 없음') : '아직 안 불러옴'}</span>
     </div>
     <div class="chips" style="margin-bottom:6px">
       <button class="chip${key === 'stage' ? ' on' : ''}" type="button" data-action="cloud-rank" data-value="stage">🏔️ 최고 스테이지</button>
