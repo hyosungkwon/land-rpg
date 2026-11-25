@@ -2308,10 +2308,6 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .syn-card .syn-n { max-width: 58%; overflow: hidden; text-overflow: ellipsis; }
 
 /* ───────────── v4.8 ☁️ 클라우드 세이브 · 🏆 랭킹 ───────────── */
-.cloud-btn.on { color: #8fd8ff; border-color: rgba(120, 200, 255, 0.5); background: rgba(120, 200, 255, 0.14); }
-.cloud-btn.warn { opacity: 1; animation: cloudPulse 1.1s ease-in-out infinite; }
-@keyframes cloudPulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
-
 .cloud-card { border-color: rgba(120, 200, 255, 0.16); }
 .cloud-card.on { border-color: rgba(120, 200, 255, 0.34); box-shadow: inset 0 0 0 1px rgba(120, 200, 255, 0.08); }
 .cloud-card .card-title small { color: var(--sub); font-weight: 700; }

@@ -4415,7 +4415,7 @@ def main():
 
     # ── 9) 화면·서비스워커 · 문서 배선 ──
     idx48 = read("index.html")
-    ok('id="cloudBtn"' in idx48 and 'aria-label="클라우드 세이브' in idx48, "HUD — ☁️ 클라우드 배지 버튼")
+    ok('data-tab="settings"' in idx48 and 'id="settingsTabDot"' in idx48, "설정 탭 — 클라우드 문제 알림 점(상단 HUD 레이아웃은 그대로)")
     ok("gstatic" not in idx48 and "firebase" not in idx48.lower(), "index.html 에 외부 SDK 스크립트 없음(부팅 가벼움)")
     sw48 = read("sw.js")
     ok("'./src/cloud.js'" in sw48 and "firebase" not in sw48.lower(), "SW — cloud.js 만 프리캐시(Firebase CDN 은 캐시하지 않음)")
@@ -4423,7 +4423,7 @@ def main():
     ok(all(x in asrc48 for x in ["cloudUpload", "openCloudLoad", "cloudRestore", "cloudPushRank", "cloudTick", "cloudSignIn"]), "app.js — 저장·불러오기·복원·랭킹·주기 저장 배선")
     ok("applySaveState(next)" in asrc48 and "writePrevSave" in asrc48, "클라우드 복원도 직전 세이브 보관 경로를 쓴다")
     css48 = read("style.css")
-    ok(all(x in css48 for x in [".cloud-card", ".cloud-btn", ".rank-row", ".rank-me", ".cloud-nick-in"]), "style.css — v4.8 클라우드·랭킹 스타일")
+    ok(all(x in css48 for x in [".cloud-card", ".rank-row", ".rank-pos", ".rank-me", ".cloud-nick-in"]), "style.css — v4.8 클라우드·랭킹 스타일")
     readme48 = read("README.md")
     ok(all(x in readme48 for x in ["v4.8.0", "클라우드", "랭킹", "rpg_rankings"]), "README — v4.8 클라우드·랭킹 문서화")
 

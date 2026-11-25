@@ -95,8 +95,7 @@ export class UI {
       offlinePill: document.getElementById('offlinePill'),
       soundBtn: document.getElementById('soundBtn'),
       soundIco: document.getElementById('soundIco'),
-      cloudBtn: document.getElementById('cloudBtn'),
-      cloudIco: document.getElementById('cloudIco'),
+      settingsTabDot: document.getElementById('settingsTabDot'),
       installBtn: document.getElementById('installBtn'),
       huntTabDot: document.getElementById('huntTabDot'),
       landTabDot: document.getElementById('landTabDot'),
@@ -152,14 +151,6 @@ export class UI {
       this.el.soundBtn.addEventListener('click', () => this.app.actions.toggleSound());
     }
     this.syncSound();
-
-    // ☁️ v4.8 상단 배지 → 설정 탭의 클라우드 카드로
-    if (this.el.cloudBtn) {
-      this.el.cloudBtn.addEventListener('click', () => {
-        this.setTab('settings');
-        this.el.panel.scrollTop = 0;
-      });
-    }
     this.syncCloud();
 
     this.el.modalRoot.addEventListener('click', (e) => {
@@ -448,15 +439,10 @@ export class UI {
   syncCloud(hint) {
     const c = this.app && this.app.cloud;
     if (!c) return;
-    const st = cloudStatusText(c);
-    const btn = this.el.cloudBtn;
-    if (btn) {
-      btn.classList.toggle('on', st.tone === 'on');
-      btn.classList.toggle('warn', st.tone === 'warn');
-      btn.classList.toggle('off', st.tone !== 'on' && st.tone !== 'warn');
-      btn.setAttribute('aria-label', `클라우드 · ${st.label}`);
-    }
-    if (this.el.cloudIco && this.el.cloudIco.textContent !== st.ico) this.el.cloudIco.textContent = st.ico;
+    // 설정 탭 알림 점 — 클라우드를 켜 둔 상태에서 문제가 생겼을 때만
+    const on = !!(this.s && this.s.cloud && this.s.cloud.enabled);
+    const bad = on && (c.status === 'error' || c.status === 'offline');
+    if (this.el.settingsTabDot) this.el.settingsTabDot.classList.toggle('hidden', !bad);
     if (this.tab === 'settings') this.render();
   }
 
@@ -2385,7 +2371,7 @@ function cloudCard(ui) {
   return `
   <div class="card cloud-card" id="cloudCard">
     <div class="card-head">
-      <div class="card-title"><span class="t-ico">☁️</span>클라우드 세이브<small>선택 · 로그인 없이도 플레이</small></div>
+      <div class="card-title"><span class="t-ico">☁️</span>클라우드 세이브<small>선택</small></div>
       <span class="tiny" style="color:var(--${status === 'gold' ? 'gold' : 'dim'})">${st.label}</span>
     </div>
     <div class="tiny muted">지금은 <b>게스트</b> — 진행도는 이 기기에만 저장됩니다. 원하면 Google 로그인으로 세이브를 클라우드에 백업하고 🏆 랭킹에 참여할 수 있습니다.</div>
