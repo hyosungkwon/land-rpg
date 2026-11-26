@@ -107,6 +107,8 @@ export class Renderer {
     this.knightShots = []; // v7.3.0 영지 기사단 캔버스 지원 사격
     this.lastKnightShot = 0;
     this.bossKillFx = null; // v7.3.0 보스 격파 폭발 연출
+    this.lightnings = []; // v7.4.0 번개 연쇄/강격 지그재그 전기선
+    this.killShards = []; // v7.4.0 몬스터 처치 파편 분산 연출
     this.resize();
     this.initAmbient();
   }
@@ -300,6 +302,13 @@ export class Renderer {
         if (ev.kind === 'whirl') {
           this.rings.push({ x: ev.x, life: 1, r: 10, color: '#8fe4ff', wide: 1.2 });
         }
+        // v7.4.0 번개 연쇄 / 번개 강격 지그재그 전기선
+        if (ev.kind === 'chain' || (ev.kind === 'strike' && this.battle && this.battle.s && this.battle.s.skills && this.battle.s.skills.strike && this.battle.s.skills.strike.rune === 'lightning')) {
+          this.spawnLightning(ev.kind === 'chain' ? (this._lastHitX || ECON.playerX + 120) : ECON.playerX + 40, ev.x, ev.kind === 'chain' ? '#c59bff' : '#7fd3ff', now);
+        }
+        this._lastHitX = ev.x;
+      } else if (ev.t === 'monsterDeath') {
+        this.spawnKillShards(ev.x, ev.isBoss ? '#ffd76a' : '#cde9ff', ev.isBoss ? 14 : 7, now);
       } else if (ev.t === 'playerHurt') {
         if (ev.ranged) {
           // 원거리: 투사체가 날아가 명중할 때 숫자·플래시를 보여 준다(약 0.24초 뒤)
@@ -1281,6 +1290,8 @@ export class Renderer {
       if (this.effects) {
         this.drawAfterimages(ctx, t);
         this.drawKnightSupport(ctx, dt, t);
+        this.drawLightnings(ctx, t);
+        this.drawKillShards(ctx, dt);
         this.drawBossKillFx(ctx, t);
         this.drawProjectiles(ctx, t);
         this.drawFx(ctx, t);
@@ -2187,6 +2198,23 @@ export class Renderer {
         eg.addColorStop(1, hexA(m.elite.color || '#ffd76a', 0));
         ctx.fillStyle = eg;
         ctx.fillRect(x - h, auraY - h, h * 2, h * 2);
+        // v7.4.0 엘리트 바닥 컬러 강조 링
+        ctx.strokeStyle = hexA(m.elite.color || '#ffd76a', 0.78);
+        ctx.lineWidth = 2 * sc;
+        ctx.beginPath();
+        ctx.ellipse(x, gy + 2 + depth, w * 0.36, w * 0.11, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      // v7.4.0 보물 고블린 금화 트레일 강조
+      if (m.treasure && this.effects && this.embers.length < 150 && Math.random() < 0.45) {
+        this.embers.push({
+          x: m.x + (Math.random() - 0.5) * 24,
+          y: gy + depth - Math.random() * 12 * sc,
+          vy: -36 - Math.random() * 44,
+          life: 1,
+          s: 1.6 + Math.random() * 1.8,
+          color: '#ffd76a',
+        });
       }
       // 황금 던전 몬스터: 금빛 광휘 + 잔불
       if (m.gold) {
@@ -2233,6 +2261,16 @@ export class Renderer {
         ctx.fill();
       }
       ctx.restore();
+
+      // v7.4.0 상태이상 비주얼 오버레이 (화상 불꽃 · 빙결 얼음 결정)
+      if (!m.dying && this.effects) {
+        if (m.burnUntil && now < m.burnUntil) {
+          this.drawBurnFx(ctx, x + dx, footY, h, sc, now);
+        }
+        if (m.slowUntil && now < m.slowUntil) {
+          this.drawFrostFx(ctx, x + dx, footY, h, sc, now);
+        }
+      }
 
       // 4) 체력바 — 무리가 많을 땐 다친 몬스터만 보여 화면이 지저분해지지 않게 한다 (엘리트·보물 고블린은 상시 표시)
       const showBar = m.isBoss || m.elite || m.treasure || m.hp < m.maxHp || (now - (m.hitAt || 0) < 900);
@@ -3470,6 +3508,139 @@ export class Renderer {
     ctx.arc(x, y, (24 + k * 140) * this.scale(), 0, Math.PI * 2);
     ctx.stroke();
     ctx.restore();
+  }
+
+  /* ─────────── v7.4.0 상태이상(화상·빙결·번개 연쇄) · 처치 파편 분산 ─────────── */
+  drawBurnFx(ctx, cx, footY, h, sc, now) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 3; i++) {
+      const ph = ((now / 260) + i * 0.33) % 1;
+      const fx = cx + Math.sin(now / 110 + i * 2.1) * h * 0.22;
+      const fy = footY - h * (0.25 + ph * 0.55);
+      const r = (5.5 - ph * 3.5) * sc;
+      ctx.fillStyle = ph < 0.5 ? `rgba(255,140,40,${0.75 * (1 - ph)})` : `rgba(255,220,90,${0.7 * (1 - ph)})`;
+      ctx.beginPath();
+      ctx.arc(fx, fy, Math.max(1, r), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  drawFrostFx(ctx, cx, footY, h, sc, now) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(130,225,255,0.82)';
+    ctx.fillStyle = 'rgba(130,225,255,0.34)';
+    ctx.lineWidth = 1.4 * sc;
+    ctx.beginPath();
+    ctx.ellipse(cx, footY + 1, h * 0.34, h * 0.1, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    for (let i = 0; i < 2; i++) {
+      const a = now / 480 + i * Math.PI;
+      const ix = cx + Math.cos(a) * h * 0.32;
+      const iy = footY - h * 0.48 + Math.sin(a) * h * 0.14;
+      ctx.fillStyle = 'rgba(210,248,255,0.9)';
+      ctx.beginPath();
+      ctx.moveTo(ix, iy - 4.5 * sc);
+      ctx.lineTo(ix + 3 * sc, iy);
+      ctx.lineTo(ix, iy + 4.5 * sc);
+      ctx.lineTo(ix - 3 * sc, iy);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  spawnLightning(fromWorldX, toWorldX, color, now) {
+    if (!this.effects) return;
+    const x1 = this.worldX(Number.isFinite(fromWorldX) ? fromWorldX : ECON.playerX);
+    const x2 = this.worldX(Number.isFinite(toWorldX) ? toWorldX : ECON.playerX + 300);
+    const y = this.groundY() - 48 * this.scale();
+    const pts = [];
+    const segs = 5;
+    for (let i = 0; i <= segs; i++) {
+      const k = i / segs;
+      const j = i === 0 || i === segs ? 0 : (Math.random() - 0.5) * 26 * this.scale();
+      pts.push([lerp(x1, x2, k), y + j]);
+    }
+    this.lightnings.push({ pts, color: color || '#b98bff', t0: now, dur: 190 });
+    if (this.lightnings.length > 10) this.lightnings.shift();
+  }
+
+  drawLightnings(ctx, now) {
+    if (!this.lightnings || !this.lightnings.length) return;
+    const keep = [];
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const l of this.lightnings) {
+      const age = now - l.t0;
+      if (age > l.dur) continue;
+      keep.push(l);
+      const fade = 1 - age / l.dur;
+      ctx.strokeStyle = hexA(l.color, 0.85 * fade);
+      ctx.lineWidth = 3.2 * this.scale();
+      ctx.beginPath();
+      l.pts.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+      ctx.stroke();
+      ctx.strokeStyle = hexA('#ffffff', 0.9 * fade);
+      ctx.lineWidth = 1.2 * this.scale();
+      ctx.stroke();
+    }
+    ctx.restore();
+    this.lightnings = keep;
+  }
+
+  spawnKillShards(worldX, color, n, now) {
+    if (!this.effects) return;
+    const x = this.worldX(Number.isFinite(worldX) ? worldX : ECON.playerX + 260);
+    const y = this.groundY() - 42 * this.scale();
+    for (let i = 0; i < n && this.killShards.length < 48; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = 70 + Math.random() * 140;
+      this.killShards.push({
+        x, y,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp - 55,
+        rot: Math.random() * Math.PI,
+        vrot: (Math.random() - 0.5) * 9,
+        s: (2.8 + Math.random() * 3.2) * this.scale(),
+        color: color || '#cde9ff',
+        life: 1,
+      });
+    }
+  }
+
+  drawKillShards(ctx, dt) {
+    if (!this.killShards || !this.killShards.length) return;
+    const sec = (dt || 16) / 1000;
+    const keep = [];
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const p of this.killShards) {
+      p.life -= sec * 2.1;
+      if (p.life <= 0) continue;
+      p.x += p.vx * sec;
+      p.y += p.vy * sec;
+      p.vy += 320 * sec;
+      p.rot += p.vrot * sec;
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.moveTo(0, -p.s);
+      ctx.lineTo(p.s * 0.65, 0);
+      ctx.lineTo(0, p.s);
+      ctx.lineTo(-p.s * 0.65, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+      keep.push(p);
+    }
+    ctx.restore();
+    this.killShards = keep;
   }
 
   /* ─────────── v7.0.0 콤보 히트 카운터 · 보스 강공격 전조 경고 ─────────── */

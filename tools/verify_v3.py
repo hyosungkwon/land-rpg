@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "7.3.0"
+EXPECTED_VER = "7.4.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui.js", "src/sound.js"]
 
@@ -6022,6 +6022,11 @@ def main():
     section("v7.3.0 영웅 진화 외형 · 타격감 2.0 · 기사단 지원 사격")
     rsrc73 = read("src/render.js")
     ok(all(x in rsrc73 for x in ["drawHeroEvolution", "hitstopUntil", "spawnAfterimages", "drawAfterimages", "drawKnightSupport", "drawBossKillFx"]), "render.js — 전직 날개/소드 비트 · 시각 히트스톱 · 잔상 · 기사단 지원 사격 · 보스 격파 폭발")
+
+    # ── 41) v7.4.0 🔥 몬스터 상태이상 비주얼 · 엘리트/보물 고블린 강조 · 파편 처치 연출 ──
+    section("v7.4.0 상태이상 비주얼 · 엘리트/고블린 강조 · 파편 처치 연출")
+    rsrc74 = read("src/render.js")
+    ok(all(x in rsrc74 for x in ["drawBurnFx", "drawFrostFx", "spawnLightning", "drawLightnings", "spawnKillShards", "drawKillShards"]), "render.js — 화상 불꽃·빙결 결정·번개 연쇄 전기선·처치 파편 분산·엘리트/고블린 강조")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:
