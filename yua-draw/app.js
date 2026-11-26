@@ -400,14 +400,15 @@
     const ch = Math.max(3, Math.min(H, maxY + step) - minY);
 
     // 2) 그림 영역(bounding box)을 참조 도형 크기에 맞춰 정규화
-    const s = Math.min((rw * 1.08) / cw, (rh * 1.08) / ch);
+    // 가로·세로를 각각 참조 도형 크기에 맞춘다(비율 차이는 arScore가 따로 감점).
+    const sxN = (rw * 1.06) / cw, syN = (rh * 1.06) / ch;
     const ccx = (minX + maxX) / 2, ccy = (minY + maxY) / 2;
     const rcx = (rb.x0 + rb.x1) / 2, rcy = (rb.y0 + rb.y1) / 2;
 
     const norm = document.createElement('canvas');
     norm.width = GRID; norm.height = GRID;
     const ng = norm.getContext('2d', { willReadFrequently: true });
-    ng.setTransform(s, 0, 0, s, rcx - ccx * s, rcy - ccy * s);
+    ng.setTransform(sxN, 0, 0, syN, rcx - ccx * sxN, rcy - ccy * syN);
     ng.drawImage(src, minX, minY, cw, ch, minX, minY, cw, ch);
     const nd = ng.getImageData(0, 0, GRID, GRID).data;
 
@@ -436,8 +437,8 @@
       const xi = Math.round(x), yi = Math.round(y);
       if (xi < 0 || yi < 0 || xi >= W || yi >= H) return;
       if (img[(yi * W + xi) * 4 + 3] <= 28) return; // 지워진 자리는 빼고
-      const gx = Math.round(rcx + (x - ccx) * s);
-      const gy = Math.round(rcy + (y - ccy) * s);
+      const gx = Math.round(rcx + (x - ccx) * sxN);
+      const gy = Math.round(rcy + (y - ccy) * syN);
       pN++;
       if (gx < 0 || gy < 0 || gx >= GRID || gy >= GRID) { junkN++; return; }
       const d = dRef[gy * GRID + gx];
