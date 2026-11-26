@@ -34,6 +34,7 @@ import { SETS_BY_ID } from './region.js';
 import { defaultExpeditions, normalizeExpeditions } from './expedition.js';
 import { defaultInvasion, normalizeInvasion } from './invasion.js';
 import { defaultCitadel, normalizeCitadel, citadelEffects } from './citadel.js';
+import { normalizeOrders } from './orders.js';
 
 const nowMs = () => Date.now();
 
@@ -178,6 +179,10 @@ export function normalizeState(raw, now = nowMs()) {
     : [];
   s.land.autoRent = s.land.autoRent === true;
   s.land.autoRentAt = Math.max(0, num(s.land.autoRentAt, 0));
+  // v6.0.0: 지정가 예약 매매 주문·체결 로그 정규화
+  const normOrd = normalizeOrders(raw.land && raw.land.orders, raw.land && raw.land.orderLog);
+  s.land.orders = normOrd.orders;
+  s.land.orderLog = normOrd.orderLog;
   s.records = { ...d.records, ...(raw.records || {}) };
   // v4.8: 클라우드 설정 정규화 — 없는 저장본은 게스트(꺼짐)로 시작한다
   const rawCloud = raw.cloud && typeof raw.cloud === 'object' ? raw.cloud : {};

@@ -23,10 +23,14 @@ import {
 } from './src/cloud.js';
 import { Battle } from './src/combat.js';
 import {
-  computeBuffs, portfolioOf, accrueRent, claimRent, applyTrade, quoteTrade, maxBuyQty,
+  computeBuffs, portfolioOf, accrueRent, claimRent, applyTrade, quoteTrade, maxBuyQty, priceInfo,
   CITY_BY_KEY, formatGold, LAND, LANDMARK, landmarkQuote, buildLandmark as buildLandmarkState,
   LAND_MANAGER, toggleFavoriteCity, landManagerUnlocked,
 } from './src/land.js';
+import {
+  LIMIT_ORDER_MAX, addLimitOrder as addLimitOrderState, cancelLimitOrder as cancelLimitOrderState,
+  processLimitOrders, recordAssetSnapshot,
+} from './src/orders.js';
 import { activeNews, newsCovers, SETS_BY_ID } from './src/region.js';
 import {
   startExpedition, claimExpedition, claimAllExpeditions, cancelExpedition,
@@ -246,6 +250,24 @@ class App {
       if (now - this.lastRentTick >= 1000) {
         this.lastRentTick = now;
         this.accrueRent(now, 1);
+        recordAssetSnapshot(this.s, now);
+        // v6.0.0 🎯 지정가 예약 매매 자동 체결 감시
+        if (this.s.land && Array.isArray(this.s.land.orders) && this.s.land.orders.length) {
+          const fills = processLimitOrders(this.s, now);
+          if (fills.length) {
+            this.buffs = computeBuffs(this.s, now);
+            this.battle.refreshStats(now);
+            this.checkPets(now);
+            this.save(true);
+            this.sound.coin('gold');
+            for (const f of fills) {
+              const verb = f.side === 'buy' ? '매수' : '매도';
+              this.ui.toast(`🎯 지정가 ${verb} 체결! ${f.cityName} ${f.qty.toLocaleString()}평 (💰${formatGold(f.total)})`, 'gold');
+              this.ui.addLog(`🎯 <b>지정가 ${verb} 체결</b> · ${esc(f.cityName)} ${f.qty.toLocaleString()}평 · 💰${formatGold(f.total)}`);
+            }
+            this.ui.renderIfNeeded();
+          }
+        }
         // v5.1.0 🤖 영지 관리인: 보유 10곳 이상 + 켜짐이면 5분마다 미수령 임대수익 자동 수령
         if (this.s.land && this.s.land.autoRent && landManagerUnlocked(this.s)
           && now - (this.s.land.autoRentAt || 0) >= LAND_MANAGER.everyMs
@@ -1436,6 +1458,18 @@ class App {
         this.save();
         this.sound.ui();
         this.ui.toast(r.fav ? `⭐ ${r.city.name} 관심 매물 등록 (${r.count}곳)` : `${r.city.name} 관심 매물 해제`);
+        this.ui.render();
+      },
+      openLimitOrder: (cityKey, defaultSide) => this.openLimitOrderModal(cityKey, defaultSide),
+      cancelLimitOrder: (orderId) => {
+        const r = cancelLimitOrderState(this.s, orderId);
+        if (!r.ok) {
+          this.ui.toast(r.reason || '주문을 취소할 수 없습니다', 'red');
+          return;
+        }
+        this.save(true);
+        this.sound.ui();
+        this.ui.toast(`🎯 ${r.city ? r.city.name : '지정가'} 예약 주문 취소`);
         this.ui.render();
       },
       landMapRegion: (setId) => {
@@ -3136,6 +3170,100 @@ class App {
              <div class="note" style="margin-top:9px">층마다 <b>기믹</b>이 다릅니다 — 다굴·포격·광폭·재생·타임어택·철벽. 장비 조합(흡혈·방어·범위 베기)을 시험해 보세요.<br>11층부터는 <b>자동 생성되는 심층</b>으로, 올라갈수록 적이 강해지고 보상도 커집니다.</div>`,
       actions: [{ label: '닫기', style: 'ghost', onClick: () => {} }],
     });
+  }
+
+  /** 🎯 v6.0.0 관심 매물 지정가 예약 매매 등록 모달 */
+  openLimitOrderModal(cityKey, defaultSide = 'buy') {
+    const city = CITY_BY_KEY[cityKey];
+    if (!city) return;
+    const now = Date.now();
+    const info = priceInfo(city, now);
+    const held = Math.floor(Number((this.s.land && this.s.land.owned && this.s.land.owned[cityKey]) || 0));
+    let side = defaultSide === 'sell' && held > 0 ? 'sell' : 'buy';
+    let targetPrice = Math.max(1, Math.round(info.price * (side === 'buy' ? 0.90 : 1.12)));
+    let qty = side === 'sell' ? Math.max(1, Math.min(10, held)) : 10;
+
+    const renderBody = () => {
+      const presets = side === 'buy'
+        ? [['-15% 저점', 0.85], ['-10%', 0.90], ['-5%', 0.95], ['현재가', 1.0]]
+        : [['+5%', 1.05], ['+10%', 1.10], ['+15% 고점', 1.15], ['+20%', 1.20]];
+      const qtys = side === 'sell'
+        ? [1, 10, 50, held].filter((v, i, arr) => v > 0 && arr.indexOf(v) === i)
+        : [1, 10, 50, 100];
+      return `
+        <div class="kv"><span class="k">현재 시세</span><span class="v">💰${info.price.toLocaleString()}/평 (${esc(info.bandLabel || '보통')})</span></div>
+        <div class="kv"><span class="k">보유 평수</span><span class="v">${held.toLocaleString()}평 · 보유 골드 💰${formatGold(this.s.gold)}</span></div>
+        <div class="chips" style="margin:8px 0 6px" id="ordSideRow">
+          <button class="chip${side === 'buy' ? ' on' : ''}" type="button" data-ord-side="buy">🔵 지정가 매수</button>
+          <button class="chip${side === 'sell' ? ' on' : ''}" type="button" data-ord-side="sell" ${held < 1 ? 'disabled' : ''}>🔴 지정가 매도</button>
+        </div>
+        <div class="tiny dim" style="margin-top:4px">목표가 (골드/평) — ${side === 'buy' ? '현재가가 이 가격 이하일 때 체결' : '현재가가 이 가격 이상일 때 체결'}</div>
+        <input id="ordPriceIn" class="cloud-nick-in" style="width:100%;margin-top:4px" type="number" min="1" value="${targetPrice}">
+        <div class="chips" style="margin-top:5px" id="ordPricePresets">
+          ${presets.map(([lbl, mul]) => `<button class="chip" type="button" data-ord-pmul="${mul}">${lbl}</button>`).join('')}
+        </div>
+        <div class="tiny dim" style="margin-top:8px">예약 수량 (평)</div>
+        <input id="ordQtyIn" class="cloud-nick-in" style="width:100%;margin-top:4px" type="number" min="1" value="${qty}">
+        <div class="chips" style="margin-top:5px" id="ordQtyPresets">
+          ${qtys.map((n) => `<button class="chip" type="button" data-ord-qty="${n}">${n === held && side === 'sell' ? `전량 ${n}` : `${n}평`}</button>`).join('')}
+        </div>
+        <div class="note" style="margin-top:8px">접속 중 시세가 목표가에 도달하면 자동으로 체결됩니다(최대 ${LIMIT_ORDER_MAX}건).</div>`;
+    };
+
+    const open = () => {
+      this.ui.modal({
+        title: `🎯 ${city.emoji} ${esc(city.name)} 지정가 예약`,
+        sub: `${esc(city.region)} · 시세 변동 자동 체결`,
+        body: renderBody(),
+        actions: [
+          { label: '취소', onClick: () => {} },
+          {
+            label: '🎯 예약 등록',
+            style: 'primary',
+            onClick: () => {
+              const pEl = document.getElementById('ordPriceIn');
+              const qEl = document.getElementById('ordQtyIn');
+              const tp = Math.floor(Number((pEl && pEl.value) || targetPrice) || 0);
+              const qn = Math.floor(Number((qEl && qEl.value) || qty) || 0);
+              const r = addLimitOrderState(this.s, { cityKey, side, targetPrice: tp, qty: qn }, Date.now());
+              if (!r.ok) {
+                this.ui.toast(r.reason || '예약을 등록할 수 없습니다', 'red');
+                return;
+              }
+              this.save(true);
+              this.sound.ui();
+              this.ui.toast(`🎯 ${city.name} ${side === 'buy' ? '매수' : '매도'} 예약 등록 (💰${tp.toLocaleString()}/평 · ${qn}평)`, 'gold');
+              this.ui.render();
+            },
+          },
+        ],
+      });
+      const card = this.ui.el.modalCard;
+      if (!card) return;
+      card.querySelectorAll('[data-ord-side]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          side = btn.dataset.ordSide === 'sell' ? 'sell' : 'buy';
+          targetPrice = Math.max(1, Math.round(info.price * (side === 'buy' ? 0.90 : 1.12)));
+          qty = side === 'sell' ? Math.max(1, Math.min(10, held)) : 10;
+          open();
+        });
+      });
+      card.querySelectorAll('[data-ord-pmul]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          targetPrice = Math.max(1, Math.round(info.price * Number(btn.dataset.ordPmul || 1)));
+          const pEl = document.getElementById('ordPriceIn');
+          if (pEl) pEl.value = String(targetPrice);
+        });
+      });
+      card.querySelectorAll('[data-ord-qty]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          qty = Math.max(1, Math.floor(Number(btn.dataset.ordQty || 1)));
+          const qEl = document.getElementById('ordQtyIn');
+          if (qEl) qEl.value = String(qty);
+        });
+      });
+    };
+    open();
   }
 
   showOfflinePopup(summary, levelUps) {

@@ -138,6 +138,8 @@ export function compactSave(state) {
     delete c.land.autoRentAt;
     if (Array.isArray(c.land.favorites) && !c.land.favorites.length) delete c.land.favorites;
     if (!c.land.autoRent) delete c.land.autoRent;
+    if (Array.isArray(c.land.orders) && !c.land.orders.length) delete c.land.orders;
+    if (Array.isArray(c.land.orderLog) && !c.land.orderLog.length) delete c.land.orderLog;
   }
   if (c.expedition && typeof c.expedition === 'object') {
     if ((!Array.isArray(c.expedition.active) || !c.expedition.active.length) && !(c.expedition.completed > 0)) {

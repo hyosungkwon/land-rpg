@@ -2716,3 +2716,34 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .cit-fx { font-size: 9.5px; color: var(--sub); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cit-cost { font-size: 9px; color: var(--dim); margin-top: 2px; font-variant-numeric: tabular-nums; }
 .cit-act { flex: 0 0 auto; }
+
+/* ══════════════ v6.0.0 📈 투자 대시보드 · 🎯 지정가 예약 매매 ══════════════ */
+.invdash-card { background: linear-gradient(160deg, rgba(105, 192, 255, 0.09), rgba(18, 26, 42, 0.96) 62%); border-color: rgba(105, 192, 255, 0.25); }
+.chart-wrap {
+  margin-top: 6px; padding: 6px 8px; border-radius: 10px;
+  background: rgba(7, 11, 22, 0.65); border: 1px solid var(--line-2);
+}
+.chart-svg { display: block; width: 100%; height: 74px; }
+.split-bar {
+  display: flex; height: 8px; border-radius: 999px; overflow: hidden;
+  background: rgba(255, 255, 255, 0.08); margin-top: 6px;
+}
+.split-bar .sb-hunt { background: linear-gradient(90deg, #ff9a5c, #ffcf5c); }
+.split-bar .sb-rent { background: linear-gradient(90deg, #3ec98e, #69c0ff); }
+.split-leg { display: flex; justify-content: space-between; font-size: 9.5px; color: var(--sub); margin-top: 4px; font-weight: 700; }
+
+.ord-card { background: linear-gradient(160deg, rgba(185, 139, 255, 0.09), rgba(18, 26, 42, 0.96) 62%); border-color: rgba(185, 139, 255, 0.26); }
+.ord-list { display: flex; flex-direction: column; gap: 5px; margin-top: 6px; }
+.ord-row {
+  display: flex; align-items: center; gap: 7px; padding: 6px 8px; border-radius: 9px;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line-2);
+}
+.ord-side {
+  flex: 0 0 auto; font-size: 9.5px; font-weight: 900; padding: 2px 6px; border-radius: 5px;
+}
+.ord-side.buy { color: #7fd3ff; background: rgba(127, 211, 255, 0.16); }
+.ord-side.sell { color: #ff9a8a; background: rgba(255, 122, 95, 0.16); }
+.ord-mid { flex: 1 1 auto; min-width: 0; }
+.ord-t { font-size: 11px; font-weight: 800; }
+.ord-s { font-size: 9.5px; color: var(--sub); font-variant-numeric: tabular-nums; margin-top: 1px; }
+.mini.ord { border-color: rgba(185, 139, 255, 0.42); color: #d6b8ff; background: rgba(185, 139, 255, 0.1); padding: 0 6px; }

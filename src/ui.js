@@ -16,6 +16,7 @@ import {
 import {
   AUCTION, auctionStatus, auctionLot, auctionBonusText,
 } from './auction.js';
+import { LIMIT_ORDER_MAX, investmentReport } from './orders.js';
 import {
   LAND_SYNERGY, landSynergy, landBuffTotals, landBuffTotalsText, nextLandmarkStep,
 } from './synergy.js';
@@ -211,6 +212,8 @@ export class UI {
       case 'land-sort': actions.landSort(v); break;
       case 'land-tier': actions.landTier(v); break;
       case 'land-fav': actions.landFav(v); break;
+      case 'land-order-open': actions.openLimitOrder(v, btn.dataset.side || 'buy'); break;
+      case 'land-order-cancel': actions.cancelLimitOrder(v); break;
       case 'land-map-region': actions.landMapRegion(v); break;
       case 'land-region-clear': actions.landRegionClear(); break;
       case 'exp-pick-pet': this.expPick.petId = v; this.render(); break;
@@ -2100,6 +2103,91 @@ function expeditionCard(ui) {
   </div>`;
 }
 
+/* ══════════════════ 📈 투자 대시보드 · 🎯 지정가 예약 매매 (v6.0.0) ══════════════════ */
+function assetChartSvg(series) {
+  const pts = Array.isArray(series) && series.length ? series : [{ t: 0, v: 0 }];
+  const w = 300;
+  const h = 72;
+  const pad = 6;
+  const vals = pts.map((p) => p.v);
+  const minV = Math.min(...vals);
+  const maxV = Math.max(...vals);
+  const span = Math.max(1, maxV - minV);
+  const coords = pts.map((p, i) => {
+    const x = pts.length === 1 ? w / 2 : pad + (i / (pts.length - 1)) * (w - pad * 2);
+    const y = h - pad - ((p.v - minV) / span) * (h - pad * 2);
+    return [Math.round(x * 10) / 10, Math.round(y * 10) / 10];
+  });
+  const line = coords.length === 1
+    ? `${pad},${coords[0][1]} ${w - pad},${coords[0][1]}`
+    : coords.map(([x, y]) => `${x},${y}`).join(' ');
+  const area = `${coords[0][0]},${h - pad} ${line} ${coords[coords.length - 1][0]},${h - pad}`;
+  const last = coords[coords.length - 1];
+  return `<svg class="chart-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-label="총자산 추이 그래프">
+    <defs><linearGradient id="ag60" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#69c0ff" stop-opacity="0.38"/><stop offset="100%" stop-color="#69c0ff" stop-opacity="0.02"/></linearGradient></defs>
+    <polygon points="${area}" fill="url(#ag60)"/>
+    <polyline points="${line}" fill="none" stroke="#69c0ff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${last[0]}" cy="${last[1]}" r="3" fill="#ffcf5c"/>
+  </svg>`;
+}
+
+function investDashboardCard(ui) {
+  const rep = investmentReport(ui.s, Date.now());
+  const pnlSign = rep.unrealizedPnl >= 0 ? '+' : '';
+  const pnlCls = rep.unrealizedPnl >= 0 ? 'up' : 'dn';
+  const topRows = rep.topHoldings.length
+    ? rep.topHoldings.map((h) => `<div class="kv"><span class="k">${h.city.emoji} ${esc(h.city.name)} (${fmt(h.qty)}평)</span><span class="v"><span class="pnl ${h.profitPct >= 0 ? 'up' : 'dn'}">${h.profitPct >= 0 ? '+' : ''}${h.profitPct.toFixed(1)}%</span> · 💰${formatGold(h.value)}</span></div>`).join('')
+    : '<div class="tiny dim" style="margin-top:5px">매물을 매수하면 보유 수익률 상위 지역이 표시됩니다.</div>';
+  return `
+  <div class="card invdash-card" id="investDashboardCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">📈</span>투자 대시보드<small>자산 추이 · 수익 분석</small></div>
+      <span class="tiny" style="color:${rep.deltaAsset >= 0 ? 'var(--green)' : '#ff8a8a'}">${rep.deltaAsset >= 0 ? '▲' : '▼'}${Math.abs(rep.deltaPct).toFixed(1)}%</span>
+    </div>
+    <div class="chart-wrap">
+      ${assetChartSvg(rep.series)}
+      <div class="row tiny dim" style="margin-top:3px"><span>최근 기록 ${rep.series.length}개 (5분 주기)</span><span>현재 💰${formatGold(rep.totalAsset)}</span></div>
+    </div>
+    <div class="stat-grid" style="margin-top:8px">
+      <div class="stat gold"><div class="k">평가 손익</div><div class="v"><span class="pnl ${pnlCls}">${pnlSign}${rep.unrealizedPct.toFixed(1)}%</span> <small>${pnlSign}${formatGold(rep.unrealizedPnl)}</small></div></div>
+      <div class="stat"><div class="k">보유 현금 / 부동산</div><div class="v">${formatGold(rep.cash)} <small>/ ${formatGold(rep.landValue)}</small></div></div>
+    </div>
+    <div class="split-bar" aria-label="사냥 대 임대 수익 비율"><span class="sb-hunt" style="width:${rep.huntPct}%"></span><span class="sb-rent" style="width:${rep.rentPct}%"></span></div>
+    <div class="split-leg"><span>⚔️ 사냥 누적 💰${formatGold(rep.huntGold)} (${rep.huntPct}%)</span><span>🏢 임대 누적 💰${formatGold(rep.rentGold)} (${rep.rentPct}%)</span></div>
+    ${topRows}
+  </div>`;
+}
+
+function limitOrdersCard(ui) {
+  const rep = investmentReport(ui.s, Date.now());
+  const rows = rep.orders.length
+    ? rep.orders.map((o) => {
+      const diffTxt = o.diffPct === 0 ? '현재가 도달' : `${o.diffPct > 0 ? '+' : ''}${o.diffPct.toFixed(1)}%`;
+      return `
+      <div class="ord-row">
+        <span class="ord-side ${o.side}">${o.side === 'buy' ? '매수' : '매도'}</span>
+        <div class="ord-mid">
+          <div class="ord-t">${o.city.emoji} ${esc(o.city.name)} · <b>${fmt(o.qty)}평</b></div>
+          <div class="ord-s">목표 💰${fmt(o.targetPrice)}/평 (현재 💰${fmt(o.curPrice)} · ${diffTxt})</div>
+        </div>
+        <button class="mini ghost" type="button" data-action="land-order-cancel" data-value="${o.id}">취소</button>
+      </div>`;
+    }).join('')
+    : '<div class="tiny dim" style="margin-top:4px">등록된 지정가 예약이 없습니다. 보유 매물·매물 투자 목록의 <b>🎯 예약</b> 버튼으로 자동 매매를 걸어 두세요!</div>';
+  const logs = rep.orderLog.length
+    ? `<div class="tiny dim" style="margin-top:7px">최근 체결: ${rep.orderLog.slice(0, 2).map((l) => `${esc(l.cityName)} ${l.side === 'buy' ? '매수' : '매도'} ${fmt(l.qty)}평 (💰${formatGold(l.total)})`).join(' · ')}</div>`
+    : '';
+  return `
+  <div class="card ord-card" id="limitOrdersCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🎯</span>지정가 예약 매매<small>${rep.orders.length}/${LIMIT_ORDER_MAX}건 · 자동 체결</small></div>
+      <span class="tiny dim">접속 중 실시간 감시</span>
+    </div>
+    <div class="ord-list">${rows}</div>
+    ${logs}
+  </div>`;
+}
+
 /* ══════════════════ 🏰 영지 성채 (영구 시설 5종 · v5.12.0) ══════════════════ */
 function citadelCard(ui) {
   const s = ui.s;
@@ -2468,6 +2556,7 @@ function tplLandHome(ui) {
             <div class="m-btns">
               <button class="mini buy" data-action="land-trade" data-value="${h.city.key}" data-side="buy">매수</button>
               <button class="mini sell" data-action="land-trade" data-value="${h.city.key}" data-side="sell">매도</button>
+              <button class="mini ord" type="button" data-action="land-order-open" data-value="${h.city.key}" data-side="sell" aria-label="지정가 예약">🎯</button>
             </div>
           </div>`;
         })
@@ -2509,6 +2598,10 @@ function tplLandHome(ui) {
       <button class="btn small ghost wide" type="button" data-action="land-sub" data-value="buff">⚡ 건물주 버프</button>
     </div>
   </div>
+
+  ${limitOrdersCard(ui)}
+
+  ${investDashboardCard(ui)}
 
   <div class="card land-rec">
     <div class="card-head">
@@ -2598,6 +2691,7 @@ function buildMarketList(ui) {
             <div class="m-btns">
               <button class="mini buy" data-action="land-trade" data-value="${c.key}" data-side="buy" ${affordable ? '' : 'disabled'}>매수</button>
               <button class="mini sell" data-action="land-trade" data-value="${c.key}" data-side="sell" ${held > 0 ? '' : 'disabled'}>매도</button>
+              <button class="mini ord" type="button" data-action="land-order-open" data-value="${c.key}" data-side="buy" aria-label="지정가 예약">🎯</button>
             </div>
           </div>`;
         })

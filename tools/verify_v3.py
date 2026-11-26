@@ -95,9 +95,9 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "5.12.0"
-FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui.js", "src/sound.js"]
+EXPECTED_VER = "6.0.0"
+FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -193,6 +193,7 @@ def main():
     ok("'./src/expedition.js'" in read("sw.js"), "sw.js 프리캐시에 expedition.js 포함")
     ok("'./src/invasion.js'" in read("sw.js"), "sw.js 프리캐시에 invasion.js 포함")
     ok("'./src/citadel.js'" in read("sw.js"), "sw.js 프리캐시에 citadel.js 포함")
+    ok("'./src/orders.js'" in read("sw.js"), "sw.js 프리캐시에 orders.js 포함")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
     ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
@@ -5497,6 +5498,63 @@ def main():
     ok(c512["denyPoor"] and c512["totalLv"] == 30 and c512["forgeOk"] and c512["towerOk"], "영지 성채 건설/증축(초월석 포함) · 대장간(강화할인/공격) · 마법탑(쿨감/스킬위력)", json.dumps(c512))
     ok(c512["alchemyOk"] and c512["barracksOk"] and c512["exchangeOk"], "연금술실(방치효율/상한) · 펫 훈련소(파견/보조펫) · 거래소 본부(거래세/경매/임대)", json.dumps(c512))
     ok(c512["keptAfterRebirth"] and c512["normOk"] and ui512["ok"] and not ui512["bad"], "환생 후 영구 유지 · 세이브 정규화 · 성채 카드 UI 렌더", json.dumps({ **c512, **ui512 }))
+
+    # ── 27) v6.0.0 📈 투자 대시보드 · 🎯 지정가 예약 매매 ──
+    section("v6.0.0 투자 대시보드 · 지정가 예약 매매")
+    o60 = js(ctx, """
+      const now = 1_700_000_000_000;
+      const s = defaultState(now);
+      s.gold = 1_000_000;
+      s.records.totalGold = 200_000;
+      s.land.totalRentClaimed = 50_000;
+      const c = CITIES[0];
+      const curP = priceInfo(c, now).price;
+      // 미보유 지정가 매도 거부
+      const denySell = addLimitOrder(s, { cityKey: c.key, side: 'sell', targetPrice: curP * 2, qty: 5 }, now);
+      // 미달 매수 주문 등록 (현재가보다 훨씬 낮음) → 미체결 유지
+      const ordWait = addLimitOrder(s, { cityKey: c.key, side: 'buy', targetPrice: Math.max(1, Math.floor(curP * 0.5)), qty: 5 }, now);
+      const fillsWait = processLimitOrders(s, now);
+      // 체결 매수 주문 등록 (현재가 이상 목표가) → 즉시 자동 체결
+      const ordBuy = addLimitOrder(s, { cityKey: c.key, side: 'buy', targetPrice: curP + 100, qty: 10 }, now);
+      const fillsBuy = processLimitOrders(s, now);
+      // 체결 매도 주문 등록 (현재가 이하 목표가) → 즉시 자동 체결
+      const ordSell = addLimitOrder(s, { cityKey: c.key, side: 'sell', targetPrice: Math.max(1, curP - 100), qty: 4 }, now);
+      const fillsSell = processLimitOrders(s, now);
+      // 대기 주문 취소
+      const canWait = cancelLimitOrder(s, ordWait.order.id);
+      // 스냅샷 기록 + 투자 리포트
+      recordAssetSnapshot(s, now + 600_000);
+      const rep = investmentReport(s, now + 600_000);
+      // 정규화
+      const norm = normalizeState({ land: { orders: [{ cityKey: c.key, side: 'buy', targetPrice: 500, qty: 3 }, { cityKey: 'bad', side: 'buy', targetPrice: 100, qty: 1 }] } }, now);
+      return {
+        denySell: !denySell.ok,
+        waitKept: ordWait.ok && fillsWait.length === 0 && s.land.orders.length === 0 && canWait.ok,
+        buyFilled: ordBuy.ok && fillsBuy.length === 1 && fillsBuy[0].qty === 10,
+        sellFilled: ordSell.ok && fillsSell.length === 1 && fillsSell[0].qty === 4 && s.land.owned[c.key] === 6,
+        logLen: s.land.orderLog.length,
+        repOk: rep.huntPct === 80 && rep.rentPct === 20 && rep.series.length >= 1 && rep.totalAsset > 0,
+        normLen: norm.land.orders.length,
+      };
+    """)
+    ui60 = js(ctx2, """
+      const now = Date.now();
+      const s = defaultState(now);
+      s.gold = 500000;
+      const c = CITIES[0];
+      applyTrade(s, c.key, 'buy', 5, now);
+      addLimitOrder(s, { cityKey: c.key, side: 'buy', targetPrice: Math.max(1, Math.floor(priceInfo(c, now).price * 0.85)), qty: 5 }, now);
+      const buffs = computeBuffs(s, now);
+      const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(1), boss: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'land', expPick: { petId: '', setId: '', durKey: 'short' }, el: {}, install: { hidden: true } };
+      const home = __landSub(ui, 'home');
+      const mkt = __landSub(ui, 'market');
+      return {
+        ok: home.includes('investDashboardCard') && home.includes('chart-svg') && home.includes('limitOrdersCard') && mkt.includes('data-action="land-order-open"'),
+        bad: /undefined|NaN|\\[object Object\\]/.test(home + mkt),
+      };
+    """)
+    ok(o60["denySell"] and o60["waitKept"] and o60["buyFilled"] and o60["sellFilled"] and o60["logLen"] == 2, "지정가 예약 매매(등록·대기·매수/매도 자동 체결·취소·체결 로그)", json.dumps(o60))
+    ok(o60["repOk"] and o60["normLen"] == 1 and ui60["ok"] and not ui60["bad"], "투자 대시보드(SVG 추이 그래프·사냥/임대 비율·평가손익) · 세이브 정규화 · UI 렌더", json.dumps({ **o60, **ui60 }))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

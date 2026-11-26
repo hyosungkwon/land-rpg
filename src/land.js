@@ -347,6 +347,9 @@ export function defaultLand(now = Date.now()) {
     favorites: [],
     autoRent: false,
     autoRentAt: 0,
+    // v6.0: 지정가 예약 매매 주문·체결 로그
+    orders: [],
+    orderLog: [],
     accruedRent: 0, // 미수령 임대수익(골드)
     rentAt: now, // 마지막 임대 적립 시각
     bestAsset: 0, // 최고 부동산 평가액
