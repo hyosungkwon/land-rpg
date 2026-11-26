@@ -45,6 +45,7 @@ import {
   achievementStatus, claimedAchievementCount, dailyQuestStatus,
 } from './quests.js';
 import { passInfo, titleStatus } from './pass.js';
+import { riftStatus, RIFT_CARD_BY_ID } from './rift.js';
 import {
   GEAR_ITEMS, GEAR_SETS, GEAR_FILTERS, GEAR_SET_FILTERS, GEAR_OPTS, GEAR_DROP,
   gearIcon, gearItem, gearList, gearOwned, gearOptionList, gearOptionSummary,
@@ -302,6 +303,10 @@ export class UI {
       case 'tower-sweep': actions.claimTowerSweep(); break;
       case 'daily': actions.enterDaily(); break;
       case 'invasion': actions.enterInvasion(); break;
+      case 'rift-start': actions.enterRift(); break;
+      case 'rift-pick-open': actions.openRiftPick(); break;
+      case 'rift-pick': actions.pickRiftCard(v); break;
+      case 'rift-retreat': actions.retreatRift(); break;
       case 'claim-attendance': actions.claimAttendance(); break;
       case 'claim-weekly-milestone': actions.claimWeeklyMilestone(Number(v)); break;
       case 'claim-quest': actions.claimQuest(v); break;
@@ -496,7 +501,11 @@ export class UI {
 
     const def = b.def;
     // v4.2: 탑 도전 중에는 스테이지 칩 대신 층 이름을 보여 준다 · v5.11 영지 방어전
-    if (b.invasion && b.invasion.city) {
+    if (b.rift) {
+      const left = (Math.max(0, b.rift.ends - now) / 1000).toFixed(1);
+      setT(this.el.stageNum, `🌀 균열 W${b.rift.wave}${b.rift.isBossWave ? ' 👑' : ''}`);
+      setT(this.el.themeName, b.rift.picking ? '🃏 축복 카드 선택 대기' : `${b.rift.waveKills}/${b.rift.waveGoal} · ${left}초`);
+    } else if (b.invasion && b.invasion.city) {
       const done = b.invasion.kills + b.invasion.bossKills;
       const left = (Math.max(0, b.invasion.ends - now) / 1000).toFixed(1);
       setT(this.el.stageNum, `🚨 ${b.invasion.city.name} 방어전`);
@@ -1672,18 +1681,56 @@ function relicCard(ui) {
   </div>`;
 }
 
+/* ───────────── 🌀 무한 균열 로그라이크 웨이브 (v6.7.0) ───────────── */
+function riftCard(ui) {
+  const s = ui.s;
+  const b = ui.battle;
+  const now = Date.now();
+  const st = riftStatus(s, now);
+  const live = b && b.rift;
+  const busy = !!(b && (b.rift || b.invasion || b.tower || b.dungeon || b.daily || b.boss));
+  const pickedTags = live && live.cards && live.cards.length
+    ? `<div class="rift-tags">${live.cards.map((id) => {
+      const c = RIFT_CARD_BY_ID[id];
+      return c ? `<span class="tag" style="border-color:${c.color}66;color:${c.color}">${c.icon} ${esc(c.name)}</span>` : '';
+    }).join('')}</div>`
+    : '';
+  const bodyBtn = live
+    ? `<div class="row gap6" style="margin-top:7px">
+        ${live.picking ? '<button class="btn small primary wide" type="button" data-action="rift-pick-open">🃏 축복 카드 선택</button>' : ''}
+        <button class="btn small ghost wide" type="button" data-action="rift-retreat">🚪 정산 귀환 (W${live.wavesCleared} 보상)</button>
+      </div>`
+    : `<button class="btn small ${st.ready && !busy ? 'primary' : 'ghost'} block" style="margin-top:7px" type="button" data-action="rift-start" ${!st.ready || busy ? 'disabled' : ''}>
+        ${st.ready ? '🌀 무한 균열 입장 (무료)' : `⏱ 재입장 대기 (${mmss(st.leftMs)})`}
+      </button>`;
+  return `
+  <div class="card rift-card${live ? ' live' : ''}" id="riftCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🌀</span>무한 균열<small>로그라이크 · 최고 W${st.bestWave}</small></div>
+      <span class="tiny" style="color:${live ? 'var(--gold)' : st.ready ? 'var(--green)' : 'var(--dim)'}">${live ? `W${live.wave} 진행 중` : st.ready ? '입장 가능' : mmss(st.leftMs)}</span>
+    </div>
+    <div class="tiny muted">${
+      live
+        ? `현재 <b style="color:var(--gold)">웨이브 ${live.wave}</b> (${live.waveKills}/${live.waveGoal}) · 클리어 ${live.wavesCleared}W · 축복 ${live.cards.length}장`
+        : `3웨이브마다 <b>3택 1 축복 카드</b>를 조합해 한계까지 돌파! W6+ 💠보석 · W9+ 🏅훈장 · 3W마다 ✨초월석 지급`
+    }</div>
+    ${pickedTags}
+    ${bodyBtn}
+  </div>`;
+}
+
 function tplHuntGrowth(ui) {
   const f = ['all', 'challenge', 'growth'].includes(ui && ui.growthFilter) ? ui.growthFilter : 'all';
   const bar = `<div class="chips growth-filter" role="tablist" aria-label="전직·도전 보기">
     <button class="chip${f === 'all' ? ' on' : ''}" type="button" data-action="growth-filter" data-value="all">전체 보기</button>
-    <button class="chip${f === 'challenge' ? ' on' : ''}" type="button" data-action="growth-filter" data-value="challenge">⚔️ 도전 (던전·탑·보스)</button>
+    <button class="chip${f === 'challenge' ? ' on' : ''}" type="button" data-action="growth-filter" data-value="challenge">⚔️ 도전 (균열·던전·탑·보스)</button>
     <button class="chip${f === 'growth' ? ' on' : ''}" type="button" data-action="growth-filter" data-value="growth">✨ 성장 (전직·환생·유물·펫)</button>
   </div>`;
   const growthCards = `${jobCard(ui)}${rebirthCard(ui)}${relicCard(ui)}${petLine(ui)}`;
-  const challengeCards = `${invasionCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}`;
+  const challengeCards = `${riftCard(ui)}${invasionCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}`;
   if (f === 'challenge') return `${bar}${challengeCards}`;
   if (f === 'growth') return `${bar}${growthCards}`;
-  return `${bar}${jobCard(ui)}${rebirthCard(ui)}${relicCard(ui)}${invasionCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}${petLine(ui)}`;
+  return `${bar}${jobCard(ui)}${rebirthCard(ui)}${relicCard(ui)}${riftCard(ui)}${invasionCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}${petLine(ui)}`;
 }
 
 /* ───────────── 📅 일일 퀘스트 (v4.9.0 · KST 자정 리셋) ───────────── */

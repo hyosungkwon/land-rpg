@@ -169,6 +169,9 @@ export function compactSave(state) {
   if (c.titles && typeof c.titles === 'object' && !c.titles.equipped) {
     delete c.titles;
   }
+  if (c.rift && typeof c.rift === 'object' && !(c.rift.runs > 0) && !(c.rift.bestWave > 0)) {
+    delete c.rift;
+  }
   if (c.skills && typeof c.skills === 'object') {
     for (const sk of Object.values(c.skills)) {
       if (sk && typeof sk === 'object' && !sk.rune) delete sk.rune;

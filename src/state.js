@@ -38,6 +38,7 @@ import { defaultCitadel, normalizeCitadel, citadelEffects } from './citadel.js';
 import { defaultRelics, normalizeRelics, relicEffects } from './relics.js';
 import { defaultGems, normalizeGems, gemEffects } from './gems.js';
 import { defaultPass, normalizePass, defaultTitles, normalizeTitles, titleBonus } from './pass.js';
+import { defaultRift, normalizeRift } from './rift.js';
 import { normalizeOrders } from './orders.js';
 
 const nowMs = () => Date.now();
@@ -97,6 +98,7 @@ export function defaultState(now = nowMs()) {
     // v6.4.0 🎖️ 영지 성장 패스(무료 30단계) · 🏷️ 칭호(20종)
     pass: defaultPass(now),
     titles: defaultTitles(),
+    rift: defaultRift(),
     battleSpeed: 1, // v5.3.0 전투 배속(1 / 1.5 / 2, 환생 1회 해금)
     dungeonCooldown: 0,
     dungeon: { best: 0, runs: 0, last: null },
@@ -272,6 +274,7 @@ export function normalizeState(raw, now = nowMs()) {
   s.maxStage = Math.max(s.stage, Math.floor(num(s.maxStage, 1)));
 
   // v3.5: 환생 기록 정규화 · 역대 최고 스테이지(환생 후에도 남는 기록)
+  s.rift = normalizeRift(raw.rift);
   s.rebirth = normalizeRebirth(raw.rebirth);
   s.peakStage = Math.max(
     1,

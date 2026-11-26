@@ -531,6 +531,44 @@ class App {
         this.ui.addLog(`🌟 <b>일일 보스 ${ev.gradeLabel}등급</b> · 피해 ${ev.dmg.toLocaleString()} · ${gains}`);
         this.showDailyResult(ev);
         this.ui.renderIfNeeded();
+      } else if (ev.t === 'riftStart') {
+        this.ui.addLog(`🌀 <b>무한 균열</b> 입장 — 웨이브 1 시작!`);
+        this.ui.toast('🌀 무한 균열 입장! 3웨이브마다 축복 카드를 고르세요', 'gold');
+        this.sound.boss();
+        this.ui.renderIfNeeded();
+      } else if (ev.t === 'riftPick') {
+        this.sound.fanfare();
+        this.openRiftPickModal();
+        this.ui.renderIfNeeded();
+      } else if (ev.t === 'riftEnd') {
+        this.battle.refreshStats();
+        this.save(true);
+        if (ev.waves > 0) {
+          addPassXp(this.s, Math.min(120, ev.waves * 12), now);
+          this.sound.fanfare();
+        } else {
+          this.sound.ui();
+        }
+        const gains = [
+          ev.gold ? `💰+${ev.gold.toLocaleString()}` : '',
+          ev.shards ? `💎+${ev.shards}` : '',
+          ev.points ? `✨+${ev.points}P` : '',
+          ev.bonusGem ? `${ev.bonusGem.icon}${ev.bonusGem.name}` : '',
+          ev.bonusMedal ? '🏅훈장 +1' : '',
+        ].filter(Boolean).join(' ');
+        this.ui.addLog(`🌀 <b>무한 균열 종료</b> · ${ev.waves}웨이브 돌파${ev.isBest ? ' (신기록!)' : ''}${gains ? ` · ${gains}` : ''}`);
+        this.ui.modal({
+          title: `🌀 무한 균열 정산 (${ev.waves}W 돌파)`,
+          sub: ev.isBest ? `🏆 최고 기록 경신! (최고 W${ev.bestWave})` : `최고 기록 W${ev.bestWave} · 선택한 축복 ${ev.cards.length}장`,
+          body: `<div class="modal-rewards">
+                   <div class="rw"><div class="e">💰</div><div class="v">+${ev.gold.toLocaleString()}</div><div class="k">골드</div></div>
+                   <div class="rw"><div class="e">💎</div><div class="v">+${ev.shards}</div><div class="k">강화석</div></div>
+                   <div class="rw"><div class="e">✨</div><div class="v">+${ev.points}P</div><div class="k">초월석</div></div>
+                 </div>
+                 ${ev.bonusGem || ev.bonusMedal ? `<div class="tiny" style="text-align:center;color:var(--gold);margin-bottom:6px">추가 보상: ${ev.bonusGem ? `${ev.bonusGem.icon} ${esc(ev.bonusGem.name)} Lv.1 ` : ''}${ev.bonusMedal ? '🏅 방어 훈장 +1' : ''}</div>` : ''}`,
+          actions: [{ label: '확인', style: 'primary', onClick: () => {} }],
+        });
+        this.ui.renderIfNeeded();
       } else if (ev.t === 'invasionStart') {
         this.ui.addLog(`🚨 <b>${esc(ev.cityName)} 방어전</b> 시작 — ${esc(ev.waveName)} (${ev.goal}마리 격파)`);
         this.ui.toast(`🚨 ${ev.cityName} 방어전! ${Math.round(ev.duration / 1000)}초 안에 마물 격퇴`, 'gold');
@@ -1852,6 +1890,32 @@ class App {
         }
         this.save(true);
         this.ui.render();
+      },
+
+      /** 🌀 v6.7 무한 균열 로그라이크 입장 · 3택 1 축복 · 정산 귀환 */
+      enterRift: () => {
+        this.sound.unlock();
+        const r = this.battle.startRift(Date.now());
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        this.save(true);
+        this.ui.render();
+      },
+      openRiftPick: () => this.openRiftPickModal(),
+      pickRiftCard: (cardId) => {
+        this.sound.unlock();
+        const r = this.battle.pickRiftCard(cardId, Date.now());
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        this.ui.closeModal();
+        this.sound.levelUp();
+        this.ui.toast(`🃏 축복 획득: ${r.card.icon} ${r.card.name} — W${r.wave} 시작!`, 'gold');
+        this.ui.addLog(`🃏 균열 축복 <b>${esc(r.card.name)}</b> (${esc(r.card.desc)}) 선택 → W${r.wave}`);
+        this.ui.render();
+      },
+      retreatRift: () => {
+        if (this.battle.rift) {
+          this.ui.closeModal();
+          this.battle.endRift(Date.now(), 'retreat');
+        }
       },
 
       evolvePet: (id) => {
@@ -3182,6 +3246,22 @@ class App {
     }
     actions.push({ label: '닫기', style: 'ghost', onClick: () => {} });
     this.ui.modal({ title: '⚔️ 장비 비교', sub: isOn ? '장착 중' : '장착하면 아래 수치만큼 바뀝니다(부위 강화 레벨은 그대로)', body, actions });
+  }
+
+  openRiftPickModal() {
+    const r = this.battle && this.battle.rift;
+    if (!r || !Array.isArray(r.picking) || !r.picking.length) return;
+    const body = `<div class="rift-picks">${r.picking.map((c) => `
+      <button class="rift-pick-btn" style="--rc:${c.color}" type="button" data-action="rift-pick" data-value="${c.id}">
+        <span class="rp-ico">${c.icon}</span>
+        <span><b>${esc(c.name)}</b><small>${esc(c.desc)}</small></span>
+      </button>`).join('')}</div>`;
+    this.ui.modal({
+      title: `🃏 균열 축복 선택 (W${r.wavesCleared} 돌파!)`,
+      sub: '3장의 축복 카드 중 1장을 고르면 다음 웨이브가 시작됩니다.',
+      body,
+      actions: [{ label: '나중에 고르기 (일시정지)', style: 'ghost', onClick: () => {} }],
+    });
   }
 
   toggleGearLockItem(uid) {

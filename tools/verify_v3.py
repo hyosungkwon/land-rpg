@@ -95,9 +95,9 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "6.6.0"
-FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui.js", "src/sound.js"]
+EXPECTED_VER = "6.7.0"
+FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -198,6 +198,7 @@ def main():
     ok("'./src/gems.js'" in read("sw.js"), "sw.js 프리캐시에 gems.js 포함")
     ok("'./src/portfolio-ops.js'" in read("sw.js"), "sw.js 프리캐시에 portfolio-ops.js 포함")
     ok("'./src/pass.js'" in read("sw.js"), "sw.js 프리캐시에 pass.js 포함")
+    ok("'./src/rift.js'" in read("sw.js"), "sw.js 프리캐시에 rift.js 포함")
     ok("'./src/ui-land.js'" in read("sw.js"), "sw.js 프리캐시에 ui-land.js 포함")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
@@ -5830,6 +5831,61 @@ def main():
     ok(my66["denyCom"] and my66["lockOk"], "장비 잠금 보호(단건/일괄 분해 차단·해제 복구) 및 비전설 초월 거부", json.dumps(my66))
     ok(my66["mythicOk"] and my66["normOk"] and ui66["ok"] and not ui66["bad"], "전설 → 신화 초월(+12강 상당·옵션 +35%·자동 잠금·정규화·UI 배지) 및 캔버스 신화 오라", json.dumps({ **my66, **ui66 }))
     ok("hasMythic" in read("src/render.js") and "transcendGearItem" in read("app.js"), "render.js 신화 오라/검기 · app.js 초월/잠금 모달 연결")
+
+    # ── 34) v6.7.0 🌀 무한 균열 로그라이크 웨이브 던전 · 3택 1 축복 카드 ──
+    section("v6.7.0 무한 균열 로그라이크 던전 · 3택 1 축복 카드")
+    rf67 = js(ctx, """
+      const now = 1_700_000_000_000;
+      const s = defaultState(now);
+      s.stage = 20; s.maxStage = 20; s.peakStage = 20; s.level = 30;
+      const b = new Battle(s, () => ({}), () => 0.5, now);
+      const st = b.startRift(now);
+      // 웨이브 1~3 클리어 시뮬 → W3 클리어 시 3택 1 축복 선택(picking) 진입
+      let t = now;
+      let guard = 0;
+      while (b.inRift() && !b.rift.picking && guard < 200) {
+        t += 100;
+        b.riftTick(t);
+        for (const m of b.monsters.slice()) {
+          if (!m.dead && !m.dying) b.killMonster(m, t);
+        }
+        guard++;
+      }
+      const picked3 = !!(b.rift && b.rift.picking && b.rift.picking.length === 3 && b.rift.wavesCleared === 3);
+      const pickRes = picked3 ? b.pickRiftCard(b.rift.picking[0].id, t) : { ok: false };
+      // 웨이브 4~6 추가 돌파 후 정산 귀환 → 골드·강화석·초월석·보석 지급
+      guard = 0;
+      while (b.inRift() && !b.rift.picking && guard < 200) {
+        t += 100;
+        b.riftTick(t);
+        for (const m of b.monsters.slice()) {
+          if (!m.dead && !m.dying) b.killMonster(m, t);
+        }
+        guard++;
+      }
+      const g0 = s.gold, sh0 = s.shards, pt0 = s.rebirth.points;
+      const ended = b.endRift(t, 'retreat');
+      const cdAfter = riftStatus(s, t + 1000).ready;
+      const norm = normalizeState({ rift: { bestWave: 12, runs: 3, totalWaves: 28, lastAt: now } }, now);
+      return {
+        startOk: st.ok && picked3 && pickRes.ok && pickRes.wave === 4,
+        rewardOk: !!ended && ended.waves === 6 && s.gold > g0 && s.shards > sh0 && s.rebirth.points > pt0 && !!ended.bonusGem && s.rift.bestWave === 6,
+        cdLock: !cdAfter,
+        normOk: norm.rift.bestWave === 12 && norm.rift.runs === 3,
+      };
+    """)
+    ui67 = js(ctx2, """
+      const s = defaultState(Date.now());
+      const b = new Battle(s, () => ({}));
+      const ui = { s, battle: b, app: { buffs: {} }, logs: [], tab: 'hunt', huntSub: 'growth', growthFilter: 'challenge', el: {}, install: { hidden: true } };
+      const html = __huntSub(ui, 'growth');
+      return {
+        ok: html.includes('riftCard') && html.includes('무한 균열') && html.includes('data-action="rift-start"'),
+        bad: /undefined|NaN|\\[object Object\\]/.test(html),
+      };
+    """)
+    ok(rf67["startOk"] and rf67["rewardOk"] and rf67["cdLock"] and rf67["normOk"], "무한 균열 웨이브 진행·W3 3택 1 축복 카드·W6 보석/초월석 정산·쿨타임·정규화", json.dumps(rf67))
+    ok(ui67["ok"] and not ui67["bad"], "무한 균열 도전 카드 UI 렌더 정상", json.dumps(ui67))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

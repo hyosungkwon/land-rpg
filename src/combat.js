@@ -15,6 +15,7 @@ import {
 } from './meta.js';
 import { TOWER_RULES, TOWER_MAX_FLOOR, towerFloor, towerStageDef, towerHas, towerReward, towerCleared, towerState, towerUnlocked, towerLockReason } from './tower.js';
 import { INVASION, invasionStatus, recordInvasionWin } from './invasion.js';
+import { RIFT, RIFT_MONSTERS, RIFT_BOSSES, RIFT_CARD_BY_ID, riftStatus, rollRiftChoices, riftCardMods, settleRiftReward } from './rift.js';
 import { relicEffects } from './relics.js';
 import { DAILY, dailyBossFor, dailyInfo, consumeDailyAttempt, dailyReward, recordDailyRun, recordWeeklyBoss, dailyDpsCap } from './daily.js';
 import { codexMeet, codexKill, trackDailyQuest } from './quests.js';
@@ -118,6 +119,8 @@ export class Battle {
     this.daily = null;
     // v5.11 🚨 영지 침공 방어전 상태
     this.invasion = null;
+    // v6.7 🌀 무한 균열 로그라이크 상태
+    this.rift = null;
     // v6.1 🔥 불사조의 깃털 즉시 부활 쿨타임
     this.phoenixAt = 0;
     this.syncStage();
@@ -158,6 +161,14 @@ export class Battle {
   /** 🚨 영지 침공 방어전 진행 중인가 */
   inInvasion() {
     return !!this.invasion;
+  }
+
+  inRift() {
+    return !!this.rift;
+  }
+
+  riftMods() {
+    return this.rift ? riftCardMods(this.rift.cards) : null;
   }
 
   invasionLeft(now = Date.now()) {
@@ -273,7 +284,7 @@ export class Battle {
     if (this.boss) return;
     if (this.monsters.filter((m) => !m.dead && !m.dying).length >= ECON.maxMonsters) return;
     // v5.7: 일반 사냥 중 확률적으로 💰 보물 고블린 또는 엘리트 변종 등장 (+ v6.1 황금 자석 유물)
-    const inField = allowSpecial && !this.tower && !this.daily && !this.dungeon && !this.invasion && this.s.totalKills > 0;
+    const inField = allowSpecial && !this.tower && !this.daily && !this.dungeon && !this.invasion && !this.rift && this.s.totalKills > 0;
     const rel = relicEffects(this.s);
     if (
       inField
@@ -331,6 +342,9 @@ export class Battle {
       return;
     }
 
+    // v6.7 🌀 무한 균열 축복 카드 선택 대기 중에는 전투 일시정지
+    if (this.rift && this.rift.picking) return;
+
     const spd = this.speed();
     const dtEff = dt * spd;
     this.regen(dtEff);
@@ -354,6 +368,10 @@ export class Battle {
     }
     if (this.invasion) {
       this.invasionTick(now);
+      return;
+    }
+    if (this.rift) {
+      this.riftTick(now);
       return;
     }
     this.maybeSpawn(now);
@@ -516,7 +534,9 @@ export class Battle {
     if (this.player.dead) return;
     // v3.8: 방어(피해 감소) 스탯 — 갑옷·투구 강화 + 환생 '수호' 특성 + v5.10 불굴 룬
     const ironAdd = this.berserkUntil > now && this.berserkRune === 'iron' ? 0.18 : 0;
-    const reduce = Math.max(0, Math.min(0.95, (this.stats.dmgReduce || 0) + ironAdd));
+    const rm = this.riftMods();
+    const riftRed = rm ? rm.dmgRedPct / 100 : 0;
+    const reduce = Math.max(0, Math.min(0.95, (this.stats.dmgReduce || 0) + ironAdd + riftRed));
     const grace = this.player.graceUntil && now < this.player.graceUntil ? ECON.reviveGraceReduce : 1;
     let dmg = Math.max(1, Math.round(raw * (1 - reduce) * grace));
     // v5.10 성광 보호막 우선 흡수
@@ -552,6 +572,7 @@ export class Battle {
       else if (this.dungeon) this.endDungeon(now); // 쓰러지면 던전 종료(그때까지의 보상 지급)
       else if (this.tower) this.endTower(now, 'dead'); // 탑에서 쓰러지면 패배 — 잃는 것 없이 복귀
       else if (this.invasion) this.endInvasion(now, 'dead'); // 침공 방어 실패 — 부동산 피해 없이 복귀
+      else if (this.rift) this.endRift(now, 'dead'); // 균열 종료 — 도달 웨이브 보상 지급 후 복귀
       // v3.8: 쓰러지면 몰려든 무리가 흩어진다 — 부활 직후 바로 다시 눌리는 일 없이 숨을 돌린다
       else this.scatterMonsters(now);
     }
@@ -606,11 +627,18 @@ export class Battle {
     let hits = 0;
     let dealt = 0;
     this.lastHitDealt = 0;
+    const rm = this.riftMods();
     for (const m of list) {
       if (m.dead || m.dying) continue;
-      const { dmg: rawDmg, crit } = this.roll(mul, now, extra);
-      // v4.0 장비 옵션: 보스 추가 피해 · 범위 베기 피해 · v5.10 처형 룬 보스 추뎀
+      const hitExtra = rm && (rm.critPct || rm.critDmgPct)
+        ? { ...(extra || {}), critAdd: (extra && extra.critAdd ? extra.critAdd : 0) + rm.critPct / 100 }
+        : extra;
+      const { dmg: rawDmg, crit } = this.roll(mul, now, hitExtra);
+      // v4.0 장비 옵션: 보스 추가 피해 · 범위 베기 피해 · v5.10 처형 룬 · v6.7 균열 축복
       let dmg = rawDmg;
+      if (rm && rm.atkPct > 0) dmg = Math.round(dmg * (1 + rm.atkPct / 100));
+      if (crit && rm && rm.critDmgPct > 0) dmg = Math.round(dmg * (1 + rm.critDmgPct / 200));
+      if (rm && rm.execPct > 0 && (m.isBoss || m.hp <= m.maxHp * 0.4)) dmg = Math.round(dmg * (1 + rm.execPct / 100));
       const bossAdd = (this.stats.bossDmgPct || 0) + (extra && extra.bossAdd ? extra.bossAdd : 0);
       if (m.isBoss && bossAdd > 0) dmg = Math.round(dmg * (1 + bossAdd));
       if (kind === 'whirl' && this.stats.whirlDmgPct > 0) dmg = Math.round(dmg * (1 + this.stats.whirlDmgPct));
@@ -625,6 +653,18 @@ export class Battle {
       if (this.daily) { this.daily.dmg += dmg; this.daily.hits = (this.daily.hits || 0) + 1; }
       dealt += dmg;
       hits++;
+      // v6.7 🌩️ 균열 번개 연쇄 — 주변 모든 생존 몬스터에 추가 피해
+      if (rm && rm.chainPct > 0 && kind !== 'chain') {
+        const cDmg = Math.max(1, Math.round(dmg * (rm.chainPct / 100)));
+        for (const o of this.monsters) {
+          if (o === m || o.dead || o.dying) continue;
+          o.hp -= cDmg;
+          o.hitAt = now;
+          dealt += cDmg;
+          this.emit({ t: 'hit', id: o.id, dmg: cDmg, crit: false, x: o.x, isBoss: o.isBoss, kind: 'chain' });
+          if (o.hp <= 0) this.killMonster(o, now);
+        }
+      }
       // v6.1 ⏳ 시간의 모래시계 유물 — 치명타 적중 시 기본 스킬 쿨타임 단축
       if (crit) {
         const trim = relicEffects(this.s).critCdTrimMs || 0;
@@ -639,7 +679,8 @@ export class Battle {
     }
     // v4.0 장비 옵션 + v5.10 룬 흡혈 — 입힌 피해의 일부를 되찾는다
     const ironLs = this.berserkUntil > now && this.berserkRune === 'iron' ? 0.08 : 0;
-    const totalLs = (this.stats.lifesteal || 0) + ironLs + (extra && extra.lifesteal ? extra.lifesteal : 0);
+    const riftLs = rm ? rm.leechPct / 100 : 0;
+    const totalLs = (this.stats.lifesteal || 0) + ironLs + riftLs + (extra && extra.lifesteal ? extra.lifesteal : 0);
     if (dealt > 0 && totalLs > 0 && !this.player.dead) {
       const heal = Math.round(dealt * totalLs);
       if (heal > 0 && this.player.hp < this.stats.hpMax) {
@@ -746,6 +787,28 @@ export class Battle {
       });
       const done = this.invasion.kills + this.invasion.bossKills;
       if (done >= this.invasion.goal) this.endInvasion(now, 'clear');
+      return;
+    }
+    // v6.7 🌀 무한 균열 로그라이크 웨이브
+    if (this.rift) {
+      this.rift.waveKills += 1;
+      this.rift.totalKills += 1;
+      this.emit({
+        t: 'monsterDeath', id: m.id, name: m.name, ko: m.ko, isBoss: m.isBoss, x: m.x,
+        gold: 0, exp: 0, shards: 0, levelUps: 0, rift: true,
+      });
+      if (this.rift.waveKills >= this.rift.waveGoal) {
+        this.rift.wavesCleared += 1;
+        const cleared = this.rift.wavesCleared;
+        if (cleared % RIFT.blessEvery === 0) {
+          const choices = rollRiftChoices(this.rng);
+          this.rift.picking = choices;
+          this.rift.pauseAt = now;
+          this.emit({ t: 'riftPick', wave: cleared, choices });
+        } else {
+          this.startRiftWave(this.rift.wave + 1, now);
+        }
+      }
       return;
     }
     const reward = killReward(this.s, this.s.stage, m.isBoss, this.buffs(), this.rng);
@@ -1743,6 +1806,161 @@ export class Battle {
       points: res ? res.points : 0,
       boomPct: res ? res.boomPct : 0,
       medals: res ? res.medals : 0,
+    });
+    return res;
+  }
+
+  /* ───────────── 🌀 무한 균열 로그라이크 웨이브 (v6.7.0) ───────────── */
+  startRift(now = Date.now()) {
+    if (this.rift) return { ok: false, reason: '이미 무한 균열이 진행 중입니다.' };
+    if (this.invasion) return { ok: false, reason: '영지 방어전 진행 중에는 입장할 수 없습니다.' };
+    if (this.tower) return { ok: false, reason: '도전의 탑 진행 중에는 입장할 수 없습니다.' };
+    if (this.daily) return { ok: false, reason: '일일 보스 진행 중에는 입장할 수 없습니다.' };
+    if (this.dungeon) return { ok: false, reason: '황금 던전 진행 중에는 입장할 수 없습니다.' };
+    if (this.boss) return { ok: false, reason: '스테이지 보스 전투 중에는 입장할 수 없습니다.' };
+    if (this.player.dead) return { ok: false, reason: '전투 불능 상태에서는 입장할 수 없습니다.' };
+    const st = riftStatus(this.s, now);
+    if (!st.ready) return { ok: false, reason: `균열 재입장까지 ${Math.ceil(st.leftMs / 1000)}초 남았습니다.` };
+
+    this.rift = {
+      wave: 0,
+      wavesCleared: 0,
+      waveKills: 0,
+      waveGoal: 0,
+      spawned: 0,
+      bossSpawned: false,
+      totalKills: 0,
+      cards: [],
+      picking: null,
+      pauseAt: 0,
+      ends: now + RIFT.waveTimeMs,
+      spawnAt: now,
+      t0: now,
+    };
+    this.monsters = [];
+    this.boss = null;
+    this.bossEnds = 0;
+    this.bossReadyAt = 0;
+    this.player.hp = this.stats.hpMax;
+    try { trackDailyQuest(this.s, 'challenge', 1, now); } catch (e) { /* ignore */ }
+    this.startRiftWave(1, now);
+    this.emit({ t: 'riftStart', wave: 1, ends: this.rift.ends });
+    return { ok: true, wave: 1 };
+  }
+
+  startRiftWave(wave, now = Date.now()) {
+    const r = this.rift;
+    if (!r) return;
+    r.wave = wave;
+    r.isBossWave = wave % RIFT.blessEvery === 0;
+    r.waveKills = 0;
+    r.spawned = 0;
+    r.bossSpawned = false;
+    r.waveGoal = r.isBossWave ? RIFT.bossWaveMinions + 1 : RIFT.normalPerWave;
+    r.ends = now + RIFT.waveTimeMs;
+    r.spawnAt = now - RIFT.spawnMs;
+    this.monsters = [];
+    this.spawnRiftMonster(now, false);
+    this.spawnRiftMonster(now - 150, false);
+    this.emit({ t: 'riftWave', wave, isBossWave: r.isBossWave, ends: r.ends });
+  }
+
+  spawnRiftMonster(now, isBoss) {
+    const r = this.rift;
+    if (!r) return null;
+    const pool = RIFT_MONSTERS[(r.wave - 1) % RIFT_MONSTERS.length];
+    const name = isBoss
+      ? RIFT_BOSSES[Math.floor((r.wave - 1) / RIFT.blessEvery) % RIFT_BOSSES.length]
+      : pool[r.spawned % pool.length];
+    if (!isBoss) r.spawned += 1;
+    else r.bossSpawned = true;
+    const m = this.makeMonster(name, isBoss, now);
+    const dps = Math.max(1, this.stats.dps || 1);
+    const scale = 0.85 + r.wave * 0.34;
+    m.maxHp = Math.max(20, Math.round(dps * scale * (isBoss ? 3.2 : 1.0) * (0.92 + this.rng() * 0.16)));
+    m.hp = m.maxHp;
+    const atkPct = (1.1 + r.wave * 0.24) * (isBoss ? 1.55 : 1);
+    m.atk = Math.max(1, Math.round((this.stats.hpMax * atkPct) / 100));
+    m.rift = true;
+    m.x = ECON.spawnX + this.rng() * 60;
+    m.lastAttack = now;
+    this.monsters.push(m);
+    return m;
+  }
+
+  pickRiftCard(cardId, now = Date.now()) {
+    const r = this.rift;
+    if (!r || !r.picking) return { ok: false, reason: '선택 대기 중인 축복 카드가 없습니다.' };
+    const card = r.picking.find((c) => c.id === cardId) || RIFT_CARD_BY_ID[cardId];
+    if (!card) return { ok: false, reason: '알 수 없는 축복 카드입니다.' };
+    r.cards.push(card.id);
+    r.picking = null;
+    if (card.fx) {
+      if (card.fx.healNowPct) {
+        this.player.hp = Math.min(this.stats.hpMax, this.player.hp + Math.round(this.stats.hpMax * (card.fx.healNowPct / 100)));
+      }
+      if (card.fx.shieldNowPct) {
+        this.player.shield = Math.max(this.player.shield || 0, Math.round(this.stats.hpMax * (card.fx.shieldNowPct / 100)));
+        this.player.shieldUntil = now + 25000;
+      }
+      if (card.fx.resetCd && this.s && this.s.skills) {
+        for (const k of ['strike', 'whirl', 'berserk', 'heal']) {
+          if (this.s.skills[k]) this.s.skills[k].last = 0;
+        }
+      }
+    }
+    this.startRiftWave(r.wave + 1, now);
+    this.emit({ t: 'riftPicked', card, wave: r.wave });
+    return { ok: true, card, wave: r.wave };
+  }
+
+  riftTick(now) {
+    const r = this.rift;
+    if (!r || r.picking) return;
+    if (now >= r.ends) {
+      this.endRift(now, 'timeout');
+      return;
+    }
+    const alive = this.monsters.filter((m) => !m.dead && !m.dying).length;
+    const minNeed = r.isBossWave ? RIFT.bossWaveMinions : RIFT.normalPerWave;
+    if (r.spawned < minNeed) {
+      if (alive < RIFT.maxAlive && now - r.spawnAt >= RIFT.spawnMs) {
+        r.spawnAt = now;
+        this.spawnRiftMonster(now, false);
+      }
+    } else if (r.isBossWave && !r.bossSpawned && r.waveKills >= minNeed) {
+      this.spawnRiftMonster(now, true);
+    }
+  }
+
+  endRift(now = Date.now(), how = 'retreat') {
+    const r = this.rift;
+    if (!r) return null;
+    this.rift = null;
+    const res = settleRiftReward(this.s, r.wavesCleared, r.cards, now, this.rng);
+    for (const m of this.monsters) {
+      m.dead = true;
+      m.dying = 0;
+    }
+    this.monsters = [];
+    this.boss = null;
+    this.bossEnds = 0;
+    this.bossReadyAt = 0;
+    this.syncStage();
+    this.spawnInitial(now);
+    this.refreshStats(now);
+    this.emit({
+      t: 'riftEnd',
+      how,
+      waves: res ? res.waves : 0,
+      gold: res ? res.gold : 0,
+      shards: res ? res.shards : 0,
+      points: res ? res.points : 0,
+      bonusGem: res ? res.bonusGem : null,
+      bonusMedal: res ? res.bonusMedal : 0,
+      isBest: res ? res.isBest : false,
+      bestWave: res ? res.bestWave : 0,
+      cards: r.cards.slice(),
     });
     return res;
   }
