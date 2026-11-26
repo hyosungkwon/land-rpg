@@ -77,7 +77,7 @@
     }
     writeSave();
     updateHomeStatus();
-    if ((SD.charLv || 1) > oldLv) showLup();
+    if ((SD.charLv || 1) > oldLv) { checkAch(); showLup(); }
   }
 
   function showSp(em, msg) {
