@@ -3,7 +3,7 @@
 // v3: 로그인·클라우드·Firebase 없음. 네트워크 대기 없이 즉시 시작하고 오프라인에서도 완전 동작.
 import { APP_VERSION, ECON, EQUIP, EQUIP_MAX_LV, SKILLS, SAVE_KEY, stageDef, RARITIES, RARITY_INDEX, spriteSrc, enhanceCost } from './src/data.js';
 import {
-  loadState, saveState, offlineSummary, applyOffline, tryEnhance, tryUpgradeSkill,
+  loadState, saveState, offlineSummary, applyOffline, tryEnhance, tryUpgradeSkill, setSkillRune as setSkillRuneState,
   exchangeShards, pullGear, recordNews, enhanceMaxCount, normalizeState, compareGear, skillCdOf,
 } from './src/state.js';
 import {
@@ -1221,6 +1221,20 @@ class App {
         } else {
           this.ui.toast(r.reason || '강화할 수 없습니다', 'red');
         }
+      },
+      setSkillRune: (key, runeId) => {
+        const r = setSkillRuneState(this.s, key, runeId);
+        if (!r.ok) {
+          this.ui.toast(r.reason || '룬을 변경할 수 없습니다', 'red');
+          return;
+        }
+        this.save(true);
+        this.sound.ui();
+        this.ui.toast(
+          r.cleared ? `🔮 ${SKILLS[key].name} 기본 형태로 복원` : `🔮 ${r.rune.icon} ${r.rune.name} 룬 장착 · ${r.rune.short}`,
+          r.cleared ? '' : 'gold',
+        );
+        this.ui.render();
       },
 
       buyShards: (n) => {

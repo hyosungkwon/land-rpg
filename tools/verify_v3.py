@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "5.9.0"
+EXPECTED_VER = "5.10.0"
 FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui.js", "src/sound.js"]
 
@@ -5277,6 +5277,91 @@ def main():
     ok(ex59["avail"] == ["owl", "dragon"] and ex59["denyOk"] and ex59["startOk"], "미장착 대기 펫 파견 출발 · 장착/미보유/조기수령/파견중장착 차단", json.dumps(ex59))
     ok(ex59["claimOk"] and ex59["cancelOk"] and ex59["normLen"] == 1 and ex59["normId"] == "owl", "파견 완료·일괄 수령(대성공·초월석/장비)·중도 철수·세이브 정규화", json.dumps(ex59))
     ok(ex59["mapOk"] and ui59["uiOk"] and not ui59["bad"], "전국 7권역 SVG 지도(229개 시군구)·영지 파견 UI·권역 마켓 필터 렌더", json.dumps(ui59))
+
+    # ── 24) v5.10.0 🔮 기본 스킬 4종 룬 각성 ──
+    section("v5.10.0 기본 스킬 4종 룬 각성")
+    r510 = js(ctx, """
+      const now = 1_700_000_000_000;
+      const s = defaultState(now);
+      s.level = 20; s.stage = 10; s.maxStage = 10;
+      // Lv.3 미만 시 룬 장착 거부
+      const denyLow = setSkillRune(s, 'strike', 'lightning');
+      for (const k of Object.keys(SKILLS)) s.skills[k].lv = 3;
+      const b = new Battle(s, () => ({}), () => 0.5, now);
+      b.monsters = [b.makeMonster('Goblin', false, now)];
+      b.monsters[0].hp = 50000; b.monsters[0].maxHp = 50000; b.monsters[0].x = 400;
+      // 1) 강격 — 번개 2연타
+      setSkillRune(s, 'strike', 'lightning');
+      b.drainEvents();
+      b.castSkill('strike', now);
+      const lightningHits = b.drainEvents().filter((e) => e.t === 'hit').length;
+      // 2) 강격 — 처형 흡혈
+      setSkillRune(s, 'strike', 'execute');
+      s.skills.strike.last = 0;
+      b.player.hp = Math.round(b.stats.hpMax * 0.4);
+      const hpBeforeEx = b.player.hp;
+      b.castSkill('strike', now + 100);
+      const execHealed = b.player.hp > hpBeforeEx;
+      // 3) 범위 베기 — 화염 화상 도트 & 서리 둔화
+      setSkillRune(s, 'whirl', 'flame');
+      b.castSkill('whirl', now + 200);
+      const hpBeforeBurn = b.monsters[0].hp;
+      b.updateMonsters(100, now + 800, 1);
+      const burnTicked = b.monsters[0].hp < hpBeforeBurn;
+      setSkillRune(s, 'whirl', 'frost');
+      s.skills.whirl.last = 0;
+      b.castSkill('whirl', now + 900);
+      const frosted = b.monsters[0].slowUntil > now + 900;
+      // 4) 광폭 — 광전사 & 불굴
+      setSkillRune(s, 'berserk', 'fury');
+      b.castSkill('berserk', now + 1000);
+      const furyOn = b.berserkRune === 'fury' && b.effectiveDps(now + 1050) > b.stats.dps * 1.8;
+      setSkillRune(s, 'berserk', 'iron');
+      s.skills.berserk.last = 0;
+      b.castSkill('berserk', now + 1100);
+      const ironOn = b.berserkRune === 'iron';
+      // 5) 회복 — 성광 보호막(흡수) & 축복(공격+쿨감)
+      setSkillRune(s, 'heal', 'shield');
+      b.player.hp = b.stats.hpMax;
+      b.castSkill('heal', now + 1200);
+      const shieldAmt = b.player.shield;
+      const hpPreDmg = b.player.hp;
+      b.damagePlayer(50, b.monsters[0], now + 1300);
+      const shieldAbsorbed = shieldAmt > 0 && b.player.hp === hpPreDmg && b.player.shield < shieldAmt;
+      setSkillRune(s, 'heal', 'bless');
+      s.skills.heal.last = 0;
+      s.skills.strike.last = now + 1000;
+      b.castSkill('heal', now + 1400);
+      const blessOk = b.blessUntil > now + 1400 && s.skills.strike.last < now + 1000;
+      // 6) 정규화
+      const norm = normalizeState({ skills: { strike: { lv: 5, last: 0, rune: 'lightning' }, whirl: { lv: 5, last: 0, rune: 'bogus' } } }, now);
+      return {
+        denyLow: !denyLow.ok,
+        lightningHits,
+        execHealed,
+        burnTicked,
+        frosted,
+        furyOn,
+        ironOn,
+        shieldAbsorbed,
+        blessOk,
+        normOk: norm.skills.strike.rune === 'lightning' && norm.skills.whirl.rune === null,
+      };
+    """)
+    ui510 = js(ctx2, """
+      const s = defaultState(1000);
+      s.skills.strike.lv = 3; s.skills.strike.rune = 'lightning';
+      const b = new Battle(s, () => ({}));
+      const ui = { s, battle: b, app: { buffs: {} }, logs: [], tab: 'hunt', huntSub: 'skill', el: {}, install: { hidden: true } };
+      const html = __huntSub(ui, 'skill');
+      return {
+        ok: html.includes('sc-runes') && html.includes('번개 강격') && html.includes('data-action="skill-rune"'),
+        bad: /undefined|NaN|\\[object Object\\]/.test(html),
+      };
+    """)
+    ok(r510["denyLow"] and r510["lightningHits"] == 2 and r510["execHealed"], "강격 룬(Lv.3 해금 게이트 · 번개 2연타 · 처형 흡혈)", json.dumps(r510))
+    ok(r510["burnTicked"] and r510["frosted"] and r510["furyOn"] and r510["ironOn"], "범위 베기 룬(화염 도트·서리 둔화) · 광폭 룬(광전사·불굴)", json.dumps(r510))
+    ok(r510["shieldAbsorbed"] and r510["blessOk"] and r510["normOk"] and ui510["ok"] and not ui510["bad"], "회복 룬(성광 보호막 흡수·축복 쿨감) · 정규화 · 스킬 룬 UI 렌더", json.dumps({ **r510, **ui510 }))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

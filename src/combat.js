@@ -2,7 +2,7 @@
 // 자동 전투 시뮬레이션. DOM·Canvas 의존 없음 → 헤드리스 검증 가능.
 // 렌더러는 이 객체의 엔티티를 읽고, UI는 events 큐를 소비한다.
 import {
-  ECON, SKILLS, stageDef, monsterKo, monsterMotion, monsterAttack, THEMES, ultimateOf, ultLeftMs,
+  ECON, SKILLS, skillRuneOf, stageDef, monsterKo, monsterMotion, monsterAttack, THEMES, ultimateOf, ultLeftMs,
   ELITE_TRAITS, ELITE_CHANCE, TREASURE_GOBLIN, stageGoldBase, RARITIES,
 } from './data.js';
 import {
@@ -71,6 +71,8 @@ export class Battle {
     this.player = {
       x: ECON.playerX,
       hp: Math.max(1, Math.round(currentHp(state, this.stats))),
+      shield: 0,        // v5.10 성광 보호막 잔량
+      shieldUntil: 0,
       dead: false,
       reviveAt: 0,
       attackAnim: 0,
@@ -86,6 +88,9 @@ export class Battle {
     this.bossEnds = 0;
     this.bossReadyAt = 0;
     this.berserkUntil = 0;
+    this.berserkRune = null; // v5.10 광폭 룬('fury' | 'iron' | null)
+    this.blessUntil = 0;     // v5.10 축복의 빛(+22% 공격)
+    this.blessAtk = 0;
     // v4.7 상위 전직 궁극기 — 발동 뒤 한동안 공격력 버프 · 직전 타격 총 피해(이벤트 표시용)
     this.ultUntil = 0;
     this.ultBonus = 0;
@@ -386,6 +391,22 @@ export class Battle {
       if (m.elite && m.elite.regenPct > 0 && m.hp > 0 && m.hp < m.maxHp) {
         m.hp = Math.min(m.maxHp, m.hp + (m.maxHp * m.elite.regenPct * dt) / 1000);
       }
+      // v5.10 화염 회오리 화상 도트 (0.5초마다 적용)
+      if (m.burnUntil && now < m.burnUntil && m.burnDps > 0 && now - (m.burnTick || 0) >= 500) {
+        m.burnTick = now;
+        const bDmg = Math.max(1, Math.round(m.burnDps * 0.5));
+        m.hp -= bDmg;
+        m.hitAt = now;
+        if (this.dungeon) this.dungeon.dmg += bDmg;
+        if (this.tower) this.tower.dmg += bDmg;
+        if (this.daily) { this.daily.dmg += bDmg; this.daily.hits = (this.daily.hits || 0) + 1; }
+        this.recordDamage(bDmg, now);
+        this.emit({ t: 'hit', id: m.id, dmg: bDmg, crit: false, x: m.x, isBoss: m.isBoss, kind: 'burn' });
+        if (m.hp <= 0) { this.killMonster(m, now); continue; }
+      }
+      const slowed = !!(m.slowUntil && now < m.slowUntil);
+      const slowMove = slowed ? (m.slowMoveMul || 0.7) : 1;
+      const slowAtk = slowed ? (m.slowAtkMul || 1.35) : 1;
       if (!Number.isFinite(m.x)) m.x = ECON.spawnX;
       if (!Number.isFinite(m.hp)) m.hp = m.maxHp;
       if (!Number.isFinite(m.slotX)) m.slotX = p.x + ATTACK_STOP_GAP;
@@ -394,7 +415,7 @@ export class Battle {
       const walking = dist > SLOT_TOL;
 
       if (walking) {
-        const speed = m.isBoss ? 132 : WALK_SPEED + (m.scale - 1) * 60; // 월드단위/초
+        const speed = (m.isBoss ? 132 : WALK_SPEED + (m.scale - 1) * 60) * slowMove; // 월드단위/초
         const prevX = m.x;
         const step = (speed * dt) / 1000;
         m.x = m.x > standX ? Math.max(standX, m.x - step) : Math.min(standX, m.x + step);
@@ -405,7 +426,7 @@ export class Battle {
         const eta = (Math.abs(m.x - standX) / (speed * Math.max(1, spd))) * 1000;
         // 도착 직전 마지막 걸음에서 전조를 시작한다 → 타격은 도착 순간.
         // 타격 예정 시각(도착 또는 공격 간격 도달)에 맞춰 시작해 전조가 너무 길게 남지 않게 한다.
-        const dueW = (Number.isFinite(m.lastAttack) ? m.lastAttack : now) + (m.attackGap || ECON.monsterAttackMs) / Math.max(1, spd);
+        const dueW = (Number.isFinite(m.lastAttack) ? m.lastAttack : now) + ((m.attackGap || ECON.monsterAttackMs) * slowAtk) / Math.max(1, spd);
         const strikeAt = Math.max(now + eta, dueW);
         if (!m.windupAt && strikeAt - now <= m.windupBase + 60) {
           m.windupAt = now;
@@ -422,7 +443,7 @@ export class Battle {
       } else {
         m.moving = false;
         if (!m.windupBase) m.windupBase = windupFor(m);
-        const gap = (m.attackGap || ECON.monsterAttackMs) / Math.max(1, spd);
+        const gap = ((m.attackGap || ECON.monsterAttackMs) * slowAtk) / Math.max(1, spd);
         const heavy = !!m.isBoss && (m.attackSeq || 0) % HEAVY_EVERY === HEAVY_EVERY - 1;
         const wuTotal = (m.windupBase + (heavy ? 170 : 0)) / Math.max(1, spd);
         const due = (Number.isFinite(m.lastAttack) ? m.lastAttack : now) + gap;
@@ -473,10 +494,21 @@ export class Battle {
 
   damagePlayer(raw, from, now, info) {
     if (this.player.dead) return;
-    // v3.8: 방어(피해 감소) 스탯 — 갑옷·투구 강화 + 환생 '수호' 특성
-    const reduce = Math.max(0, Math.min(0.95, this.stats.dmgReduce || 0));
+    // v3.8: 방어(피해 감소) 스탯 — 갑옷·투구 강화 + 환생 '수호' 특성 + v5.10 불굴 룬
+    const ironAdd = this.berserkUntil > now && this.berserkRune === 'iron' ? 0.18 : 0;
+    const reduce = Math.max(0, Math.min(0.95, (this.stats.dmgReduce || 0) + ironAdd));
     const grace = this.player.graceUntil && now < this.player.graceUntil ? ECON.reviveGraceReduce : 1;
-    const dmg = Math.max(1, Math.round(raw * (1 - reduce) * grace));
+    let dmg = Math.max(1, Math.round(raw * (1 - reduce) * grace));
+    // v5.10 성광 보호막 우선 흡수
+    if (this.player.shield > 0 && this.player.shieldUntil > now) {
+      const absorbed = Math.min(this.player.shield, dmg);
+      this.player.shield -= absorbed;
+      dmg -= absorbed;
+      if (this.player.shield <= 0) this.player.shieldUntil = 0;
+    } else if (this.player.shield > 0) {
+      this.player.shield = 0;
+      this.player.shieldUntil = 0;
+    }
     this.player.hp -= dmg;
     this.player.hurtAt = now;
     this.emit({ t: 'playerHurt', dmg, from: from.ko, reduce: Math.round(reduce * 100), ...(info || {}) });
@@ -508,7 +540,8 @@ export class Battle {
 
   /* ───────────── 공격 ───────────── */
   attack(now, spd = 1) {
-    if (now - this.player.lastAttack < this.stats.attackMs / Math.max(1, spd)) return;
+    const furyMul = this.berserkUntil > now && this.berserkRune === 'fury' ? 0.80 : 1;
+    if (now - this.player.lastAttack < (this.stats.attackMs * furyMul) / Math.max(1, spd)) return;
     const target = this.targets().find((m) => m.x - this.player.x <= ECON.playerRange);
     if (!target) return;
     this.player.lastAttack = now;
@@ -522,29 +555,33 @@ export class Battle {
     return this.monsters.filter((m) => !m.dead && !m.dying).sort((a, b) => a.x - b.x);
   }
 
-  roll(rawMul, now) {
+  roll(rawMul, now, extra = null) {
     let dmg = this.stats.atk * rawMul * (0.9 + this.rng() * 0.2);
     if (this.berserkUntil > now) dmg *= 1 + skillEffect('berserk', this.s.skills.berserk.lv);
+    if (this.blessUntil > now && this.blessAtk > 0) dmg *= 1 + this.blessAtk;
     // v4.7 궁극기 발동 직후의 공격력 버프
     if (this.ultUntil > now) dmg *= 1 + (this.ultBonus || 0);
     let crit = false;
-    if (this.rng() < this.stats.crit) {
+    const critChance = Math.min(0.95, this.stats.crit + (extra && extra.critAdd ? extra.critAdd : 0));
+    const furyCd = this.berserkUntil > now && this.berserkRune === 'fury' ? 0.35 : 0;
+    if (this.rng() < critChance) {
       crit = true;
-      dmg *= this.stats.critDmg;
+      dmg *= this.stats.critDmg + furyCd;
     }
     return { dmg: Math.max(1, Math.round(dmg)), crit };
   }
 
-  hit(list, mul, kind, now) {
+  hit(list, mul, kind, now, extra = null) {
     let hits = 0;
     let dealt = 0;
     this.lastHitDealt = 0;
     for (const m of list) {
       if (m.dead || m.dying) continue;
-      const { dmg: rawDmg, crit } = this.roll(mul, now);
-      // v4.0 장비 옵션: 보스 추가 피해 · 범위 베기 피해
+      const { dmg: rawDmg, crit } = this.roll(mul, now, extra);
+      // v4.0 장비 옵션: 보스 추가 피해 · 범위 베기 피해 · v5.10 처형 룬 보스 추뎀
       let dmg = rawDmg;
-      if (m.isBoss && this.stats.bossDmgPct > 0) dmg = Math.round(dmg * (1 + this.stats.bossDmgPct));
+      const bossAdd = (this.stats.bossDmgPct || 0) + (extra && extra.bossAdd ? extra.bossAdd : 0);
+      if (m.isBoss && bossAdd > 0) dmg = Math.round(dmg * (1 + bossAdd));
       if (kind === 'whirl' && this.stats.whirlDmgPct > 0) dmg = Math.round(dmg * (1 + this.stats.whirlDmgPct));
       // v4.2 도전의 탑 '철벽 진형' — 주는 피해가 45% 깎인다 · v5.7 철갑 엘리트 25% 경감
       if (this.tower && towerHas(this.tower.floor, 'guard')) dmg = Math.max(1, Math.round(dmg * (1 - TOWER_RULES.guardReduce)));
@@ -560,9 +597,11 @@ export class Battle {
       this.emit({ t: 'hit', id: m.id, dmg, crit, x: m.x, isBoss: m.isBoss, kind });
       if (m.hp <= 0) this.killMonster(m, now);
     }
-    // v4.0 장비 옵션: 흡혈 — 입힌 피해의 일부를 되찾는다
-    if (dealt > 0 && this.stats.lifesteal > 0 && !this.player.dead) {
-      const heal = Math.round(dealt * this.stats.lifesteal);
+    // v4.0 장비 옵션 + v5.10 룬 흡혈 — 입힌 피해의 일부를 되찾는다
+    const ironLs = this.berserkUntil > now && this.berserkRune === 'iron' ? 0.08 : 0;
+    const totalLs = (this.stats.lifesteal || 0) + ironLs + (extra && extra.lifesteal ? extra.lifesteal : 0);
+    if (dealt > 0 && totalLs > 0 && !this.player.dead) {
+      const heal = Math.round(dealt * totalLs);
       if (heal > 0 && this.player.hp < this.stats.hpMax) {
         this.player.hp = Math.min(this.stats.hpMax, this.player.hp + heal);
         this.emit({ t: 'lifesteal', heal });
@@ -584,12 +623,14 @@ export class Battle {
     this.dmgLog.push({ t: now, d: v });
   }
 
-  /** 현재 활성 공격 버프(광폭·궁극기)가 반영된 기본 이론 DPS */
+  /** 현재 활성 공격 버프(광폭·축복·궁극기)가 반영된 기본 이론 DPS */
   effectiveDps(now = Date.now()) {
     let dps = this.stats ? Number(this.stats.dps) || 0 : 0;
     if (this.berserkUntil > now && this.s && this.s.skills && this.s.skills.berserk) {
       dps *= 1 + skillEffect('berserk', this.s.skills.berserk.lv);
+      if (this.berserkRune === 'fury') dps *= 1.25;
     }
+    if (this.blessUntil > now && this.blessAtk > 0) dps *= 1 + this.blessAtk;
     if (this.ultUntil > now && this.ultBonus > 0) {
       dps *= 1 + this.ultBonus;
     }
@@ -920,14 +961,32 @@ export class Battle {
     if (!def || !sk) return false;
     if (now - sk.last < skillCdOf(key, this.buffs())) return false;
     if (this.player.dead) return false;
+    const rune = skillRuneOf(this.s, key);
+    const col = rune ? rune.color : def.color;
+    const ko = rune ? rune.name : def.name;
     const alive = this.targets();
     if (key === 'heal') {
       sk.last = now;
       this.player.skillAt = now;
       this.player.skillKey = key;
       const heal = Math.round(this.stats.hpMax * skillEffect('heal', sk.lv));
+      const beforeHp = this.player.hp;
       this.player.hp = Math.min(this.stats.hpMax, this.player.hp + heal);
-      this.emit({ t: 'skill', key, ko: def.name, heal, color: def.color });
+      let shieldAdded = 0;
+      if (rune && rune.id === 'shield') {
+        const over = Math.max(0, beforeHp + heal - this.stats.hpMax);
+        shieldAdded = Math.round(over + this.stats.hpMax * (rune.shieldBase || 0.12));
+        this.player.shield = Math.min(this.stats.hpMax, (this.player.shieldUntil > now ? this.player.shield : 0) + shieldAdded);
+        this.player.shieldUntil = now + (rune.shieldMs || 8000);
+      } else if (rune && rune.id === 'bless') {
+        this.blessUntil = now + (rune.blessMs || 6000);
+        this.blessAtk = rune.blessAtk || 0.22;
+        const trim = rune.cdTrimMs || 1200;
+        for (const k of ['strike', 'whirl', 'berserk']) {
+          if (this.s.skills[k] && this.s.skills[k].last > 0) this.s.skills[k].last = Math.max(0, this.s.skills[k].last - trim);
+        }
+      }
+      this.emit({ t: 'skill', key, ko, heal, shield: shieldAdded, rune: rune ? rune.id : null, color: col });
       return true;
     }
     if (key === 'berserk') {
@@ -935,7 +994,8 @@ export class Battle {
       this.player.skillAt = now;
       this.player.skillKey = key;
       this.berserkUntil = now + def.dur;
-      this.emit({ t: 'skill', key, ko: def.name, color: def.color, dur: def.dur });
+      this.berserkRune = rune ? rune.id : null;
+      this.emit({ t: 'skill', key, ko, rune: rune ? rune.id : null, color: col, dur: def.dur });
       return true;
     }
     if (!alive.length) return false;
@@ -946,8 +1006,24 @@ export class Battle {
       this.player.attackAt = now;
       this.player.attackKind = 'whirl';
       const inRange = alive.filter((m) => m.x - this.player.x <= ECON.playerRange * 1.6);
-      this.hit(inRange.length ? inRange : alive, skillEffect('whirl', sk.lv), 'whirl', now);
-      this.emit({ t: 'skill', key, ko: def.name, color: def.color });
+      const list = inRange.length ? inRange : alive;
+      this.hit(list, skillEffect('whirl', sk.lv), 'whirl', now);
+      if (rune && rune.id === 'flame') {
+        for (const m of list) {
+          if (m.dead || m.dying) continue;
+          m.burnUntil = now + (rune.burnMs || 4000);
+          m.burnDps = Math.max(1, Math.round(this.stats.atk * (rune.burnMul || 0.38)));
+          m.burnTick = now;
+        }
+      } else if (rune && rune.id === 'frost') {
+        for (const m of list) {
+          if (m.dead || m.dying) continue;
+          m.slowUntil = now + (rune.slowMs || 4000);
+          m.slowAtkMul = rune.slowAtkMul || 1.35;
+          m.slowMoveMul = rune.slowMoveMul || 0.70;
+        }
+      }
+      this.emit({ t: 'skill', key, ko, rune: rune ? rune.id : null, color: col });
       return true;
     }
     if (key === 'strike') {
@@ -957,8 +1033,19 @@ export class Battle {
       this.player.skillKey = key;
       this.player.attackAt = now;
       this.player.attackKind = 'strike';
-      this.hit([target], skillEffect('strike', sk.lv), 'strike', now);
-      this.emit({ t: 'skill', key, ko: def.name, color: def.color, x: target.x });
+      const power = skillEffect('strike', sk.lv);
+      if (rune && rune.id === 'lightning') {
+        const per = power * (rune.hitMul || 0.62);
+        for (let i = 0; i < (rune.hits || 2); i++) {
+          if (target.dead || target.dying) break;
+          this.hit([target], per, 'strike', now, { critAdd: rune.critAdd || 0.20 });
+        }
+      } else if (rune && rune.id === 'execute') {
+        this.hit([target], power, 'strike', now, { bossAdd: rune.bossAdd || 0.40, lifesteal: rune.lifesteal || 0.15 });
+      } else {
+        this.hit([target], power, 'strike', now);
+      }
+      this.emit({ t: 'skill', key, ko, rune: rune ? rune.id : null, color: col, x: target.x });
       return true;
     }
     return false;

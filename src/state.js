@@ -2,7 +2,7 @@
 // 게임 상태 · 저장 · 성장 계산. DOM 의존 없음.
 // v3: 로그인/클라우드 없음. 골드 하나로 사냥 + 부동산을 함께 굴리는 통합 상태.
 import {
-  ECON, EQUIP, EQUIP_MAX_LV, SKILLS, SKILL_UPGRADE_MAX, DEF,
+  ECON, EQUIP, EQUIP_MAX_LV, SKILLS, SKILL_UPGRADE_MAX, SKILL_RUNE_UNLOCK_LV, skillRuneDef, DEF,
   SAVE_KEY, SAVE_VERSION, enhanceCost, skillCost, skillPowerMul,
   RARITIES, RARITY_INDEX, RARITY_IDS, GACHA, gachaCost, rarityBonusLv,
   stageGoldBase, stageExpBase, monsterBaseHp, monsterBaseAtk,
@@ -54,10 +54,10 @@ export function defaultState(now = nowMs()) {
     gacha: { pity: 0, total: 0, best: 'common', legend: 0, cur: 'gold' },
     soundOn: true,
     skills: {
-      strike: { lv: 0, last: 0 },
-      whirl: { lv: 0, last: 0 },
-      berserk: { lv: 0, last: 0 },
-      heal: { lv: 0, last: 0 },
+      strike: { lv: 0, last: 0, rune: null },
+      whirl: { lv: 0, last: 0, rune: null },
+      berserk: { lv: 0, last: 0, rune: null },
+      heal: { lv: 0, last: 0, rune: null },
     },
     stage: 1,
     killsInStage: 0,
@@ -115,7 +115,9 @@ export function normalizeState(raw, now = nowMs()) {
   s.skills = { ...d.skills };
   for (const k of Object.keys(d.skills)) {
     const v = (raw.skills || {})[k];
-    s.skills[k] = typeof v === 'object' && v ? { lv: num(v.lv, 0), last: num(v.last, 0) } : { lv: num(v, 0), last: 0 };
+    const runeRaw = typeof v === 'object' && v && typeof v.rune === 'string' ? v.rune : null;
+    const rune = skillRuneDef(k, runeRaw) ? runeRaw : null;
+    s.skills[k] = typeof v === 'object' && v ? { lv: num(v.lv, 0), last: num(v.last, 0), rune } : { lv: num(v, 0), last: 0, rune: null };
   }
   s.gearRarity = { ...d.gearRarity };
   for (const k of Object.keys(d.gearRarity)) {
@@ -891,4 +893,21 @@ export function recordNews(s, news, now = nowMs()) {
   });
   s.news.log = s.news.log.slice(0, 8);
   return true;
+}
+
+/** v5.10.0 스킬 룬 장착/전환 (같은 룬 다시 선택 또는 null 시 기본으로 해제) */
+export function setSkillRune(s, key, runeId) {
+  if (!s || !s.skills || !s.skills[key] || !SKILLS[key]) return { ok: false, reason: '알 수 없는 스킬입니다.' };
+  const sk = s.skills[key];
+  if ((sk.lv || 0) < SKILL_RUNE_UNLOCK_LV) {
+    return { ok: false, reason: `${SKILLS[key].name} Lv.${SKILL_RUNE_UNLOCK_LV} 달성 시 룬 각성이 해금됩니다.` };
+  }
+  if (!runeId || runeId === 'none' || sk.rune === runeId) {
+    sk.rune = null;
+    return { ok: true, key, rune: null, cleared: true };
+  }
+  const def = skillRuneDef(key, runeId);
+  if (!def) return { ok: false, reason: '알 수 없는 룬입니다.' };
+  sk.rune = def.id;
+  return { ok: true, key, rune: def, cleared: false };
 }

@@ -3,6 +3,7 @@
 // v3: 게스트 전용 — 로그인/클라우드 UI 없이 [사냥/스킬 | 장비/강화 | 부동산 | 설정].
 import {
   APP_VERSION, ECON, EQUIP, EQUIP_SLOTS, EQUIP_MAX_LV, SKILLS, SKILL_UPGRADE_MAX, skillCost, enhanceCost,
+  SKILL_RUNES, SKILL_RUNE_UNLOCK_LV, skillRuneOf,
   RARITIES, RARITY_INDEX, GACHA, gachaCost, rarityBonusLv,
   ULTIMATES, ULT_MIN_TIER, ultimateOf, ultCdOf, ultLeftMs,
 } from './data.js';
@@ -174,6 +175,7 @@ export class UI {
       case 'gacha-cur': actions.gachaCur(v); break;
       case 'cast': actions.castSkill(v); break;
       case 'upgrade-skill': actions.upgradeSkill(v); break;
+      case 'skill-rune': actions.setSkillRune(btn.dataset.skill, v); break;
       case 'enhance': actions.enhance(btn.dataset.slot, 1); break;
       case 'enhance5': actions.enhance(btn.dataset.slot, 5); break;
       case 'enhance10': actions.enhance(btn.dataset.slot, 10); break;
@@ -1310,6 +1312,8 @@ function dpsSnapshot(b, now = Date.now()) {
   const src = hasLive ? '최근 5초 실측' : (dead ? '전투 불능' : '기본 기준');
   const buffs = [];
   if (b && b.berserkUntil > now) buffs.push('🔥광폭');
+  if (b && b.blessUntil > now) buffs.push('🌟축복');
+  if (b && b.player && b.player.shield > 0 && b.player.shieldUntil > now) buffs.push('✨보호막');
   if (b && b.ultUntil > now) buffs.push('⚡궁극');
   return { value, base, src, hasLive, boost: buffs.length > 0, buffText: buffs.join(' ') };
 }
@@ -1399,18 +1403,25 @@ function huntSkillCard(ui) {
             : `체력 ${Math.round(power * 100)}% 회복`;
       const cost = skillCost(sk.lv);
       const maxed = sk.lv >= SKILL_UPGRADE_MAX;
+      const runes = SKILL_RUNES[key] || [];
+      const activeRune = skillRuneOf(s, key);
+      const runeUnlocked = (sk.lv || 0) >= SKILL_RUNE_UNLOCK_LV;
+      const runeRow = runes.length
+        ? `<div class="sc-runes">${runes.map((r) => `<button class="rune-chip${activeRune && activeRune.id === r.id ? ' on' : ''}" style="--rc:${r.color}" type="button" data-action="skill-rune" data-skill="${key}" data-value="${r.id}" ${runeUnlocked ? '' : 'disabled'} title="${esc(r.short)}">${runeUnlocked ? `${r.icon} ${esc(r.name)}` : `🔒 Lv.${SKILL_RUNE_UNLOCK_LV}`}</button>`).join('')}</div>${activeRune ? `<div class="sc-rune-desc">${activeRune.icon} ${esc(activeRune.short)}</div>` : ''}`
+        : '';
       return `
       <div class="skill-cell">
         <button class="sc-cast" type="button" data-action="cast" data-value="${key}" aria-label="${def.name} 시전">
-          <span class="s-ico" style="color:${def.color}">${def.icon}</span>
+          <span class="s-ico" style="color:${activeRune ? activeRune.color : def.color}">${activeRune ? activeRune.icon : def.icon}</span>
           <span class="sc-mid">
-            <span class="sc-name">${def.name}<span class="lv">Lv.${sk.lv}</span></span>
+            <span class="sc-name">${activeRune ? esc(activeRune.name) : def.name}<span class="lv">Lv.${sk.lv}</span></span>
             <span class="sc-effect">${detail} · ${def.cd / 1000}s</span>
           </span>
         </button>
         <button class="btn small ${maxed ? 'ghost' : 'blue'} sc-up" data-action="upgrade-skill" data-value="${key}" aria-label="${def.name} 강화" ${maxed || s.shards < cost ? 'disabled' : ''}>
           ${maxed ? 'MAX' : `💎${cost}`}
         </button>
+        ${runeRow}
         <i class="cd-bar"><i data-live="cd-${key}"></i></i>
       </div>`;
     })

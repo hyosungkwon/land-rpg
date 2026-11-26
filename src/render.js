@@ -325,22 +325,22 @@ export class Renderer {
         this.spawnLoot(ev, now);
         this.deathFx(ev, now);
       } else if (ev.t === 'skill') {
-        this.fx.push({ key: ev.key, x: ev.x || ECON.playerX, t0: now, dur: ev.key === 'whirl' ? 560 : ev.key === 'strike' ? 420 : 760 });
+        this.fx.push({ key: ev.key, x: ev.x || ECON.playerX, t0: now, dur: ev.key === 'whirl' ? 560 : ev.key === 'strike' ? 420 : 760, color: ev.color });
         if (ev.key === 'whirl') {
-          this.rings.push({ x: ECON.playerX, life: 1, r: 26, color: '#8fe4ff', wide: 1.4 });
+          this.rings.push({ x: ECON.playerX, life: 1, r: 26, color: ev.color || '#8fe4ff', wide: 1.4 });
           this.shake = Math.max(this.shake, 3);
           this.flash = Math.max(this.flash, 0.12);
         }
         if (ev.key === 'strike') {
-          this.rings.push({ x: ev.x || ECON.playerX, life: 1, r: 12, color: '#ffd166', wide: 1 });
+          this.rings.push({ x: ev.x || ECON.playerX, life: 1, r: 12, color: ev.color || '#ffd166', wide: 1 });
           this.shake = Math.max(this.shake, 4);
         }
         if (ev.key === 'heal') {
-          this.rings.push({ x: ECON.playerX, life: 1, r: 18, color: '#8ff0a4', wide: 1 });
+          this.rings.push({ x: ECON.playerX, life: 1, r: 18, color: ev.color || '#8ff0a4', wide: 1 });
           this.addFloater(ECON.playerX, `+${ev.heal || 0}`, false, 'heal', null, 1, now);
         }
         if (ev.key === 'berserk') {
-          this.rings.push({ x: ECON.playerX, life: 1, r: 20, color: '#ff7a59', wide: 1.6 });
+          this.rings.push({ x: ECON.playerX, life: 1, r: 20, color: ev.color || '#ff7a59', wide: 1.6 });
           this.shake = Math.max(this.shake, 3);
           for (let i = 0; i < 18; i++) {
             this.embers.push({
@@ -1636,6 +1636,18 @@ export class Renderer {
     if (this.effects && !dead) this.drawAura(ctx, px, gy, h, sc, now);
     // v4.3 부활 가호 — 빛 고리·보호막 + 머리 위 남은 초 (남은 시간은 상단 배너 drawGraceBanner)
     if (!dead && p.graceUntil && now < p.graceUntil) this.drawGrace(ctx, px, gy, h, sc, now, p.graceUntil);
+    // v5.10 성광 보호막 돔
+    if (!dead && p.shield > 0 && p.shieldUntil && now < p.shieldUntil) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 227, 138, 0.72)';
+      ctx.fillStyle = 'rgba(255, 227, 138, 0.10)';
+      ctx.lineWidth = Math.max(1.5, 2 * sc);
+      ctx.beginPath();
+      ctx.arc(px, gy - h * 0.45, h * 0.62, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // 광폭 아우라
     if (b.berserkUntil > now) {

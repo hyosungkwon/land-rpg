@@ -2,7 +2,7 @@
 // 밸런스·몬스터·장비·스킬 정의. DOM 의존 없음(헤드리스 테스트 가능).
 // v3: 게스트 전용 통합 경제 — 골드 하나로 사냥과 부동산을 함께 굴린다.
 
-export const APP_VERSION = '5.9.0';
+export const APP_VERSION = '5.10.0';
 export const SAVE_KEY = 'land_rpg_unified_v3';
 export const SAVE_VERSION = 3;
 
@@ -571,6 +571,43 @@ export const SKILLS = {
   berserk: { name: '광폭', icon: '🔥', key: '3', cd: 22000, dur: 7000, bonus: 0.6, color: '#ff7a59', desc: '7초간 공격력 +60%' },
   heal: { name: '회복', icon: '💚', key: '4', cd: 16000, ratio: 0.28, color: '#7fe08a', desc: '최대 체력의 28% 회복' },
 };
+
+/* ────────────────────────────── v5.10.0 스킬 룬 각성 ──────────────────────────────
+ * 각 기본 스킬이 Lv.3에 도달하면 2가지 룬 중 1개를 자유롭게 장착·전환할 수 있다.
+ * 미선택(null) 시 기존 기본 효과 그대로 유지(기존 밸런스 100% 호환).
+ */
+export const SKILL_RUNE_UNLOCK_LV = 3;
+export const SKILL_RUNES = {
+  strike: [
+    { id: 'lightning', name: '번개 강격', icon: '⚡', color: '#7fd3ff', short: '2연타(총 124%) · 치명 +20%p', hits: 2, hitMul: 0.62, critAdd: 0.20 },
+    { id: 'execute',   name: '처형 일격', icon: '🩸', color: '#ff5f7e', short: '보스 피해 +40% · 흡혈 15%', bossAdd: 0.40, lifesteal: 0.15 },
+  ],
+  whirl: [
+    { id: 'flame', name: '화염 회오리', icon: '🔥', color: '#ff8a47', short: '4초 화상(초당 공격력 38%)', burnMs: 4000, burnMul: 0.38 },
+    { id: 'frost', name: '서리 검풍',   icon: '❄️', color: '#9be7ff', short: '4초 빙결(적 공속 -35% · 이속 -30%)', slowMs: 4000, slowAtkMul: 1.35, slowMoveMul: 0.70 },
+  ],
+  berserk: [
+    { id: 'fury', name: '광전사',      icon: '⚔️', color: '#ff4d4d', short: '지속 중 공속 +25% · 치명피해 +35%p', atkSpdMul: 0.80, critDmgAdd: 0.35 },
+    { id: 'iron', name: '불굴의 투지', icon: '🛡️', color: '#ffd76a', short: '지속 중 피해감소 +18%p · 흡혈 +8%p', reduceAdd: 0.18, lifestealAdd: 0.08 },
+  ],
+  heal: [
+    { id: 'shield', name: '성광 보호막', icon: '✨', color: '#ffe38a', short: '초과 회복 + 체력 12% 보호막(8초)', shieldMs: 8000, shieldBase: 0.12 },
+    { id: 'bless',  name: '축복의 빛',   icon: '🌟', color: '#b98bff', short: '6초 공격 +22% · 쿨타임 1.2초 단축', blessMs: 6000, blessAtk: 0.22, cdTrimMs: 1200 },
+  ],
+};
+
+export function skillRuneDef(key, runeId) {
+  const list = SKILL_RUNES[key];
+  if (!Array.isArray(list) || !runeId) return null;
+  return list.find((r) => r.id === runeId) || null;
+}
+
+/** 현재 적용 중인 스킬 룬 정의(Lv.3 미만 또는 미선택 시 null) */
+export function skillRuneOf(state, key) {
+  const sk = state && state.skills && state.skills[key];
+  if (!sk || (sk.lv || 0) < SKILL_RUNE_UNLOCK_LV || !sk.rune) return null;
+  return skillRuneDef(key, sk.rune);
+}
 /* ────────────────────────────── 상위 전직 궁극기 (v4.7) ──────────────────────────────
  * 5단계 드래곤 로드부터 열리는 다섯 번째 필살기.
  *  - 기존 4개 스킬 퀵슬롯은 그대로 두고, 전투 화면에 전용 궁극기 버튼을 따로 둔다.
