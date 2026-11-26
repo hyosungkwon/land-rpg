@@ -17,6 +17,28 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const easeOut = (t) => 1 - (1 - clamp(t, 0, 1)) * (1 - clamp(t, 0, 1));
 const FONT = 'system-ui, -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
 
+/** v7.5.0 전투 데미지 숫자 축약 (12500 → 12.5K, 1500000 → 1.5M, 2300000000 → 2.3B) */
+function fmtDmg(val) {
+  if (typeof val === 'number') {
+    if (!Number.isFinite(val)) return '0';
+    const sign = val < 0 ? '-' : '';
+    const n = Math.round(Math.abs(val));
+    if (n >= 1e9) return sign + (n / 1e9).toFixed(2).replace(/\.?0+$/, '') + 'B';
+    if (n >= 1e6) return sign + (n / 1e6).toFixed(2).replace(/\.?0+$/, '') + 'M';
+    if (n >= 1e3) return sign + (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
+    return sign + String(n);
+  }
+  const s = String(val ?? '');
+  const m = /^([+-]?)(\d+(?:\.\d+)?)$/.exec(s.trim());
+  if (!m) return s;
+  const n = Math.round(Number(m[2]));
+  if (!Number.isFinite(n)) return s;
+  if (n >= 1e9) return m[1] + (n / 1e9).toFixed(2).replace(/\.?0+$/, '') + 'B';
+  if (n >= 1e6) return m[1] + (n / 1e6).toFixed(2).replace(/\.?0+$/, '') + 'M';
+  if (n >= 1e3) return m[1] + (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
+  return m[1] + String(n);
+}
+
 /** #rrggbb → rgba() */
 function hexA(hex, a) {
   const h = String(hex || '#ffffff').replace('#', '');
@@ -83,6 +105,7 @@ export class Renderer {
     this._jobTier = -1;
     this.shake = 0;
     this.shakeOn = true; // v4.3 설정 '화면 흔들림' — 끄면 흔들림만 멈춘다
+    this.dmgNumbersOn = true; // v7.5.0 설정 '데미지 숫자 표시' — 끄면 전투 피해 숫자만 숨긴다
     this.impacts = []; // v4.3 타격 임팩트 플래시(별 모양)·보스/치명타 강조
     this.flash = 0; // 흰색 화면 플래시
     this.redFlash = 0; // 피격 붉은 플래시
@@ -669,30 +692,35 @@ export class Renderer {
   }
 
   addFloater(x, text, crit, kind, color, boost, at) {
+    if (!this.dmgNumbersOn && kind !== 'gold' && kind !== 'heal') return;
     const now = Number.isFinite(at) ? at : Date.now();
     // v3.8 다굴: 같은 순간에 여러 마리가 때리면 피해 숫자를 하나로 합쳐 읽기 쉽게 한다
     if (kind === 'hurt') {
       const last = this.floaters[this.floaters.length - 1];
       if (last && last.kind === 'hurt' && now - (last.at || 0) < 190) {
-        last.sum = (last.sum || Number(last.text) || 0) + (Number(text) || 0);
-        last.text = String(last.sum);
+        last.sum = (last.sum || Number(last.raw) || 0) + (Number(text) || 0);
+        last.raw = last.sum;
+        last.text = fmtDmg(last.sum);
         last.life = 1;
         last.at = now;
         return;
       }
     }
+    const rawNum = typeof text === 'number' ? text : Number(text);
     this.floaters.push({
-      x,
-      y: 0,
-      text: String(text),
+      x: x + (Math.random() - 0.5) * 18,
+      y: (Math.random() - 0.5) * 14,
+      raw: Number.isFinite(rawNum) ? rawNum : 0,
+      sum: kind === 'hurt' && Number.isFinite(rawNum) ? rawNum : 0,
+      text: fmtDmg(text),
       crit,
       kind,
       color: color || null,
       boost: Number(boost) > 0 ? Number(boost) : 1, // v4.3 보스 타격 등 숫자 강조 배율
       life: 1,
       at: now,
-      vx: (Math.random() - 0.5) * 26,
-      vy: crit ? -84 : -60,
+      vx: (Math.random() - 0.5) * 32,
+      vy: crit ? -86 : -62,
     });
     if (this.floaters.length > 40) this.floaters.shift();
   }
@@ -2994,8 +3022,8 @@ export class Renderer {
       const y = gy - 46 * sc + f.y;
       ctx.globalAlpha = Math.min(1, f.life * 1.7);
       ctx.textAlign = 'center';
-      // v3.8 다굴: 여러 숫자가 동시에 뜨므로 기본 크기를 조금 줄여 화면이 덜 시끄럽게
-      const base = (f.crit ? 25 : f.kind === 'gold' ? 12 : f.kind === 'pet' ? 11 : f.kind === 'heal' ? 15 : f.kind === 'hurt' ? 14 : 14) * (f.boost || 1);
+      // v3.8 다굴 · v7.5.0 축약: 여러 숫자가 동시에 뜨므로 도트/펫은 더 작게, 치명타는 선명하게
+      const base = (f.crit ? 24 : f.kind === 'gold' ? 12 : f.kind === 'pet' || f.kind === 'burn' || f.kind === 'chain' ? 11 : f.kind === 'heal' ? 15 : f.kind === 'hurt' ? 14 : 13.5) * (f.boost || 1);
       const pop = f.age < 130 ? 1 + (1 - f.age / 130) * 0.5 : 1;
       const size = base * Math.max(0.8, sc) * pop;
       if (f.crit) {
@@ -3650,8 +3678,11 @@ export class Renderer {
     const alpha = age > 1800 ? Math.max(0, 1 - (age - 1800) / 600) : 1;
     const pop = age < 140 ? 1 + (1 - age / 140) * 0.22 : 1;
     const sc = this.scale();
+    const b = this.battle;
+    // v7.5.0 캔버스 상단 안전 구역: 보스 바·특수 모드 HUD·상단 버프 바와 겹치지 않게 아래로 배치
+    const topBusy = !!(b && (b.boss || b.dungeon || b.tower || b.daily || b.invasion || b.rift));
     const x = 16 * sc;
-    const y = Math.max(82, this.H * 0.34);
+    const y = topBusy ? Math.max(118, this.H * 0.44) : Math.max(88, this.H * 0.36);
     const hot = this.combo >= 15;
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -3706,8 +3737,8 @@ export class Renderer {
     const w = Math.min(W * 0.72, 268);
     const hgt = 30;
     const x = (W - w) / 2;
-    // 보스 바(62~106)·던전 HUD(54~100)·탑 HUD(50~102)가 있으면 그 아래로, 없으면 상단 침(스테이지) 바로 아래로
-    const busy = !!(b.boss || b.dungeon || b.tower);
+    // 보스 바(62~106)·특수 모드 HUD(50~102)가 있으면 그 아래로, 없으면 상단 칩(스테이지) 바로 아래로
+    const busy = !!(b.boss || b.dungeon || b.tower || b.daily || b.invasion || b.rift);
     const y = busy ? 112 : 44;
     const pulse = 0.7 + 0.3 * Math.sin(now / 130);
     ctx.save();

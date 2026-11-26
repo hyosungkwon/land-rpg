@@ -138,6 +138,7 @@ class App {
     this.renderer.setBattle(this.battle);
     this.renderer.effects = this.s.effects !== false;
     this.renderer.shakeOn = this.s.screenShake !== false; // v4.3 화면 흔들림 설정
+    this.renderer.dmgNumbersOn = this.s.dmgNumbers !== false; // v7.5.0 데미지 숫자 표시 설정
     this.sound = new GameSound(this.s.soundOn !== false);
     this.renderer.onLoot = (kind) => this.sound.coin(kind);
     this.ui = new UI(this);
@@ -1273,6 +1274,17 @@ class App {
         this.save();
         this.ui.render();
         this.ui.toast(this.s.screenShake ? '📳 화면 흔들림 켜짐' : '화면 흔들림 꺼짐');
+      },
+      // v7.5.0: 전투 데미지 숫자 표시 토글
+      toggleDmgNumbers: () => {
+        this.s.dmgNumbers = this.s.dmgNumbers === false;
+        this.renderer.dmgNumbersOn = this.s.dmgNumbers;
+        if (!this.s.dmgNumbers) {
+          this.renderer.floaters = this.renderer.floaters.filter((f) => f.kind === 'gold' || f.kind === 'heal');
+        }
+        this.save();
+        this.ui.render();
+        this.ui.toast(this.s.dmgNumbers ? '🔢 데미지 숫자 켜짐' : '데미지 숫자 꺼짐');
       },
       toggleSound: () => {
         this.s.soundOn = this.s.soundOn === false;
@@ -2884,6 +2896,7 @@ class App {
     if (this.renderer) {
       this.renderer.effects = this.s.effects !== false;
       this.renderer.shakeOn = this.s.screenShake !== false;
+      this.renderer.dmgNumbersOn = this.s.dmgNumbers !== false;
     }
     try { this.sound.setEnabled(this.s.soundOn !== false); } catch (e) { /* ignore */ }
     this._newsKey = undefined;

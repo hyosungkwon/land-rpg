@@ -219,6 +219,7 @@ export class UI {
       case 'toggle-auto': actions.toggleAutoBoss(); break;
       case 'toggle-effects': actions.toggleEffects(); break;
       case 'toggle-shake': actions.toggleShake(); break;
+      case 'toggle-dmg-numbers': actions.toggleDmgNumbers(); break;
       case 'toggle-sound': actions.toggleSound(); break;
       case 'gacha': actions.pullGacha(Number(v) || 1); break;
       case 'gacha-cur': actions.gachaCur(v); break;
@@ -2698,6 +2699,10 @@ function tplSettings(ui) {
     <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
       <span class="tiny">화면 흔들림 <span class="dim">타격감</span></span>
       <button class="switch ${s.screenShake !== false ? 'on' : ''}" data-action="toggle-shake" aria-label="화면 흔들림 전환"></button>
+    </div>
+    <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
+      <span class="tiny">데미지 숫자 표시 <span class="dim">K/M/B 축약</span></span>
+      <button class="switch ${s.dmgNumbers !== false ? 'on' : ''}" data-action="toggle-dmg-numbers" aria-label="데미지 숫자 표시 전환"></button>
     </div>
     <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
       <span class="tiny">효과음 <span class="dim">타격·코인·보스·뽑기</span></span>

@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "7.4.0"
+EXPECTED_VER = "7.5.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui.js", "src/sound.js"]
 
@@ -6027,6 +6027,22 @@ def main():
     section("v7.4.0 상태이상 비주얼 · 엘리트/고블린 강조 · 파편 처치 연출")
     rsrc74 = read("src/render.js")
     ok(all(x in rsrc74 for x in ["drawBurnFx", "drawFrostFx", "spawnLightning", "drawLightnings", "spawnKillShards", "drawKillShards"]), "render.js — 화상 불꽃·빙결 결정·번개 연쇄 전기선·처치 파편 분산·엘리트/고블린 강조")
+
+    # ── 42) v7.5.0 🔢 데미지 숫자 축약(K/M/B) · 상단 안전 구역 · 데미지 숫자 표시 토글 ──
+    section("v7.5.0 데미지 숫자 축약 · 상단 안전 구역 · 데미지 숫자 토글")
+    st75 = js(ctx, """
+      const d = defaultState(0);
+      const keepOff = normalizeState({ dmgNumbers: false }, 0);
+      const migrateOld = normalizeState({}, 0);
+      const badVal = normalizeState({ dmgNumbers: 'bad' }, 0);
+      return { def: d.dmgNumbers, keepOff: keepOff.dmgNumbers, migrateOld: migrateOld.dmgNumbers, badVal: badVal.dmgNumbers };
+    """)
+    ok(st75["def"] is True and st75["keepOff"] is False and st75["migrateOld"] is True and st75["badVal"] is True, "dmgNumbers 기본값/저장 유지/구버전 마이그레이션/손상 방어", json.dumps(st75))
+    rsrc75 = read("src/render.js")
+    asrc75 = read("app.js")
+    usrc75 = read("src/ui.js")
+    ok(all(x in rsrc75 for x in ["function fmtDmg(", "this.dmgNumbersOn", "topBusy", "b.invasion || b.rift"]), "render.js — K/M/B 데미지 축약·dmgNumbersOn 토글·상단 안전 구역(콤보/가호 배너)")
+    ok("toggleDmgNumbers" in asrc75 and "this.renderer.dmgNumbersOn" in asrc75 and 'data-action="toggle-dmg-numbers"' in usrc75 and "case 'toggle-dmg-numbers':" in usrc75, "app.js · ui.js — 설정 탭 데미지 숫자 표시 토글 배선")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:
