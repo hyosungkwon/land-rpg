@@ -287,6 +287,7 @@
     SD.puzzleDone = (SD.puzzleDone || 0) + 1;
     App.writeSave();
     App.checkAch();
+    if (window.Mission) window.Mission.add('puzzle');
 
     setTimeout(function () {
       Util.doConfetti();

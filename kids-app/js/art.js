@@ -439,6 +439,7 @@
     App.SD.drawSaved = (App.SD.drawSaved || 0) + 1;
     App.writeSave();
     App.checkAch();
+    if (window.Mission) window.Mission.add('color');
     setTimeout(function () {
       App.earnReward('🖍️', DESIGNS[curDesign].name + ' 색칠 완성! 멋진 화가! 🎨');
     }, 250);

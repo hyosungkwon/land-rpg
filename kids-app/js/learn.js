@@ -10,6 +10,8 @@
   var $id = function (x) { return document.getElementById(x); };
   var setText = function (x, v) { var e = $id(x); if (e) e.textContent = v; };
   var speak = Util.speak;
+  // 🎯 오늘의 미션 진행(mission.js 가 없으면 그냥 넘어간다)
+  function mis(ev, n) { if (window.Mission) window.Mission.add(ev, n || 1); }
 
   /* ══════════════════ 🔢 수학 카드 ══════════════════ */
 
@@ -58,7 +60,7 @@
   function mathFlip() {
     mFlip = !mFlip;
     $id('math-card').classList.toggle('flipped', mFlip);
-    if (mFlip) Util.beep('ok');
+    if (mFlip) { Util.beep('ok'); mis('math'); }
   }
   function mathNext() {
     if (mIdx < mCards.length - 1) { mIdx++; showMCard(); }
@@ -153,17 +155,44 @@
   /* ══════════════════ 🕐 시계 읽기 ══════════════════ */
 
   var ckQ = 0, ckSc = 0, ckEl = 0, ckTid = null, ckTotal = 10, ckAnswered = false;
+  var ckDiff = (App.SD.clockDiff === 'hard') ? 'hard' : 'easy';
 
   function ckClear() { clearInterval(ckTid); ckTid = null; }
+
+  // 😊 쉬움: 정시·30분 / 🔥 도전: 5분·10분 단위
+  function clockSetDiff(d) {
+    ckDiff = (d === 'hard') ? 'hard' : 'easy';
+    App.SD.clockDiff = ckDiff;
+    App.writeSave();
+    clockInit();
+    Util.beep('ok');
+    speak(ckDiff === 'hard' ? '도전! 오 분 십 분 단위예요.' : '쉬움! 정각하고 삼십 분이에요.', 'ko-KR', { rate: 0.95 });
+  }
+
+  function clockDiffUI() {
+    var e = $id('ck-diff-easy'), h = $id('ck-diff-hard');
+    if (e) e.classList.toggle('active', ckDiff === 'easy');
+    if (h) h.classList.toggle('active', ckDiff === 'hard');
+    var tip = $id('ck-diff-tip');
+    if (tip) tip.textContent = ckDiff === 'hard' ? '5분·10분 단위까지 읽어 봐요' : '정각과 30분을 먼저 익혀요';
+  }
 
   function clockInit() {
     ckQ = 0; ckSc = 0; ckEl = 0; ckAnswered = false;
     ckClear();
+    clockDiffUI();
     setText('ck-sc', '0'); setText('ck-tm', '0');
     $id('ck-next-btn').style.display = 'none';
     ckTid = setInterval(function () { ckEl++; setText('ck-tm', String(ckEl)); }, 1000);
     clockMakeQ();
   }
+
+  // 난이도별 분 선택지
+  function ckMinuteOpts() {
+    if (ckDiff === 'hard') return [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+    return [0, 30];
+  }
+  function ckLabel(h, m) { return m === 0 ? h + '시 정각' : h + '시 ' + m + '분'; }
 
   function clockMakeQ() {
     ckAnswered = false;
@@ -172,20 +201,25 @@
     setText('ck-num', String(ckQ + 1));
     var pr = $id('ck-prog');
     if (pr) pr.style.width = ((ckQ + 1) / ckTotal * 100) + '%';
-    var mOpts = [0, 15, 30, 45];
+    var mOpts = ckMinuteOpts();
     var m = mOpts[Util.randInt(mOpts.length)];
     var h = Util.randInt(12) + 1;
     drawClock(h, m);
     setText('ck-q', '몇 시 몇 분일까요?');
     speak('몇 시 몇 분일까요?', 'ko-KR', { rate: 0.95, pitch: 1.1 });
 
-    var correct = m === 0 ? h + '시 정각' : h + '시 ' + m + '분';
+    var correct = ckLabel(h, m);
     var wrongs = {};
     var guard = 0;
-    while (Object.keys(wrongs).length < 3 && guard++ < 80) {
+    while (Object.keys(wrongs).length < 3 && guard++ < 120) {
       var wh = Util.randInt(12) + 1;
       var wm = mOpts[Util.randInt(mOpts.length)];
-      var t = wm === 0 ? wh + '시 정각' : wh + '시 ' + wm + '분';
+      // 도전 난이도에서는 정답과 5분 차이 나는 보기를 하나 넣어 헷갈리게 한다.
+      if (guard % 3 === 0 && ckDiff === 'hard') {
+        wm = (m + (Util.randInt(2) ? 5 : 55)) % 60;
+        wh = h;
+      }
+      var t = ckLabel(wh, wm);
       if (t !== correct) wrongs[t] = 1;
     }
     var choices = Util.shuffle([correct].concat(Object.keys(wrongs)));
@@ -202,23 +236,33 @@
 
   function drawClock(h, m) {
     var svg = $id('clock-svg');
-    var cx = 100, cy = 100, r = 90;
-    var out = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="#fff" stroke="#ddd" stroke-width="3"/>';
+    var cx = 100, cy = 100, r = 92;
+    var out = '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="#fff" stroke="#cfd8dc" stroke-width="3"/>';
+    // 분 눈금 60개 (5분마다 굵게)
     for (var i = 0; i < 60; i++) {
       var a = (i / 60) * Math.PI * 2 - Math.PI / 2;
       var major = i % 5 === 0;
-      var r1 = major ? 78 : 84;
-      out += '<line x1="' + (cx + Math.cos(a) * r1) + '" y1="' + (cy + Math.sin(a) * r1) + '" x2="' + (cx + Math.cos(a) * 88) + '" y2="' + (cy + Math.sin(a) * 88) + '" stroke="' + (major ? '#888' : '#ccc') + '" stroke-width="' + (major ? 2 : 1) + '"/>';
+      var r1 = major ? 76 : 84;
+      out += '<line x1="' + (cx + Math.cos(a) * r1).toFixed(1) + '" y1="' + (cy + Math.sin(a) * r1).toFixed(1) + '" x2="' + (cx + Math.cos(a) * 89).toFixed(1) + '" y2="' + (cy + Math.sin(a) * 89).toFixed(1) + '" stroke="' + (major ? '#78909c' : '#cfd8dc') + '" stroke-width="' + (major ? 2.4 : 1) + '" stroke-linecap="round"/>';
     }
+    // 도전 난이도에서는 5·10·…·55 분 숫자를 작게 보여 준다
+    if (ckDiff === 'hard') {
+      for (var q = 5; q <= 55; q += 5) {
+        var aq = (q / 60) * Math.PI * 2 - Math.PI / 2;
+        out += '<text x="' + (cx + Math.cos(aq) * 66).toFixed(1) + '" y="' + (cy + Math.sin(aq) * 66).toFixed(1) + '" text-anchor="middle" dominant-baseline="central" font-size="8.5" font-family="Jua,sans-serif" fill="#b0bec5">' + q + '</text>';
+      }
+    }
+    // 1~12 시 숫자 — 크고 또렷하게
     for (var n = 1; n <= 12; n++) {
       var an = (n / 12) * Math.PI * 2 - Math.PI / 2;
-      out += '<text x="' + (cx + Math.cos(an) * 72) + '" y="' + (cy + Math.sin(an) * 72) + '" text-anchor="middle" dominant-baseline="central" font-size="13" font-family="Jua,sans-serif" fill="#555">' + n + '</text>';
+      out += '<text x="' + (cx + Math.cos(an) * 54).toFixed(1) + '" y="' + (cy + Math.sin(an) * 54).toFixed(1) + '" text-anchor="middle" dominant-baseline="central" font-size="15" font-weight="bold" font-family="Jua,sans-serif" fill="#37474f">' + n + '</text>';
     }
     var ha = ((h % 12 + m / 60) / 12) * Math.PI * 2 - Math.PI / 2;
     var ma = (m / 60) * Math.PI * 2 - Math.PI / 2;
-    out += '<line x1="' + cx + '" y1="' + cy + '" x2="' + (cx + Math.cos(ha) * 52) + '" y2="' + (cy + Math.sin(ha) * 52) + '" stroke="#333" stroke-width="6" stroke-linecap="round"/>';
-    out += '<line x1="' + cx + '" y1="' + cy + '" x2="' + (cx + Math.cos(ma) * 72) + '" y2="' + (cy + Math.sin(ma) * 72) + '" stroke="#555" stroke-width="4" stroke-linecap="round"/>';
-    out += '<circle cx="' + cx + '" cy="' + cy + '" r="5" fill="#333"/>';
+    // 시침(짧고 파랗게) · 분침(길고 빨갛게) — 한눈에 구분되도록
+    out += '<line x1="' + cx + '" y1="' + cy + '" x2="' + (cx + Math.cos(ma) * 78).toFixed(1) + '" y2="' + (cy + Math.sin(ma) * 78).toFixed(1) + '" stroke="#e53935" stroke-width="5" stroke-linecap="round"/>';
+    out += '<line x1="' + cx + '" y1="' + cy + '" x2="' + (cx + Math.cos(ha) * 46).toFixed(1) + '" y2="' + (cy + Math.sin(ha) * 46).toFixed(1) + '" stroke="#1565c0" stroke-width="8" stroke-linecap="round"/>';
+    out += '<circle cx="' + cx + '" cy="' + cy + '" r="6" fill="#263238"/>';
     svg.innerHTML = out;
   }
 
@@ -235,6 +279,7 @@
       App.SD.clockCorrect = (App.SD.clockCorrect || 0) + 1;
       App.writeSave();
       App.checkAch();
+      mis('clock');
       Util.beep('combo');
       speak(correct + '! 정답이에요!', 'ko-KR', { rate: 0.95 });
     } else {
@@ -258,11 +303,39 @@
 
   function clockNext() { clockMakeQ(); }
   function clockSpeakQ() { speak('몇 시 몇 분일까요?', 'ko-KR', { rate: 0.95 }); }
-
   /* ══════════════════ 📝 단어 퀴즈 ══════════════════ */
 
   var WQ_CATS = KD.WQ_CATS;
   var wqKeys = Object.keys(WQ_CATS), wqCat = 0, wqIdx = 0, wqCards = [], wqSc = 0, wqCombo = 0, wqAnswered = false;
+
+  /* 자음·모음/받침 힌트 — 한글 음절을 초성·종성으로 풀어 보여 준다 */
+  var JAMO_CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ';
+  var JAMO_JONG = ['', 'ㄱ', 'ㄲ', 'ㄳ', 'ㄴ', 'ㄵ', 'ㄶ', 'ㄷ', 'ㄹ', 'ㄺ', 'ㄻ', 'ㄼ', 'ㄽ', 'ㄾ', 'ㄿ', 'ㅀ', 'ㅁ', 'ㅂ', 'ㅄ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+
+  function jamoOf(word) {
+    var cho = [], jong = [];
+    var w = String(word || '');
+    for (var i = 0; i < w.length; i++) {
+      var c = w.charCodeAt(i);
+      if (c >= 0xAC00 && c <= 0xD7A3) {
+        var n = c - 0xAC00;
+        cho.push(JAMO_CHO.charAt(Math.floor(n / 588)));
+        var j = JAMO_JONG[n % 28];
+        if (j) jong.push(j);
+      } else {
+        cho.push(w.charAt(i));
+      }
+    }
+    return {
+      cho: cho.join(' '),
+      jong: jong.length ? jong.join(' ') : '없어요'
+    };
+  }
+  function jamoLine(word) {
+    var j = jamoOf(word);
+    return '🧩 초성 ' + j.cho + ' · 받침 ' + j.jong;
+  }
+  window._jamoHint = jamoLine;
 
   function buildWqTabs() {
     var el = $id('wq-tabs');
@@ -301,6 +374,7 @@
     setText('wq-emoji', c.em);
     setText('wq-hint', c.hint);
     setText('wq-blank', c.word[0] + ' _ '.repeat(c.word.length - 1).trim());
+    setText('wq-jamo', jamoLine(c.word));
     var allWords = WQ_CATS[wqKeys[wqCat]].map(function (x) { return x.word; });
     var wrongs = Util.shuffle(allWords.filter(function (w) { return w !== c.word; })).slice(0, 3);
     var choices = Util.shuffle([c.word].concat(wrongs));
@@ -328,6 +402,7 @@
       setText('wq-combo', String(wqCombo));
       setText('wq-fb', wqCombo >= 3 ? '🔥 ' + wqCombo + '연속! 멋져요!' : '🎉 정답!');
       setText('wq-blank', correct);
+      mis('word');
       Util.beep(wqCombo >= 3 ? 'combo' : 'ok');
       speak(correct, 'ko-KR', { rate: 0.92 });
     } else {
@@ -401,6 +476,7 @@
     var pr = $id('dict-prog');
     if (pr) pr.style.width = ((dIdx + 1) / tot * 100) + '%';
     var all = DICT_CATS[dKeys[dCat]];
+    setText('dict-jamo', jamoLine(c.word));
     var wrongs = Util.shuffle(all.filter(function (w) { return w.word !== c.word; })).slice(0, 3);
     var choices = Util.shuffle([c].concat(wrongs));
     var el = $id('dict-choices');
@@ -442,6 +518,7 @@
       setText('dict-sc', String(dSc));
       setText('dict-combo', String(dCombo));
       setText('dict-fb', dCombo >= 3 ? '🔥 ' + dCombo + '연속! 귀가 밝아요!' : '🎉 정답!');
+      mis('dict');
       Util.beep(dCombo >= 3 ? 'combo' : 'ok');
       speak(correct, 'ko-KR', { rate: 0.9 });
     } else {
@@ -573,6 +650,7 @@
       setText('addq-combo', String(addqCombo));
       setText('addq-combo-msg', addqCombo >= 3 ? '🔥 ' + addqCombo + '연속 +' + bonus + '보너스!' : '');
       setText('addq-fb', '🎉 정답!');
+      mis('math');
       Util.beep(addqCombo >= 3 ? 'combo' : 'ok');
     } else {
       if (btn) btn.classList.add('wrong');
@@ -600,8 +678,8 @@
     engFlip: engFlip, engNext: engNext, engPrev: engPrev, engShuffle: engShuffle, speakEng: speakEng
   };
   window.Clock = {
-    next: clockNext, speakQuestion: clockSpeakQ,
-    _qa: function () { return { q: ckQ, score: ckSc, answered: ckAnswered, tts: App.ttsOk }; }
+    next: clockNext, speakQuestion: clockSpeakQ, setDiff: clockSetDiff,
+    _qa: function () { return { q: ckQ, score: ckSc, answered: ckAnswered, tts: App.ttsOk, diff: ckDiff }; }
   };
   window.Word = {
     next: wordNext, speakHint: wordSpeakHint,

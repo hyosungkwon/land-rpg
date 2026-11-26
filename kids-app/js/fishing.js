@@ -340,6 +340,7 @@
       cnt++;
       var SD = App.SD;
       SD.fishCaught = (SD.fishCaught || 0) + 1;
+      if (window.Mission) window.Mission.add('fish');
       SD.petTreats = Math.min(99, (SD.petTreats || 0) + 1); // 잠은 물고기 1마리 = 내 친구 간식 1개
       caughtArr.push(f.em);
       if (!SD.fishCodex) SD.fishCodex = [];

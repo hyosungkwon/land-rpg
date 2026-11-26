@@ -15,6 +15,10 @@
     totalStickers: 0, earnedStickers: [], charLv: 1, charExp: 0,
     puzzleDone: 0, mathDone: 0, engDone: 0, drawSaved: 0, memDone: 0,
     clockCorrect: 0, diffDone: 0, pianoPlayed: 0, mazeDone: 0, fishCaught: 0,
+    /* 예비 초1 학습 확장(2단계) */
+    lifeDone: 0, clockDiff: 'easy',
+    /* 🎯 오늘의 미션(mission.js) */
+    misDate: '', misSel: [], misProg: {}, misDone: {}, misClaimed: false, misTotal: 0, misDays: 0,
     doneAchievements: [], pCleared: {}, pStars: {}, pTotalSc: 0,
     fishCodex: [], fishRodLv: 1, fishRodExp: 0,
     /* 친구 교감(pet.js) — 예전 저장본에는 없으므로 기본값을 여기서 채운다 */
@@ -244,6 +248,7 @@
     stopAll();
     show('home');
     updateHomeStatus();
+    if (window.Mission && window.Mission.refresh) window.Mission.refresh();
   }
 
   function tab(name) {

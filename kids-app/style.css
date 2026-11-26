@@ -940,3 +940,125 @@ body{font-family:'Jua',sans-serif;background:#0f0c29;min-height:100vh;overflow-x
   .pet-btn{width:36px;height:31px;font-size:.92rem;}
   .pet-bubble{font-size:.8rem;top:108px;}
 }
+
+/* ══════════════════════════════════════════════════════════
+   2단계 (2026-11-26) — 🎯 오늘의 미션 · 예비 초1 학습 확장
+   ══════════════════════════════════════════════════════════ */
+
+/* ── 홈: 오늘의 미션 미니 바 ── */
+.mission-bar{position:relative;z-index:3;display:flex;align-items:center;gap:7px;width:calc(100% - 28px);
+  margin:0 14px 10px;padding:8px 10px 8px 12px;cursor:pointer;text-align:left;
+  font-family:'Jua',sans-serif;color:#fff;
+  background:linear-gradient(135deg,rgba(255,217,61,.26),rgba(255,107,157,.2));
+  border:1px solid rgba(255,217,61,.42);border-radius:16px;
+  box-shadow:0 4px 14px rgba(0,0,0,.22);}
+.mission-bar:active{transform:scale(.985);}
+.mission-bar.all{background:linear-gradient(135deg,rgba(76,175,80,.35),rgba(255,217,61,.28));border-color:rgba(129,199,132,.7);}
+.mis-bar-title{font-size:.8rem;color:#FFD93D;white-space:nowrap;}
+.mis-dots{display:flex;gap:3px;flex:1;min-width:0;}
+.mis-dot{width:22px;height:22px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  font-size:.8rem;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.16);filter:grayscale(.5);opacity:.85;}
+.mis-dot.done{background:rgba(76,175,80,.38);border-color:rgba(129,199,132,.8);filter:none;opacity:1;animation:sPop .4s ease;}
+.mis-bar-count{font-size:.72rem;color:#fff;white-space:nowrap;}
+.mis-bar-go{font-size:.68rem;color:rgba(255,255,255,.72);white-space:nowrap;}
+
+/* ── 미션 목록 팝업 ── */
+#mission-modal{position:fixed;inset:0;z-index:880;display:none;align-items:center;justify-content:center;
+  padding:18px;background:rgba(10,8,24,.72);backdrop-filter:blur(5px);}
+#mission-modal.show{display:flex;}
+.mis-card{width:100%;max-width:340px;max-height:86vh;overflow-y:auto;border-radius:24px;padding:18px 16px 16px;
+  background:linear-gradient(160deg,#2b2350,#3b2560);border:1px solid rgba(255,217,61,.28);
+  box-shadow:0 20px 50px rgba(0,0,0,.5);animation:popIn .24s ease;text-align:center;}
+.mis-head{display:flex;align-items:baseline;justify-content:space-between;gap:6px;font-family:'Jua',sans-serif;
+  font-size:1.02rem;color:#FFD93D;}
+.mis-days{font-size:.6rem;color:rgba(255,255,255,.5);}
+.mis-sub{font-size:.72rem;color:rgba(255,255,255,.7);margin:5px 0 11px;}
+.mis-list{display:flex;flex-direction:column;gap:8px;margin-bottom:11px;}
+.mis-row{display:flex;align-items:center;gap:8px;text-align:left;padding:9px 10px;border-radius:15px;
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);}
+.mis-row.done{background:rgba(76,175,80,.16);border-color:rgba(129,199,132,.45);}
+.mis-row-em{font-size:1.35rem;line-height:1;flex-shrink:0;}
+.mis-row-main{flex:1;min-width:0;}
+.mis-row-title{font-size:.8rem;color:#fff;line-height:1.25;}
+.mis-row.done .mis-row-title{color:#a5d6a7;}
+.mis-track{height:6px;border-radius:6px;background:rgba(255,255,255,.14);margin-top:5px;overflow:hidden;}
+.mis-track i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,#FFD93D,#FF9800);transition:width .35s;}
+.mis-row.done .mis-track i{background:linear-gradient(90deg,#66BB6A,#2e7d32);}
+.mis-row-num{font-size:.66rem;color:rgba(255,255,255,.6);white-space:nowrap;}
+.mis-row-go{border:none;border-radius:11px;padding:6px 9px;font-family:'Jua',sans-serif;font-size:.68rem;
+  color:#fff;background:linear-gradient(135deg,#FF6B9D,#c2185b);cursor:pointer;white-space:nowrap;
+  box-shadow:0 3px 0 rgba(0,0,0,.22);}
+.mis-row-go:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.22);}
+.mis-row-go.done{background:rgba(255,255,255,.14);box-shadow:none;color:#a5d6a7;}
+.mis-reward{font-size:.68rem;color:rgba(255,255,255,.62);background:rgba(255,217,61,.1);
+  border:1px dashed rgba(255,217,61,.35);border-radius:13px;padding:8px 10px;margin-bottom:12px;line-height:1.4;}
+.mis-reward.done{background:rgba(76,175,80,.16);border-color:rgba(129,199,132,.5);color:#c8e6c9;}
+
+/* ── 미션 모두 완료 축하 ── */
+#mis-clear{position:fixed;inset:0;z-index:940;display:none;align-items:center;justify-content:center;
+  padding:20px;background:rgba(10,8,24,.7);backdrop-filter:blur(5px);}
+#mis-clear.show{display:flex;}
+.mis-clear-card{width:100%;max-width:300px;border-radius:26px;padding:24px 20px 20px;text-align:center;
+  background:linear-gradient(160deg,#FFD93D,#FF6B9D);box-shadow:0 18px 46px rgba(0,0,0,.45);animation:popIn .3s ease;}
+.mis-clear-em{font-size:56px;display:block;margin-bottom:4px;}
+.mis-clear-title{font-family:'Jua',sans-serif;font-size:1.25rem;color:#5a2b00;margin-bottom:6px;}
+.mis-clear-msg{font-size:.82rem;color:#6b3400;line-height:1.45;margin-bottom:14px;}
+
+/* ── 미션 성공 토스트 ── */
+#mis-toast{position:fixed;left:50%;top:12px;transform:translate(-50%,-160%);z-index:960;pointer-events:none;
+  background:linear-gradient(135deg,#FFD93D,#FF9800);color:#4a2c00;font-family:'Jua',sans-serif;
+  font-size:.8rem;line-height:1.35;padding:9px 14px;border-radius:15px;text-align:center;max-width:90%;
+  box-shadow:0 8px 24px rgba(0,0,0,.4);transition:transform .38s cubic-bezier(.2,1.4,.4,1);}
+#mis-toast.show{transform:translate(-50%,0);}
+
+/* ── 시계: 난이도·범례 ── */
+.ck-diff-row{display:flex;gap:7px;justify-content:center;margin:8px 0 4px;width:100%;max-width:340px;}
+.ck-diff-btn{flex:1;font-family:'Jua',sans-serif;border:2px solid rgba(255,255,255,.3);
+  background:rgba(255,255,255,.12);border-radius:14px;padding:6px 4px;color:#fff;font-size:.82rem;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:1px;line-height:1.2;}
+.ck-diff-btn small{font-size:.6rem;color:rgba(255,255,255,.7);}
+.ck-diff-btn.active{background:#fff;border-color:#fff;color:#1b5e20;}
+.ck-diff-btn.active small{color:#4CAF50;}
+.ck-diff-tip{font-size:.66rem;color:rgba(255,255,255,.66);margin-bottom:2px;}
+.clock-legend{display:flex;gap:12px;justify-content:center;align-items:center;font-size:.68rem;
+  color:rgba(255,255,255,.8);margin:-6px 0 8px;}
+.clock-legend span{display:flex;align-items:center;gap:4px;}
+.clock-legend i{display:inline-block;border-radius:3px;}
+.lg-hour{width:14px;height:6px;background:#1565c0;}
+.lg-min{width:22px;height:4px;background:#e53935;}
+
+/* ── 한글: 자음·모음/받침 힌트 줄 ── */
+.wq-jamo,.dict-jamo{display:inline-block;margin-top:6px;font-family:'Jua',sans-serif;font-size:.76rem;
+  color:#FFE082;background:rgba(0,0,0,.22);border:1px solid rgba(255,224,130,.3);border-radius:10px;
+  padding:3px 9px;letter-spacing:1px;}
+.dict-jamo{color:#e1bee7;border-color:rgba(225,190,231,.3);margin-top:7px;}
+
+/* ── 생활 상식 퀴즈 ── */
+.gc-life{background:linear-gradient(135deg,#00897b,#004d40);}
+#lifequiz{background:linear-gradient(160deg,#00332f,#00695c 55%,#26a69a);align-items:center;padding-bottom:20px;}
+.life-body{display:flex;flex-direction:column;align-items:center;padding:0 14px;flex:1;width:100%;max-width:420px;margin:0 auto;}
+.life-infobar{display:flex;gap:7px;margin:6px 0 8px;flex-wrap:wrap;justify-content:center;}
+.life-badge{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.2);border-radius:11px;
+  padding:4px 11px;font-size:.8rem;color:#fff;}
+.life-card{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:22px;
+  padding:16px 14px;text-align:center;width:100%;margin-bottom:9px;}
+.life-emoji{font-size:48px;display:block;line-height:1.1;margin-bottom:4px;}
+.life-q{font-family:'Jua',sans-serif;font-size:1rem;color:#fff;line-height:1.42;word-break:keep-all;}
+.life-feedback{font-size:.8rem;color:#FFD93D;text-align:center;min-height:2.6em;margin-bottom:7px;
+  line-height:1.4;padding:0 4px;word-break:keep-all;}
+.life-choices{display:grid;grid-template-columns:1fr 1fr;gap:9px;width:100%;margin-bottom:10px;}
+.life-choices.two{grid-template-columns:1fr;}
+.life-choice{font-family:'Jua',sans-serif;border:2px solid rgba(255,255,255,.22);border-radius:14px;
+  padding:12px 8px;font-size:.94rem;line-height:1.3;cursor:pointer;background:rgba(255,255,255,.14);
+  color:#fff;transition:transform .1s;word-break:keep-all;}
+.life-choice:active{transform:scale(.96);}
+.life-choice.correct{background:linear-gradient(135deg,#4CAF50,#81c784);border-color:transparent;animation:cpop .4s;}
+.life-choice.wrong{background:linear-gradient(135deg,#f44336,#ef9a9a);border-color:transparent;animation:cshk .4s;}
+
+@media (max-width:400px){
+  .life-q{font-size:.92rem;}
+  .life-choice{padding:10px 6px;font-size:.86rem;}
+  .life-emoji{font-size:40px;}
+  .mis-bar-title{font-size:.74rem;}
+  .mis-dot{width:20px;height:20px;font-size:.72rem;}
+}

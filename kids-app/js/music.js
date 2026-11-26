@@ -268,6 +268,7 @@
     App.SD.pianoPlayed = (App.SD.pianoPlayed || 0) + 3;
     App.writeSave();
     App.checkAch();
+    if (window.Mission) window.Mission.add('piano');
     Util.doConfetti();
     Util.beep('win');
     setText('piano-notes', '🎉 완주! ' + SONGS[songIdx].name);

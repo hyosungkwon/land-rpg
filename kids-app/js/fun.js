@@ -124,6 +124,7 @@
     App.SD.memDone = (App.SD.memDone || 0) + 1;
     App.writeSave();
     App.checkAch();
+    if (window.Mission) window.Mission.add('memory');
     setTimeout(function () {
       App.earnReward('🃏', '기억력 게임 완료! ' + memTries + '번 만에 ' + memEl + '초! 두뇌왕 🧠');
     }, 420);
@@ -181,7 +182,10 @@
 
   function balloonEnd() {
     balClearAll();
-    if (balSc >= 60) App.earnReward('🎈', '풍선 ' + balSc + '점! 정말 대단해요! 💥');
+    if (balSc >= 60) {
+      if (window.Mission) window.Mission.add('balloon');
+      App.earnReward('🎈', '풍선 ' + balSc + '점! 정말 대단해요! 💥');
+    }
     else if (balSc >= 20) App.showTip('🎈', balSc + '점! 잘했어요! 한 번 더?');
     else App.showTip('🎈', balSc + '점! 다시 해봐요! 💪');
     balloonInit();
@@ -542,6 +546,7 @@
     App.SD.diffDone = (App.SD.diffDone || 0) + 1;
     App.writeSave();
     App.checkAch();
+    if (window.Mission) window.Mission.add('diff');
     Util.doConfetti();
     Util.beep('win');
     setTimeout(function () {
@@ -741,6 +746,7 @@
     App.SD.mazeDone = (App.SD.mazeDone || 0) + 1;
     App.writeSave();
     App.checkAch();
+    if (window.Mission) window.Mission.add('maze');
     setText('maze-best', App.SD[key] + '초');
     setText('maze-msg', '🎉 탈출 성공! ' + mzEl + '초!');
     Util.doConfetti();

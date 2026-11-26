@@ -6,7 +6,12 @@
 <meta name="theme-color" content="#0f0c29">
 <title>🌟 유아의 놀이터</title>
 <link rel="manifest" href="../manifest.json">
-<link rel="stylesheet" href="style.css?v=6cf14ddb">
+<script>/* 자체 점검용: 화면에서 난 오류를 모아 둔다. (Mission._qa() 로 확인) */
+window.__errs = [];
+addEventListener('error', function (e) { try { window.__errs.push(String(e.message || 'error')); } catch (_) {} });
+addEventListener('unhandledrejection', function (e) { try { window.__errs.push('promise: ' + String((e.reason && e.reason.message) || e.reason)); } catch (_) {} });
+</script>
+<link rel="stylesheet" href="style.css?v=7dff07fe">
 </head>
 <body>
 
@@ -56,6 +61,14 @@
       <button class="pet-btn pet" onclick="Pet.pet()" aria-label="쓰다듬기">💖</button>
     </div>
   </div>
+
+  <!-- 🎯 오늘의 미션 (컴팩트 미니 바) -->
+  <button class="mission-bar" id="mission-bar" onclick="Mission.open()" aria-label="오늘의 미션 보기">
+    <span class="mis-bar-title">🎯 오늘의 미션</span>
+    <span class="mis-dots" id="mis-dots"></span>
+    <span class="mis-bar-count" id="mis-count">0/3 완료</span>
+    <span class="mis-bar-go" id="mis-go">보기 ›</span>
+  </button>
 
   <div class="home-stats">
     <div class="stat-chip"><span class="stat-val" id="stat-stickers">0</span><span class="stat-lbl">🏷 스티커</span></div>
@@ -124,6 +137,10 @@
       <button class="game-card gc-addq" onclick="App.openAddq()">
         <span class="gc-icon">⚡</span><span class="gc-title">빠른 덧셈</span>
         <span class="gc-desc">타이머 4지선다!</span><span class="gc-badge">스피드</span>
+      </button>
+      <button class="game-card gc-life" onclick="App.openLife()">
+        <span class="gc-icon">🧠</span><span class="gc-title">생활 상식</span>
+        <span class="gc-desc">안전·생활·자연 OX 퀴즈</span><span class="gc-badge">NEW · 26문항</span>
       </button>
     </div>
   </div>
@@ -444,6 +461,11 @@
 <div id="clock-quiz" class="screen">
   <div class="sub-header"><button class="back-btn" onclick="App.home()">← 홈</button><span class="sub-title">🕐 시계 읽기</span></div>
   <div class="clock-body">
+    <div class="ck-diff-row">
+      <button class="ck-diff-btn active" id="ck-diff-easy" onclick="Clock.setDiff('easy')">😊 쉬움<small>정시·30분</small></button>
+      <button class="ck-diff-btn" id="ck-diff-hard" onclick="Clock.setDiff('hard')">🔥 도전<small>5·10분 단위</small></button>
+    </div>
+    <div class="ck-diff-tip" id="ck-diff-tip">정각과 30분을 먼저 익혀요</div>
     <div class="clock-infobar">
       <div class="clock-badge">문제 <span id="ck-num">1</span>/10</div>
       <div class="clock-badge">⭐ <span id="ck-sc">0</span>점</div>
@@ -451,6 +473,7 @@
     </div>
     <div class="pbw" style="max-width:320px;background:rgba(255,255,255,.2);"><div class="pbf" id="ck-prog" style="width:10%"></div></div>
     <div id="clock-svg-wrap"><svg id="clock-svg" width="180" height="180" viewBox="0 0 200 200"></svg></div>
+    <div class="clock-legend"><span><i class="lg-hour"></i>시침 · 짧아요</span><span><i class="lg-min"></i>분침 · 길어요</span></div>
     <div class="clock-question" id="ck-q">몇 시 몇 분일까요?</div>
     <div style="display:flex;gap:8px;justify-content:center;margin-bottom:8px;">
       <button class="speak-btn" onclick="Clock.speakQuestion()">🔊 문제 듣기</button>
@@ -554,6 +577,7 @@
       <span class="wq-emoji" id="wq-emoji">🐱</span>
       <div class="wq-hint" id="wq-hint">이 동물의 이름은?</div>
       <div class="wq-blank" id="wq-blank">_ _ _</div>
+      <div class="wq-jamo" id="wq-jamo">🧩 초성</div>
     </div>
     <div class="wq-choices" id="wq-choices"></div>
     <div class="wq-feedback" id="wq-fb"></div>
@@ -578,6 +602,7 @@
     <div class="dict-card">
       <button class="dict-listen-btn" onclick="Dict.speak()">🔊 들어봐요!</button>
       <div class="dict-hint" id="dict-hint">버튼을 눌러 소리를 들어봐요!</div>
+      <div class="dict-jamo" id="dict-jamo"></div>
     </div>
     <div class="dict-choices" id="dict-choices"></div>
     <div class="dict-feedback" id="dict-fb"></div>
@@ -712,6 +737,30 @@
   </div>
 </div>
 
+<!-- ══════════ 생활·상식 퀴즈 (OX · 4지선다) ══════════ -->
+<div id="lifequiz" class="screen">
+  <div class="sub-header"><button class="back-btn" onclick="App.home()">← 홈</button><span class="sub-title">🧠 생활 상식</span></div>
+  <div class="life-body">
+    <div class="life-infobar">
+      <div class="life-badge">문제 <span id="life-num">1</span>/<span id="life-tot">10</span></div>
+      <div class="life-badge">⭐ <span id="life-sc">0</span>점</div>
+      <div class="life-badge">✅ <span id="life-correct">0</span>개</div>
+      <div class="life-badge">🔥 <span id="life-combo">0</span></div>
+    </div>
+    <div class="pbw" style="max-width:340px;background:rgba(255,255,255,.15);"><div class="pbf" id="life-prog" style="width:10%;background:rgba(255,255,255,.8);"></div></div>
+    <div class="life-card">
+      <span class="life-emoji" id="life-emoji">🚦</span>
+      <div class="life-q" id="life-q">초록불이 깜박일 때는?</div>
+    </div>
+    <div class="life-feedback" id="life-fb"></div>
+    <div class="life-choices" id="life-choices"></div>
+    <div style="display:flex;gap:8px;justify-content:center;">
+      <button class="speak-btn" onclick="Life.speak()">🔊 문제 듣기</button>
+      <button class="gbtn gg" id="life-next" onclick="Life.next()" style="display:none;">다음 ▶</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════ 공통 팝업 ══════════ -->
 <div id="overlay">
   <div class="popup-card">
@@ -742,6 +791,30 @@
 </div>
 <canvas id="conf"></canvas>
 
+<!-- 🎯 오늘의 미션 목록 -->
+<div id="mission-modal">
+  <div class="mis-card">
+    <div class="mis-head"><span>🎯 오늘의 미션</span><span class="mis-days" id="mis-days">지금까지 0일 모두 완료</span></div>
+    <div class="mis-sub" id="mis-sub">0/3 완료 · 3개를 모두 하면 특별 선물! 🎁</div>
+    <div class="mis-list" id="mis-list"></div>
+    <div class="mis-reward" id="mis-reward">🎁 모두 완료 보상 · 스티커 +2 · 경험치 +3 · 축하 폭죽</div>
+    <button class="gbtn gpk" onclick="Mission.close()">닫기</button>
+  </div>
+</div>
+
+<!-- 🎉 오늘의 미션 모두 완료 -->
+<div id="mis-clear">
+  <div class="mis-clear-card">
+    <span class="mis-clear-em">🎉</span>
+    <div class="mis-clear-title">오늘의 미션 모두 완료!</div>
+    <div class="mis-clear-msg">스티커 +2 · 경험치 +3 받았어요!<br>내일 또 새로운 미션이 와요 🌙</div>
+    <button class="gbtn gyd" onclick="Mission.closeClear()">신난다! 🎉</button>
+  </div>
+</div>
+
+<!-- 🎯 미션 성공 알림(짧게 지나가는 토스트) -->
+<div id="mis-toast">🎯 미션 성공!</div>
+
 <!-- 친구 이름 짓기 -->
 <div id="pet-name-modal">
   <div class="pnm-card">
@@ -755,17 +828,19 @@
   </div>
 </div>
 
-<script src="js/data.js?v=eda5c3bd"></script>
+<script src="js/data.js?v=b8da49bd"></script>
 <script src="js/topics.js?v=5f3602fe"></script>
-<script src="js/core.js?v=5bfa4835"></script>
-<script src="js/draw.js?v=54660474"></script>
-<script src="js/puzzle.js?v=7a5d1e4e"></script>
-<script src="js/fun.js?v=2277c4dc"></script>
-<script src="js/music.js?v=01d45b24"></script>
-<script src="js/art.js?v=116285a2"></script>
-<script src="js/learn.js?v=96d94c30"></script>
-<script src="js/fishing.js?v=8eb597c1"></script>
-<script src="js/pet.js?v=e630ef23"></script>
+<script src="js/core.js?v=ccef43f6"></script>
+<script src="js/draw.js?v=5247a429"></script>
+<script src="js/puzzle.js?v=f9b16dc0"></script>
+<script src="js/fun.js?v=13faf798"></script>
+<script src="js/music.js?v=5583be97"></script>
+<script src="js/art.js?v=ef9525d0"></script>
+<script src="js/learn.js?v=5ea8bf8d"></script>
+<script src="js/fishing.js?v=21358929"></script>
+<script src="js/pet.js?v=ef859fc2"></script>
+<script src="js/mission.js?v=e01558b7"></script>
+<script src="js/life.js?v=f3408133"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); });

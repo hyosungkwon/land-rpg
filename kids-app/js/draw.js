@@ -880,6 +880,8 @@
 
     confetti(res.pct >= 85 ? 96 : res.pct >= 70 ? 64 : 34);
     if (state.sound) chime(res.pct);
+    // 🎯 오늘의 미션: 그림을 한 번 그려서 냈으면 '그림 놀이 1번'으로 친다(일치율과 상관없이).
+    if (window.Mission) window.Mission.add('draw');
 
     // 🌟 놀이터 보상: 일치율 70% 이상이면 스티커 + 캐릭터 경험치를 바로 준다.
     const line = $('rewardLine');
