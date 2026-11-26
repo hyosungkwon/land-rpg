@@ -488,6 +488,38 @@ class App {
         this.ui.addLog(`🌟 <b>일일 보스 ${ev.gradeLabel}등급</b> · 피해 ${ev.dmg.toLocaleString()} · ${gains}`);
         this.showDailyResult(ev);
         this.ui.renderIfNeeded();
+      } else if (ev.t === 'invasionStart') {
+        this.ui.addLog(`🚨 <b>${esc(ev.cityName)} 방어전</b> 시작 — ${esc(ev.waveName)} (${ev.goal}마리 격파)`);
+        this.ui.toast(`🚨 ${ev.cityName} 방어전! ${Math.round(ev.duration / 1000)}초 안에 마물 격퇴`, 'gold');
+        this.sound.boss();
+        this.ui.renderIfNeeded();
+      } else if (ev.t === 'invasionEnd') {
+        this.battle.refreshStats();
+        this.buffs = computeBuffs(this.s);
+        this.checkPets(now);
+        this.save(true);
+        if (ev.how === 'clear') {
+          this.sound.fanfare();
+          const gains = [`💰+${ev.gold.toLocaleString()}`, `💎+${ev.shards}`, ev.points ? `✨+${ev.points}P` : '', `🎉임대 +${ev.boomPct}%(30분)`].filter(Boolean).join(' ');
+          this.ui.addLog(`🏅 <b>${esc(ev.cityName)} 방어 성공!</b> · ${gains}`);
+          this.ui.modal({
+            title: `🏅 ${esc(ev.cityName)} 방어 성공!`,
+            sub: `${esc(ev.waveName)} 격퇴 · 방어 훈장 🏅${ev.medals}`,
+            body: `<div class="modal-rewards">
+                     <div class="rw"><div class="e">💰</div><div class="v">+${ev.gold.toLocaleString()}</div><div class="k">골드</div></div>
+                     <div class="rw"><div class="e">💎</div><div class="v">+${ev.shards}</div><div class="k">강화석</div></div>
+                     <div class="rw"><div class="e">🎉</div><div class="v">+${ev.boomPct}%</div><div class="k">임대 30분</div></div>
+                   </div>
+                   ${ev.points ? `<div class="tiny" style="text-align:center;color:var(--gold);margin-bottom:6px">✨ 초월석 +${ev.points}P 추가 획득!</div>` : ''}
+                   <div class="note"><b>${esc(ev.cityName)}</b>에 30분간 <b>호황 버프(임대수익 +${ev.boomPct}%)</b>가 적용되었습니다!</div>`,
+            actions: [{ label: '확인', style: 'primary', onClick: () => {} }],
+          });
+        } else {
+          this.sound.ui();
+          this.ui.toast(`🚨 ${ev.cityName} 방어 실패(${ev.how === 'dead' ? '전투 불능' : '시간 초과'}) · 매물 피해 없이 재도전 가능`, 'red');
+          this.ui.addLog(`🚨 <b>${esc(ev.cityName)}</b> 방어 실패(${ev.how === 'dead' ? '전투 불능' : '시간 초과'}) · 재도전 가능`);
+        }
+        this.ui.renderIfNeeded();
       } else if (ev.t === 'towerEnd') {
         this.battle.refreshStats();
         this.checkPets(now);
@@ -1681,6 +1713,19 @@ class App {
         this.sound.boss();
         this.ui.toast(`🌟 일일 보스 ${r.boss.ko} — 30초 타임어택!`, 'gold');
         this.ui.addLog(`🌟 <b>일일 보스 ${esc(r.boss.ko)}</b> ${esc(r.boss.title)} · 30초 누적 피해 도전`);
+        this.ui.render();
+      },
+
+      /** 🚨 v5.11 영지 침공 방어전 입장 */
+      enterInvasion: () => {
+        this.sound.unlock();
+        const now = Date.now();
+        const r = this.battle.startInvasion(now);
+        if (!r.ok) {
+          this.ui.toast(r.reason, 'red');
+          return;
+        }
+        this.save(true);
         this.ui.render();
       },
 

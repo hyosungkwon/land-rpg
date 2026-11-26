@@ -25,6 +25,7 @@ import {
 import {
   EXPEDITION_DURATIONS, EXPEDITION_MAX_SLOTS, isPetDispatched, expeditionStatus, expeditionPreview, regionMapData,
 } from './expedition.js';
+import { INVASION, invasionStatus } from './invasion.js';
 import {
   PETS, DUNGEON, PET_MAX_LV, petDef, petProgress, petLevel, petAtkPct, petDmgPct,
   petUpgradeCost, jobOf, jobProgress, dungeonState, JOB_COUNT, isUpperJob,
@@ -241,6 +242,7 @@ export class UI {
       case 'tower-floors': actions.openTowerFloors(); break;
       case 'tower-sweep': actions.claimTowerSweep(); break;
       case 'daily': actions.enterDaily(); break;
+      case 'invasion': actions.enterInvasion(); break;
       case 'claim-attendance': actions.claimAttendance(); break;
       case 'claim-weekly-milestone': actions.claimWeeklyMilestone(Number(v)); break;
       case 'claim-quest': actions.claimQuest(v); break;
@@ -408,8 +410,13 @@ export class UI {
     setT(this.el.shard, fmt(s.shards));
 
     const def = b.def;
-    // v4.2: 탑 도전 중에는 스테이지 칩 대신 층 이름을 보여 준다
-    if (b.tower && b.tower.floor) {
+    // v4.2: 탑 도전 중에는 스테이지 칩 대신 층 이름을 보여 준다 · v5.11 영지 방어전
+    if (b.invasion && b.invasion.city) {
+      const done = b.invasion.kills + b.invasion.bossKills;
+      const left = (Math.max(0, b.invasion.ends - now) / 1000).toFixed(1);
+      setT(this.el.stageNum, `🚨 ${b.invasion.city.name} 방어전`);
+      setT(this.el.themeName, `${done}/${b.invasion.goal} · ${left}초`);
+    } else if (b.tower && b.tower.floor) {
       setT(this.el.stageNum, `🗼 탑 ${b.tower.n}층`);
       setT(this.el.themeName, b.tower.floor.name);
     } else {
@@ -630,7 +637,15 @@ export class UI {
               : `최근 ${last.n}층 ${last.how === 'dead' ? '패배(전투 불능)' : '패배(시간 초과)'} · 언제든 재도전`)
             : '1층부터 차례대로 — 패배해도 잃는 것은 없습니다';
       } else if (k === 'tower-free') {
-        el.disabled = !!(b && (b.tower || b.dungeon || b.daily || b.boss));
+        el.disabled = !!(b && (b.tower || b.dungeon || b.daily || b.boss || b.invasion));
+      } else if (k === 'inv-left') {
+        const iv = b && b.invasion;
+        const st = invasionStatus(s, now);
+        el.textContent = iv ? `방어 중 · ${(Math.max(0, iv.ends - now) / 1000).toFixed(1)}초` : st.available ? '🚨 침공 경보!' : `다음 경보 ${mmss(st.nextMs)}`;
+      } else if (k === 'inv-run') {
+        const iv = b && b.invasion;
+        if (!iv) return;
+        el.innerHTML = `<b style="color:var(--gold)">방어 중</b> · ${esc(iv.city.name)} · ${iv.kills + iv.bossKills}/${iv.goal} 격파 · ${(Math.max(0, iv.ends - now) / 1000).toFixed(1)}초 남음`;
       } else if (k === 'daily-free') {
         const di = dailyInfo(s, now);
         el.disabled = !!(b && b.daily) || di.left <= 0;
@@ -1527,10 +1542,10 @@ function tplHuntGrowth(ui) {
     <button class="chip${f === 'growth' ? ' on' : ''}" type="button" data-action="growth-filter" data-value="growth">✨ 성장 (전직·환생·펫)</button>
   </div>`;
   const growthCards = `${jobCard(ui)}${rebirthCard(ui)}${petLine(ui)}`;
-  const challengeCards = `${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}`;
+  const challengeCards = `${invasionCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}`;
   if (f === 'challenge') return `${bar}${challengeCards}`;
   if (f === 'growth') return `${bar}${growthCards}`;
-  return `${bar}${jobCard(ui)}${rebirthCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}${petLine(ui)}`;
+  return `${bar}${jobCard(ui)}${rebirthCard(ui)}${invasionCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}${petLine(ui)}`;
 }
 
 /* ───────────── 📅 일일 퀘스트 (v4.9.0 · KST 자정 리셋) ───────────── */
@@ -1915,6 +1930,54 @@ function newsSlim(ui) {
       <span class="ns-clock" data-live="news-left">${mmss(n.endsAt - Date.now())}</span>
     </div>
     <div class="ns-fx">${esc(n.targetLabel)} · <span class="up">시세 ▲${n.pricePct}%</span> · <span class="up">임대 ▲${n.rentPct}%</span> · <span data-live="news-own">${esc(newsOwnShort(ui.s, n))}</span></div>
+  </div>`;
+}
+
+/* ══════════════════ 🚨 영지 침공 방어전 (v5.11.0) ══════════════════ */
+function invasionCard(ui) {
+  const s = ui.s;
+  const b = ui.battle;
+  const now = Date.now();
+  const st = invasionStatus(s, now);
+  const live = b && b.invasion;
+  const busy = !!(b && (b.invasion || b.tower || b.dungeon || b.daily || b.boss));
+  const boomsHtml = st.activeBooms.length
+    ? `<div class="inv-booms">${st.activeBooms.slice(0, 3).map((bm) => `<span class="tag boom">🎉 ${esc(bm.city.name)} 임대 +${bm.pct}% (${mmss(bm.leftMs)})</span>`).join('')}</div>`
+    : '';
+  if (!st.hasLand) {
+    return `
+    <div class="card inv-card" id="invasionCard">
+      <div class="card-head">
+        <div class="card-title"><span class="t-ico">🚨</span>영지 침공 방어전<small>부동산 × 전투</small></div>
+        <span class="tiny dim">매물 1곳부터 해금</span>
+      </div>
+      <div class="tiny dim">부동산을 1곳 이상 매수하면 30분마다 침공 경보가 열립니다. 방어에 성공하면 <b>30분간 해당 지역 임대수익 +50%</b>와 대량 보상을 받습니다.</div>
+    </div>`;
+  }
+  const rw = st.reward;
+  const rwText = rw ? `💰${formatGold(rw.gold)} · 💎${rw.shards}${rw.points ? ` · ✨${rw.points}P` : ''} · 🎉임대 +${rw.boomPct}%(30분)` : '';
+  return `
+  <div class="card inv-card${live ? ' live' : st.won ? ' won' : ''}" id="invasionCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🚨</span>영지 침공 방어전<small>훈장 🏅${st.medals} · 35초</small></div>
+      <span class="tiny" style="color:${st.available || live ? '#ff9fa8' : 'var(--dim)'}" data-live="inv-left">${live ? `방어 중 · ${(Math.max(0, live.ends - now) / 1000).toFixed(1)}초` : st.available ? '🚨 침공 경보!' : `다음 경보 ${mmss(st.nextMs)}`}</span>
+    </div>
+    <div class="inv-head">
+      <span class="inv-city">${st.city.emoji} ${esc(st.city.name)}${st.landmarkLv ? ` <span class="tag lm">🏛️Lv.${st.landmarkLv}</span>` : ''}</span>
+      <span class="inv-wave">${esc(st.wave.name)} · 보스 ${esc(st.wave.bossKo)}</span>
+    </div>
+    <div class="tiny ellip" style="margin-top:4px" data-live="inv-run">${
+      live
+        ? `<b style="color:var(--gold)">방어 중</b> · ${esc(live.city.name)} · ${live.kills + live.bossKills}/${live.goal} 격파`
+        : st.available
+          ? `승리 보상: <b style="color:var(--gold)">${rwText}</b>`
+          : `✅ 이번 침공 방어 완료! · 다음 경보까지 ${mmss(st.nextMs)}`
+    }</div>
+    ${boomsHtml}
+    <button class="btn small ${st.available && !busy ? 'primary' : 'ghost'} block" style="margin-top:7px" type="button" data-action="invasion" ${!st.available || busy ? 'disabled' : ''}>
+      ${live ? '🚨 방어전 진행 중' : st.available ? `⚔️ ${esc(st.city.name)} 방어 출격!` : '✅ 방어 완료 · 다음 경보 대기'}
+    </button>
+    <div class="tiny dim" style="margin-top:4px">무시하거나 패배해도 보유 매물에는 피해가 없습니다 · 승리 시 30분 호황</div>
   </div>`;
 }
 
@@ -2349,6 +2412,7 @@ function tplLandHome(ui) {
             ? `<button class="lm-chip ${lm ? 'on' : ''}" type="button" data-action="landmark" data-value="${h.city.key}">${lm ? `${LANDMARK.levels[lm - 1].icon} Lv.${lm}` : '🏛️ 랜드마크'}</button>`
             : '';
           const newsTag = h.news ? '<span class="tag hot">📈 호재</span>' : '';
+          const boomTag = h.boomPct > 0 ? `<span class="tag boom">🎉 호황 +${h.boomPct}%</span>` : '';
           const leaseTag = h.leasePct > 0 ? `<span class="tag lease">🏷️ 임대 +${h.leasePct}%</span>` : '';
           const mulTag = h.rentMul > 1.001 ? `<span class="up">임대 ×${h.rentMul.toFixed(2)}</span>` : '';
           const fav = isFavoriteCity(s, h.city.key);
@@ -2359,7 +2423,7 @@ function tplLandHome(ui) {
           return `<div class="hold${h.news ? ' hot' : ''}">
             <div class="h-ico">${h.city.emoji}</div>
             <div class="h-mid">
-              <div class="h-name"><button class="fav-btn${fav ? ' on' : ''}" type="button" data-action="land-fav" data-value="${h.city.key}" aria-label="관심 매물">${fav ? '★' : '☆'}</button>${esc(h.city.name)}<span class="h-region">${esc(h.city.region)}</span>${traitBadge(h.city.trait)}${newsTag}${lmBtn}${leaseTag}</div>
+              <div class="h-name"><button class="fav-btn${fav ? ' on' : ''}" type="button" data-action="land-fav" data-value="${h.city.key}" aria-label="관심 매물">${fav ? '★' : '☆'}</button>${esc(h.city.name)}<span class="h-region">${esc(h.city.region)}</span>${traitBadge(h.city.trait)}${newsTag}${boomTag}${lmBtn}${leaseTag}</div>
               <div class="h-line"><b>${fmt(h.qty)}평</b><span class="dim"> · 평가 💰${formatGold(h.value)}</span>${pnlTag ? ` ${pnlTag}` : ''}${mulTag ? ` · ${mulTag}` : ''}</div>
               <div class="h-line dim">시간 +💰${formatGold(h.incomePerHour)} · 회수 ${paybackText(payback)} · ${trendHtml(h.trend)} <span class="band-pill ${h.bandLabel === '저점' ? 'lo' : h.bandLabel === '고점' ? 'hi' : ''}">${esc(h.bandLabel || '보통')} ${bandPct}%</span></div>
             </div>
@@ -2379,6 +2443,8 @@ function tplLandHome(ui) {
     : '';
 
   return `
+  ${invasionCard(ui)}
+
   ${auctionCard(ui)}
 
   ${regionMapCard(ui)}

@@ -14,6 +14,7 @@ import {
   effectiveBattleSpeed,
 } from './meta.js';
 import { TOWER_RULES, TOWER_MAX_FLOOR, towerFloor, towerStageDef, towerHas, towerReward, towerCleared, towerState, towerUnlocked, towerLockReason } from './tower.js';
+import { INVASION, invasionStatus, recordInvasionWin } from './invasion.js';
 import { DAILY, dailyBossFor, dailyInfo, consumeDailyAttempt, dailyReward, recordDailyRun, recordWeeklyBoss, dailyDpsCap } from './daily.js';
 import { codexMeet, codexKill, trackDailyQuest } from './quests.js';
 import { tryGearDrop, acquireGear, rollDropRarityIdx, randomItemOfRarity } from './gear.js';
@@ -114,6 +115,8 @@ export class Battle {
     this.tower = null;
     // v4.5 🌟 일일 보스 상태(30초 타임어택 진행 중일 때만 객체)
     this.daily = null;
+    // v5.11 🚨 영지 침공 방어전 상태
+    this.invasion = null;
     this.syncStage();
     this.spawnInitial(startAt);
   }
@@ -147,6 +150,15 @@ export class Battle {
   /** 🌟 일일 보스 진행 중인가 */
   inDaily() {
     return !!this.daily;
+  }
+
+  /** 🚨 영지 침공 방어전 진행 중인가 */
+  inInvasion() {
+    return !!this.invasion;
+  }
+
+  invasionLeft(now = Date.now()) {
+    return this.invasion ? Math.max(0, this.invasion.ends - now) : 0;
   }
 
   /** 일일 보스 남은 시간(ms) */
@@ -336,6 +348,10 @@ export class Battle {
       this.towerTick(now);
       return;
     }
+    if (this.invasion) {
+      this.invasionTick(now);
+      return;
+    }
     this.maybeSpawn(now);
     this.bossLogic(now);
   }
@@ -521,6 +537,7 @@ export class Battle {
       if (this.daily) this.endDailyBoss(now, 'dead'); // 쓰러져도 그때까지의 피해로 보상
       else if (this.dungeon) this.endDungeon(now); // 쓰러지면 던전 종료(그때까지의 보상 지급)
       else if (this.tower) this.endTower(now, 'dead'); // 탑에서 쓰러지면 패배 — 잃는 것 없이 복귀
+      else if (this.invasion) this.endInvasion(now, 'dead'); // 침공 방어 실패 — 부동산 피해 없이 복귀
       // v3.8: 쓰러지면 몰려든 무리가 흩어진다 — 부활 직후 바로 다시 눌리는 일 없이 숨을 돌린다
       else this.scatterMonsters(now);
     }
@@ -694,6 +711,18 @@ export class Battle {
       });
       const done = this.tower.kills + this.tower.bossKills;
       if (done >= this.tower.goal) this.endTower(now, 'clear');
+      return;
+    }
+    // v5.11 🚨 영지 침공 방어전
+    if (this.invasion) {
+      if (m.isBoss) this.invasion.bossKills += 1;
+      else this.invasion.kills += 1;
+      this.emit({
+        t: 'monsterDeath', id: m.id, name: m.name, ko: m.ko, isBoss: m.isBoss, x: m.x,
+        gold: 0, exp: 0, shards: 0, levelUps: 0, invasion: true,
+      });
+      const done = this.invasion.kills + this.invasion.bossKills;
+      if (done >= this.invasion.goal) this.endInvasion(now, 'clear');
       return;
     }
     const reward = killReward(this.s, this.s.stage, m.isBoss, this.buffs(), this.rng);
@@ -1078,6 +1107,7 @@ export class Battle {
     if (this.tower) return false; // 탑 도전 중에는 스테이지 보스를 부르지 않는다
     if (this.daily) return false; // 일일 보스 중에도 마찬가지
     if (this.dungeon) return false;
+    if (this.invasion) return false;
     const boss = this.makeMonster(this._def.boss, true, now);
     // v3.8: 보스전은 1:1 결투 — 잡몹 무리는 물러나 보스와 정면으로 붙는다
     this.monsters = this.monsters.filter((m) => m.dying);
@@ -1130,6 +1160,7 @@ export class Battle {
     if (this.dungeon) return { ok: false, reason: '이미 던전이 진행 중입니다.' };
     if (this.tower) return { ok: false, reason: '도전의 탑 진행 중에는 입장할 수 없습니다.' };
     if (this.daily) return { ok: false, reason: '일일 보스 진행 중에는 입장할 수 없습니다.' };
+    if (this.invasion) return { ok: false, reason: '영지 방어전 진행 중에는 입장할 수 없습니다.' };
     if (this.player.dead) return { ok: false, reason: '전투 불능 상태에서는 입장할 수 없습니다.' };
     if (this.boss) return { ok: false, reason: '스테이지 보스 전투 중에는 입장할 수 없습니다.' };
     this.dungeon = {
@@ -1237,6 +1268,7 @@ export class Battle {
   startTower(floor, now = Date.now()) {
     if (this.tower) return { ok: false, reason: '이미 도전의 탑에 입장해 있습니다.' };
     if (this.daily) return { ok: false, reason: '일일 보스 진행 중에는 입장할 수 없습니다.' };
+    if (this.invasion) return { ok: false, reason: '영지 방어전 진행 중에는 입장할 수 없습니다.' };
     if (this.dungeon) return { ok: false, reason: '황금 던전 진행 중에는 입장할 수 없습니다.' };
     if (this.boss) return { ok: false, reason: '스테이지 보스 전투 중에는 입장할 수 없습니다.' };
     if (this.player.dead) return { ok: false, reason: '전투 불능 상태에서는 입장할 수 없습니다.' };
@@ -1450,6 +1482,7 @@ export class Battle {
    */
   startDailyBoss(now = Date.now()) {
     if (this.daily) return { ok: false, reason: '이미 일일 보스에 도전 중입니다.' };
+    if (this.invasion) return { ok: false, reason: '영지 방어전 진행 중에는 입장할 수 없습니다.' };
     if (this.dungeon) return { ok: false, reason: '황금 던전 진행 중에는 입장할 수 없습니다.' };
     if (this.tower) return { ok: false, reason: '도전의 탑 진행 중에는 입장할 수 없습니다.' };
     if (this.boss) return { ok: false, reason: '스테이지 보스 전투 중에는 입장할 수 없습니다.' };
@@ -1565,6 +1598,125 @@ export class Battle {
       isBest: rec.isBest, best: rec.best, bestGrade: rec.bestGrade, left,
     });
     return reward;
+  }
+
+  /* ───────────── 🚨 영지 침공 방어전 (v5.11.0) ───────────── */
+  startInvasion(now = Date.now()) {
+    if (this.invasion) return { ok: false, reason: '이미 영지 방어전이 진행 중입니다.' };
+    if (this.tower) return { ok: false, reason: '도전의 탑 진행 중에는 입장할 수 없습니다.' };
+    if (this.daily) return { ok: false, reason: '일일 보스 진행 중에는 입장할 수 없습니다.' };
+    if (this.dungeon) return { ok: false, reason: '황금 던전 진행 중에는 입장할 수 없습니다.' };
+    if (this.boss) return { ok: false, reason: '스테이지 보스 전투 중에는 입장할 수 없습니다.' };
+    if (this.player.dead) return { ok: false, reason: '전투 불능 상태에서는 입장할 수 없습니다.' };
+    const info = invasionStatus(this.s, now);
+    if (!info.hasLand) return { ok: false, reason: '보유한 부동산이 있어야 침공 방어전에 참여할 수 있습니다.' };
+    if (!info.available) return { ok: false, reason: '이번 침공은 이미 방어했습니다. 다음 경보를 기다려 주세요.' };
+
+    this.invasion = {
+      info,
+      city: info.city,
+      wave: info.wave,
+      t0: now,
+      ends: now + INVASION.durationMs,
+      kills: 0,
+      bossKills: 0,
+      spawned: 0,
+      bossSpawned: false,
+      goal: INVASION.goal,
+      spawnAt: now - INVASION.spawnMs,
+    };
+    this.monsters = [];
+    this.boss = null;
+    this.bossEnds = 0;
+    this.bossReadyAt = 0;
+    this.player.hp = this.stats.hpMax;
+    try { trackDailyQuest(this.s, 'challenge', 1, now); } catch (e) { /* ignore */ }
+    this.spawnInvasionMonster(now, false);
+    this.spawnInvasionMonster(now - 200, false);
+    this.emit({
+      t: 'invasionStart',
+      cityName: info.city.name,
+      waveName: info.wave.name,
+      bossKo: info.wave.bossKo,
+      ends: this.invasion.ends,
+      duration: INVASION.durationMs,
+      goal: INVASION.goal,
+    });
+    return { ok: true, info };
+  }
+
+  spawnInvasionMonster(now, isBoss) {
+    const inv = this.invasion;
+    if (!inv) return null;
+    const w = inv.wave;
+    const name = isBoss ? w.boss : w.normals[inv.spawned % w.normals.length];
+    if (!isBoss) inv.spawned += 1;
+    else inv.bossSpawned = true;
+    const m = this.makeMonster(name, isBoss, now);
+    const dps = Math.max(1, this.stats.dps || 1);
+    const sec = isBoss ? INVASION.hpSecBoss : INVASION.hpSecNormal;
+    m.maxHp = Math.max(20, Math.round(dps * sec * (0.9 + this.rng() * 0.2)));
+    m.hp = m.maxHp;
+    const atkPct = INVASION.atkOfHpPct * (isBoss ? INVASION.bossAtkMul : 1);
+    m.atk = Math.max(1, Math.round((this.stats.hpMax * atkPct) / 100));
+    m.invasion = true;
+    m.x = ECON.spawnX + this.rng() * 60;
+    m.lastAttack = now;
+    this.monsters.push(m);
+    return m;
+  }
+
+  invasionTick(now) {
+    const inv = this.invasion;
+    if (!inv) return;
+    if (now >= inv.ends) {
+      this.endInvasion(now, 'timeout');
+      return;
+    }
+    const alive = this.monsters.filter((m) => !m.dead && !m.dying).length;
+    if (inv.spawned < INVASION.minionGoal) {
+      if (alive < INVASION.maxAlive && now - inv.spawnAt >= INVASION.spawnMs) {
+        inv.spawnAt = now;
+        this.spawnInvasionMonster(now, false);
+      }
+    } else if (!inv.bossSpawned && inv.kills >= INVASION.minionGoal) {
+      this.spawnInvasionMonster(now, true);
+    }
+  }
+
+  endInvasion(now = Date.now(), how = 'clear') {
+    const inv = this.invasion;
+    if (!inv) return null;
+    this.invasion = null;
+    let res = null;
+    if (how === 'clear') {
+      res = recordInvasionWin(this.s, inv.info, now);
+    }
+    for (const m of this.monsters) {
+      m.dead = true;
+      m.dying = 0;
+    }
+    this.monsters = [];
+    this.boss = null;
+    this.bossEnds = 0;
+    this.bossReadyAt = 0;
+    this.syncStage();
+    this.spawnInitial(now);
+    this.refreshStats(now);
+    this.emit({
+      t: 'invasionEnd',
+      how,
+      cityName: inv.city.name,
+      waveName: inv.wave.name,
+      kills: inv.kills,
+      bossKills: inv.bossKills,
+      gold: res ? res.gold : 0,
+      shards: res ? res.shards : 0,
+      points: res ? res.points : 0,
+      boomPct: res ? res.boomPct : 0,
+      medals: res ? res.medals : 0,
+    });
+    return res;
   }
 
   /** 저장용 hp 반영 */

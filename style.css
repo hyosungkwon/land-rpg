@@ -2687,3 +2687,13 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   grid-column: 1 / -1; font-size: 9px; color: var(--gold); font-weight: 700;
   margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+/* ══════════════ v5.11.0 🚨 영지 침공 방어전 ══════════════ */
+.inv-card { background: linear-gradient(160deg, rgba(255, 95, 110, 0.14), rgba(18, 26, 42, 0.96) 62%); border-color: rgba(255, 95, 110, 0.34); }
+.inv-card.won { background: linear-gradient(160deg, rgba(94, 225, 163, 0.1), rgba(18, 26, 42, 0.96) 62%); border-color: rgba(94, 225, 163, 0.32); }
+.inv-card.live { border-color: rgba(255, 207, 92, 0.72); box-shadow: 0 0 0 1px rgba(255, 207, 92, 0.22); }
+.inv-head { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.inv-city { font-size: 13px; font-weight: 900; color: var(--txt); }
+.inv-wave { font-size: 10.5px; color: #ff9fa8; font-weight: 800; }
+.inv-booms { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.tag.boom { color: #ffe799; background: rgba(255, 207, 92, 0.16); border-color: rgba(255, 207, 92, 0.45); }

@@ -144,6 +144,11 @@ export function compactSave(state) {
       delete c.expedition;
     }
   }
+  if (c.invasion && typeof c.invasion === 'object') {
+    if (!(c.invasion.wins > 0) && (!c.invasion.booms || !Object.keys(c.invasion.booms).length)) {
+      delete c.invasion;
+    }
+  }
   if (c.skills && typeof c.skills === 'object') {
     for (const sk of Object.values(c.skills)) {
       if (sk && typeof sk === 'object' && !sk.rune) delete sk.rune;

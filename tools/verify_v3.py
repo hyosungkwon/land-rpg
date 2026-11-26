@@ -95,9 +95,9 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "5.10.0"
-FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui.js", "src/sound.js"]
+EXPECTED_VER = "5.11.0"
+FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -191,6 +191,7 @@ def main():
     ok(f"land-rpg-v{EXPECTED_VER}" in read("sw.js"), f"SW 캐시 버전 v{EXPECTED_VER}")
     ok(f"APP_VERSION = '{EXPECTED_VER}'" in read("src/data.js"), f"앱 버전 v{EXPECTED_VER}")
     ok("'./src/expedition.js'" in read("sw.js"), "sw.js 프리캐시에 expedition.js 포함")
+    ok("'./src/invasion.js'" in read("sw.js"), "sw.js 프리캐시에 invasion.js 포함")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
     ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
@@ -5362,6 +5363,71 @@ def main():
     ok(r510["denyLow"] and r510["lightningHits"] == 2 and r510["execHealed"], "강격 룬(Lv.3 해금 게이트 · 번개 2연타 · 처형 흡혈)", json.dumps(r510))
     ok(r510["burnTicked"] and r510["frosted"] and r510["furyOn"] and r510["ironOn"], "범위 베기 룬(화염 도트·서리 둔화) · 광폭 룬(광전사·불굴)", json.dumps(r510))
     ok(r510["shieldAbsorbed"] and r510["blessOk"] and r510["normOk"] and ui510["ok"] and not ui510["bad"], "회복 룬(성광 보호막 흡수·축복 쿨감) · 정규화 · 스킬 룬 UI 렌더", json.dumps({ **r510, **ui510 }))
+
+    # ── 25) v5.11.0 🚨 영지 침공 방어전 ──
+    section("v5.11.0 영지 침공 방어전")
+    iv511 = js(ctx, """
+      const now = 1_700_000_000_000;
+      const s = defaultState(now);
+      s.stage = 22; s.maxStage = 22; s.peakStage = 22; s.level = 30;
+      const b0 = new Battle(s, () => ({}), () => 0.5, now);
+      const denyNoLand = b0.startInvasion(now);
+      // 매물 + 랜드마크 보유
+      const c1 = CITIES[0];
+      s.land.owned[c1.key] = 20;
+      s.land.landmarks[c1.key] = 2;
+      const rentBefore = portfolioOf(s, now).incomePerMin;
+      const st0 = invasionStatus(s, now);
+      const gold0 = s.gold, shards0 = s.shards, pts0 = s.rebirth.points;
+      const b = new Battle(s, () => computeBuffs(s, now), () => 0.5, now);
+      const started = b.startInvasion(now);
+      const denyDup = b.startDungeon(now);
+      // 9마리 모두 격파 시뮬
+      let guard = 0;
+      let t = now;
+      while (b.inInvasion() && guard < 300) {
+        t += 100;
+        b.invasionTick(t);
+        for (const m of b.monsters.slice()) {
+          if (!m.dead && !m.dying) b.killMonster(m, t);
+        }
+        guard++;
+      }
+      const evEnd = b.drainEvents().find((e) => e.t === 'invasionEnd');
+      const rentAfter = portfolioOf(s, t).incomePerMin;
+      const stAfter = invasionStatus(s, t);
+      const denyAgain = b.startInvasion(t);
+      const nextBlockOk = invasionStatus(s, now + INVASION.intervalMs + 1000).available;
+      // 정규화: 만료/미보유 boom 정리
+      const norm = normalizeState({ land: { owned: { [c1.key]: 5 } }, invasion: { wins: 3, medals: 3, lastBlock: 5, booms: { [c1.key]: now + 60000, bad_key: now + 60000 } } }, now);
+      return {
+        denyNoLand: !denyNoLand.ok,
+        st0Ok: st0.hasLand && st0.available && st0.city.key === c1.key && st0.landmarkLv === 2,
+        startedOk: started.ok && !denyDup.ok,
+        cleared: !b.inInvasion() && !!evEnd && evEnd.how === 'clear',
+        rewardsOk: s.gold > gold0 && s.shards > shards0 && s.rebirth.points > pts0 && s.invasion.wins === 1 && s.invasion.medals === 1,
+        boomRentRatio: Math.round((rentAfter / Math.max(0.0001, rentBefore)) * 100) / 100,
+        blockLock: !stAfter.available && !denyAgain.ok && nextBlockOk,
+        normBoomKeys: Object.keys(norm.invasion.booms),
+      };
+    """)
+    ui511 = js(ctx2, """
+      const now = Date.now();
+      const s = defaultState(now);
+      s.land.owned[CITIES[0].key] = 20;
+      s.invasion.booms[CITIES[0].key] = now + 600000;
+      const buffs = computeBuffs(s, now);
+      const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(1), boss: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'land', expPick: { petId: '', setId: '', durKey: 'short' }, growthFilter: 'challenge', el: {}, install: { hidden: true } };
+      const home = __landSub(ui, 'home');
+      const chal = __huntSub(ui, 'growth');
+      return {
+        ok: home.includes('invasionCard') && home.includes('호황 +50%') && chal.includes('invasionCard'),
+        bad: /undefined|NaN|\\[object Object\\]/.test(home + chal),
+      };
+    """)
+    ok(iv511["denyNoLand"] and iv511["st0Ok"] and iv511["startedOk"] and iv511["cleared"], "영지 침공 경보(랜드마크 우선) · 35초 방어전 출격·9마리 격파 승리 · 중복 모드 차단", json.dumps(iv511))
+    ok(iv511["rewardsOk"] and abs(iv511["boomRentRatio"] - 1.5) < 0.05 and iv511["blockLock"] and len(iv511["normBoomKeys"]) == 1, "승리 보상(골드·강화석·초월석·훈장) · 해당 지역 임대 +50% 호황 실반영 · 블록 쿨타임·정규화", json.dumps(iv511))
+    ok(ui511["ok"] and not ui511["bad"], "영지 침공 방어전 카드(부동산 홈·사냥 도전) 및 호황 배지 렌더", json.dumps(ui511))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

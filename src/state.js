@@ -32,6 +32,7 @@ import {
 } from './daily.js';
 import { SETS_BY_ID } from './region.js';
 import { defaultExpeditions, normalizeExpeditions } from './expedition.js';
+import { defaultInvasion, normalizeInvasion } from './invasion.js';
 
 const nowMs = () => Date.now();
 
@@ -79,6 +80,8 @@ export function defaultState(now = nowMs()) {
     pet: { equipped: null, sub: null, unlocked: [], chosen: false, levels: {}, evo: {} },
     // v5.9.0 🧭 미장착 펫 영지 파견(탐험대)
     expedition: defaultExpeditions(),
+    // v5.11.0 🚨 영지 침공 방어전
+    invasion: defaultInvasion(),
     battleSpeed: 1, // v5.3.0 전투 배속(1 / 1.5 / 2, 환생 1회 해금)
     dungeonCooldown: 0,
     dungeon: { best: 0, runs: 0, last: null },
@@ -209,6 +212,7 @@ export function normalizeState(raw, now = nowMs()) {
     evo: petEvoMap,
   };
   s.expedition = normalizeExpeditions(raw.expedition, s, now);
+  s.invasion = normalizeInvasion(raw.invasion, s.land.owned, now);
   s.battleSpeed = normalizeBattleSpeed(raw.battleSpeed);
   s.jobTier = clamp(Math.floor(num(raw.jobTier, 0)), 0, JOB_MAX);
   s.jobAt = Math.max(0, num(raw.jobAt, 0));

@@ -229,7 +229,9 @@ export function cityRentMul(state, key, now = Date.now(), setBuffs = null, news 
   const lm = landmarkRentMul(landmarkLevel(state, key));
   const newsMul = news ? 1 + (news.rentPct || 0) / 100 : 1;
   const leaseMul = 1 + leasePctOf(state, key) / 100; // v4.6 경매 특별 임대
-  return (1 + setPct / 100) * lm * newsMul * leaseMul;
+  const boomEnd = state && state.invasion && state.invasion.booms ? Number(state.invasion.booms[key]) || 0 : 0;
+  const boomMul = boomEnd > now ? 1.5 : 1; // v5.11 침공 방어 성공 호황 +50%
+  return (1 + setPct / 100) * lm * newsMul * leaseMul * boomMul;
 }
 
 /* ─────────────── 🏷️ 경매 특별 임대 계약 (v4.6) ─────────────── */
@@ -425,8 +427,10 @@ export function portfolioOf(state, now = Date.now()) {
     const setRentPct = setId ? (setBuffs.rentBySet[setId] || 0) : 0;
     const news = info.news || null;
     const leasePct = leasePctOf(s, key);
+    const boomEnd = s && s.invasion && s.invasion.booms ? Number(s.invasion.booms[key]) || 0 : 0;
+    const boomPct = boomEnd > now ? 50 : 0;
     const rentMul = (1 + setRentPct / 100) * landmarkRentMul(lm)
-      * (news ? 1 + (news.rentPct || 0) / 100 : 1) * (1 + leasePct / 100);
+      * (news ? 1 + (news.rentPct || 0) / 100 : 1) * (1 + leasePct / 100) * (1 + boomPct / 100);
     const income = incomePerMinOf(city, qty, qty, now, rentMul);
     const v = qty * info.price;
     const cost = num(totalCost[key]);
@@ -453,6 +457,7 @@ export function portfolioOf(state, now = Date.now()) {
       setId,
       setRentPct,
       leasePct,
+      boomPct,
       rentMul,
       news,
     });
