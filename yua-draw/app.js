@@ -274,6 +274,29 @@
     return { mask, count, bbox: { x0, y0, x1, y1 } };
   }
 
+  // 참조 도형의 총 길이(단위 좌표). 아이가 그은 획의 양과 비교해 과도한 낙서를 가려낸다.
+  function shapeLength(s) {
+    if (s.t === 'c') return 2 * Math.PI * s.r;
+    if (s.t === 'e') {
+      const a = s.rx, b = s.ry;
+      return Math.PI * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b)));
+    }
+    if (s.t === 'l') return Math.hypot(s.x2 - s.x1, s.y2 - s.y1);
+    if (s.t === 'p') {
+      let sum = 0;
+      for (let i = 1; i < s.pts.length; i++) {
+        sum += Math.hypot(s.pts[i][0] - s.pts[i - 1][0], s.pts[i][1] - s.pts[i - 1][1]);
+      }
+      if (s.closed && s.pts.length > 2) {
+        const f = s.pts[0], l = s.pts[s.pts.length - 1];
+        sum += Math.hypot(f[0] - l[0], f[1] - l[1]);
+      }
+      return sum;
+    }
+    if (s.t === 'a') return Math.abs(((s.a1 - s.a0) * Math.PI) / 180) * s.r;
+    return 0;
+  }
+
   function getRef(topic) {
     if (refCache.has(topic.id)) return refCache.get(topic.id);
     const all = rasterShapes(topic.shapes);
@@ -291,7 +314,9 @@
     }
     const bw = Math.max(1, all.bbox.x1 - all.bbox.x0 + 1);
     const bh = Math.max(1, all.bbox.y1 - all.bbox.y0 + 1);
-    const info = { mask: all.mask, bbox: all.bbox, ar: bw / bh, parts };
+    let refLen = 0;
+    for (const s2 of topic.shapes) refLen += shapeLength(s2);
+    const info = { mask: all.mask, bbox: all.bbox, ar: bw / bh, parts, refLen: Math.max(1, refLen) };
     refCache.set(topic.id, info);
     return info;
   }
@@ -432,7 +457,7 @@
 
     // 4) 정밀도 — 그은 선(획의 중심선)이 참조 도형에서 얼마나 벗어났나
     //    (칠한 면적이 아니라 획 자체를 보므로, 캔버스를 뒤덮은 낙서와 모양을 맞춘 그림이 갈린다)
-    let pSum = 0, pN = 0, junkN = 0;
+    let pSum = 0, pN = 0, junkN = 0, childLen = 0;
     const consider = (x, y) => {
       const xi = Math.round(x), yi = Math.round(y);
       if (xi < 0 || yi < 0 || xi >= W || yi >= H) return;
@@ -453,6 +478,7 @@
         const ax = st.pts[i - 1].x * sx, ay = st.pts[i - 1].y * sy;
         const bx = st.pts[i].x * sx, by = st.pts[i].y * sy;
         const len = Math.hypot(bx - ax, by - ay);
+        childLen += Math.hypot((bx - ax) * sxN, (by - ay) * syN);
         const n = Math.max(1, Math.min(40, Math.ceil(len / 3)));
         for (let k = 0; k < n; k++) consider(ax + ((bx - ax) * k) / n, ay + ((by - ay) * k) / n);
       }
@@ -472,7 +498,11 @@
 
     const colorScore = colorFidelity(topic);
 
-    const raw = clamp01(0.84 * f1 * (1 - 0.55 * junk) + 0.08 * arScore + 0.08 * colorScore);
+    // 획의 양 — 모양을 맞춘 그림은 참조와 비슷하지만, 캔버스를 뒤덮은 낙서는 훨씬 많다.
+    const lenRatio = childLen / ref.refLen;
+    const excess = clamp01((lenRatio - 2.5) / 7.5);
+
+    const raw = clamp01(0.84 * f1 * (1 - 0.55 * junk) * (1 - 0.5 * excess) + 0.08 * arScore + 0.08 * colorScore);
     let pct = pctFromRaw(raw);
     pct = Math.max(55, Math.min(99, pct));
 
@@ -491,7 +521,7 @@
     missing.sort((a, b) => b.count - a.count);
 
     return {
-      empty: false, pct, raw, recall, precision, f1, junk, arScore, colorScore,
+      empty: false, pct, raw, recall, precision, f1, junk, arScore, colorScore, lenRatio,
       missing: missing.map((m) => m.name)
     };
   }
@@ -523,17 +553,14 @@
     const stars = starsFor(res.pct);
     $('stars').textContent = '⭐'.repeat(stars) + '☆'.repeat(3 - stars);
 
+    const hasMissing = !!(res.missing && res.missing.length);
     let praise;
-    if (res.pct >= 85) praise = topic.praise;
+    if (res.pct >= 85 && !hasMissing) praise = topic.praise;
+    else if (res.pct >= 85) praise = '우와! ' + topic.word + ' 모양이 아주 잘 맞았어요!';
     else if (res.pct >= 70) praise = '우와, ' + topic.word + ' 모양이 많이 닮았어요!';
     else praise = '그림을 아주 열심히 그렸네요!';
 
-    let tip = '';
-    if (res.missing && res.missing.length && res.pct < 92) {
-      tip = '다음엔 ' + res.missing[0] + '도 그려볼까요?';
-    } else {
-      tip = topic.tip;
-    }
+    let tip = hasMissing ? '다음엔 ' + res.missing[0] + '도 그려볼까요?' : topic.tip;
     if (res.pct < 70 && !state.hint) {
       tip += ' 힌트 보기를 켜고 점선을 따라 그려 보세요!';
     }
