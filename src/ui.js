@@ -46,6 +46,7 @@ import {
 } from './quests.js';
 import { passInfo, titleStatus } from './pass.js';
 import { riftStatus, RIFT_CARD_BY_ID } from './rift.js';
+import { KNIGHTS, KNIGHT_MAX_LV, knightLevel, knightCost, guildEffects, raidStatus } from './guild.js';
 import {
   GEAR_ITEMS, GEAR_SETS, GEAR_FILTERS, GEAR_SET_FILTERS, GEAR_OPTS, GEAR_DROP,
   gearIcon, gearItem, gearList, gearOwned, gearOptionList, gearOptionSummary,
@@ -312,6 +313,9 @@ export class UI {
       case 'rift-pick-open': actions.openRiftPick(); break;
       case 'rift-pick': actions.pickRiftCard(v); break;
       case 'rift-retreat': actions.retreatRift(); break;
+      case 'knight-up': actions.upgradeKnight(v); break;
+      case 'raid-attack': actions.attackRaid(); break;
+      case 'raid-claim': actions.claimRaidPhase(Number(v)); break;
       case 'claim-attendance': actions.claimAttendance(); break;
       case 'claim-weekly-milestone': actions.claimWeeklyMilestone(Number(v)); break;
       case 'claim-quest': actions.claimQuest(v); break;
@@ -1392,10 +1396,11 @@ function huntBadges(ui) {
   const att = attendanceInfo(s);
   const attReady = att.canClaim && (s.totalKills > 0 || att.total > 0) ? 1 : 0;
   const passReady = passInfo(s).readyCount;
+  const raidReady = raidStatus(s, ui.battle && ui.battle.stats).readyCount;
   // 던전 '무료 입장 가능'은 10분마다 계속 켜지므로 배지에서 뺀다(탭 안에서 바로 보임) — 상시 점등 방지
   return {
     skill: 0,
-    growth: (pr.canPromote ? 1 : 0) + (rb.can ? 1 : 0) + (traitReady ? 1 : 0) + (petEvoReady > 0 ? 1 : 0) + weeklyReady,
+    growth: (pr.canPromote ? 1 : 0) + (rb.can ? 1 : 0) + (traitReady ? 1 : 0) + (petEvoReady > 0 ? 1 : 0) + weeklyReady + raidReady,
     quest: (questReady ? 1 : 0) + dqReady + achReady + attReady + passReady,
   };
 }
@@ -1724,18 +1729,70 @@ function riftCard(ui) {
   </div>`;
 }
 
+/* ───────────── 🛡️ 영지 기사단 · 🐉 주간 거대 레이드 토벌전 (v6.9.0) ───────────── */
+function guildRaidCard(ui) {
+  const s = ui.s;
+  const eff = guildEffects(s);
+  const st = raidStatus(s, ui.battle && ui.battle.stats, Date.now());
+  const medals = Math.max(0, Math.floor(Number(s.invasion && s.invasion.medals) || 0));
+
+  const phaseBtns = st.phases.map((ph) => `
+    <button class="rp-chip${ph.claimed ? ' done' : ph.claimable ? ' ready' : ''}" type="button" data-action="raid-claim" data-value="${ph.idx}" ${ph.claimable ? '' : 'disabled'}>
+      <div>${ph.pct}%</div>
+      <small>${ph.claimed ? '수령✓' : ph.claimable ? '🎁받기' : ph.legend ? '👑전설' : ph.medals ? '🏅훈장' : ph.points ? `✨${ph.points}P` : `💎${ph.shards}`}</small>
+    </button>`).join('');
+
+  const knCells = KNIGHTS.map((k) => {
+    const lv = knightLevel(s, k.id);
+    const cost = knightCost(lv);
+    const can = !!(cost && (s.gold || 0) >= cost.gold && (s.shards || 0) >= cost.shards && medals >= cost.medals);
+    return `
+    <div class="kn-cell${lv > 0 ? ' on' : ''}" style="--kc:${k.color}">
+      <div class="r-head"><span>${k.icon} ${esc(k.name)}</span><span class="lv">${lv > 0 ? `Lv.${lv}` : '미영입'}</span></div>
+      <div class="r-fx">${lv > 0 ? esc(k.effect(lv)) : esc(k.desc)}</div>
+      ${cost
+        ? `<button class="mini ${can ? 'up' : ''}" type="button" data-action="knight-up" data-value="${k.id}" ${can ? '' : 'disabled'}>${lv > 0 ? '강화' : '영입'} 💰${formatGold(cost.gold)} 💎${cost.shards}${cost.medals ? ` 🏅${cost.medals}` : ''}</button>`
+        : '<button class="mini on" type="button" disabled>MAX</button>'}
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="card guild-card" id="guildRaidCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🛡️</span>영지 기사단 · 거대 레이드<small>용병 ${eff.recruited}/${KNIGHTS.length} · 토벌 ${st.clears}회</small></div>
+      <span class="tiny dim">합동 ×${eff.raidBonusMul.toFixed(2)}</span>
+    </div>
+    <div class="raid-box">
+      <div class="row">
+        <span style="font-size:12px;font-weight:900;color:${st.boss.color}">${st.boss.icon} ${esc(st.boss.name)} <small class="dim">(${esc(st.boss.title)})</small></span>
+        <span class="tiny" style="color:var(--gold)">${st.pct.toFixed(1)}% 격파</span>
+      </div>
+      <div class="prog tiny-prog${st.defeated ? ' gold' : ''}" style="margin-top:5px"><i style="width:${st.pct}%"></i></div>
+      <div class="row tiny dim" style="margin-top:4px">
+        <span>누적 피해 ${fmt(st.damage)} / ${fmt(st.maxHp)}</span>
+        <span>오늘 출격 <b>${st.leftTickets}/${st.maxTickets}</b></span>
+      </div>
+      <button class="btn small ${!st.defeated && st.leftTickets > 0 ? 'primary' : 'ghost'} block" style="margin-top:7px" type="button" data-action="raid-attack" ${st.defeated || st.leftTickets <= 0 ? 'disabled' : ''}>
+        ${st.defeated ? '🏆 이번 주 거대 보스 완전 토벌!' : st.leftTickets > 0 ? `⚔️ 기사단 합동 일제 공격! (남은 ${st.leftTickets}회)` : '⏱ 오늘 출격 완료 · 내일 자정 충전'}
+      </button>
+      <div class="raid-phases">${phaseBtns}</div>
+    </div>
+    <div class="knight-grid">${knCells}</div>
+  </div>`;
+}
+
 function tplHuntGrowth(ui) {
   const f = ['all', 'challenge', 'growth'].includes(ui && ui.growthFilter) ? ui.growthFilter : 'all';
   const bar = `<div class="chips growth-filter" role="tablist" aria-label="전직·도전 보기">
     <button class="chip${f === 'all' ? ' on' : ''}" type="button" data-action="growth-filter" data-value="all">전체 보기</button>
-    <button class="chip${f === 'challenge' ? ' on' : ''}" type="button" data-action="growth-filter" data-value="challenge">⚔️ 도전 (균열·던전·탑·보스)</button>
+    <button class="chip${f === 'challenge' ? ' on' : ''}" type="button" data-action="growth-filter" data-value="challenge">⚔️ 도전 (균열·레이드·탑·보스)</button>
     <button class="chip${f === 'growth' ? ' on' : ''}" type="button" data-action="growth-filter" data-value="growth">✨ 성장 (전직·환생·유물·펫)</button>
   </div>`;
   const growthCards = `${jobCard(ui)}${rebirthCard(ui)}${relicCard(ui)}${petLine(ui)}`;
-  const challengeCards = `${riftCard(ui)}${invasionCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}`;
+  const challengeCards = `${guildRaidCard(ui)}${riftCard(ui)}${invasionCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}`;
   if (f === 'challenge') return `${bar}${challengeCards}`;
   if (f === 'growth') return `${bar}${growthCards}`;
-  return `${bar}${jobCard(ui)}${rebirthCard(ui)}${relicCard(ui)}${riftCard(ui)}${invasionCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}${petLine(ui)}`;
+  return `${bar}${jobCard(ui)}${rebirthCard(ui)}${relicCard(ui)}${guildRaidCard(ui)}${riftCard(ui)}${invasionCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}${petLine(ui)}`;
 }
 
 /* ───────────── 📅 일일 퀘스트 (v4.9.0 · KST 자정 리셋) ───────────── */

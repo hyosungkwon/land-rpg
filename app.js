@@ -45,6 +45,9 @@ import {
   cancelDeposit as cancelDepositState, buildMegaProject as buildMegaProjectState,
 } from './src/bank.js';
 import {
+  upgradeKnight as upgradeKnightState, attackRaidBoss as attackRaidBossState, claimRaidPhase as claimRaidPhaseState,
+} from './src/guild.js';
+import {
   summonRelic as summonRelicState, toggleEquipRelic as toggleEquipRelicState, upgradeRelic as upgradeRelicState,
 } from './src/relics.js';
 import {
@@ -1966,6 +1969,51 @@ class App {
         this.sound.fanfare();
         this.ui.toast(`🏗️ ${r.def.icon} ${r.def.name} Lv.${r.lv} 완공!`, 'gold');
         this.ui.addLog(`🏗️ 메가 프로젝트 <b>${esc(r.def.name)} Lv.${r.lv}</b> 완공 (${esc(r.def.effect(r.lv))})`);
+        this.ui.render();
+      },
+
+      /** 🛡️ v6.9 영지 기사단 · 🐉 주간 거대 레이드 토벌전 */
+      upgradeKnight: (id) => {
+        this.sound.unlock();
+        const r = upgradeKnightState(this.s, id);
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.levelUp();
+        this.ui.toast(`🛡️ ${r.def.icon} ${r.def.name} ${r.recruited ? '영입 완료!' : `Lv.${r.lv} 승급!`} (${r.def.effect(r.lv)})`, 'gold');
+        this.ui.addLog(`🛡️ 기사단 <b>${esc(r.def.name)} Lv.${r.lv}</b> (${esc(r.def.effect(r.lv))})`);
+        this.ui.render();
+      },
+      attackRaid: () => {
+        this.sound.unlock();
+        const now = Date.now();
+        const r = attackRaidBossState(this.s, this.battle.stats, now);
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        addPassXp(this.s, r.defeated ? 80 : 35, now);
+        try { trackDailyQuest(this.s, 'challenge', 1, now); } catch (e) { /* ignore */ }
+        this.save(true);
+        if (r.defeated) this.sound.fanfare();
+        else this.sound.hit(r.crit);
+        this.ui.toast(`🐉 합동 공격! ${r.crit ? '💥치명 ' : ''}${r.dmg.toLocaleString()} 피해 (${r.pct.toFixed(1)}%) · 💰+${formatGold(r.gold)} 💎+${r.shards}`, 'gold');
+        this.ui.addLog(`🐉 <b>${esc(r.boss.name)}</b> 레이드 피해 ${r.dmg.toLocaleString()} (${r.pct.toFixed(1)}%)`);
+        this.ui.render();
+      },
+      claimRaidPhase: (idx) => {
+        this.sound.unlock();
+        const r = claimRaidPhaseState(this.s, idx, Date.now());
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.fanfare();
+        const gains = [
+          `💰+${formatGold(r.gold)}`, `💎+${r.shards}`,
+          r.points ? `✨+${r.points}P` : '',
+          r.medals ? `🏅+${r.medals}` : '',
+          r.bonusGem ? `${r.bonusGem.icon}${r.bonusGem.name} Lv.${r.bonusGem.lv}` : '',
+          r.item ? `👑${r.item.name}` : '',
+        ].filter(Boolean).join(' · ');
+        this.ui.toast(`🎁 레이드 ${r.phase.label} 보상: ${gains}`, 'gold');
+        this.ui.addLog(`🎁 레이드 <b>${esc(r.phase.label)}</b> 수령 (${gains})`);
         this.ui.render();
       },
 

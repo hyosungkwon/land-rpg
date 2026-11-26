@@ -178,6 +178,11 @@ export function compactSave(state) {
   if (c.mega && typeof c.mega === 'object' && !Object.values(c.mega).some((v) => Number(v) > 0)) {
     delete c.mega;
   }
+  if (c.guild && typeof c.guild === 'object') {
+    const anyK = c.guild.knights && Object.values(c.guild.knights).some((v) => Number(v) > 0);
+    const anyR = c.guild.raid && (c.guild.raid.attacks > 0 || c.guild.raid.clears > 0);
+    if (!anyK && !anyR) delete c.guild;
+  }
   if (c.skills && typeof c.skills === 'object') {
     for (const sk of Object.values(c.skills)) {
       if (sk && typeof sk === 'object' && !sk.rune) delete sk.rune;

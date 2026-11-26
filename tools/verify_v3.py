@@ -95,9 +95,9 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "6.8.0"
-FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui.js", "src/sound.js"]
+EXPECTED_VER = "6.9.0"
+FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -200,6 +200,7 @@ def main():
     ok("'./src/pass.js'" in read("sw.js"), "sw.js 프리캐시에 pass.js 포함")
     ok("'./src/rift.js'" in read("sw.js"), "sw.js 프리캐시에 rift.js 포함")
     ok("'./src/bank.js'" in read("sw.js"), "sw.js 프리캐시에 bank.js 포함")
+    ok("'./src/guild.js'" in read("sw.js"), "sw.js 프리캐시에 guild.js 포함")
     ok("'./src/ui-land.js'" in read("sw.js"), "sw.js 프리캐시에 ui-land.js 포함")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
@@ -5939,6 +5940,48 @@ def main():
     """)
     ok(bk68["bankOk"] and bk68["megaOk"] and bk68["normOk"], "영지 은행(예치·조기차단·중도해지 원금보장·만기이자) · 메가 프로젝트(임대/공격/거래세·환생유지·정규화)", json.dumps(bk68))
     ok(ui68["ok"] and not ui68["bad"], "영지 은행·메가 프로젝트 카드 및 지도 배지 UI 렌더", json.dumps(ui68))
+
+    # ── 36) v6.9.0 🛡️ 영지 기사단(용병 4인) · 🐉 주간 거대 레이드 토벌전 ──
+    section("v6.9.0 영지 기사단 · 주간 거대 레이드 토벌전")
+    gd69 = js(ctx, """
+      const now = 1_700_000_000_000;
+      const s = defaultState(now);
+      s.level = 20; s.gold = 5_000_000; s.shards = 3000; s.invasion.medals = 5;
+      const baseSt = calcStats(s, {});
+      // 용병 4인 영입 → 공격·체력·치명·쿨감·골드 모두 상승 + 합동 배율 증가
+      const u1 = upgradeKnight(s, 'paladin');
+      const u2 = upgradeKnight(s, 'archer');
+      const u3 = upgradeKnight(s, 'mage');
+      const u4 = upgradeKnight(s, 'merchant');
+      const nextSt = calcStats(s, {});
+      // 레이드 일제 공격 3회 → 일일 티켓 소진 → 4회차 거부, 페이즈 보상 수령
+      const a1 = attackRaidBoss(s, nextSt, now, () => 0.1);
+      const a2 = attackRaidBoss(s, nextSt, now, () => 0.1);
+      const a3 = attackRaidBoss(s, nextSt, now, () => 0.1);
+      const a4 = attackRaidBoss(s, nextSt, now, () => 0.1);
+      const stAfter = raidStatus(s, nextSt, now);
+      const c0 = claimRaidPhase(s, 0, now, () => 0.2);
+      const c3 = stAfter.defeated ? claimRaidPhase(s, 3, now, () => 0.2) : { ok: false };
+      // 다음 주 자동 리셋 확인(기사단 레벨 유지)
+      const nextWk = normalizeGuild(s.guild, now + 8 * 86400 * 1000);
+      return {
+        knightsOk: u1.ok && u2.ok && u3.ok && u4.ok && nextSt.atk > baseSt.atk && nextSt.hpMax > baseSt.hpMax && nextSt.crit > baseSt.crit && nextSt.skillCdr > baseSt.skillCdr && nextSt.goldMult > baseSt.goldMult,
+        raidOk: a1.ok && a2.ok && a3.ok && !a4.ok && c0.ok && (!stAfter.defeated || (c3.ok && !!c3.item)),
+        weekResetOk: nextWk.knights.mage === 1 && nextWk.raid.damage === 0 && nextWk.raid.usedToday === 0,
+      };
+    """)
+    ui69 = js(ctx2, """
+      const s = defaultState(Date.now());
+      const b = new Battle(s, () => ({}));
+      const ui = { s, battle: b, app: { buffs: {} }, logs: [], tab: 'hunt', huntSub: 'growth', growthFilter: 'challenge', el: {}, install: { hidden: true } };
+      const html = __huntSub(ui, 'growth');
+      return {
+        ok: html.includes('guildRaidCard') && html.includes('성기사 아서') && html.includes('data-action="raid-attack"') && html.includes('data-action="knight-up"'),
+        bad: /undefined|NaN|\\[object Object\\]/.test(html),
+      };
+    """)
+    ok(gd69["knightsOk"] and gd69["raidOk"] and gd69["weekResetOk"], "영지 기사단 4인 영입/스탯반영 · 주간 거대 레이드 합동 공격/페이즈 보상/주간 리셋", json.dumps(gd69))
+    ok(ui69["ok"] and not ui69["bad"], "영지 기사단·거대 레이드 UI 카드 렌더 정상", json.dumps(ui69))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:
