@@ -1450,9 +1450,10 @@ function questCard(ui) {
  * 접힘 상태는 세션 UI 상태(ui.collapsed)에만 둔다 — 저장 데이터·기존 기능 불변.
  */
 const DEFAULT_COLLAPSED = [
-  'battle-detail', 'gems', 'shards', 'craft', 'gacha', 'inventory', 'gear-info',
+  'battle-detail', 'presets', 'gems', 'shards', 'craft', 'gacha', 'inventory', 'gear-info', 'titles',
   'invest-dash', 'region-set', 'landmark', 'synergy', 'buff-detail', 'expedition', 'trade-rec',
   'pass', 'codex', 'info',
+  'orders', 'citadel', 'mega',
 ];
 const isCardOpen = (ui, id) => !(ui && ui.collapsed && typeof ui.collapsed.has === 'function' && ui.collapsed.has(id));
 
@@ -1564,8 +1565,19 @@ function battleInfoCard(ui) {
   // v8.0.0: 부동산 버프 합계는 '전투 요약 1줄'로만 — 상세 내역은 부동산 → 영지
   const tot = landBuffTotals(buffs);
   const hasLand = buffs.active || tot.atkPct || tot.goldPct || tot.critDmgPct || tot.cdrPct || tot.bossDmgPct || tot.expPct;
+  const buffItems = [];
+  const r1 = (v) => Math.round(Number(v) * 10) / 10;
+  if (tot.atkPct) buffItems.push(`공격력 +${r1(tot.atkPct)}%`);
+  if (tot.goldPct) buffItems.push(`골드 획득 +${r1(tot.goldPct)}%`);
+  if (tot.critDmgPct) buffItems.push(`치명타 피해 +${r1(tot.critDmgPct)}%`);
+  if (tot.bossDmgPct) buffItems.push(`보스 피해 +${r1(tot.bossDmgPct)}%`);
+  if (tot.cdrPct) buffItems.push(`스킬 쿨감 -${r1(tot.cdrPct)}%`);
+  if (tot.expPct) buffItems.push(`경험치 +${r1(tot.expPct)}%`);
+  if (tot.hpPct) buffItems.push(`최대 체력 +${r1(tot.hpPct)}%`);
+  const shownBuff = buffItems.slice(0, 3);
+  const restBuff = buffItems.length - shownBuff.length;
   const landLine = hasLand
-    ? `<span class="bi-land-k">🏘️ 부동산 버프</span><span class="bi-land-v">${landBuffTotalsText(buffs)}</span><span class="dim">· ${buffs.buildings || 0}곳</span>`
+    ? `<span class="bi-land-k">🏘️ 부동산 버프</span><span class="bi-land-v">${shownBuff.join(' · ')}${restBuff > 0 ? ` <span class="dim">외 ${restBuff}</span>` : ''}</span><span class="dim">· ${buffs.buildings || 0}곳</span>`
     : `<span class="bi-land-k">🏘️ 부동산 버프</span><span class="dim">매물을 사면 사냥에 영구 버프 — <b style="color:var(--gold)">부동산 → 매물</b></span>`;
 
   const spdUnlocked = battleSpeedUnlocked(s);

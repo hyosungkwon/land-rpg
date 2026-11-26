@@ -90,7 +90,7 @@ export function gearSlotCards(s) {
   ).join('');
 
   return `
-  <div class="card">
+  <div class="card" data-fold="presets">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">⚔️</span>장착 중 <small>5부위</small></div>
       <span class="tiny dim">프리셋 1탭 전환 · 장비 눌러 비교</span>

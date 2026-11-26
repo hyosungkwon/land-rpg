@@ -185,7 +185,7 @@ export function titleCard(ui) {
       <small>${t.unlocked ? esc(t.bonusText) : `🔒 ${esc(t.cond)}`}</small>
     </button>`).join('');
   return `
-  <div class="card title-card" id="titleCard">
+  <div class="card title-card" id="titleCard" data-fold="titles">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🏷️</span>칭호<small>${ts.unlockedCount}/${ts.total} 해금</small></div>
       <span class="tiny" style="color:${ts.active ? 'var(--gold)' : 'var(--dim)'}">${ts.active ? `${ts.active.icon} ${esc(ts.active.name)}` : '미장착'}</span>

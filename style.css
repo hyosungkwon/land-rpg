@@ -2724,7 +2724,9 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 }
 .rmap-poly.done .rmap-cnt { fill: var(--gold); }
 .rmap-poly:focus-visible { outline: none; filter: brightness(1.25); }
-.rmap-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; margin-top: 7px; }
+.rmap-grid { display: flex; gap: 5px; margin-top: 7px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.rmap-grid::-webkit-scrollbar { display: none; }
+.rmap-btn { flex: 0 0 auto; }
 .rmap-btn {
   display: flex; align-items: center; justify-content: space-between; gap: 6px;
   padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line-2);

@@ -319,7 +319,7 @@ export function limitOrdersCard(ui) {
     ? `<div class="tiny dim" style="margin-top:7px">최근 체결: ${rep.orderLog.slice(0, 2).map((l) => `${esc(l.cityName)} ${l.side === 'buy' ? '매수' : '매도'} ${fmt(l.qty)}평 (💰${formatGold(l.total)})`).join(' · ')}</div>`
     : '';
   return `
-  <div class="card ord-card" id="limitOrdersCard">
+  <div class="card ord-card" id="limitOrdersCard" data-fold="orders">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🎯</span>지정가 예약 매매<small>${rep.orders.length}/${LIMIT_ORDER_MAX}건 · 자동 체결</small></div>
       <span class="tiny dim">접속 중 실시간 감시</span>
@@ -355,7 +355,7 @@ export function citadelCard(ui) {
     </div>`;
   }).join('');
   return `
-  <div class="card cit-card" id="citadelCard">
+  <div class="card cit-card" id="citadelCard" data-fold="citadel">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🏰</span>영지 성채<small>총 Lv.${eff.totalLv}/${eff.maxTotalLv} · 환생 유지</small></div>
       <span class="tiny dim">영구 시설 5종</span>
@@ -428,7 +428,7 @@ export function megaProjectCard(ui) {
     </div>`;
   }).join('');
   return `
-  <div class="card mega-card" id="megaProjectCard">
+  <div class="card mega-card" id="megaProjectCard" data-fold="mega">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🏗️</span>전국 메가 프로젝트<small>총 Lv.${eff.totalLv}/${eff.maxTotalLv} · 환생 유지</small></div>
       <span class="tiny dim">국가 인프라 4종</span>
