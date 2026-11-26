@@ -1227,7 +1227,7 @@
     });
     $('stampTray').hidden = state.tool !== 'stamp';
     $('btnHint').classList.toggle('on', state.hint);
-    $('btnHint').textContent = state.hint ? '🙈 힌트 끄기' : '👀 힌트';
+    $('btnHint').textContent = state.hint ? '💡 끄기' : '💡 힌트';
     wrap.classList.toggle('hinting', state.hint);
     $('btnSound').classList.toggle('off', !state.sound);
     $('btnSound').textContent = state.sound ? '🔊' : '🔇';
