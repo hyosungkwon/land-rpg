@@ -108,21 +108,22 @@
     {
       id: 'dino', name: '🦕 공룡',
       regions: [
-        poly([[26, 60], [6, 42], [8, 66], [26, 70]], '꼬리'),
+        svg('M28,54 q-16,-12 -24,0 q12,12 24,14 z', '꼬리'),
         poly([[30, 46], [34, 32], [38, 46]], '등 가시'),
-        poly([[40, 42], [44, 28], [48, 42]], '등 가시'),
-        poly([[50, 46], [54, 34], [58, 46]], '등 가시'),
+        poly([[40, 42], [44, 27], [48, 42]], '등 가시'),
+        poly([[50, 46], [54, 33], [58, 46]], '등 가시'),
         rect(36, 72, 9, 16, '다리'),
         rect(54, 72, 9, 16, '다리'),
         ell(46, 58, 26, 20, 0, '몸통'),
-        ell(70, 46, 11, 13, -20, '목'),
-        cir(76, 32, 14, '머리'),
+        cir(72, 34, 14, '머리'),
         ell(50, 92, 48, 7, 0, '땅')
       ],
       deco: [
-        { k: 'dot', x: 80, y: 28, r: 2.2 },
-        { k: 'dot', x: 68, y: 52, r: 1.6, c: '#81c784' },
-        { k: 'dot', x: 46, y: 56, r: 1.6, c: '#81c784' }
+        { k: 'dot', x: 77, y: 29, r: 2.4 },
+        { k: 'line', x1: 78, y1: 42, x2: 84, y2: 40 },
+        { k: 'dot', x: 64, y: 52, r: 1.6, c: '#81c784' },
+        { k: 'dot', x: 46, y: 58, r: 1.6, c: '#81c784' },
+        { k: 'dot', x: 55, y: 66, r: 1.6, c: '#81c784' }
       ]
     },
     {
@@ -534,7 +535,7 @@
       dressApply();
       buildDressItems();
       Util.beep('win');
-      App.showSp(item.em, item.name + ' 구매 완료! 이제 홈 캐릭터도 바뀌어요 💖');
+      App.showPop(item.em, item.name + ' 구매 완료! 이제 홈 캐릭터도 바뀌어요 💖', '새 옷을 샀어요! 🛍️');
     } else {
       Util.beep('ng');
       App.showTip('😢', '스티커 ' + item.price + '개가 필요해요! 지금 ' + (SD.totalStickers || 0) + '개 있어요.');
@@ -564,7 +565,7 @@
   };
   window.Dress = {
     removeCur: removeCur,
-    homeHero: function () { App.updateHomeStatus(); App.showSp('🏠', '홈 화면 캐릭터에 그대로 입혔어요!'); }
+    homeHero: function () { App.updateHomeStatus(); App.showPop('🏠', '홈 화면 캐릭터에 그대로 입혔어요!', '홈에 입혔어요!'); }
   };
   App.openColoring = openColoring;
   App.openDress = openDress;

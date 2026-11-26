@@ -366,6 +366,7 @@
     updateHomeStatus: updateHomeStatus,
     showSp: showSp,
     showTip: showTip,
+    showPop: function (em, msg, title) { showPop(em, msg, title, true); },
     closeSp: closeSp,
     closeLup: closeLup,
     closeOverlay: closeOverlay,

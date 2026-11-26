@@ -49,7 +49,7 @@ body{font-family:'Jua',sans-serif;background:#0f0c29;min-height:100vh;overflow-x
   display:flex;align-items:center;justify-content:space-between;
   padding:14px 16px 10px;
 }
-.home-logo{font-size:1.6rem;font-family:'Gaegu',cursive;color:#FFD93D;text-shadow:0 2px 12px rgba(255,217,61,.5);}
+.home-logo{font-size:1.32rem;font-family:'Jua',sans-serif;letter-spacing:-.5px;color:#FFD93D;text-shadow:0 2px 12px rgba(255,217,61,.45);white-space:nowrap;}
 .home-char-mini{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.1);border-radius:20px;padding:6px 12px;cursor:pointer;}
 .home-char-mini-em{font-size:1.4rem;}
 .home-char-mini-info{line-height:1.2;}
