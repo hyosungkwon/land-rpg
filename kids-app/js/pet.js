@@ -160,7 +160,7 @@
     if (b) {
       b.classList.add('show');
       if (bubTimer) clearTimeout(bubTimer);
-      bubTimer = setTimeout(function () { b.classList.remove('show'); }, opts.ms || Math.min(4200, 2400 + text.length * 45));
+      bubTimer = setTimeout(function () { b.classList.remove('show'); }, opts.ms || Math.min(5500, 3000 + text.length * 60));
     }
     if (SD.petSound === false || opts.silent) return;
     var now = Date.now();
