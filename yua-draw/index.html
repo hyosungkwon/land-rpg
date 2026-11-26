@@ -2,109 +2,51 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#dff1ff">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<title>유아의 그림 놀이 🎨</title>
-<link rel="stylesheet" href="style.css?v=12">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f0c29">
+<title>🎨 그림 놀이 → 🌟 유아의 놀이터</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{font-family:'Jua','Apple SD Gothic Neo','Noto Sans KR',system-ui,sans-serif;
+       background:linear-gradient(160deg,#0f0c29,#302b63 55%,#24243e);color:#fff;
+       display:flex;align-items:center;justify-content:center;padding:24px;text-align:center}
+  .card{max-width:340px;width:100%}
+  .em{font-size:56px;animation:float 2.6s ease-in-out infinite}
+  @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+  h1{font-size:20px;margin:10px 0 6px;color:#FFD93D}
+  p{font-size:14px;line-height:1.55;color:rgba(255,255,255,.78);margin:0 0 16px}
+  a{display:inline-block;background:linear-gradient(135deg,#FFD93D,#FF9800);color:#5a3e00;
+    text-decoration:none;font-weight:bold;border-radius:16px;padding:14px 22px;font-size:16px;
+    box-shadow:0 6px 0 rgba(0,0,0,.2)}
+  .small{margin-top:14px;font-size:12px;color:rgba(255,255,255,.45)}
+</style>
+<script>
+  // 예전 yua-draw 주소로 들어온 안내를 통합 앱의 그림 놀이 화면으로 넘긴다.
+  var TARGET = '../kids-app/?screen=ydraw';
+  try {
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+      navigator.serviceWorker.getRegistrations().then(function (rs) {
+        rs.forEach(function (r) { r.unregister(); });
+      }).catch(function () {});
+    }
+    if (window.caches && caches.keys) {
+      caches.keys().then(function (keys) {
+        keys.filter(function (k) { return k.indexOf('yua-draw-') === 0; })
+            .forEach(function (k) { caches.delete(k); });
+      }).catch(function () {});
+    }
+  } catch (e) {}
+  setTimeout(function () { location.replace(TARGET); }, 700);
+</script>
 </head>
 <body>
-<div id="app">
-  <header class="topbar">
-    <div class="brand"><span class="brand-ico">🎨</span><span>유아의 그림 놀이</span></div>
-    <div class="top-actions">
-      <button id="btnSound" class="icon-btn" aria-label="소리 켜기/끄기">🔊</button>
-      <button id="btnGallery" class="icon-btn" aria-label="내 그림 갤러리">🖼️</button>
-    </div>
-  </header>
-
-  <section class="topic">
-    <div class="topic-emoji" id="topicEmoji">🍎</div>
-    <div class="topic-text">
-      <div class="topic-label">오늘의 주제</div>
-      <div class="topic-word" id="topicWord">사과</div>
-    </div>
-    <button id="btnNext" class="pill">다른 주제 ↻</button>
-  </section>
-
-  <section class="tools">
-    <div class="palette" id="palette" aria-label="색 고르기"></div>
-    <div class="tool-row" id="toolRow"></div>
-    <div class="sub-row">
-      <div class="sizes" id="sizes" aria-label="굵기 고르기"></div>
-      <div class="divider" aria-hidden="true"></div>
-      <div class="bgs" id="bgs" aria-label="도화지 색"></div>
-    </div>
-  </section>
-
-  <div class="canvas-wrap" id="canvasWrap">
-    <canvas id="hint" aria-hidden="true"></canvas>
-    <canvas id="paint" aria-label="그림 그리는 곳"></canvas>
-    <div class="empty-hint" id="emptyHint">손가락으로 그려 보세요 ✏️</div>
-    <div class="hint-badge" id="hintBadge">점선을 따라 그려 보세요</div>
-    <div class="stamp-tray" id="stampTray" hidden></div>
-    <div class="toast" id="toast"></div>
+  <div class="card">
+    <div class="em">🌈</div>
+    <h1>그림 놀이가 새 집으로 이사했어요!</h1>
+    <p>이제 <b>🌟 유아의 놀이터</b> 안에서<br>자유 그리기와 주제 일치율 놀이를 함께 즐겨요.</p>
+    <a href="../kids-app/?screen=ydraw">🎨 유아의 놀이터 열기</a>
+    <div class="small">잠시 뒤 자동으로 이동해요</div>
   </div>
-
-  <footer class="bottom">
-    <button id="btnUndo" class="pad" aria-label="되돌리기">↩︎</button>
-    <button id="btnClear" class="pad" aria-label="싹 지우기">🧹</button>
-    <button id="btnHint" class="ghost">👀 힌트</button>
-    <button id="btnSubmit" class="primary">다 그렸어요! ✨</button>
-  </footer>
-</div>
-
-<!-- 결과 -->
-<div class="modal" id="resultModal" hidden>
-  <div class="modal-card result-card">
-    <div class="result-top">
-      <div class="result-topic" id="resTopic">🍎 사과</div>
-      <button class="x" id="btnResultClose" aria-label="닫기">✕</button>
-    </div>
-    <div class="result-body">
-      <img id="resThumb" class="res-thumb" alt="내가 그린 그림">
-      <div class="result-score">
-        <div class="score"><span id="scoreNum">92</span><span class="pct">%</span></div>
-        <div class="score-label">일치율</div>
-        <div class="stars" id="stars">⭐⭐⭐</div>
-      </div>
-    </div>
-    <p class="praise" id="praiseText"></p>
-    <p class="tip" id="tipText"></p>
-    <div class="result-actions">
-      <button id="btnSavePng" class="ghost">💾 그림 저장</button>
-      <button id="btnNextTopic" class="primary">다음 주제 →</button>
-    </div>
-  </div>
-</div>
-
-<!-- 갤러리 -->
-<div class="modal" id="galleryModal" hidden>
-  <div class="modal-card gallery-card">
-    <div class="result-top">
-      <div class="result-topic">🖼️ 유아의 그림 갤러리</div>
-      <button class="x" id="btnGalleryClose" aria-label="닫기">✕</button>
-    </div>
-    <p class="gallery-sub">최근 12개까지 모여요</p>
-    <div class="gallery" id="galleryList"></div>
-  </div>
-</div>
-
-<!-- 확인 -->
-<div class="modal" id="confirmModal" hidden>
-  <div class="modal-card confirm-card">
-    <p class="confirm-text" id="confirmText">그림을 지우고 새 주제로 갈까요?</p>
-    <div class="result-actions">
-      <button id="btnConfirmNo" class="ghost">아니야</button>
-      <button id="btnConfirmYes" class="primary">응, 좋아!</button>
-    </div>
-  </div>
-</div>
-
-<canvas id="fx" aria-hidden="true"></canvas>
-
-<script src="topics.js?v=12"></script>
-<script src="app.js?v=12"></script>
 </body>
 </html>

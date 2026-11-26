@@ -1,54 +1,12 @@
-/* yua-draw/sw.js — yua-draw 전용 서비스워커 (범위: /yua-draw/)
-   상위 land-rpg 서비스워커가 이 폴더의 요청을 캐시우선으로 가로채지 않도록
-   더 좁은 범위의 워커로 직접 처리한다. 항상 네트워크 우선 + 캐시는 오프라인 대비. */
-const CACHE = 'yua-draw-v4';
-const CORE = [
-  './',
-  './index.html',
-  './style.css?v=12',
-  './topics.js?v=12',
-  './app.js?v=12'
-];
-
-self.addEventListener('install', (event) => {
-  event.waitUntil((async () => {
-    const cache = await caches.open(CACHE);
-    await Promise.all(CORE.map((u) => cache.add(new Request(u, { cache: 'reload' })).catch(() => {})));
-    await self.skipWaiting();
-  })());
-});
-
+/* yua-draw/sw.js — 2026-11-26 통합 이후: 이 경로는 안내 페이지로 바뀌었습니다.
+   남아 있는 yua-draw 캐시를 지우고 스스로 등록을 해제합니다. */
+self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
-    const keys = await caches.keys();
-    await Promise.all(keys.filter((k) => k.indexOf('yua-draw-') === 0 && k !== CACHE).map((k) => caches.delete(k)));
-    await self.clients.claim();
-  })());
-});
-
-self.addEventListener('fetch', (event) => {
-  const req = event.request;
-  if (req.method !== 'GET') return;
-  let url;
-  try { url = new URL(req.url); } catch (e) { return; }
-  if (url.origin !== self.location.origin) return;
-
-  event.respondWith((async () => {
-    const cache = await caches.open(CACHE);
     try {
-      const fresh = await fetch(req);
-      if (fresh && fresh.ok && url.pathname.indexOf('/yua-draw/') === 0) {
-        cache.put(req, fresh.clone()).catch(() => {});
-      }
-      return fresh;
-    } catch (e) {
-      const hit = await cache.match(req, { ignoreSearch: true });
-      if (hit) return hit;
-      if (req.mode === 'navigate') {
-        const idx = await cache.match('./index.html');
-        if (idx) return idx;
-      }
-      return Response.error();
-    }
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((k) => k.indexOf('yua-draw-') === 0).map((k) => caches.delete(k)));
+    } catch (e) {}
+    try { await self.registration.unregister(); } catch (e) {}
   })());
 });

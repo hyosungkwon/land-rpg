@@ -1,8 +1,23 @@
-/* kids-app/sw.js — 키즈 놀이터 전용 서비스워커 (범위: /kids-app/)
+/* kids-app/sw.js — 🌟 유아의 놀이터 전용 서비스워커 (범위: /kids-app/)
    상위 land-rpg 서비스워커가 이 폴더의 HTML을 자기 캐시(index.html)에 덮어쓰지 않도록
-   더 좁은 범위의 워커로 직접 처리한다. 네트워크 우선 + 캐시는 오프라인 대비. */
-const CACHE = 'kids-app-v1';
-const CORE = ['./', './index.html'];
+   더 좁은 범위의 워커로 직접 처리한다. 네트워크 우선 + 캐시는 오프라인 대비.
+   v3 (2026-11-26): 통합 그림 놀이·게임 개선판 — 모듈 JS/CSS 를 캐시 목록에 추가 */
+const CACHE = 'kids-app-v3';
+const CORE = [
+  './',
+  './index.html',
+  './style.css',
+  './js/data.js',
+  './js/topics.js',
+  './js/core.js',
+  './js/draw.js',
+  './js/puzzle.js',
+  './js/fun.js',
+  './js/music.js',
+  './js/art.js',
+  './js/learn.js',
+  './js/fishing.js'
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {

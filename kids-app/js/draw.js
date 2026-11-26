@@ -1,6 +1,8 @@
-/* yua-draw/app.js — 유아(7세)용 그림 그리기 & 일치율 놀이
-   v2: 20색 팔레트 · 붓 7종(크레파스/무지개/네온/반짝이/채우기/스탬프/지우개)
-       · 도화지 배경 6종(배경 레이어 분리, 채점·저장에 안전) · 굵기 4단 */
+/* kids-app/js/draw.js — 🎨 그림 놀이 (자유 그리기 · 주제 일치율)
+   원래 yua-draw 앱이던 것을 '🌟 유아의 놀이터' 안으로 옮기고,
+   자유/주제 모드 전환과 스티커·경험치 보상을 붙였습니다.
+   20색 팔레트 · 붓 7종(크레파스/무지개/네온/반짝이/채우기/스탬프/지우개)
+   · 도화지 6종(배경 레이어 분리, 채점·저장에 안전) · 굵기 4단 */
 (function () {
   'use strict';
 
@@ -79,7 +81,9 @@
     cmds: [],
     active: null,
     recent: [],
-    sound: true
+    sound: true,
+    mode: 'topic',   // 'topic' 주제 도전 | 'free' 자유 그리기
+    awarded: false   // 이번 그림으로 스티커를 줬는지
   };
 
   const paintCanvas = $('paint');
@@ -876,6 +880,20 @@
 
     confetti(res.pct >= 85 ? 96 : res.pct >= 70 ? 64 : 34);
     if (state.sound) chime(res.pct);
+
+    // 🌟 놀이터 보상: 일치율 70% 이상이면 스티커 + 캐릭터 경험치를 바로 준다.
+    const line = $('rewardLine');
+    if (res.pct >= 70 && !state.awarded && window.App) {
+      state.awarded = true;
+      line.textContent = '🏷️ 스티커 +1 · 경험치 +1 받았어요!';
+      setTimeout(() => window.App.earnReward('🎨', topic.word + ' 그림이 ' + res.pct + '%! 정말 잘 그렸어요!'), 420);
+    } else if (res.pct >= 70) {
+      line.textContent = '🏷️ 스티커는 이미 받았어요!';
+    } else if (!state.awarded) {
+      line.textContent = '70% 넘으면 스티커를 받아요. 한 번 더 그려볼까요?';
+    } else {
+      line.textContent = '';
+    }
   }
 
   function inkBBox(canvas, step) {
@@ -946,7 +964,53 @@
     }
   }
 
+  // 그림을 PNG 로 저장(+ 아직 보상을 못 받은 그림이면 저장도 보상)
+  function savePng() {
+    const data = exportImage(1400, 'image/png');
+    if (!data) { toast('저장할 그림이 없어요 😊'); return; }
+    const topic = TOPICS[state.topicIndex] || { word: '자유그림' };
+    const name = state.mode === 'free'
+      ? '유아놀이터-자유그림-' + Date.now() + '.png'
+      : '유아그림-' + topic.word + '-' + ($('scoreNum') ? $('scoreNum').textContent : '') + '점.png';
+    downloadDataUrl(data, name);
+    toast('그림을 저장했어요! 💾');
+    if (window.App) {
+      window.App.SD.drawSaved = (window.App.SD.drawSaved || 0) + 1;
+      window.App.writeSave();
+      window.App.checkAch();
+      if (!state.awarded) {
+        state.awarded = true;
+        const line = $('rewardLine');
+        if (line) line.textContent = '🏷️ 저장 기념 스티커 +1 · 경험치 +1!';
+        setTimeout(() => window.App.earnReward('🖼️', '그림을 저장했어요! 꼬마 화가!'), 300);
+      }
+    }
+  }
+
+  /* ───────────────────── 자유 / 주제 모드 ───────────────────── */
+
+  function setMode(m) {
+    state.mode = (m === 'free') ? 'free' : 'topic';
+    const root = document.getElementById('ydraw');
+    if (root) root.classList.toggle('free-mode', state.mode === 'free');
+    const bt = $('ydModeTopic'), bf = $('ydModeFree');
+    if (bt) bt.classList.toggle('on', state.mode === 'topic');
+    if (bf) bf.classList.toggle('on', state.mode === 'free');
+    const sub = $('btnSubmit');
+    if (sub) sub.textContent = state.mode === 'free' ? '💾 그림 저장' : '다 그렸어요! ✨';
+    const hintBtn = $('btnHint');
+    if (hintBtn) hintBtn.style.display = state.mode === 'free' ? 'none' : '';
+    if (state.mode === 'free') {
+      state.hint = false;
+      drawHint();
+    }
+    syncTools();
+    savePrefs();
+    requestAnimationFrame(setupCanvas);
+  }
+
   function submit() {
+    if (state.mode === 'free') { savePng(); return; }
     const topic = TOPICS[state.topicIndex];
     const res = computeScore(topic);
     if (res.empty) {
@@ -1050,6 +1114,9 @@
 
   function clearAll() {
     state.cmds.length = 0;
+    state.awarded = false;
+    const line = $('rewardLine');
+    if (line) line.textContent = '';
     clearPaint();
     syncEmpty();
   }
@@ -1077,6 +1144,19 @@
   }
 
   async function onNextTopic() {
+    if (state.mode === 'free') {
+      if (state.cmds.length) {
+        const ok = await confirmDialog('그림을 지우고 새 종이로 갈까요?');
+        if (!ok) return;
+      }
+      clearAll();
+      state.bgIndex = 0;
+      state.bgHex = BACKGROUNDS[0].hex;
+      applyBg();
+      syncTools();
+      toast('새 종이예요! ✏️');
+      return;
+    }
     if (state.cmds.length) {
       const ok = await confirmDialog('그림을 지우고 새 주제로 갈까요?');
       if (!ok) return;
@@ -1372,14 +1452,7 @@
     });
     $('btnResultClose').addEventListener('click', closeResult);
     $('btnNextTopic').addEventListener('click', () => { closeResult(); clearAndNext(); });
-    $('btnSavePng').addEventListener('click', () => {
-      const topic = TOPICS[state.topicIndex];
-      const data = exportImage(1400, 'image/png');
-      if (!data) { toast('저장할 그림이 없어요'); return; }
-      const pct = $('scoreNum').textContent;
-      downloadDataUrl(data, '유아그림-' + topic.word + '-' + pct + '점.png');
-      toast('그림을 저장했어요! 💾');
-    });
+    $('btnSavePng').addEventListener('click', savePng);
     $('btnConfirmYes').addEventListener('click', () => resolveConfirm(true));
     $('btnConfirmNo').addEventListener('click', () => resolveConfirm(false));
     $('confirmModal').addEventListener('click', (e) => {
@@ -1423,16 +1496,33 @@
     bind();
     renderTopic();
     syncTools();
+    setMode(state.mode);
     requestAnimationFrame(() => { setupCanvas(); renderTopic(); });
 
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(() => {});
-      });
-    }
   }
 
   init();
+
+  /* ── 놀이터에 연결 ─────────────────────────────── */
+
+  function open(mode) {
+    if (window.App) App.show('ydraw');
+    setMode(mode === 'free' ? 'free' : 'topic');
+    requestAnimationFrame(function () {
+      setupCanvas();
+      if (state.mode === 'topic') renderTopic();
+    });
+    setTimeout(function () { setupCanvas(); }, 220);
+  }
+
+  window.Draw = {
+    open: open,
+    setMode: setMode,
+    submit: submit,
+    savePng: savePng,
+    state: state
+  };
+  if (window.App) window.App.openDraw = open;
 
   // 자체 점검(qa.html)용 손잡이
   window.__yua = { state: state, computeScore: computeScore, replay: replay, fill: doFill };
