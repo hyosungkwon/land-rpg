@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>yua-draw 자체 점검 (QA)</title>
+<style>
+  body{margin:0;display:flex;gap:16px;padding:16px;background:#22314a;color:#cfe0f2;
+       font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+  iframe{width:390px;height:844px;border:0;border-radius:24px;background:#fff;flex:0 0 auto;
+         box-shadow:0 20px 50px rgba(0,0,0,.45)}
+  pre{margin:0;white-space:pre-wrap;line-height:1.5;max-width:900px}
+  h1{font-size:14px;margin:0 0 8px;color:#fff}
+  .ok{color:#7ee2a8}.warn{color:#ffd166}.bad{color:#ff8a8a}
+</style>
+</head>
+<body>
+  <iframe id="app" src="./index.html" title="yua-draw app"></iframe>
+  <div>
+    <h1>yua-draw 자체 점검 (?s=trace|scribble|partial|blank)</h1>
+    <pre id="log">준비 중…</pre>
+  </div>
+<script>
+(function () {
+  const q = new URLSearchParams(location.search);
+  const scenario = q.get('s') || 'trace';
+  const rounds = Number(q.get('n') || 6);
+  const frame = document.getElementById('app');
+  const out = document.getElementById('log');
+  let lines = [];
+  function log(s) { lines.push(s); out.textContent = lines.join('\n'); }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  frame.addEventListener('load', () => { run().catch((e) => log('FATAL ' + (e && e.stack || e))); });
+
+  async function run() {
+    const w = frame.contentWindow;
+    const d = frame.contentDocument;
+    let errors = 0;
+    w.addEventListener('error', (e) => { errors++; log('JS ERROR: ' + e.message + ' @' + e.filename + ':' + e.lineno); });
+    await sleep(400);
+
+    const cv = d.getElementById('draw');
+    const r = cv.getBoundingClientRect();
+    const side = Math.min(r.width, r.height) * 0.9, k = side / 100;
+    const ox = r.left + r.width / 2 - 50 * k, oy = r.top + r.height / 2 - 50 * k;
+    const P = (ux, uy) => ({ x: ox + ux * k, y: oy + uy * k });
+    const pick = (name) => [...d.querySelectorAll('.swatch')].find((b) => b.dataset.name === name);
+    let pid = 100;
+    const ev = (type, p, id) => cv.dispatchEvent(new w.PointerEvent(type, {
+      pointerId: id, pointerType: 'touch', isPrimary: true,
+      clientX: p.x, clientY: p.y, bubbles: true, cancelable: true
+    }));
+
+    function stroke(pts, colorName) {
+      const b = pick(colorName) || pick('검정');
+      b.click();
+      const id = ++pid;
+      ev('pointerdown', P(pts[0][0], pts[0][1]), id);
+      for (let i = 1; i < pts.length; i++) ev('pointermove', P(pts[i][0], pts[i][1]), id);
+      ev('pointerup', P(pts[pts.length - 1][0], pts[pts.length - 1][1]), id);
+    }
+
+    function jitter(v, amp) { return v + (Math.random() - 0.5) * amp; }
+
+    function shapePoints(s) {
+      const out = [];
+      if (s.t === 'c') {
+        for (let i = 0; i <= 28; i++) {
+          const a = (i / 28) * Math.PI * 2;
+          out.push([jitter(s.cx + Math.cos(a) * s.r, 1.4), jitter(s.cy + Math.sin(a) * s.r, 1.4)]);
+        }
+      } else if (s.t === 'e') {
+        const rot = ((s.rot || 0) * Math.PI) / 180;
+        for (let i = 0; i <= 28; i++) {
+          const a = (i / 28) * Math.PI * 2;
+          const x = Math.cos(a) * s.rx, y = Math.sin(a) * s.ry;
+          out.push([jitter(s.cx + x * Math.cos(rot) - y * Math.sin(rot), 1.2),
+                    jitter(s.cy + x * Math.sin(rot) + y * Math.cos(rot), 1.2)]);
+        }
+      } else if (s.t === 'l') {
+        for (let i = 0; i <= 6; i++) {
+          out.push([jitter(s.x1 + ((s.x2 - s.x1) * i) / 6, 0.9), jitter(s.y1 + ((s.y2 - s.y1) * i) / 6, 0.9)]);
+        }
+      } else if (s.t === 'p') {
+        for (let i = 0; i < s.pts.length; i++) {
+          const a = s.pts[i], b = s.pts[(i + 1) % s.pts.length];
+          const segs = s.closed || i < s.pts.length - 1 ? 5 : 0;
+          for (let j = 0; j <= segs; j++) {
+            if (i === s.pts.length - 1 && !s.closed) break;
+            out.push([jitter(a[0] + ((b[0] - a[0]) * j) / 5, 0.8), jitter(a[1] + ((b[1] - a[1]) * j) / 5, 0.8)]);
+          }
+        }
+        if (!s.closed && s.pts.length) out.push(s.pts[s.pts.length - 1].slice());
+      } else if (s.t === 'a') {
+        const a0 = (s.a0 * Math.PI) / 180, a1 = (s.a1 * Math.PI) / 180, span = a1 - a0;
+        for (let i = 0; i <= 24; i++) {
+          const a = a0 + (span * i) / 24;
+          out.push([jitter(s.cx + Math.cos(a) * s.r, 1.0), jitter(s.cy + Math.sin(a) * s.r, 1.0)]);
+        }
+      }
+      return out;
+    }
+
+    function traceTopic(topic, onlyPart) {
+      let i = 0;
+      const colors = topic.colors && topic.colors.length ? topic.colors : ['검정'];
+      for (const s of topic.shapes) {
+        if (onlyPart && s.p !== onlyPart) continue;
+        const pts = shapePoints(s);
+        if (pts.length < 2) continue;
+        stroke(pts, colors[i % colors.length]);
+        i++;
+      }
+    }
+
+    function scribble() {
+      const cols = ['검정', '파랑', '빨강', '초록'];
+      for (let s = 0; s < 3; s++) {
+        const pts = [];
+        for (let i = 0; i <= 14; i++) {
+          pts.push([8 + Math.random() * 84, 14 + Math.random() * 72]);
+        }
+        stroke(pts, cols[s % cols.length]);
+      }
+    }
+
+    function currentTopic() {
+      const word = d.getElementById('topicWord').textContent;
+      return w.YUA_TOPICS.find((t) => t.word === word);
+    }
+
+    function submitAndRead(label) {
+      d.getElementById('btnSubmit').click();
+      const open = !d.getElementById('resultModal').hidden;
+      if (!open) {
+        log(label + ' → 결과모달 안 열림 (토스트: ' + d.getElementById('toast').textContent + ')');
+        return null;
+      }
+      const score = Number(d.getElementById('scoreNum').textContent);
+      log(label + ' → ' + score + '% ' + d.getElementById('stars').textContent +
+          ' | ' + d.getElementById('praiseText').textContent +
+          ' / ' + d.getElementById('tipText').textContent);
+      return score;
+    }
+
+    if (scenario === 'trace') {
+      const scores = [];
+      for (let n = 0; n < rounds; n++) {
+        const t = currentTopic();
+        traceTopic(t);
+        await sleep(60);
+        const sc = submitAndRead(t.emoji + ' ' + t.word + ' (가이드 그대로 따라그리기)');
+        if (sc != null) scores.push({ word: t.word, sc: sc });
+        d.getElementById('btnNextTopic').click();
+        await sleep(120);
+      }
+      const min = Math.min(...scores.map((s) => s.sc));
+      const max = Math.max(...scores.map((s) => s.sc));
+      log('── 따라그리기 점수 범위: ' + min + '~' + max + ' (n=' + scores.length + ')');
+      log(errors ? '⚠ JS 오류 ' + errors + '건' : '✓ JS 오류 없음');
+    } else if (scenario === 'scribble') {
+      const scores = [];
+      for (let n = 0; n < rounds; n++) {
+        const t = currentTopic();
+        scribble();
+        await sleep(60);
+        const sc = submitAndRead(t.emoji + ' ' + t.word + ' (낙서)');
+        if (sc != null) scores.push({ word: t.word, sc: sc });
+        d.getElementById('btnNextTopic').click();
+        await sleep(120);
+      }
+      log('── 낙서 점수: ' + scores.map((s) => s.word + ':' + s.sc).join(', '));
+      log(errors ? '⚠ JS 오류 ' + errors + '건' : '✓ JS 오류 없음');
+    } else if (scenario === 'partial') {
+      const t = currentTopic();
+      const part = q.get('part') || null;
+      traceTopic(t, part);
+      await sleep(60);
+      submitAndRead(t.emoji + ' ' + t.word + ' (일부만: ' + (part || '전체') + ')');
+      log(errors ? '⚠ JS 오류 ' + errors + '건' : '✓ JS 오류 없음');
+    } else if (scenario === 'blank') {
+      d.getElementById('btnSubmit').click();
+      await sleep(120);
+      log('빈 캔버스 제출 → 모달열림=' + !d.getElementById('resultModal').hidden +
+          ' 토스트="' + d.getElementById('toast').textContent + '"');
+      // 아주 작은 점 하나
+      stroke([[50, 50], [50, 52]], '빨강');
+      await sleep(60);
+      d.getElementById('btnSubmit').click();
+      await sleep(120);
+      log('점 하나 제출 → 모달열림=' + !d.getElementById('resultModal').hidden +
+          ' 토스트="' + d.getElementById('toast').textContent + '"');
+      log(errors ? '⚠ JS 오류 ' + errors + '건' : '✓ JS 오류 없음');
+    }
+  }
+})();
+</script>
+</body>
+</html>
