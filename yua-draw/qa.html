@@ -315,6 +315,23 @@
         log('갤러리 항목 수: ' + d.querySelectorAll('.g-item').length);
       }
       log(errors ? '⚠ JS 오류 ' + errors + '건' : '✓ JS 오류 없음');
+    } else if (scenario === 'bg') {
+      traceTopic(currentTopic());
+      await sleep(80);
+      const scores = [];
+      const dots = [...d.querySelectorAll('.bg-dot')];
+      for (let i = 0; i < dots.length; i++) {
+        dots[i].click();
+        await sleep(40);
+        d.getElementById('btnSubmit').click();
+        await sleep(120);
+        scores.push(d.getElementById('scoreNum').textContent);
+        d.getElementById('btnResultClose').click();
+        await sleep(40);
+      }
+      log('도화지 색 6종 × 같은 그림 점수: ' + scores.join(' / ') +
+          (new Set(scores).size === 1 ? ' → 배경색 영향 없음 ✓' : ' → ⚠ 배경색에 따라 달라짐'));
+      log(errors ? '⚠ JS 오류 ' + errors + '건' : '✓ JS 오류 없음');
     } else if (scenario === 'brushes') {
       const rows = [['crayon', '빨강'], ['rainbow', '보라'], ['neon', '하늘'], ['sparkle', '노랑']];
       for (let r = 0; r < rows.length; r++) {
