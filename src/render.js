@@ -102,6 +102,11 @@ export class Renderer {
     this.bgFade = 1; // 사진 레이어 페이드인 (0→1)
     this.scrollX = 0; // v7.2.0 패럴랙스 지면/안개 스크롤 오프셋
     this.marchUntil = 0; // v7.2.0 스테이지 돌파 행군 연출 종료 시각
+    this.hitstopUntil = 0; // v7.3.0 치명타/강격 시각 히트스톱
+    this.afterimages = []; // v7.3.0 스킬 잔상
+    this.knightShots = []; // v7.3.0 영지 기사단 캔버스 지원 사격
+    this.lastKnightShot = 0;
+    this.bossKillFx = null; // v7.3.0 보스 격파 폭발 연출
     this.resize();
     this.initAmbient();
   }
@@ -279,9 +284,13 @@ export class Renderer {
           this.addImpact(ev.x, { crit: true, boss: bossHit, color: '#ffe08a' }, now);
           this.shake = Math.max(this.shake, bossHit ? 7 : 5.4);
           this.flash = Math.max(this.flash, 0.2);
+          this.hitstopUntil = Math.max(this.hitstopUntil || 0, now + 34);
         } else {
           this.addImpact(ev.x, { crit: false, boss: bossHit, color: bossHit ? '#ffcf6a' : '#fff1cf' }, now);
           this.shake = Math.max(this.shake, bossHit ? 2.2 : 1.2);
+        }
+        if (ev.kind === 'strike' || ev.kind === 'whirl' || ev.kind === 'ultimate') {
+          this.spawnAfterimages(ev.kind, now);
         }
         if (ev.kind === 'strike') {
           this.fx.push({ key: 'strikeHit', x: ev.x, t0: now, dur: 380 });
@@ -518,9 +527,23 @@ export class Renderer {
           });
         }
       } else if (ev.t === 'stageClear') {
-        // v7.2.0 스테이지 돌파 행군 전환(1.1초 가속 스크롤 + 바람결)
+        // v7.2.0 스테이지 돌파 행군 전환(1.1초 가속 스크롤 + 바람결) · v7.3.0 보스 격파 폭발
         this.marchUntil = now + 1100;
-        this.flash = Math.max(this.flash, 0.22);
+        this.bossKillFx = { t0: now, dur: 520, x: ECON.playerX + 360 };
+        this.flash = Math.max(this.flash, 0.34);
+        this.shake = Math.max(this.shake, 9);
+        for (let i = 0; i < 32; i++) {
+          const a = (Math.PI * 2 * i) / 32;
+          this.sparks.push({
+            x: ECON.playerX + 340,
+            y: this.groundY() - 56 * this.scale(),
+            life: 1,
+            vx: Math.cos(a) * (120 + Math.random() * 180),
+            vy: Math.sin(a) * (110 + Math.random() * 140) - 40,
+            color: i % 2 === 0 ? '#ffd76a' : '#ff7a5c',
+            s: 2.2 + Math.random() * 2.2,
+          });
+        }
       } else if (ev.t === 'dailyEnd') {
         this.flash = Math.max(this.flash, 0.28);
         this.shake = Math.max(this.shake, 6);
@@ -1215,7 +1238,9 @@ export class Renderer {
   /* ─────────── 프레임 ─────────── */
   frame(now) {
     const t = typeof now === 'number' && isFinite(now) ? now : Date.now();
-    const dt = this.lastFrame ? clamp(t - this.lastFrame, 0, 100) : 16;
+    const rawDt = this.lastFrame ? clamp(t - this.lastFrame, 0, 100) : 16;
+    // v7.3.0 시각 히트스톱(34ms) — 치명타/강격 순간 시각 프레임을 0.2배로 잠깐 멈춰 타격감 극대화
+    const dt = this.effects && this.hitstopUntil > t ? rawDt * 0.18 : rawDt;
     this.lastFrame = t;
     this.time += dt;
     const ctx = this.ctx;
@@ -1254,6 +1279,9 @@ export class Renderer {
       this.drawPet(ctx, t, dt);
       this.drawPlayer(ctx, t, dt);
       if (this.effects) {
+        this.drawAfterimages(ctx, t);
+        this.drawKnightSupport(ctx, dt, t);
+        this.drawBossKillFx(ctx, t);
         this.drawProjectiles(ctx, t);
         this.drawFx(ctx, t);
         this.drawArcs(ctx, t);
@@ -1794,8 +1822,9 @@ export class Renderer {
     ctx.ellipse(px, gy + 2, w * 0.3, w * 0.085, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // v4.4 전직 오라 (칭호 색) → 그 위에 장비 등급 오라
+    // v4.4 전직 오라 (칭호 색) → v7.3 영웅 진화 외형(망토·날개·소드 비트) → 장비 등급 오라
     if (this.effects && !dead) this.drawJobAura(ctx, px, gy, h, sc, now);
+    if (this.effects && !dead) this.drawHeroEvolution(ctx, px, gy, h, sc, now);
     // 장비 등급 오라 (발밑·주변 색)
     if (this.effects && !dead) this.drawAura(ctx, px, gy, h, sc, now);
     // v4.3 부활 가호 — 빛 고리·보호막 + 머리 위 남은 초 (남은 시간은 상단 배너 drawGraceBanner)
@@ -3266,6 +3295,183 @@ export class Renderer {
   }
 
   /* ─────────── 🛡 v4.3 부활 가호 배너 — 남은 시간 게이지 ─────────── */
+  /* ─────────── v7.3.0 영웅 진화 외형 · 스킬 잔상 · 기사단 지원 사격 · 보스 격파 폭발 ─────────── */
+  drawHeroEvolution(ctx, px, gy, h, sc, now) {
+    const j = this.syncJob();
+    const tier = j ? j.tier : 0;
+    const mythic = !!(this._rar && this._rar.hasMythic);
+    if (tier < 2 && !mythic) return;
+    const col = mythic ? '#ff66c4' : (j && j.color) || '#ffcf5c';
+    const pulse = 0.5 + 0.5 * Math.sin(now / 260);
+    const cy = gy - h * 0.54;
+    ctx.save();
+    // Tier 2+: 등 뒤 흐르는 망토 트레일
+    const wave = Math.sin(now / 150) * 6 * sc;
+    ctx.fillStyle = hexA(col, 0.26);
+    ctx.beginPath();
+    ctx.moveTo(px - 6 * sc, cy - 8 * sc);
+    ctx.quadraticCurveTo(px - 28 * sc, cy + wave, px - 36 * sc, gy - 8 * sc + wave * 0.5);
+    ctx.lineTo(px - 10 * sc, gy - 12 * sc);
+    ctx.closePath();
+    ctx.fill();
+    // Tier 4+ (드래곤 로드·용신) 또는 신화 장비: 등 뒤 에너지 날개 한 쌍
+    if (tier >= 4 || mythic) {
+      const flap = Math.sin(now / 220) * 0.16;
+      const wingLen = (tier >= 5 || mythic ? 42 : 32) * sc;
+      for (const dir of [-1, 1]) {
+        ctx.save();
+        ctx.translate(px - 4 * sc, cy - 4 * sc);
+        ctx.rotate(dir * (0.55 + flap) - 0.35);
+        const wg = ctx.createLinearGradient(0, 0, -wingLen, -wingLen * 0.45);
+        wg.addColorStop(0, hexA(col, 0.62));
+        wg.addColorStop(1, hexA('#ffe799', 0.06));
+        ctx.fillStyle = wg;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(-wingLen * 0.55, -wingLen * 0.58 * dir, -wingLen, -wingLen * 0.18 * dir);
+        ctx.quadraticCurveTo(-wingLen * 0.5, wingLen * 0.12 * dir, 0, 6 * sc);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+    // Tier 5 (🐉 용신) 또는 신화 장비: 영웅 주위를 공전하는 부유 검(소드 비트) 3자루
+    if (tier >= 5 || mythic) {
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 3; i++) {
+        const a = now / 520 + (i * Math.PI * 2) / 3;
+        const bx = px + Math.cos(a) * 34 * sc;
+        const by = cy - 6 * sc + Math.sin(a) * 14 * sc;
+        ctx.save();
+        ctx.translate(bx, by);
+        ctx.rotate(Math.sin(a) * 0.25 + 0.3);
+        ctx.fillStyle = hexA(mythic ? '#ff8ad6' : '#ffe082', 0.78 + 0.18 * pulse);
+        ctx.beginPath();
+        ctx.moveTo(10 * sc, 0);
+        ctx.lineTo(-7 * sc, -2.6 * sc);
+        ctx.lineTo(-4 * sc, 0);
+        ctx.lineTo(-7 * sc, 2.6 * sc);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+    ctx.restore();
+  }
+
+  spawnAfterimages(kind, now) {
+    if (!this.effects || !this.battle) return;
+    const baseX = this.worldX(this.battle.player.x);
+    const sc = this.scale();
+    const col = kind === 'ultimate' ? '#ff66c4' : kind === 'whirl' ? '#69c0ff' : '#ffd166';
+    for (let i = 0; i < 3; i++) {
+      this.afterimages.push({
+        x: baseX + (i + 1) * 14 * sc,
+        t0: now + i * 28,
+        dur: 240,
+        color: col,
+      });
+    }
+    if (this.afterimages.length > 12) this.afterimages.splice(0, this.afterimages.length - 12);
+  }
+
+  drawAfterimages(ctx, now) {
+    if (!this.afterimages || !this.afterimages.length) return;
+    const gy = this.groundY();
+    const sc = this.scale();
+    const h = Math.min(this.H * 0.4, 100 * sc);
+    const img = this.image('hero_skill') || this.image('hero_attack');
+    const keep = [];
+    for (const a of this.afterimages) {
+      const age = now - a.t0;
+      if (age > a.dur) continue;
+      keep.push(a);
+      if (age < 0) continue;
+      const fade = 1 - age / a.dur;
+      ctx.save();
+      ctx.globalAlpha = 0.32 * fade;
+      if (img) ctx.drawImage(img, a.x - h / 2, gy - h, h, h);
+      else {
+        ctx.fillStyle = a.color;
+        ctx.fillRect(a.x - h * 0.25, gy - h * 0.85, h * 0.5, h * 0.75);
+      }
+      ctx.restore();
+    }
+    this.afterimages = keep;
+  }
+
+  drawKnightSupport(ctx, dt, now) {
+    const b = this.battle;
+    const kn = b && b.s && b.s.guild && b.s.guild.knights;
+    if (!kn) return;
+    const hasArc = (kn.archer || 0) > 0;
+    const hasMag = (kn.mage || 0) > 0;
+    if ((hasArc || hasMag) && now - (this.lastKnightShot || 0) >= 1800) {
+      const target = b.monsters.find((m) => !m.dead && !m.dying);
+      if (target) {
+        this.lastKnightShot = now;
+        const gy = this.groundY();
+        const sc = this.scale();
+        const sx = Math.max(12, this.worldX(b.player.x) - 48 * sc);
+        const tx = this.worldX(target.x);
+        if (hasArc) {
+          this.knightShots.push({ kind: 'arrow', sx, sy: gy - 44 * sc, tx, ty: gy - 38 * sc, t0: now, dur: 260, color: '#5ee1a3' });
+        }
+        if (hasMag) {
+          this.knightShots.push({ kind: 'orb', sx: sx - 8 * sc, sy: gy - 62 * sc, tx, ty: gy - 42 * sc, t0: now + 90, dur: 320, color: '#b98bff' });
+        }
+      }
+    }
+    if (!this.knightShots || !this.knightShots.length) return;
+    const keep = [];
+    const sc = this.scale();
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const s of this.knightShots) {
+      const age = now - s.t0;
+      if (age > s.dur) continue;
+      keep.push(s);
+      if (age < 0) continue;
+      const k = clamp(age / s.dur, 0, 1);
+      const x = lerp(s.sx, s.tx, k);
+      const y = lerp(s.sy, s.ty, k) - Math.sin(Math.PI * k) * 18 * sc;
+      ctx.strokeStyle = s.color;
+      ctx.fillStyle = s.color;
+      if (s.kind === 'arrow') {
+        ctx.lineWidth = 2.2 * sc;
+        ctx.beginPath();
+        ctx.moveTo(x - 16 * sc, y + 2 * sc);
+        ctx.lineTo(x + 6 * sc, y);
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.arc(x, y, 5.5 * sc, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+    this.knightShots = keep;
+  }
+
+  drawBossKillFx(ctx, now) {
+    const fx = this.bossKillFx;
+    if (!fx) return;
+    const age = now - fx.t0;
+    if (age > fx.dur) { this.bossKillFx = null; return; }
+    const k = clamp(age / fx.dur, 0, 1);
+    const fade = 1 - k;
+    const x = this.worldX(fx.x);
+    const y = this.groundY() - 52 * this.scale();
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = hexA('#ffd76a', 0.85 * fade);
+    ctx.lineWidth = (5 * fade + 1) * this.scale();
+    ctx.beginPath();
+    ctx.arc(x, y, (24 + k * 140) * this.scale(), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   /* ─────────── v7.0.0 콤보 히트 카운터 · 보스 강공격 전조 경고 ─────────── */
   drawCombo(ctx, W, now) {
     if (!this.combo || this.combo < 3 || !this.comboAt || now - this.comboAt > 2400) return;

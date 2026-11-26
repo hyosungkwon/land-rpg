@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "7.2.0"
+EXPECTED_VER = "7.3.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui.js", "src/sound.js"]
 
@@ -6017,6 +6017,11 @@ def main():
     section("v7.2.0 패럴랙스 행군 · 특수 모드 캔버스 분위기")
     rsrc72 = read("src/render.js")
     ok(all(x in rsrc72 for x in ["drawModeBackdrop", "drawAtmosphere", "marchUntil", "scrollX", "b.rift", "b.invasion", "b.dungeon", "b.tower"]), "render.js — 패럴랙스 지면 스크롤·스테이지 행군·균열/침공/던전/탑 전용 캔버스 분위기")
+
+    # ── 40) v7.3.0 ⚔️ 영웅 진화 외형 · 타격감 2.0(히트스톱·잔상·보스 폭발) · 기사단 지원 사격 ──
+    section("v7.3.0 영웅 진화 외형 · 타격감 2.0 · 기사단 지원 사격")
+    rsrc73 = read("src/render.js")
+    ok(all(x in rsrc73 for x in ["drawHeroEvolution", "hitstopUntil", "spawnAfterimages", "drawAfterimages", "drawKnightSupport", "drawBossKillFx"]), "render.js — 전직 날개/소드 비트 · 시각 히트스톱 · 잔상 · 기사단 지원 사격 · 보스 격파 폭발")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:
