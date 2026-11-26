@@ -16,7 +16,10 @@
     puzzleDone: 0, mathDone: 0, engDone: 0, drawSaved: 0, memDone: 0,
     clockCorrect: 0, diffDone: 0, pianoPlayed: 0, mazeDone: 0, fishCaught: 0,
     doneAchievements: [], pCleared: {}, pStars: {}, pTotalSc: 0,
-    fishCodex: [], fishRodLv: 1, fishRodExp: 0
+    fishCodex: [], fishRodLv: 1, fishRodExp: 0,
+    /* 친구 교감(pet.js) — 예전 저장본에는 없으므로 기본값을 여기서 채운다 */
+    petName: '꼬마친구', petHunger: 70, petHappy: 60, petTreats: 3,
+    petTreatDate: '', petTickAt: 0, petFed: 0, petPets: 0, petSound: true
   };
 
   function loadSave() {
@@ -59,6 +62,22 @@
     updateHomeStatus();
     if ((SD.charLv || 1) > oldLv) showLup(function () { showSp(emoji || '🌟', msg); });
     else showSp(emoji || '🌟', msg);
+  }
+
+  // 스티커 없이 캐릭터 경험치만 올린다(간식 주기 같은 교감 활동용)
+  function addExp(n) {
+    n = Math.max(0, Math.floor(n || 0));
+    if (!n) return;
+    var oldLv = SD.charLv || 1;
+    SD.charExp = (SD.charExp || 0) + n;
+    var st = stageOf(SD.charLv);
+    if (SD.charExp >= st.need && (SD.charLv || 1) < CHAR_STAGES.length) {
+      SD.charExp = 0;
+      SD.charLv = (SD.charLv || 1) + 1;
+    }
+    writeSave();
+    updateHomeStatus();
+    if ((SD.charLv || 1) > oldLv) showLup();
   }
 
   function showSp(em, msg) {
@@ -151,6 +170,8 @@
     if (SD.pCleared) for (var i = 1; i <= 30; i++) if (SD.pCleared[i]) maxS = i;
     setText('stat-stage', String(maxS));
     setText('stat-fish', String(SD.fishCaught || 0));
+
+    if (window.Pet && window.Pet.refresh) window.Pet.refresh();
   }
 
   function greeting() {
@@ -365,6 +386,7 @@
     SD: SD,
     writeSave: writeSave,
     earnReward: earnReward,
+    addExp: addExp,
     checkAch: checkAch,
     updateHomeStatus: updateHomeStatus,
     showSp: showSp,

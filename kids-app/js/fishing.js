@@ -340,6 +340,7 @@
       cnt++;
       var SD = App.SD;
       SD.fishCaught = (SD.fishCaught || 0) + 1;
+      SD.petTreats = Math.min(99, (SD.petTreats || 0) + 1); // 잠은 물고기 1마리 = 내 친구 간식 1개
       caughtArr.push(f.em);
       if (!SD.fishCodex) SD.fishCodex = [];
       if (SD.fishCodex.indexOf(f.id) < 0) SD.fishCodex.push(f.id);
@@ -364,7 +365,7 @@
       li.title = f.name;
       if (f.rare >= 2) li.style.filter = 'drop-shadow(0 0 4px gold)';
       $id('fish-caught-list').appendChild(li);
-      setText('fish-msg', (f.rare === 3 ? '🏆전설!' : f.rare === 2 ? '💫슈퍼레어!' : f.rare === 1 ? '✨희귀!' : '') + ' ' + f.name + ' +' + pts + '점!');
+      setText('fish-msg', (f.rare === 3 ? '🏆전설!' : f.rare === 2 ? '💫슈퍼레어!' : f.rare === 1 ? '✨희귀!' : '') + ' ' + f.name + ' +' + pts + '점! 🍎간식+1');
       btn.textContent = '🎣 낚기!';
       btn.className = '';
       ripple.push({ x: hook.x, y: hook.y, pts: pts, rare: f.rare, life: 25 });

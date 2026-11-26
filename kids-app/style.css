@@ -52,9 +52,9 @@ body{font-family:'Jua',sans-serif;background:#0f0c29;min-height:100vh;overflow-x
 .home-logo{font-size:1.32rem;font-family:'Jua',sans-serif;letter-spacing:-.5px;color:#FFD93D;text-shadow:0 2px 12px rgba(255,217,61,.45);white-space:nowrap;}
 .home-char-mini{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.1);border-radius:20px;padding:6px 12px;cursor:pointer;}
 .home-char-mini-em{font-size:1.4rem;}
-.home-char-mini-info{line-height:1.2;}
+.home-char-mini-info{line-height:1.2;max-width:78px;overflow:hidden;}
 .home-char-lv{font-size:.72rem;color:#FFD93D;}
-.home-char-nm{font-size:.78rem;color:#fff;}
+.home-char-nm{font-size:.78rem;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
 /* 메인 캐릭터 영역 */
 .home-hero{
@@ -817,3 +817,126 @@ body{font-family:'Jua',sans-serif;background:#0f0c29;min-height:100vh;overflow-x
 #math .fc-hint,#english .fc-hint{color:rgba(0,0,0,.38);}
 #math .math-lbl{color:#00796b;}
 #english .math-lbl{color:#4527a0;}
+
+/* ══════════════════════════════════════════════════════════
+   v3 — 🐣 친구 교감(말풍선 · 간식 · 쓰다듬기 · 이름 짓기)  2026-11-26
+   ══════════════════════════════════════════════════════════ */
+
+/* ── 홈 헤더: 소리 켜기/끄기 ── */
+.home-snd{margin-left:auto;margin-right:9px;width:32px;height:32px;border:none;border-radius:50%;
+  background:rgba(255,255,255,.12);color:#fff;font-size:.95rem;line-height:1;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;padding:0;}
+.home-snd:active{background:rgba(255,255,255,.28);}
+
+/* ── 히어로 캐릭터: 톡톡 누르면 통통 ── */
+.hero-wrap{cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.hero-wrap.pop .hero-char{animation:petBounce .7s cubic-bezier(.34,1.56,.64,1);}
+.hero-wrap.nom .hero-char{animation:petNom .72s ease-in-out;}
+.hero-wrap.shake{animation:cshk .42s ease;}
+@keyframes petBounce{
+  0%{transform:translateY(0) scale(1);}
+  22%{transform:translateY(-18px) scale(1.12,.92);}
+  46%{transform:translateY(0) scale(.93,1.08);}
+  68%{transform:translateY(-7px) scale(1.05,.96);}
+  100%{transform:translateY(0) scale(1);}
+}
+@keyframes petNom{
+  0%{transform:scale(1) rotate(0);}
+  20%{transform:scale(1.14,.88) rotate(-5deg);}
+  40%{transform:scale(.92,1.14) rotate(4deg);}
+  60%{transform:scale(1.1,.9) rotate(-3deg);}
+  80%{transform:scale(.96,1.06) rotate(2deg);}
+  100%{transform:scale(1) rotate(0);}
+}
+
+/* ── 말풍선(히어로 인사말 자리를 잠깐 덮는다) ── */
+.pet-bubble{position:absolute;left:50%;top:112px;z-index:6;
+  max-width:86%;padding:9px 14px;
+  background:#fffdf7;color:#4a3550;font-family:'Jua',sans-serif;font-size:.86rem;line-height:1.35;
+  border-radius:16px;text-align:center;box-shadow:0 10px 24px rgba(0,0,0,.32);
+  opacity:0;transform:translate(-50%,8px) scale(.86);pointer-events:none;
+  transition:opacity .16s ease,transform .2s cubic-bezier(.34,1.56,.64,1);}
+.pet-bubble.show{opacity:1;transform:translate(-50%,0) scale(1);}
+.pet-bubble::before{content:'';position:absolute;top:-7px;left:50%;transform:translateX(-50%);
+  border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:8px solid #fffdf7;}
+
+/* ── 캐릭터에서 터지는 하트·별 ── */
+.pet-fx{position:absolute;pointer-events:none;z-index:5;line-height:1;
+  animation:petFx 1.1s ease-out forwards;}
+@keyframes petFx{
+  0%{opacity:0;transform:translate(-50%,0) scale(.5) rotate(0);}
+  25%{opacity:1;}
+  100%{opacity:0;transform:translate(calc(-50% + var(--dx,0px)),-76px) scale(1.15) rotate(var(--rot,0deg));}
+}
+
+/* ── 교감 바: 1줄 컴팩트 알약 ── */
+.pet-bar{position:relative;z-index:3;display:flex;align-items:center;gap:7px;
+  margin:0 14px 9px;padding:6px 8px 6px 9px;
+  background:linear-gradient(135deg,rgba(255,255,255,.15),rgba(255,255,255,.06));
+  border:1px solid rgba(255,255,255,.18);border-radius:18px;
+  box-shadow:0 4px 14px rgba(0,0,0,.22);}
+.pet-name-btn{display:flex;align-items:center;gap:3px;flex-shrink:0;max-width:92px;
+  background:rgba(255,255,255,.14);border:none;border-radius:12px;padding:5px 7px;
+  color:#fff;font-family:'Jua',sans-serif;font-size:.72rem;cursor:pointer;}
+.pet-name-btn span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pet-name-btn:active{background:rgba(255,255,255,.3);}
+.pet-name-edit{font-size:.62rem;opacity:.85;}
+.pet-gauges{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;}
+.pet-gauge{display:flex;align-items:center;gap:3px;}
+.pg-ico{font-size:.62rem;line-height:1;width:11px;text-align:center;}
+.pg-track{position:relative;flex:1;height:7px;background:rgba(0,0,0,.3);border-radius:6px;overflow:hidden;}
+.pg-fill{position:absolute;left:0;top:0;bottom:0;display:block;border-radius:6px;transition:width .35s ease;}
+.pg-fill.hunger{background:linear-gradient(90deg,#FFC14D,#FF7A18);}
+.pg-fill.happy{background:linear-gradient(90deg,#FFA6C9,#FF5C8A);}
+.pg-val{font-size:.56rem;color:rgba(255,255,255,.7);width:15px;text-align:right;flex-shrink:0;}
+.pet-btns{display:flex;gap:5px;flex-shrink:0;}
+.pet-btn{position:relative;width:39px;height:33px;border:none;border-radius:12px;
+  font-family:'Jua',sans-serif;font-size:1rem;line-height:1;color:#fff;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 3px 0 rgba(0,0,0,.26);transition:transform .1s,box-shadow .1s;}
+.pet-btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.26);}
+.pet-btn.feed{background:linear-gradient(135deg,#8BC34A,#4E8B23);}
+.pet-btn.pet{background:linear-gradient(135deg,#FF7BA9,#C2185B);}
+.pet-btn.empty{filter:grayscale(.45);opacity:.72;}
+.pet-btn .treat-n{position:absolute;top:-5px;right:-4px;min-width:15px;height:15px;padding:0 3px;
+  border-radius:8px;background:#FFD93D;color:#5a3e00;font-size:.58rem;font-style:normal;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 1px 3px rgba(0,0,0,.35);}
+
+/* ── 내 방: 내 친구 카드 ── */
+.pet-room{margin-top:10px;display:flex;align-items:center;gap:10px;cursor:pointer;
+  background:linear-gradient(135deg,rgba(255,214,231,.22),rgba(200,230,255,.18));
+  border:1px solid rgba(255,255,255,.2);border-radius:18px;padding:10px 12px;}
+.pet-room-em{font-size:1.9rem;line-height:1;filter:drop-shadow(0 3px 6px rgba(0,0,0,.25));}
+.pet-room-info{flex:1;min-width:0;}
+.pet-room-name{font-family:'Jua',sans-serif;font-size:.95rem;color:#fff;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pet-room-tag{font-size:.6rem;color:#FFD93D;background:rgba(0,0,0,.22);border-radius:8px;padding:1px 5px;vertical-align:middle;}
+.pet-room-desc{font-size:.68rem;color:rgba(255,255,255,.72);margin-top:2px;}
+.pet-room-desc b{color:#FFD93D;font-weight:normal;}
+.pet-room-edit{flex-shrink:0;border:none;border-radius:12px;padding:7px 10px;
+  background:rgba(255,255,255,.2);color:#fff;font-family:'Jua',sans-serif;font-size:.72rem;cursor:pointer;}
+.pet-room-edit:active{background:rgba(255,255,255,.36);}
+
+/* ── 이름 짓기 팝업 ── */
+#pet-name-modal{position:fixed;inset:0;z-index:660;display:none;align-items:center;justify-content:center;
+  padding:22px;background:rgba(10,8,24,.72);}
+#pet-name-modal.show{display:flex;}
+.pnm-card{width:100%;max-width:310px;padding:18px;border-radius:22px;text-align:center;
+  background:linear-gradient(160deg,#fff8f0,#ffe9f3);box-shadow:0 18px 42px rgba(0,0,0,.45);
+  animation:popIn .2s ease;}
+.pnm-card h3{font-family:'Jua',sans-serif;font-size:1.02rem;color:#b3557a;margin-bottom:11px;}
+.pnm-input{width:100%;padding:10px 12px;border:2px solid #ffd0e0;border-radius:14px;background:#fff;
+  font-family:'Jua',sans-serif;font-size:1rem;color:#5a3e00;text-align:center;outline:none;}
+.pnm-input:focus{border-color:#FF6B9D;}
+.pnm-hint{font-size:.66rem;color:#a78a96;margin-top:7px;line-height:1.4;}
+.pnm-row{display:flex;gap:8px;margin-top:12px;}
+.pnm-row .gbtn{flex:1;padding:10px 8px;}
+.pnm-cancel{background:linear-gradient(135deg,#e6dbe1,#cbb7c2);color:#7a5b6a;}
+
+/* ── 아주 좁은 화면 ── */
+@media (max-width:360px){
+  .pet-bar{gap:5px;margin:0 10px 8px;padding:5px 6px 5px 7px;}
+  .pet-name-btn{max-width:72px;font-size:.66rem;}
+  .pet-btn{width:36px;height:31px;font-size:.92rem;}
+  .pet-bubble{font-size:.8rem;top:108px;}
+}

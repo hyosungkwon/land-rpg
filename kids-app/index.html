@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0f0c29">
 <title>🌟 유아의 놀이터</title>
 <link rel="manifest" href="../manifest.json">
-<link rel="stylesheet" href="style.css?v=17313461">
+<link rel="stylesheet" href="style.css?v=6cf14ddb">
 </head>
 <body>
 
@@ -20,17 +20,18 @@
 
   <div class="home-header">
     <div class="home-logo">🌟 유아의 놀이터</div>
+    <button class="home-snd" id="home-snd" onclick="Pet.toggleSound()" aria-label="친구 목소리 켜기·끄기">🔊</button>
     <div class="home-char-mini" onclick="App.openReward()">
       <span class="home-char-mini-em" id="hc-em">🐣</span>
       <div class="home-char-mini-info">
         <div class="home-char-lv" id="hc-lv">Lv.1</div>
-        <div class="home-char-nm" id="hc-nm">아기 병아리</div>
+        <div class="home-char-nm" id="hc-nm">꼬마친구</div>
       </div>
     </div>
   </div>
 
   <div class="home-hero">
-    <div class="hero-wrap">
+    <div class="hero-wrap" onclick="Pet.tap()" role="button" aria-label="친구와 교감하기">
       <span class="hero-bg-em" id="hero-bg-em"></span>
       <span class="hero-char" id="hero-char">🐣</span>
       <span class="hero-hat" id="hero-hat"></span>
@@ -38,6 +39,22 @@
     </div>
     <div class="hero-greeting" id="hero-greeting">안녕! 같이 놀자! 🎉</div>
     <div class="hero-sub" id="hero-sub">오늘도 신나게 놀아요!</div>
+    <div class="pet-bubble" id="pet-bubble"><span id="pet-bubble-tx">안녕!</span></div>
+  </div>
+
+  <!-- 🐣 친구 교감 바 (컴팩트 1줄) -->
+  <div class="pet-bar">
+    <button class="pet-name-btn" onclick="Pet.rename()" aria-label="친구 이름 바꾸기">
+      <span id="pet-bar-name">꼬마친구</span><span class="pet-name-edit">✏️</span>
+    </button>
+    <div class="pet-gauges">
+      <div class="pet-gauge"><span class="pg-ico">🍎</span><div class="pg-track"><i class="pg-fill hunger" id="pg-fill-hunger" style="width:70%"></i></div><span class="pg-val" id="pg-val-hunger">70</span></div>
+      <div class="pet-gauge"><span class="pg-ico">💖</span><div class="pg-track"><i class="pg-fill happy" id="pg-fill-happy" style="width:60%"></i></div><span class="pg-val" id="pg-val-happy">60</span></div>
+    </div>
+    <div class="pet-btns">
+      <button class="pet-btn feed" id="pet-btn-feed" onclick="Pet.feed()" aria-label="간식 주기">🍎<b class="treat-n" id="pet-treat-n">3</b></button>
+      <button class="pet-btn pet" onclick="Pet.pet()" aria-label="쓰다듬기">💖</button>
+    </div>
   </div>
 
   <div class="home-stats">
@@ -142,6 +159,14 @@
         <span class="gc-icon">🏆</span><span class="gc-title">내 보상</span>
         <span class="gc-desc">스티커북·업적 확인</span><span class="gc-badge" id="home-sticker-cnt">0개</span>
       </button>
+    </div>
+    <div class="pet-room" onclick="Pet.rename()">
+      <span class="pet-room-em" id="pet-room-em">🐣</span>
+      <div class="pet-room-info">
+        <div class="pet-room-name"><span id="pet-room-name">꼬마친구</span> <span class="pet-room-tag">내 친구</span></div>
+        <div class="pet-room-desc">🍎 배부름 <b id="pet-room-hunger">70</b> · 💖 친밀도 <b id="pet-room-happy">60</b> · 간식 <b id="pet-room-treats">3</b>개</div>
+      </div>
+      <button class="pet-room-edit" onclick="event.stopPropagation();Pet.rename()">✏️ 이름</button>
     </div>
   </div>
 </div>
@@ -717,16 +742,30 @@
 </div>
 <canvas id="conf"></canvas>
 
+<!-- 친구 이름 짓기 -->
+<div id="pet-name-modal">
+  <div class="pnm-card">
+    <h3>🐣 친구 이름 짓기</h3>
+    <input class="pnm-input" id="pet-name-input" type="text" maxlength="10" placeholder="꼬마친구" autocomplete="off" enterkeyhint="done">
+    <div class="pnm-hint">한글·영어 10글자까지 · 비우면 '꼬마친구'</div>
+    <div class="pnm-row">
+      <button class="gbtn pnm-cancel" onclick="Pet.renameClose()">취소</button>
+      <button class="gbtn gpk" onclick="Pet.renameSave()">저장</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/data.js?v=eda5c3bd"></script>
 <script src="js/topics.js?v=5f3602fe"></script>
-<script src="js/core.js?v=bf181b6f"></script>
+<script src="js/core.js?v=ac635e3b"></script>
 <script src="js/draw.js?v=54660474"></script>
 <script src="js/puzzle.js?v=7a5d1e4e"></script>
 <script src="js/fun.js?v=2277c4dc"></script>
 <script src="js/music.js?v=01d45b24"></script>
 <script src="js/art.js?v=116285a2"></script>
 <script src="js/learn.js?v=96d94c30"></script>
-<script src="js/fishing.js?v=7be224d3"></script>
+<script src="js/fishing.js?v=8eb597c1"></script>
+<script src="js/pet.js?v=e4bcf55e"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); });
