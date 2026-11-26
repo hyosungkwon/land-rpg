@@ -315,6 +315,18 @@
         log('갤러리 항목 수: ' + d.querySelectorAll('.g-item').length);
       }
       log(errors ? '⚠ JS 오류 ' + errors + '건' : '✓ JS 오류 없음');
+    } else if (scenario === 'brushes') {
+      const rows = [['crayon', '빨강'], ['rainbow', '보라'], ['neon', '하늘'], ['sparkle', '노랑']];
+      for (let r = 0; r < rows.length; r++) {
+        const pts = [];
+        for (let i = 0; i <= 34; i++) {
+          pts.push([13 + i * 2.2, 18 + r * 19 + Math.sin(i / 3.6) * 4]);
+        }
+        stroke(pts, rows[r][1], rows[r][0]);
+        await sleep(90);
+      }
+      log('붓 4종(크레파스·무지개·네온·반짝이) 그리기 완료 · 명령 수=' + w.__yua.state.cmds.length);
+      log(errors ? '⚠ JS 오류 ' + errors + '건' : '✓ JS 오류 없음');
     } else if (scenario === 'showcase') {
       await gotoTopic('apple');
       traceTopic(currentTopic());
