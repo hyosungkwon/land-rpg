@@ -174,9 +174,12 @@ export function expeditionPreview(state, petId, setId, durKey) {
   const powerMul = Math.round(petMul * landMul * 100) / 100;
 
   const refStage = Math.max(1, Math.floor(Number((state && (state.peakStage || state.maxStage || state.stage)) || 1)));
+  // v5.12 영지 성채 '펫 훈련소' 파견 보상 증가(+4%/Lv)
+  const barracksLv = Math.max(0, Math.min(10, Math.floor(Number(state && state.citadel && state.citadel.levels && state.citadel.levels.barracks) || 0)));
+  const citMul = 1 + barracksLv * 0.04;
   const goldBase = stageGoldBase(refStage);
-  const gold = Math.max(100, Math.round(goldBase * dur.goldMul * powerMul * rb.goldMul));
-  const shards = Math.max(4, Math.round(dur.shardsBase * powerMul * rb.shardMul));
+  const gold = Math.max(100, Math.round(goldBase * dur.goldMul * powerMul * rb.goldMul * citMul));
+  const shards = Math.max(4, Math.round(dur.shardsBase * powerMul * rb.shardMul * citMul));
   const points = dur.pointsBase > 0 ? Math.max(1, Math.round((dur.pointsBase + rb.pointAdd) * (1 + evo * 0.25))) : (rb.pointAdd > 0 && evo >= 1 ? 1 : 0);
   const gearChance = clamp(dur.gearChance + rb.gearAdd + evo * 0.05, 0, 0.9);
   const greatChance = clamp(dur.greatBase + evo * 0.08 + Math.min(0.20, lmLv * 0.02) + rb.greatAdd, 0.05, 0.75);

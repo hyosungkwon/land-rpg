@@ -31,6 +31,7 @@ import { activeNews, newsCovers, SETS_BY_ID } from './src/region.js';
 import {
   startExpedition, claimExpedition, claimAllExpeditions, cancelExpedition,
 } from './src/expedition.js';
+import { upgradeCitadel as upgradeCitadelState } from './src/citadel.js';
 import { AUCTION, auctionStatus, bidQuote, applyAuctionBid } from './src/auction.js';
 import { Renderer } from './src/render.js';
 import { UI } from './src/ui.js';
@@ -1519,6 +1520,22 @@ class App {
         this.save(true);
         this.sound.ui();
         this.ui.toast(`🧭 ${r.pet ? r.pet.name : '펫'} 파견 철수 완료`);
+        this.ui.render();
+      },
+      /* ── v5.12.0 🏰 영지 성채 ── */
+      upgradeCitadel: (id) => {
+        this.sound.unlock();
+        const r = upgradeCitadelState(this.s, id);
+        if (!r.ok) {
+          this.ui.toast(r.reason || '증축할 수 없습니다', 'red');
+          return;
+        }
+        this.buffs = computeBuffs(this.s);
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.fanfare();
+        this.ui.toast(`🏰 ${r.def.icon} ${r.def.name} Lv.${r.lv} 증축! · ${r.def.effect(r.lv)}`, 'gold');
+        this.ui.addLog(`🏰 <b>${esc(r.def.name)} Lv.${r.lv}</b> 증축 · ${esc(r.def.effect(r.lv))}`);
         this.ui.render();
       },
       toggleAutoRent: () => {

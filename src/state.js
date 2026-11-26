@@ -33,6 +33,7 @@ import {
 import { SETS_BY_ID } from './region.js';
 import { defaultExpeditions, normalizeExpeditions } from './expedition.js';
 import { defaultInvasion, normalizeInvasion } from './invasion.js';
+import { defaultCitadel, normalizeCitadel, citadelEffects } from './citadel.js';
 
 const nowMs = () => Date.now();
 
@@ -82,6 +83,8 @@ export function defaultState(now = nowMs()) {
     expedition: defaultExpeditions(),
     // v5.11.0 🚨 영지 침공 방어전
     invasion: defaultInvasion(),
+    // v5.12.0 🏰 영지 성채 (영구 시설 5종)
+    citadel: defaultCitadel(),
     battleSpeed: 1, // v5.3.0 전투 배속(1 / 1.5 / 2, 환생 1회 해금)
     dungeonCooldown: 0,
     dungeon: { best: 0, runs: 0, last: null },
@@ -213,6 +216,7 @@ export function normalizeState(raw, now = nowMs()) {
   };
   s.expedition = normalizeExpeditions(raw.expedition, s, now);
   s.invasion = normalizeInvasion(raw.invasion, s.land.owned, now);
+  s.citadel = normalizeCitadel(raw.citadel);
   s.battleSpeed = normalizeBattleSpeed(raw.battleSpeed);
   s.jobTier = clamp(Math.floor(num(raw.jobTier, 0)), 0, JOB_MAX);
   s.jobAt = Math.max(0, num(raw.jobAt, 0));
@@ -378,9 +382,10 @@ export function calcStats(s, buffs = NO_BUFF) {
   const extraHp = add(b.setHpPct);
   const extraCrit = add(b.setCritPct);
   const extraDrop = add(b.setDropPct) + add(b.synDropPct);
-  // v4.6 부동산 전투 시너지 — 치명타 피해 · 스킬 쿨감 · 보스 추가 피해 · 경험치
+  // v4.6 부동산 전투 시너지 + v5.12 영지 성채(대장간 공격·마법탑 쿨감·펫 훈련소 보조 펫)
+  const cit = citadelEffects(s);
   const synCritDmg = add(b.synCritDmgPct) / 100;
-  const skillCdr = Math.min(0.4, Math.max(0, add(b.synCdrPct)) / 100);
+  const skillCdr = Math.min(0.4, Math.max(0, add(b.synCdrPct) + cit.skillCdrPct) / 100);
   const synBoss = add(b.synBossDmgPct) / 100;
   const expMult = 1 + add(b.synExpPct) / 100;
   const L = s.level;
@@ -393,20 +398,21 @@ export function calcStats(s, buffs = NO_BUFF) {
   const job = jobOf(s);
   const pet = equippedPet(s);
   const sp = subPet(s);
+  const subRate = SUB_PET_RATE + (cit.subPetRateAdd || 0);
   const jobAtkMul = 1 + (job.atkPct || 0) / 100;
   const jobHpMul = 1 + (job.hpPct || 0) / 100;
-  const subAtkPct = sp ? Math.round(petAtkPct(s, sp.id) * SUB_PET_RATE * 10) / 10 : 0;
+  const subAtkPct = sp ? Math.round(petAtkPct(s, sp.id) * subRate * 10) / 10 : 0;
   const petAtkMul = 1 + ((pet ? petAtkPct(s, pet.id) : 0) + subAtkPct) / 100;
-  // v4.2: 펫 진화·고유 스킬 — 치명타·골드·보스 추가 피해 패시브 (+ v5.3 보조 펫 50% · v5.8 방어/드랍/공속/치명피해)
+  // v4.2: 펫 진화·고유 스킬 — 치명타·골드·보스 추가 피해 패시브 (+ v5.3 보조 펫 50% · v5.12 훈련소 +25%p)
   const petPas = pet ? petPassive(s, pet.id) : { critPct: 0, goldPct: 0, splash: 1, bossDmgPct: 0, dmgRedPct: 0, dropPct: 0, atkSpdPct: 0, critDmgPct: 0, stage: 0 };
   const subPas = sp ? petPassive(s, sp.id) : { critPct: 0, goldPct: 0, splash: 1, bossDmgPct: 0, dmgRedPct: 0, dropPct: 0, atkSpdPct: 0, critDmgPct: 0, stage: 0 };
-  const subCritPct = Math.round((subPas.critPct || 0) * SUB_PET_RATE * 10) / 10;
-  const subBossPct = Math.round((subPas.bossDmgPct || 0) * SUB_PET_RATE * 10) / 10;
-  const petDmgRedPct = (petPas.dmgRedPct || 0) + Math.round((subPas.dmgRedPct || 0) * SUB_PET_RATE * 10) / 10;
-  const petDropPct = (petPas.dropPct || 0) + Math.round((subPas.dropPct || 0) * SUB_PET_RATE * 10) / 10;
-  const petAtkSpdPct = (petPas.atkSpdPct || 0) + Math.round((subPas.atkSpdPct || 0) * SUB_PET_RATE * 10) / 10;
-  const petCritDmgPct = (petPas.critDmgPct || 0) + Math.round((subPas.critDmgPct || 0) * SUB_PET_RATE * 10) / 10;
-  const petGold = (pet ? petGoldPct(s, pet.id) : 0) + (sp ? Math.round(petGoldPct(s, sp.id) * SUB_PET_RATE * 10) / 10 : 0);
+  const subCritPct = Math.round((subPas.critPct || 0) * subRate * 10) / 10;
+  const subBossPct = Math.round((subPas.bossDmgPct || 0) * subRate * 10) / 10;
+  const petDmgRedPct = (petPas.dmgRedPct || 0) + Math.round((subPas.dmgRedPct || 0) * subRate * 10) / 10;
+  const petDropPct = (petPas.dropPct || 0) + Math.round((subPas.dropPct || 0) * subRate * 10) / 10;
+  const petAtkSpdPct = (petPas.atkSpdPct || 0) + Math.round((subPas.atkSpdPct || 0) * subRate * 10) / 10;
+  const petCritDmgPct = (petPas.critDmgPct || 0) + Math.round((subPas.critDmgPct || 0) * subRate * 10) / 10;
+  const petGold = (pet ? petGoldPct(s, pet.id) : 0) + (sp ? Math.round(petGoldPct(s, sp.id) * subRate * 10) / 10 : 0);
   // v3.3: 도감 수집률 마일스톤 + 수령한 업적의 소폭 영구 보너스(기본 0 → 기존 밸런스 불변)
   const col = collectionBonus(s);
   const colAtkMul = 1 + (col.atkPct || 0) / 100;
@@ -416,7 +422,7 @@ export function calcStats(s, buffs = NO_BUFF) {
   const rbHpMul = 1 + rb.hpPct / 100;
   const baseAtk = 12 + 2.6 * L + 0.035 * L * L;
   const equipAtk = EQUIP.weapon.per * eLv('weapon');
-  const atk = (baseAtk + equipAtk) * (1 + (b.atkPct + extraAtk + gm.atkPct) / 100) * jobAtkMul * petAtkMul * colAtkMul * rbAtkMul;
+  const atk = (baseAtk + equipAtk) * (1 + (b.atkPct + extraAtk + gm.atkPct + cit.atkPct) / 100) * jobAtkMul * petAtkMul * colAtkMul * rbAtkMul;
   const hpMax =
     (150 + 30 * L + EQUIP.armor.per * eLv('armor') + EQUIP.helmet.per * eLv('helmet'))
     * (1 + (b.hpPct + extraHp + gm.hpPct) / 100) * jobHpMul * rbHpMul;
@@ -724,6 +730,13 @@ export function compareGear(s, uid, buffs = NO_BUFF) {
   return { item: it, before, after, delta, equipped: prev === row.uid, slotRarity: equippedRarity(s, it.slot) };
 }
 
+/** 대장간 할인이 반영된 실효 강화 비용 */
+export function enhanceCostFor(s, lv) {
+  const base = enhanceCost(lv);
+  const disc = citadelEffects(s).forgeDiscount || 0;
+  return disc > 0 ? Math.max(1, Math.round(base * (1 - disc))) : base;
+}
+
 /** 지금 보유 강화석으로 한 번에 올릴 수 있는 최대 강화 횟수 (0 ~ 남은 단계) */
 export function enhanceMaxCount(s, slot) {
   if (!s || !(slot in EQUIP)) return 0;
@@ -731,7 +744,7 @@ export function enhanceMaxCount(s, slot) {
   let shards = Math.max(0, num(s.shards, 0));
   let n = 0;
   while (lv < EQUIP_MAX_LV) {
-    const cost = enhanceCost(lv);
+    const cost = enhanceCostFor(s, lv);
     if (shards < cost) break;
     shards -= cost;
     lv += 1;
@@ -747,7 +760,7 @@ export function tryEnhance(s, slot, times = 1) {
   let spent = 0;
   for (let i = 0; i < want; i++) {
     if (s.equip[slot] >= EQUIP_MAX_LV) return { ok: done > 0, reason: '최대 강화 단계입니다.', done, spent, max: true };
-    const cost = enhanceCost(s.equip[slot]);
+    const cost = enhanceCostFor(s, s.equip[slot]);
     if (s.shards < cost) return { ok: done > 0, reason: '강화석이 부족합니다.', done, spent, need: cost };
     s.shards -= cost;
     s.equip[slot] += 1;
@@ -772,17 +785,19 @@ export function tryUpgradeSkill(s, key) {
   return { ok: true, lv: sk.lv, spent: cost };
 }
 
-/** 스킬 쿨타임 실효값 — 부동산 시너지(쿨감)를 반영한다(상한 40%) */
-export function skillCdOf(key, buffs) {
+/** 스킬 쿨타임 실효값 — 부동산 시너지 + 영지 성채 마법탑(쿨감)을 반영한다(상한 40%) */
+export function skillCdOf(key, buffs, state = null) {
   const def = SKILLS[key];
   if (!def) return 0;
-  const cdr = Math.min(0.4, Math.max(0, Number((buffs || {}).synCdrPct) || 0) / 100);
+  const citCdr = Math.max(Number((buffs || {}).citCdrPct) || 0, state ? (citadelEffects(state).skillCdrPct || 0) : 0);
+  const cdr = Math.min(0.4, Math.max(0, (Number((buffs || {}).synCdrPct) || 0) + citCdr) / 100);
   return def.cd * (1 - cdr);
 }
 
-export function skillEffect(key, lv) {
+export function skillEffect(key, lv, state = null) {
   const def = SKILLS[key];
-  const p = skillPowerMul(lv);
+  const citMul = state ? 1 + (citadelEffects(state).skillPowerPct || 0) / 100 : 1;
+  const p = skillPowerMul(lv) * citMul;
   if (!def) return 1;
   if (key === 'strike' || key === 'whirl') return def.mul * p;
   if (key === 'berserk') return def.bonus * p;
@@ -845,18 +860,21 @@ export function registerKill(s, isBoss) {
 /* ────────────────────────────── 오프라인 정산 ────────────────────────────── */
 
 export function offlineSummary(s, now = nowMs(), buffs = NO_BUFF) {
+  const cit = citadelEffects(s);
   const elapsed = Math.max(0, now - (s.lastActiveAt || now));
-  const capMs = ECON.offlineCapHours * 3600 * 1000;
+  const capHours = ECON.offlineCapHours + (cit.offlineCapHoursAdd || 0);
+  const capMs = capHours * 3600 * 1000;
   const capped = elapsed > capMs;
   const ms = Math.min(elapsed, capMs);
   const sec = Math.floor(ms / 1000);
   if (sec < 60) return { ms, sec, capped, gold: 0, exp: 0, shards: 0 };
   const kills = sec * ECON.offlineKillsPerSec;
   const st = calcStats(s, buffs);
+  const rate = ECON.offlineRate + (cit.offlineRateAdd || 0);
   const goldPerKill = stageGoldBase(s.stage) * st.goldMult;
   const expPerKill = stageExpBase(s.stage) * st.expMult;
-  const gold = Math.floor(goldPerKill * kills * ECON.offlineRate);
-  const exp = Math.floor(expPerKill * kills * ECON.offlineRate);
+  const gold = Math.floor(goldPerKill * kills * rate);
+  const exp = Math.floor(expPerKill * kills * rate);
   const shards = Math.floor((sec / 3600) * 3 * st.dropMult);
   return { ms, sec, capped, gold, exp, shards };
 }

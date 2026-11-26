@@ -2,7 +2,7 @@
 // 밸런스·몬스터·장비·스킬 정의. DOM 의존 없음(헤드리스 테스트 가능).
 // v3: 게스트 전용 통합 경제 — 골드 하나로 사냥과 부동산을 함께 굴린다.
 
-export const APP_VERSION = '5.11.0';
+export const APP_VERSION = '5.12.0';
 export const SAVE_KEY = 'land_rpg_unified_v3';
 export const SAVE_VERSION = 3;
 
@@ -637,11 +637,12 @@ export function ultimateOf(state) {
   return pick;
 }
 
-/** 궁극기 실효 쿨타임 — 부동산 시너지 쿨감(상한 40%)을 반영한다 */
+/** 궁극기 실효 쿨타임 — 부동산 시너지 + 영지 성채 마법탑 쿨감(상한 40%)을 반영한다 */
 export function ultCdOf(state, buffs) {
   const u = ultimateOf(state);
   if (!u) return 0;
-  const cdr = Math.min(0.4, Math.max(0, Number((buffs || {}).synCdrPct) || 0) / 100);
+  const towLv = Math.max(0, Math.min(10, Math.floor(Number(state && state.citadel && state.citadel.levels && state.citadel.levels.tower) || 0)));
+  const cdr = Math.min(0.4, Math.max(0, (Number((buffs || {}).synCdrPct) || 0) + towLv * 1.2) / 100);
   return u.cd * (1 - cdr);
 }
 

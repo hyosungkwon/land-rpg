@@ -839,7 +839,9 @@ export class Battle {
     if (!target) return;
     this.subPetLast = now;
     this.subPetAnimAt = now;
-    const base = this.stats.atk * petDmgPct(this.s, sp.id) * SUB_PET_RATE;
+    const barLv = Math.max(0, Math.min(10, Math.floor(Number(this.s && this.s.citadel && this.s.citadel.levels && this.s.citadel.levels.barracks) || 0)));
+    const subRate = SUB_PET_RATE + barLv * 0.025;
+    const base = this.stats.atk * petDmgPct(this.s, sp.id) * subRate;
     const zerk = this.berserkUntil > now ? 1 + skillEffect('berserk', this.s.skills.berserk.lv) * 0.5 : 1;
     this.petHitTarget(target, base * zerk * (0.9 + this.rng() * 0.2), now, 'sub', sp);
   }
@@ -923,7 +925,7 @@ export class Battle {
   autoSkills(now) {
     const sk = this.s.skills;
     const alive = this.targets();
-    // v4.6 부동산 시너지(쿨감)를 반영한 실효 쿨타임
+    // v4.6 부동산 시너지 + v5.12 영지 성채 마법탑 쿨감
     const cd = (key) => skillCdOf(key, this.buffs());
     // v4.8.2: 스테이지 보스뿐 아니라 일일 보스·도전의 탑 보스 층도 보스전으로 판정
     const hasBoss = !!(this.boss || this.daily || alive.some((m) => m.isBoss));
@@ -998,7 +1000,7 @@ export class Battle {
       sk.last = now;
       this.player.skillAt = now;
       this.player.skillKey = key;
-      const heal = Math.round(this.stats.hpMax * skillEffect('heal', sk.lv));
+      const heal = Math.round(this.stats.hpMax * skillEffect('heal', sk.lv, this.s));
       const beforeHp = this.player.hp;
       this.player.hp = Math.min(this.stats.hpMax, this.player.hp + heal);
       let shieldAdded = 0;
@@ -1036,7 +1038,7 @@ export class Battle {
       this.player.attackKind = 'whirl';
       const inRange = alive.filter((m) => m.x - this.player.x <= ECON.playerRange * 1.6);
       const list = inRange.length ? inRange : alive;
-      this.hit(list, skillEffect('whirl', sk.lv), 'whirl', now);
+      this.hit(list, skillEffect('whirl', sk.lv, this.s), 'whirl', now);
       if (rune && rune.id === 'flame') {
         for (const m of list) {
           if (m.dead || m.dying) continue;
@@ -1062,7 +1064,7 @@ export class Battle {
       this.player.skillKey = key;
       this.player.attackAt = now;
       this.player.attackKind = 'strike';
-      const power = skillEffect('strike', sk.lv);
+      const power = skillEffect('strike', sk.lv, this.s);
       if (rune && rune.id === 'lightning') {
         const per = power * (rune.hitMul || 0.62);
         for (let i = 0; i < (rune.hits || 2); i++) {

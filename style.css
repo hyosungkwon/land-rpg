@@ -2697,3 +2697,22 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .inv-wave { font-size: 10.5px; color: #ff9fa8; font-weight: 800; }
 .inv-booms { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .tag.boom { color: #ffe799; background: rgba(255, 207, 92, 0.16); border-color: rgba(255, 207, 92, 0.45); }
+
+/* ══════════════ v5.12.0 🏰 영지 성채 ══════════════ */
+.cit-card { background: linear-gradient(160deg, rgba(255, 207, 92, 0.10), rgba(18, 26, 42, 0.96) 62%); border-color: rgba(255, 207, 92, 0.28); }
+.cit-list { display: flex; flex-direction: column; gap: 6px; margin-top: 7px; }
+.cit-row {
+  display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line-2);
+}
+.cit-row.ready { border-color: rgba(255, 207, 92, 0.48); background: rgba(255, 207, 92, 0.06); }
+.cit-ico {
+  flex: 0 0 34px; height: 34px; border-radius: 9px; display: grid; place-items: center;
+  font-size: 18px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line-2);
+  box-shadow: inset 2px 0 0 var(--cc, var(--gold));
+}
+.cit-mid { flex: 1 1 auto; min-width: 0; }
+.cit-name { font-size: 11.5px; font-weight: 900; display: flex; align-items: center; gap: 5px; }
+.cit-fx { font-size: 9.5px; color: var(--sub); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cit-cost { font-size: 9px; color: var(--dim); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.cit-act { flex: 0 0 auto; }

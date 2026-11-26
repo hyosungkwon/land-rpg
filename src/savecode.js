@@ -149,6 +149,10 @@ export function compactSave(state) {
       delete c.invasion;
     }
   }
+  if (c.citadel && typeof c.citadel === 'object') {
+    const lvSum = c.citadel.levels ? Object.values(c.citadel.levels).reduce((a, v) => a + (Number(v) || 0), 0) : 0;
+    if (lvSum <= 0) delete c.citadel;
+  }
   if (c.skills && typeof c.skills === 'object') {
     for (const sk of Object.values(c.skills)) {
       if (sk && typeof sk === 'object' && !sk.rune) delete sk.rune;

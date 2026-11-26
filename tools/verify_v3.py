@@ -95,9 +95,9 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "5.11.0"
-FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui.js", "src/sound.js"]
+EXPECTED_VER = "5.12.0"
+FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -192,6 +192,7 @@ def main():
     ok(f"APP_VERSION = '{EXPECTED_VER}'" in read("src/data.js"), f"앱 버전 v{EXPECTED_VER}")
     ok("'./src/expedition.js'" in read("sw.js"), "sw.js 프리캐시에 expedition.js 포함")
     ok("'./src/invasion.js'" in read("sw.js"), "sw.js 프리캐시에 invasion.js 포함")
+    ok("'./src/citadel.js'" in read("sw.js"), "sw.js 프리캐시에 citadel.js 포함")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
     ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
@@ -5428,6 +5429,74 @@ def main():
     ok(iv511["denyNoLand"] and iv511["st0Ok"] and iv511["startedOk"] and iv511["cleared"], "영지 침공 경보(랜드마크 우선) · 35초 방어전 출격·9마리 격파 승리 · 중복 모드 차단", json.dumps(iv511))
     ok(iv511["rewardsOk"] and abs(iv511["boomRentRatio"] - 1.5) < 0.05 and iv511["blockLock"] and len(iv511["normBoomKeys"]) == 1, "승리 보상(골드·강화석·초월석·훈장) · 해당 지역 임대 +50% 호황 실반영 · 블록 쿨타임·정규화", json.dumps(iv511))
     ok(ui511["ok"] and not ui511["bad"], "영지 침공 방어전 카드(부동산 홈·사냥 도전) 및 호황 배지 렌더", json.dumps(ui511))
+
+    # ── 26) v5.12.0 🏰 영지 성채 (영구 시설 5종) ──
+    section("v5.12.0 영지 성채 영구 시설 5종")
+    c512 = js(ctx, """
+      const now = 1_700_000_000_000;
+      const s = defaultState(now);
+      s.stage = 25; s.maxStage = 25; s.peakStage = 25; s.level = 30;
+      s.land.owned[CITIES[0].key] = 50;
+      s.pet.unlocked = ['wolf', 'fox', 'owl']; s.pet.equipped = 'wolf'; s.pet.sub = 'fox'; s.rebirth.count = 1;
+      const baseAtk = calcStats(s, computeBuffs(s, now)).atk;
+      const baseEnh = enhanceCostFor(s, 50);
+      const baseCd = skillCdOf('strike', {}, s);
+      const basePow = skillEffect('strike', 5, s);
+      const baseOff = offlineSummary({ ...s, lastActiveAt: now - 16 * 3600 * 1000 }, now, {});
+      const baseExp = expeditionPreview(s, 'owl', citySetId(CITIES[0].key), 'short');
+      const baseFee = quoteTrade(CITIES[0].key, 'buy', 100, { ...s, gold: 9e9 }, now).fee;
+      const baseRent = portfolioOf(s, now).incomePerMin;
+      const baseAuc = auctionStatus(s, now).price;
+      // 자원 부족 시 거부
+      const denyPoor = upgradeCitadel(s, 'forge');
+      // 5개 시설 모두 Lv.6으로 증축 (초월석 포함)
+      s.gold = 9e9; s.shards = 9e6; s.rebirth.points = 500;
+      for (const id of CITADEL_IDS) {
+        for (let i = 0; i < 6; i++) {
+          const r = upgradeCitadel(s, id);
+          if (!r.ok) throw new Error('upgrade fail: ' + id + ' ' + r.reason);
+        }
+      }
+      const eff = citadelEffects(s);
+      const nextAtk = calcStats(s, computeBuffs(s, now)).atk;
+      const nextEnh = enhanceCostFor(s, 50);
+      const nextCd = skillCdOf('strike', {}, s);
+      const nextPow = skillEffect('strike', 5, s);
+      const nextOff = offlineSummary({ ...s, lastActiveAt: now - 16 * 3600 * 1000 }, now, {});
+      const nextExp = expeditionPreview(s, 'owl', citySetId(CITIES[0].key), 'short');
+      const nextFee = quoteTrade(CITIES[0].key, 'buy', 100, { ...s, gold: 9e9 }, now).fee;
+      const nextRent = portfolioOf(s, now).incomePerMin;
+      const nextAuc = auctionStatus(s, now).price;
+      // 환생 후 영구 유지 확인
+      doRebirth(s, now);
+      const keptAfterRebirth = citadelEffects(s).totalLv === 30;
+      const norm = normalizeState({ citadel: { levels: { forge: 99, tower: -3, alchemy: 4 } } }, now);
+      return {
+        denyPoor: !denyPoor.ok,
+        totalLv: eff.totalLv,
+        forgeOk: nextAtk > baseAtk && nextEnh < baseEnh,
+        towerOk: nextCd < baseCd && nextPow > basePow,
+        alchemyOk: nextOff.gold > baseOff.gold && nextOff.sec > baseOff.sec,
+        barracksOk: nextExp.gold > baseExp.gold && eff.subPetRateAdd > 0.1,
+        exchangeOk: nextFee < baseFee && nextRent > baseRent && nextAuc < baseAuc,
+        keptAfterRebirth,
+        normOk: norm.citadel.levels.forge === 10 && norm.citadel.levels.tower === 0 && norm.citadel.levels.alchemy === 4,
+      };
+    """)
+    ui512 = js(ctx2, """
+      const s = defaultState(Date.now());
+      s.gold = 999999; s.shards = 999;
+      const buffs = computeBuffs(s);
+      const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(1), boss: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'land', expPick: { petId: '', setId: '', durKey: 'short' }, el: {}, install: { hidden: true } };
+      const html = __landSub(ui, 'buff');
+      return {
+        ok: html.includes('citadelCard') && html.includes('대장간') && html.includes('거래소 본부') && html.includes('data-action="citadel-up"'),
+        bad: /undefined|NaN|\\[object Object\\]/.test(html),
+      };
+    """)
+    ok(c512["denyPoor"] and c512["totalLv"] == 30 and c512["forgeOk"] and c512["towerOk"], "영지 성채 건설/증축(초월석 포함) · 대장간(강화할인/공격) · 마법탑(쿨감/스킬위력)", json.dumps(c512))
+    ok(c512["alchemyOk"] and c512["barracksOk"] and c512["exchangeOk"], "연금술실(방치효율/상한) · 펫 훈련소(파견/보조펫) · 거래소 본부(거래세/경매/임대)", json.dumps(c512))
+    ok(c512["keptAfterRebirth"] and c512["normOk"] and ui512["ok"] and not ui512["bad"], "환생 후 영구 유지 · 세이브 정규화 · 성채 카드 UI 렌더", json.dumps({ **c512, **ui512 }))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

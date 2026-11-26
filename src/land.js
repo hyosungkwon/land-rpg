@@ -231,7 +231,9 @@ export function cityRentMul(state, key, now = Date.now(), setBuffs = null, news 
   const leaseMul = 1 + leasePctOf(state, key) / 100; // v4.6 경매 특별 임대
   const boomEnd = state && state.invasion && state.invasion.booms ? Number(state.invasion.booms[key]) || 0 : 0;
   const boomMul = boomEnd > now ? 1.5 : 1; // v5.11 침공 방어 성공 호황 +50%
-  return (1 + setPct / 100) * lm * newsMul * leaseMul * boomMul;
+  const exLv = Math.max(0, Math.min(10, Math.floor(Number(state && state.citadel && state.citadel.levels && state.citadel.levels.exchange) || 0)));
+  const citMul = 1 + exLv * 0.02; // v5.12 영지 성채 거래소 본부 임대 +2%/Lv
+  return (1 + setPct / 100) * lm * newsMul * leaseMul * boomMul * citMul;
 }
 
 /* ─────────────── 🏷️ 경매 특별 임대 계약 (v4.6) ─────────────── */
@@ -429,8 +431,9 @@ export function portfolioOf(state, now = Date.now()) {
     const leasePct = leasePctOf(s, key);
     const boomEnd = s && s.invasion && s.invasion.booms ? Number(s.invasion.booms[key]) || 0 : 0;
     const boomPct = boomEnd > now ? 50 : 0;
+    const exLv = Math.max(0, Math.min(10, Math.floor(Number(s && s.citadel && s.citadel.levels && s.citadel.levels.exchange) || 0)));
     const rentMul = (1 + setRentPct / 100) * landmarkRentMul(lm)
-      * (news ? 1 + (news.rentPct || 0) / 100 : 1) * (1 + leasePct / 100) * (1 + boomPct / 100);
+      * (news ? 1 + (news.rentPct || 0) / 100 : 1) * (1 + leasePct / 100) * (1 + boomPct / 100) * (1 + exLv * 0.02);
     const income = incomePerMinOf(city, qty, qty, now, rentMul);
     const v = qty * info.price;
     const cost = num(totalCost[key]);
@@ -537,6 +540,7 @@ export function computeBuffs(state, now = Date.now()) {
     synDropPct: syn.dropPct,
     synCritDmgPct: syn.critDmgPct,
     synCdrPct: syn.cdrPct,
+    citCdrPct: Math.round(Math.max(0, Math.min(10, Math.floor(Number(state && state.citadel && state.citadel.levels && state.citadel.levels.tower) || 0))) * 1.2 * 10) / 10,
     synBossDmgPct: syn.bossDmgPct,
     synExpPct: syn.expPct,
     synText: syn.text,
@@ -596,7 +600,9 @@ export function quoteTrade(key, side, qty, state, now = Date.now()) {
   if (!(q > 0)) return { ok: false, reason: '수량을 1평 이상 입력해 주세요.' };
   const info = priceInfo(city, now);
   const total = info.price * q;
-  const fee = Math.floor(total * LAND.feeRate);
+  const exLv = Math.max(0, Math.min(10, Math.floor(Number(s && s.citadel && s.citadel.levels && s.citadel.levels.exchange) || 0)));
+  const feeRate = LAND.feeRate * (1 - Math.min(0.8, exLv * 0.08));
+  const fee = Math.floor(total * feeRate);
 
   if (side === 'buy') {
     const remaining = Math.max(0, city.supply - held);

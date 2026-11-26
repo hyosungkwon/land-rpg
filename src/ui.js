@@ -26,6 +26,7 @@ import {
   EXPEDITION_DURATIONS, EXPEDITION_MAX_SLOTS, isPetDispatched, expeditionStatus, expeditionPreview, regionMapData,
 } from './expedition.js';
 import { INVASION, invasionStatus } from './invasion.js';
+import { CITADEL_FACILITIES, CITADEL_MAX_LV, citadelEffects, citadelUpgradeQuote } from './citadel.js';
 import {
   PETS, DUNGEON, PET_MAX_LV, petDef, petProgress, petLevel, petAtkPct, petDmgPct,
   petUpgradeCost, jobOf, jobProgress, dungeonState, JOB_COUNT, isUpperJob,
@@ -219,6 +220,7 @@ export class UI {
       case 'exp-claim': actions.expClaim(v); break;
       case 'exp-claim-all': actions.expClaimAll(); break;
       case 'exp-cancel': actions.expCancel(v); break;
+      case 'citadel-up': actions.upgradeCitadel(v); break;
       case 'toggle-auto-rent': actions.toggleAutoRent(); break;
       case 'claim-rent': actions.claimRent(); break;
       case 'rent-info': actions.rentInfo(); break;
@@ -2098,6 +2100,42 @@ function expeditionCard(ui) {
   </div>`;
 }
 
+/* ══════════════════ 🏰 영지 성채 (영구 시설 5종 · v5.12.0) ══════════════════ */
+function citadelCard(ui) {
+  const s = ui.s;
+  const eff = citadelEffects(s);
+  const rows = CITADEL_FACILITIES.map((f) => {
+    const q = citadelUpgradeQuote(s, f.id);
+    const lv = q.lv || 0;
+    const costTxt = q.max
+      ? '최종 증축 완료'
+      : `💰${formatGold(q.cost.gold)} · 💎${fmt(q.cost.shards)}${q.cost.points ? ` · ✨${q.cost.points}P` : ''}`;
+    return `
+    <div class="cit-row${q.can ? ' ready' : ''}">
+      <div class="cit-ico" style="--cc:${f.color}">${f.icon}</div>
+      <div class="cit-mid">
+        <div class="cit-name">${esc(f.name)}<span class="lv">Lv.${lv}/${CITADEL_MAX_LV}</span></div>
+        <div class="cit-fx">${lv > 0 ? esc(f.effect(lv)) : esc(f.desc)}</div>
+        <div class="cit-cost">${q.max ? '<span style="color:var(--gold)">MAX</span>' : `다음 Lv.${lv + 1}: ${costTxt}`}</div>
+      </div>
+      <div class="cit-act">
+        ${q.max
+          ? '<button class="mini on" type="button" disabled>MAX</button>'
+          : `<button class="btn small ${q.can ? 'primary' : 'ghost'}" type="button" data-action="citadel-up" data-value="${f.id}" ${q.can ? '' : 'disabled'}>${lv > 0 ? '증축' : '건설'}</button>`}
+      </div>
+    </div>`;
+  }).join('');
+  return `
+  <div class="card cit-card" id="citadelCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🏰</span>영지 성채<small>총 Lv.${eff.totalLv}/${eff.maxTotalLv} · 환생 유지</small></div>
+      <span class="tiny dim">영구 시설 5종</span>
+    </div>
+    <div class="tiny muted">골드·강화석·초월석으로 영지 본부를 증축합니다. 모든 시설은 <b>환생 후에도 영구 유지</b>됩니다.</div>
+    <div class="cit-list">${rows}</div>
+  </div>`;
+}
+
 /** 내 부동산 홈 — 권역 세트 요약 */
 function regionSetMini(ui) {
   const sets = regionSetStatus(ui.s.land.owned);
@@ -2667,6 +2705,8 @@ function tplLandBuff(ui) {
   ${petCard(ui)}
 
   ${expeditionCard(ui)}
+
+  ${citadelCard(ui)}
 
   ${regionSetCard(ui)}
 

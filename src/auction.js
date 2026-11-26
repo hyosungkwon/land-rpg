@@ -119,9 +119,13 @@ export function auctionStatus(state, now = Date.now()) {
   const done = !!(st && Math.floor(num(st.done, -1)) === lot.block);
   const progress = live ? Math.min(1, elapsed / AUCTION.liveMs) : 1;
   // 입찰가는 최저가 → 시세까지 오른다(경쟁 입찰). 시간이 지날수록 싸게 살 수 없다.
-  const price = live
+  // v5.12 영지 성채 '거래소 본부' 경매 할인(-1.5%/Lv, 최대 -15%)
+  const exLv = Math.max(0, Math.min(10, Math.floor(Number(state && state.citadel && state.citadel.levels && state.citadel.levels.exchange) || 0)));
+  const citDisc = 1 - Math.min(0.15, exLv * 0.015);
+  const rawPrice = live
     ? Math.max(lot.startBid, Math.round(lot.startBid + (lot.marketValue - lot.startBid) * progress))
     : lot.marketValue;
+  const price = Math.max(1, Math.round(rawPrice * citDisc));
   const discountPct = Math.round((1 - price / lot.marketValue) * 100);
   const leftMs = live ? Math.max(0, AUCTION.liveMs - elapsed) : 0;
   // 다음 경매(다음 20분 블록)까지 — 낙찰 완료·준비 시간 모두 같은 기준으로 센다
