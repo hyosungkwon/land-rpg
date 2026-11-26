@@ -1242,15 +1242,15 @@ body.resting{overflow:hidden;}
 
 /* ── 허브 ── */
 #duo{background:linear-gradient(160deg,#1a1033,#2b2350 55%,#3b2560);}
-.duo-body{flex:1;display:flex;flex-direction:column;justify-content:center;gap:9px;
-  padding:10px 14px 24px;width:100%;max-width:430px;margin:0 auto;}
-.duo-hero{display:flex;align-items:center;gap:11px;background:rgba(255,255,255,.08);
-  border:1px solid rgba(255,255,255,.14);border-radius:18px;padding:11px 13px;}
+.duo-body{flex:1;display:flex;flex-direction:column;justify-content:center;gap:11px;
+  padding:12px 14px 22px;width:100%;max-width:430px;margin:0 auto;}
+.duo-hero{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.14);border-radius:18px;padding:13px 14px;}
 .duo-hero-em{font-size:2rem;}
 .duo-hero-title{font-family:'Jua',sans-serif;font-size:.95rem;color:#FFD93D;}
 .duo-hero-sub{font-family:'Jua',sans-serif;font-size:.68rem;color:rgba(255,255,255,.72);line-height:1.35;margin-top:2px;}
 .duo-pick{display:flex;align-items:center;gap:12px;text-align:left;border:none;border-radius:18px;
-  padding:14px;cursor:pointer;font-family:'Jua',sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.32);
+  padding:16px 14px;cursor:pointer;font-family:'Jua',sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.32);
   transition:transform .12s,box-shadow .12s;}
 .duo-pick:active{transform:scale(.97);box-shadow:0 2px 8px rgba(0,0,0,.32);}
 .duo-pick-em{font-size:1.9rem;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3));}
@@ -1263,8 +1263,10 @@ body.resting{overflow:hidden;}
 .duo-pick.dm{background:linear-gradient(135deg,#7B1FA2,#4527A0);}
 .duo-pick.da{background:linear-gradient(135deg,#1565c0,#0d47a1);}
 .duo-pick.dd{background:linear-gradient(135deg,#c2185b,#7B1FA2);}
-.duo-note{text-align:center;font-family:'Jua',sans-serif;font-size:.68rem;
-  color:rgba(255,255,255,.55);margin-top:2px;}
+.duo-tip{text-align:center;font-family:'Jua',sans-serif;font-size:.68rem;
+  color:rgba(255,255,255,.62);line-height:1.4;margin-top:4px;word-break:keep-all;}
+.duo-note{text-align:center;font-family:'Jua',sans-serif;font-size:.66rem;
+  color:rgba(255,255,255,.5);margin-top:-4px;}
 
 /* ── 🃏 기억력 턴제 대결 ── */
 #duo-mem{background:linear-gradient(160deg,#2a1b4d,#12204a);}
@@ -1278,8 +1280,8 @@ body.resting{overflow:hidden;}
 .dm-intro-rules b{color:#FFD93D;}
 .dm-themes{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;}
 .dm-start{padding:12px 26px;font-size:1rem;}
-.dm-game{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;
-  padding:6px 12px 12px;width:100%;max-width:440px;margin:0 auto;}
+.dm-game{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;
+  padding:6px 12px 14px;width:100%;max-width:440px;margin:0 auto;}
 .dm-scores{display:flex;align-items:center;gap:8px;width:100%;}
 .dm-p{flex:1;display:flex;align-items:center;gap:5px;border-radius:14px;padding:6px 9px;
   background:rgba(255,255,255,.08);border:2px solid transparent;transition:.15s;
@@ -1291,11 +1293,12 @@ body.resting{overflow:hidden;}
 .dm-p-tag{font-size:.55rem;background:rgba(0,0,0,.3);border-radius:7px;padding:2px 5px;color:#fff;}
 .dm-p-name{font-size:.78rem;}
 .dm-p b{font-size:1.2rem;color:#fff;margin-left:auto;}
-.dm-p-turn{font-size:.6rem;color:#FFD93D;display:none;}
+.dm-p-turn{font-size:.6rem;color:#FFD93D;display:none;background:rgba(0,0,0,.28);
+  border-radius:8px;padding:2px 6px;margin-left:4px;}
 .dm-p.active .dm-p-turn{display:inline;}
 .dm-vs{color:rgba(255,255,255,.5);font-size:.9rem;}
-.dm-status{font-family:'Jua',sans-serif;font-size:.76rem;color:rgba(255,255,255,.84);
-  min-height:1.2em;text-align:center;}
+.dm-status{font-family:'Jua',sans-serif;font-size:.82rem;color:rgba(255,255,255,.9);
+  min-height:1.3em;text-align:center;}
 .dm-status.good{color:#B9F6CA;}
 .dm-grid{display:grid;justify-content:center;margin:2px 0;}
 .dm-row{display:flex;gap:8px;margin-top:6px;}

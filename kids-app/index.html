@@ -11,7 +11,7 @@ window.__errs = [];
 addEventListener('error', function (e) { try { window.__errs.push(String(e.message || 'error')); } catch (_) {} });
 addEventListener('unhandledrejection', function (e) { try { window.__errs.push('promise: ' + String((e.reason && e.reason.message) || e.reason)); } catch (_) {} });
 </script>
-<link rel="stylesheet" href="style.css?v=dd3fe948">
+<link rel="stylesheet" href="style.css?v=e9409afe">
 </head>
 <body>
 
@@ -866,6 +866,7 @@ addEventListener('unhandledrejection', function (e) { try { window.__errs.push('
       <span class="duo-pick-badge">10초·5획</span>
     </button>
 
+    <div class="duo-tip">🍽️ 폰을 식탁이나 무릎 위에 놓고 마주 앉으면 더 재미있어요!</div>
     <div class="duo-note" id="duo-count">지금까지 같이 놀기 0판</div>
   </div>
 </div>
