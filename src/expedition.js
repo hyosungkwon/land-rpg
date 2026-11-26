@@ -181,8 +181,11 @@ export function expeditionPreview(state, petId, setId, durKey) {
   const gold = Math.max(100, Math.round(goldBase * dur.goldMul * powerMul * rb.goldMul * citMul));
   const shards = Math.max(4, Math.round(dur.shardsBase * powerMul * rb.shardMul * citMul));
   const points = dur.pointsBase > 0 ? Math.max(1, Math.round((dur.pointsBase + rb.pointAdd) * (1 + evo * 0.25))) : (rb.pointAdd > 0 && evo >= 1 ? 1 : 0);
+  const rEq = (state && state.relics && Array.isArray(state.relics.equipped)) ? state.relics.equipped : [];
+  const compLv = rEq.includes('compass') ? Math.max(0, Math.min(5, Math.floor(num(state.relics.owned && state.relics.owned.compass, 0)))) : 0;
+  const compGreat = compLv > 0 ? (4 + 2 * compLv) / 100 : 0;
   const gearChance = clamp(dur.gearChance + rb.gearAdd + evo * 0.05, 0, 0.9);
-  const greatChance = clamp(dur.greatBase + evo * 0.08 + Math.min(0.20, lmLv * 0.02) + rb.greatAdd, 0.05, 0.75);
+  const greatChance = clamp(dur.greatBase + evo * 0.08 + Math.min(0.20, lmLv * 0.02) + rb.greatAdd + compGreat, 0.05, 0.85);
 
   return {
     dur,
@@ -224,13 +227,16 @@ export function startExpedition(state, petId, setId, durKey = 'short', now = Dat
   const dur = EXPEDITION_DUR_BY_KEY[durKey];
   if (!dur) return { ok: false, reason: '잘못된 파견 기간입니다.' };
 
+  const rEq = (state && state.relics && Array.isArray(state.relics.equipped)) ? state.relics.equipped : [];
+  const compLv = rEq.includes('compass') ? Math.max(0, Math.min(5, Math.floor(num(state.relics.owned && state.relics.owned.compass, 0)))) : 0;
+  const durMs = Math.max(60000, Math.round(dur.ms * (1 - (compLv > 0 ? (8 + 4 * compLv) / 100 : 0))));
   const slot = {
     id: `${petId}_${Math.floor(now)}_${state.expedition.active.length}`,
     petId,
     setId,
     durKey: dur.key,
     startedAt: Math.floor(now),
-    endsAt: Math.floor(now) + dur.ms,
+    endsAt: Math.floor(now) + durMs,
   };
   state.expedition.active.push(slot);
   return { ok: true, slot, pet: pDef, region: regDef, dur, preview: expeditionPreview(state, petId, setId, dur.key) };

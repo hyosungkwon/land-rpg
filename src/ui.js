@@ -57,6 +57,7 @@ import {
 import {
   REBIRTH, REBIRTH_TRAITS, rebirthStatus, rebirthBonus, traitLevel, traitCost, traitSummary,
 } from './rebirth.js';
+import { RELICS, RELIC_BY_ID, RELIC_SLOTS, RELIC_MAX_LV, RELIC_SUMMON_COST, relicLevel } from './relics.js';
 import { esc, fmt, pct, hhmmss, mmss } from './ui-fmt.js';
 import { cloudCard, rankCard } from './ui-cloud.js';
 import { rarityBadge, rarityName, gearSlotCards, gearInventory, gachaCard } from './ui-gear.js';
@@ -237,6 +238,9 @@ export class UI {
       case 'rebirth-start': actions.pickRebirthStart(v); break;
       case 'rebirth-traits': actions.openRebirthTraits(); break;
       case 'rebirth-trait': actions.upgradeRebirthTrait(v); break;
+      case 'relic-summon': actions.summonRelic(v); break;
+      case 'relic-equip': actions.equipRelic(v); break;
+      case 'relic-upgrade': actions.upgradeRelic(v); break;
       case 'pet-equip': actions.equipPet(v); break;
       case 'pet-sub': actions.equipSubPet(v); break;
       case 'pet-upgrade': actions.upgradePet(v); break;
@@ -1539,18 +1543,69 @@ function petLine(ui) {
   </div>`;
 }
 
+/* ───────────── 🏺 고대 유물(아티팩트 12종 · v6.1.0) ───────────── */
+function relicCard(ui) {
+  const s = ui.s;
+  const rs = s.relics || { owned: {}, frags: {}, equipped: [], summons: 0 };
+  const eq = Array.isArray(rs.equipped) ? rs.equipped : [];
+  const ownedCount = Object.keys(rs.owned || {}).length;
+  const medals = Math.max(0, Math.floor(Number(s.invasion && s.invasion.medals) || 0));
+  const pts = Math.max(0, Math.floor(Number(s.rebirth && s.rebirth.points) || 0));
+
+  const slots = Array.from({ length: RELIC_SLOTS }, (_, i) => {
+    const id = eq[i];
+    const def = id && RELIC_BY_ID[id];
+    const lv = def ? relicLevel(s, id) : 0;
+    if (!def) return `<div class="r-slot"><span class="ri">➕</span><span>빈 슬롯 ${i + 1}</span></div>`;
+    return `<div class="r-slot on" style="--rc:${def.color}"><span class="ri">${def.icon}</span><b>${esc(def.name)} Lv.${lv}</b><span>${esc(def.effect(lv))}</span></div>`;
+  }).join('');
+
+  const items = RELICS.map((def) => {
+    const lv = relicLevel(s, def.id);
+    const have = lv >= 1;
+    const on = eq.includes(def.id);
+    const frags = Math.max(0, Math.floor(Number(rs.frags && rs.frags[def.id]) || 0));
+    const canUp = have && lv < RELIC_MAX_LV && (frags >= lv || pts >= lv * 4);
+    const upLbl = lv >= RELIC_MAX_LV ? 'MAX' : frags >= lv ? `강화 (파편 ${frags}/${lv})` : `강화 (✨${lv * 4}P)`;
+    return `
+    <div class="r-item${on ? ' on' : ''}${have ? '' : ' lock'}" style="--rc:${def.color}">
+      <div class="r-head"><span>${def.icon} ${esc(def.name)}</span><span class="lv">${have ? `Lv.${lv}` : '미보유'}</span></div>
+      <div class="r-fx">${have ? esc(def.effect(lv)) : esc(def.desc)}</div>
+      ${have ? `<div class="r-acts">
+        <button class="mini ${on ? 'on' : 'equip'}" type="button" data-action="relic-equip" data-value="${def.id}">${on ? '해제' : '장착'}</button>
+        <button class="mini ${canUp ? 'up' : ''}" type="button" data-action="relic-upgrade" data-value="${def.id}" ${canUp ? '' : 'disabled'}>${upLbl}</button>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+
+  return `
+  <div class="card relic-card" id="relicCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🏺</span>고대 유물<small>${ownedCount}/${RELICS.length} 수집 · 장착 ${eq.length}/${RELIC_SLOTS}</small></div>
+      <span class="tiny dim">🏅훈장 ${medals} · ✨${pts}P</span>
+    </div>
+    <div class="relic-slots">${slots}</div>
+    <div class="row gap6" style="margin-top:8px">
+      <button class="btn small ${medals >= 1 ? 'primary' : 'ghost'} wide" type="button" data-action="relic-summon" data-value="medal" ${medals >= 1 ? '' : 'disabled'}>🏺 감정 (${RELIC_SUMMON_COST.medal.label})</button>
+      <button class="btn small ${pts >= 6 && s.gold >= 50000 ? 'blue' : 'ghost'} wide" type="button" data-action="relic-summon" data-value="points" ${pts >= 6 && s.gold >= 50000 ? '' : 'disabled'}>${RELIC_SUMMON_COST.points.label}</button>
+      <button class="btn small ${s.shards >= 120 && s.gold >= 50000 ? 'ghost' : 'ghost'}" type="button" data-action="relic-summon" data-value="shards" ${s.shards >= 120 && s.gold >= 50000 ? '' : 'disabled'}>${RELIC_SUMMON_COST.shards.label}</button>
+    </div>
+    <div class="relic-grid">${items}</div>
+  </div>`;
+}
+
 function tplHuntGrowth(ui) {
   const f = ['all', 'challenge', 'growth'].includes(ui && ui.growthFilter) ? ui.growthFilter : 'all';
   const bar = `<div class="chips growth-filter" role="tablist" aria-label="전직·도전 보기">
     <button class="chip${f === 'all' ? ' on' : ''}" type="button" data-action="growth-filter" data-value="all">전체 보기</button>
     <button class="chip${f === 'challenge' ? ' on' : ''}" type="button" data-action="growth-filter" data-value="challenge">⚔️ 도전 (던전·탑·보스)</button>
-    <button class="chip${f === 'growth' ? ' on' : ''}" type="button" data-action="growth-filter" data-value="growth">✨ 성장 (전직·환생·펫)</button>
+    <button class="chip${f === 'growth' ? ' on' : ''}" type="button" data-action="growth-filter" data-value="growth">✨ 성장 (전직·환생·유물·펫)</button>
   </div>`;
-  const growthCards = `${jobCard(ui)}${rebirthCard(ui)}${petLine(ui)}`;
+  const growthCards = `${jobCard(ui)}${rebirthCard(ui)}${relicCard(ui)}${petLine(ui)}`;
   const challengeCards = `${invasionCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}`;
   if (f === 'challenge') return `${bar}${challengeCards}`;
   if (f === 'growth') return `${bar}${growthCards}`;
-  return `${bar}${jobCard(ui)}${rebirthCard(ui)}${invasionCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}${petLine(ui)}`;
+  return `${bar}${jobCard(ui)}${rebirthCard(ui)}${relicCard(ui)}${invasionCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}${petLine(ui)}`;
 }
 
 /* ───────────── 📅 일일 퀘스트 (v4.9.0 · KST 자정 리셋) ───────────── */

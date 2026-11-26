@@ -227,13 +227,19 @@ export function cityRentMul(state, key, now = Date.now(), setBuffs = null, news 
   const setId = citySetId(key);
   const setPct = setId && sb.rentBySet ? (sb.rentBySet[setId] || 0) : 0;
   const lm = landmarkRentMul(landmarkLevel(state, key));
-  const newsMul = news ? 1 + (news.rentPct || 0) / 100 : 1;
+  const rEq = (state && state.relics && Array.isArray(state.relics.equipped)) ? state.relics.equipped : [];
+  const rOwn = (state && state.relics && state.relics.owned) || {};
+  const scrollLv = rEq.includes('scroll') ? Math.max(0, Math.min(5, Math.floor(Number(rOwn.scroll) || 0))) : 0;
+  const ledgerLv = rEq.includes('ledger') ? Math.max(0, Math.min(5, Math.floor(Number(rOwn.ledger) || 0))) : 0;
+  const newsBoost = 1 + (scrollLv > 0 ? (20 + 10 * scrollLv) / 100 : 0);
+  const newsMul = news ? 1 + ((news.rentPct || 0) * newsBoost) / 100 : 1;
   const leaseMul = 1 + leasePctOf(state, key) / 100; // v4.6 경매 특별 임대
   const boomEnd = state && state.invasion && state.invasion.booms ? Number(state.invasion.booms[key]) || 0 : 0;
   const boomMul = boomEnd > now ? 1.5 : 1; // v5.11 침공 방어 성공 호황 +50%
   const exLv = Math.max(0, Math.min(10, Math.floor(Number(state && state.citadel && state.citadel.levels && state.citadel.levels.exchange) || 0)));
   const citMul = 1 + exLv * 0.02; // v5.12 영지 성채 거래소 본부 임대 +2%/Lv
-  return (1 + setPct / 100) * lm * newsMul * leaseMul * boomMul * citMul;
+  const ledgerMul = ledgerLv > 0 ? 1 + (6 + 4 * ledgerLv) / 100 : 1;
+  return (1 + setPct / 100) * lm * newsMul * leaseMul * boomMul * citMul * ledgerMul;
 }
 
 /* ─────────────── 🏷️ 경매 특별 임대 계약 (v4.6) ─────────────── */
@@ -435,8 +441,14 @@ export function portfolioOf(state, now = Date.now()) {
     const boomEnd = s && s.invasion && s.invasion.booms ? Number(s.invasion.booms[key]) || 0 : 0;
     const boomPct = boomEnd > now ? 50 : 0;
     const exLv = Math.max(0, Math.min(10, Math.floor(Number(s && s.citadel && s.citadel.levels && s.citadel.levels.exchange) || 0)));
+    const rEq = (s && s.relics && Array.isArray(s.relics.equipped)) ? s.relics.equipped : [];
+    const rOwn = (s && s.relics && s.relics.owned) || {};
+    const scrollLv = rEq.includes('scroll') ? Math.max(0, Math.min(5, Math.floor(Number(rOwn.scroll) || 0))) : 0;
+    const ledgerLv = rEq.includes('ledger') ? Math.max(0, Math.min(5, Math.floor(Number(rOwn.ledger) || 0))) : 0;
+    const newsBoost = 1 + (scrollLv > 0 ? (20 + 10 * scrollLv) / 100 : 0);
+    const ledgerMul = ledgerLv > 0 ? 1 + (6 + 4 * ledgerLv) / 100 : 1;
     const rentMul = (1 + setRentPct / 100) * landmarkRentMul(lm)
-      * (news ? 1 + (news.rentPct || 0) / 100 : 1) * (1 + leasePct / 100) * (1 + boomPct / 100) * (1 + exLv * 0.02);
+      * (news ? 1 + ((news.rentPct || 0) * newsBoost) / 100 : 1) * (1 + leasePct / 100) * (1 + boomPct / 100) * (1 + exLv * 0.02) * ledgerMul;
     const income = incomePerMinOf(city, qty, qty, now, rentMul);
     const v = qty * info.price;
     const cost = num(totalCost[key]);

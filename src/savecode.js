@@ -155,6 +155,9 @@ export function compactSave(state) {
     const lvSum = c.citadel.levels ? Object.values(c.citadel.levels).reduce((a, v) => a + (Number(v) || 0), 0) : 0;
     if (lvSum <= 0) delete c.citadel;
   }
+  if (c.relics && typeof c.relics === 'object') {
+    if ((!c.relics.owned || !Object.keys(c.relics.owned).length) && !(c.relics.summons > 0)) delete c.relics;
+  }
   if (c.skills && typeof c.skills === 'object') {
     for (const sk of Object.values(c.skills)) {
       if (sk && typeof sk === 'object' && !sk.rune) delete sk.rune;

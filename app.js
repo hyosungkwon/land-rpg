@@ -36,6 +36,9 @@ import {
   startExpedition, claimExpedition, claimAllExpeditions, cancelExpedition,
 } from './src/expedition.js';
 import { upgradeCitadel as upgradeCitadelState } from './src/citadel.js';
+import {
+  summonRelic as summonRelicState, toggleEquipRelic as toggleEquipRelicState, upgradeRelic as upgradeRelicState,
+} from './src/relics.js';
 import { AUCTION, auctionStatus, bidQuote, applyAuctionBid } from './src/auction.js';
 import { Renderer } from './src/render.js';
 import { UI } from './src/ui.js';
@@ -472,6 +475,10 @@ class App {
       } else if (ev.t === 'revive') {
         this.ui.addLog('✨ 부활했습니다');
         this.ui.announce(`부활 — ${Math.round((ev.graceMs || 0) / 100) / 10}초 동안 받는 피해 ${ev.reducePct || 0}% 경감`);
+      } else if (ev.t === 'phoenixRevive') {
+        this.sound.fanfare();
+        this.ui.toast(`🔥 불사조의 깃털 발동! 즉시 부활 (HP ${ev.hp.toLocaleString()})`, 'gold');
+        this.ui.addLog(`🔥 <b>불사조의 깃털</b> 발동 — 치명상에서 즉시 부활 + 보호막`);
       } else if (ev.t === 'dungeonStart') {
         this.ui.addLog(`🔥 <b>황금 던전</b> 시작 — ${DUNGEON.durationMs / 1000}초 보스 러시`);
         this.ui.toast('🔥 황금 던전 시작! 30초간 몰아칩니다', 'gold');
@@ -1820,6 +1827,56 @@ class App {
       pickRebirthStart: (v) => this.pickRebirthStart(v),
       openRebirthTraits: () => this.showRebirthTraits(),
       upgradeRebirthTrait: (id) => this.doUpgradeRebirthTrait(id),
+
+      /* ── v6.1.0: 🏺 고대 유물(아티팩트) ── */
+      summonRelic: (mode) => {
+        this.sound.unlock();
+        const r = summonRelicState(this.s, mode);
+        if (!r.ok) {
+          this.ui.toast(r.reason || '감정할 수 없습니다', 'red');
+          return;
+        }
+        this.buffs = computeBuffs(this.s);
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.fanfare();
+        this.ui.toast(
+          r.isNew
+            ? `🏺 신규 유물 획득! ${r.relic.icon} ${r.relic.name} — ${r.relic.effect(r.lv)}`
+            : `🏺 ${r.relic.icon} ${r.relic.name} 파편 +1 (보유 ${r.frags}개)`,
+          'gold',
+        );
+        this.ui.addLog(`🏺 <b>${esc(r.relic.name)}</b> ${r.isNew ? '신규 획득' : `파편 +1 (${r.frags})`}`);
+        this.ui.render();
+      },
+      equipRelic: (id) => {
+        const r = toggleEquipRelicState(this.s, id);
+        if (!r.ok) {
+          this.ui.toast(r.reason || '장착할 수 없습니다', 'red');
+          return;
+        }
+        this.buffs = computeBuffs(this.s);
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.ui();
+        this.ui.toast(`🏺 ${r.relic.icon} ${r.relic.name} ${r.equipped ? '장착!' : '해제'}`, r.equipped ? 'green' : '');
+        this.ui.render();
+      },
+      upgradeRelic: (id) => {
+        this.sound.unlock();
+        const r = upgradeRelicState(this.s, id);
+        if (!r.ok) {
+          this.ui.toast(r.reason || '강화할 수 없습니다', 'red');
+          return;
+        }
+        this.buffs = computeBuffs(this.s);
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.levelUp();
+        this.ui.toast(`🏺 ${r.relic.icon} ${r.relic.name} Lv.${r.lv} 강화! (${r.paid})`, 'gold');
+        this.ui.addLog(`🏺 <b>${esc(r.relic.name)} Lv.${r.lv}</b> 강화 (${r.paid})`);
+        this.ui.render();
+      },
 
       /* ── v3.3: 🎯 미션 · 🏆 업적 · 📖 도감 · v5.4 출석/주간 보스 ── */
       claimAttendance: () => {

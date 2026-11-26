@@ -15,6 +15,7 @@ import {
 } from './meta.js';
 import { TOWER_RULES, TOWER_MAX_FLOOR, towerFloor, towerStageDef, towerHas, towerReward, towerCleared, towerState, towerUnlocked, towerLockReason } from './tower.js';
 import { INVASION, invasionStatus, recordInvasionWin } from './invasion.js';
+import { relicEffects } from './relics.js';
 import { DAILY, dailyBossFor, dailyInfo, consumeDailyAttempt, dailyReward, recordDailyRun, recordWeeklyBoss, dailyDpsCap } from './daily.js';
 import { codexMeet, codexKill, trackDailyQuest } from './quests.js';
 import { tryGearDrop, acquireGear, rollDropRarityIdx, randomItemOfRarity } from './gear.js';
@@ -117,6 +118,8 @@ export class Battle {
     this.daily = null;
     // v5.11 🚨 영지 침공 방어전 상태
     this.invasion = null;
+    // v6.1 🔥 불사조의 깃털 즉시 부활 쿨타임
+    this.phoenixAt = 0;
     this.syncStage();
     this.spawnInitial(startAt);
   }
@@ -269,13 +272,14 @@ export class Battle {
   spawnNormal(now, allowSpecial = true) {
     if (this.boss) return;
     if (this.monsters.filter((m) => !m.dead && !m.dying).length >= ECON.maxMonsters) return;
-    // v5.7: 일반 사냥 중 확률적으로 💰 보물 고블린 또는 엘리트 변종 등장
-    const inField = allowSpecial && !this.tower && !this.daily && !this.dungeon && this.s.totalKills > 0;
+    // v5.7: 일반 사냥 중 확률적으로 💰 보물 고블린 또는 엘리트 변종 등장 (+ v6.1 황금 자석 유물)
+    const inField = allowSpecial && !this.tower && !this.daily && !this.dungeon && !this.invasion && this.s.totalKills > 0;
+    const rel = relicEffects(this.s);
     if (
       inField
       && this.s.stage >= TREASURE_GOBLIN.minStage
       && !this.monsters.some((x) => x.treasure && !x.dead && !x.dying)
-      && this.rng() < TREASURE_GOBLIN.chance
+      && this.rng() < TREASURE_GOBLIN.chance * (rel.goblinChanceMul || 1)
     ) {
       const tg = this.makeMonster(TREASURE_GOBLIN.name, false, now);
       tg.treasure = true;
@@ -284,7 +288,7 @@ export class Battle {
       tg.maxHp = tg.hp;
       tg.atk = 1;
       tg.scale = 1.08;
-      tg.fleeAt = now + TREASURE_GOBLIN.durationMs;
+      tg.fleeAt = now + TREASURE_GOBLIN.durationMs + (rel.goblinExtraMs || 0);
       this.monsters.push(tg);
       this.emit({ t: 'treasureSpawn', id: tg.id, ko: tg.ko, durationMs: TREASURE_GOBLIN.durationMs });
       return;
@@ -529,6 +533,16 @@ export class Battle {
     this.player.hurtAt = now;
     this.emit({ t: 'playerHurt', dmg, from: from.ko, reduce: Math.round(reduce * 100), ...(info || {}) });
     if (this.player.hp <= 0) {
+      // v6.1 🔥 불사조의 깃털 유물 — 치명상 시 쿨타임마다 즉시 부활 + 4초 보호막
+      const rel = relicEffects(this.s);
+      if (rel.phoenixCdMs > 0 && (!this.phoenixAt || now - this.phoenixAt >= rel.phoenixCdMs)) {
+        this.phoenixAt = now;
+        this.player.hp = Math.max(1, Math.round(this.stats.hpMax * rel.phoenixHpRatio));
+        this.player.shield = Math.round(this.stats.hpMax * 0.25);
+        this.player.shieldUntil = now + 4000;
+        this.emit({ t: 'phoenixRevive', hp: this.player.hp });
+        return;
+      }
       this.player.hp = 0;
       this.player.dead = true;
       this.player.reviveAt = now + ECON.reviveMs;
@@ -611,6 +625,15 @@ export class Battle {
       if (this.daily) { this.daily.dmg += dmg; this.daily.hits = (this.daily.hits || 0) + 1; }
       dealt += dmg;
       hits++;
+      // v6.1 ⏳ 시간의 모래시계 유물 — 치명타 적중 시 기본 스킬 쿨타임 단축
+      if (crit) {
+        const trim = relicEffects(this.s).critCdTrimMs || 0;
+        if (trim > 0 && this.s && this.s.skills) {
+          for (const k of ['strike', 'whirl', 'berserk', 'heal']) {
+            if (this.s.skills[k] && this.s.skills[k].last > 0) this.s.skills[k].last = Math.max(0, this.s.skills[k].last - trim);
+          }
+        }
+      }
       this.emit({ t: 'hit', id: m.id, dmg, crit, x: m.x, isBoss: m.isBoss, kind });
       if (m.hp <= 0) this.killMonster(m, now);
     }
@@ -822,7 +845,8 @@ export class Battle {
     const pas = petPassive(this.s, pet.id);
     const splash = Math.max(1, Math.floor(pas.splash || 1));
     const list = inRange.slice(0, splash);
-    const base = this.stats.atk * petDmgPct(this.s, pet.id);
+    const hornMul = 1 + (relicEffects(this.s).petDmgPct || 0) / 100;
+    const base = this.stats.atk * petDmgPct(this.s, pet.id) * hornMul;
     const zerk = this.berserkUntil > now ? 1 + skillEffect('berserk', this.s.skills.berserk.lv) * 0.5 : 1;
     for (let i = 0; i < list.length; i++) {
       const mul = (i === 0 ? 1 : 0.65) * zerk;
@@ -841,7 +865,8 @@ export class Battle {
     this.subPetAnimAt = now;
     const barLv = Math.max(0, Math.min(10, Math.floor(Number(this.s && this.s.citadel && this.s.citadel.levels && this.s.citadel.levels.barracks) || 0)));
     const subRate = SUB_PET_RATE + barLv * 0.025;
-    const base = this.stats.atk * petDmgPct(this.s, sp.id) * subRate;
+    const hornMul = 1 + (relicEffects(this.s).petDmgPct || 0) / 100;
+    const base = this.stats.atk * petDmgPct(this.s, sp.id) * subRate * hornMul;
     const zerk = this.berserkUntil > now ? 1 + skillEffect('berserk', this.s.skills.berserk.lv) * 0.5 : 1;
     this.petHitTarget(target, base * zerk * (0.9 + this.rng() * 0.2), now, 'sub', sp);
   }
@@ -895,7 +920,8 @@ export class Battle {
     if (!inRange.length) return;
     this.petSkillAt = now;
     this.petAnimAt = now;
-    const base = this.stats.atk * petDmgPct(this.s, pet.id);
+    const hornMul = 1 + (relicEffects(this.s).petDmgPct || 0) / 100;
+    const base = this.stats.atk * petDmgPct(this.s, pet.id) * hornMul;
     let total = 0;
     let hits = 0;
     if (act.kind === 'multi') {

@@ -232,7 +232,10 @@ export function rebirthStatus(state) {  const s = state && typeof state === 'obj
   const stage = Math.max(1, Math.floor(num(s.maxStage, 1)));
   const need = REBIRTH.stageReq;
   const can = stage >= need;
-  const gain = rebirthPointsFor(stage);
+  const rEq = (s.relics && Array.isArray(s.relics.equipped)) ? s.relics.equipped : [];
+  const prismLv = rEq.includes('prism') ? Math.max(0, Math.min(5, Math.floor(num(s.relics.owned && s.relics.owned.prism, 0)))) : 0;
+  const prismMul = prismLv > 0 ? 1 + (10 + 6 * prismLv) / 100 : 1;
+  const gain = Math.round(rebirthPointsFor(stage) * prismMul);
   const points = Math.max(0, Math.floor(num(rb.points, 0)));
   return {
     can,

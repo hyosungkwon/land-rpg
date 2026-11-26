@@ -95,9 +95,9 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "6.0.0"
-FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui.js", "src/sound.js"]
+EXPECTED_VER = "6.1.0"
+FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -194,6 +194,7 @@ def main():
     ok("'./src/invasion.js'" in read("sw.js"), "sw.js 프리캐시에 invasion.js 포함")
     ok("'./src/citadel.js'" in read("sw.js"), "sw.js 프리캐시에 citadel.js 포함")
     ok("'./src/orders.js'" in read("sw.js"), "sw.js 프리캐시에 orders.js 포함")
+    ok("'./src/relics.js'" in read("sw.js"), "sw.js 프리캐시에 relics.js 포함")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
     ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
@@ -5555,6 +5556,69 @@ def main():
     """)
     ok(o60["denySell"] and o60["waitKept"] and o60["buyFilled"] and o60["sellFilled"] and o60["logLen"] == 2, "지정가 예약 매매(등록·대기·매수/매도 자동 체결·취소·체결 로그)", json.dumps(o60))
     ok(o60["repOk"] and o60["normLen"] == 1 and ui60["ok"] and not ui60["bad"], "투자 대시보드(SVG 추이 그래프·사냥/임대 비율·평가손익) · 세이브 정규화 · UI 렌더", json.dumps({ **o60, **ui60 }))
+
+    # ── 28) v6.1.0 🏺 고대 유물(아티팩트 12종) ──
+    section("v6.1.0 고대 유물 12종 · 방어 훈장 감정")
+    rl61 = js(ctx, """
+      const now = 1_700_000_000_000;
+      const s = defaultState(now);
+      s.stage = 25; s.maxStage = 25; s.peakStage = 25; s.level = 30;
+      s.invasion.medals = 2;
+      s.rebirth.points = 50;
+      s.gold = 500000;
+      s.land.owned[CITIES[0].key] = 20;
+      // 방어 훈장으로 유물 감정
+      const sum1 = summonRelic(s, 'medal', () => 0.0);
+      const sum2 = summonRelic(s, 'points', () => 0.0);
+      // 강화 (파편 또는 초월석)
+      const up1 = upgradeRelic(s, sum1.id);
+      // ⏳ 모래시계(치명타 쿨감) + 🔥 불사조(치명상 부활) 실전 검증
+      s.relics.owned = { hourglass: 3, phoenix: 3, crown: 3, ledger: 3, prism: 3 };
+      s.relics.equipped = ['hourglass', 'phoenix', 'crown'];
+      const b = new Battle(s, () => computeBuffs(s, now), () => 0.0, now); // rng=0 → 100% 치명타
+      b.monsters = [b.makeMonster('Goblin', false, now)];
+      b.monsters[0].hp = 99999; b.monsters[0].maxHp = 99999; b.monsters[0].x = 300;
+      s.skills.strike.last = now;
+      b.hit([b.monsters[0]], 1, 'normal', now);
+      const cdTrimmed = s.skills.strike.last < now;
+      // 불사조 즉시 부활
+      b.player.hp = 10;
+      b.damagePlayer(99999, b.monsters[0], now + 100);
+      const phoenixSaved = !b.player.dead && b.player.hp > 10 && b.player.shield > 0;
+      // 📒 원장 임대 + 🔮 프리즘 환생 초월석
+      const baseRent = portfolioOf({ ...s, relics: defaultRelics() }, now).incomePerMin;
+      const baseRbPts = rebirthStatus({ ...s, relics: defaultRelics() }).gain;
+      s.relics.equipped = ['ledger', 'prism'];
+      const boostedRent = portfolioOf(s, now).incomePerMin;
+      const boostedRbPts = rebirthStatus(s).gain;
+      // 4번째 슬롯 초과 장착 거부 + 정규화
+      s.relics.equipped = ['hourglass', 'phoenix', 'crown'];
+      const deny4 = toggleEquipRelic(s, 'ledger');
+      const norm = normalizeState({ relics: { owned: { crown: 99, bad: 2 }, equipped: ['crown', 'crown', 'phoenix', 'bad'] } }, now);
+      return {
+        count: RELICS.length,
+        summonOk: sum1.ok && sum2.ok && s.invasion.medals === 1 && up1.ok,
+        cdTrimmed,
+        phoenixSaved,
+        rentAndRbOk: boostedRent > baseRent && boostedRbPts > baseRbPts,
+        deny4: !deny4.ok,
+        normOk: norm.relics.owned.crown === 5 && norm.relics.equipped.length === 1 && norm.relics.equipped[0] === 'crown',
+      };
+    """)
+    ui61 = js(ctx2, """
+      const s = defaultState(Date.now());
+      s.invasion.medals = 2;
+      s.relics.owned = { hourglass: 2 }; s.relics.equipped = ['hourglass'];
+      const b = new Battle(s, () => ({}));
+      const ui = { s, battle: b, app: { buffs: {} }, logs: [], tab: 'hunt', huntSub: 'growth', growthFilter: 'growth', el: {}, install: { hidden: true } };
+      const html = __huntSub(ui, 'growth');
+      return {
+        ok: html.includes('relicCard') && html.includes('시간의 모래시계') && html.includes('data-action="relic-summon"'),
+        bad: /undefined|NaN|\\[object Object\\]/.test(html),
+      };
+    """)
+    ok(rl61["count"] == 12 and rl61["summonOk"] and rl61["deny4"] and rl61["normOk"], "고대 유물 12종 · 방어 훈장/초월석 감정·강화 · 3슬롯 상한·정규화", json.dumps(rl61))
+    ok(rl61["cdTrimmed"] and rl61["phoenixSaved"] and rl61["rentAndRbOk"] and ui61["ok"] and not ui61["bad"], "유물 특수 효과(모래시계 쿨감·불사조 부활·원장 임대·프리즘 환생) 및 UI 렌더", json.dumps({ **rl61, **ui61 }))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

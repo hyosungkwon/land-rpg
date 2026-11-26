@@ -131,8 +131,13 @@ export function invasionStatus(state, now = Date.now()) {
   const won = inv.lastBlock === block;
 
   const refStage = Math.max(1, Math.floor(num((state && (state.peakStage || state.maxStage || state.stage)), 1)));
-  const gold = Math.max(300, Math.round(stageGoldBase(refStage) * (55 + lmLv * 25)));
-  const shards = 24 + lmLv * 12;
+  // v6.1 🛡️ 영주의 인장 유물 — 침공 호황 시간 연장 · 보상 증가
+  const rEq = (state && state.relics && Array.isArray(state.relics.equipped)) ? state.relics.equipped : [];
+  const sealLv = rEq.includes('seal') ? Math.max(0, Math.min(5, Math.floor(num(state.relics.owned && state.relics.owned.seal, 0)))) : 0;
+  const sealMul = sealLv > 0 ? 1 + (15 + 5 * sealLv) / 100 : 1;
+  const sealExtraMs = sealLv > 0 ? (10 + 5 * sealLv) * 60 * 1000 : 0;
+  const gold = Math.max(300, Math.round(stageGoldBase(refStage) * (55 + lmLv * 25) * sealMul));
+  const shards = Math.round((24 + lmLv * 12) * sealMul);
   const points = (lmLv >= 1 || refStage >= 20) ? (1 + lmLv) : 0;
 
   return {
@@ -149,7 +154,7 @@ export function invasionStatus(state, now = Date.now()) {
     medals: inv.medals || 0,
     activeBooms,
     last: inv.last || null,
-    reward: { gold, shards, points, boomPct: INVASION.boomPct, boomDurMs: INVASION.boomDurMs },
+    reward: { gold, shards, points, boomPct: INVASION.boomPct, boomDurMs: INVASION.boomDurMs + sealExtraMs },
   };
 }
 

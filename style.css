@@ -2747,3 +2747,30 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .ord-t { font-size: 11px; font-weight: 800; }
 .ord-s { font-size: 9.5px; color: var(--sub); font-variant-numeric: tabular-nums; margin-top: 1px; }
 .mini.ord { border-color: rgba(185, 139, 255, 0.42); color: #d6b8ff; background: rgba(185, 139, 255, 0.1); padding: 0 6px; }
+
+/* ══════════════ v6.1.0 🏺 고대 유물(아티팩트) ══════════════ */
+.relic-card { background: linear-gradient(160deg, rgba(185, 139, 255, 0.11), rgba(18, 26, 42, 0.96) 62%); border-color: rgba(185, 139, 255, 0.28); }
+.relic-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-top: 7px; }
+.r-slot {
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px;
+  padding: 6px 4px; border-radius: 9px; border: 1px dashed var(--line-2);
+  background: rgba(255, 255, 255, 0.025); font-size: 9.5px; color: var(--dim);
+}
+.r-slot.on {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--rc, #b98bff) 55%, transparent);
+  background: color-mix(in srgb, var(--rc, #b98bff) 12%, transparent);
+  color: var(--txt);
+}
+.r-slot .ri { font-size: 18px; line-height: 1.1; }
+.r-slot b { font-size: 10px; }
+.relic-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; margin-top: 8px; }
+.r-item {
+  display: flex; flex-direction: column; gap: 3px; padding: 6px 7px; border-radius: 9px;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line-2);
+}
+.r-item.on { border-color: color-mix(in srgb, var(--rc, #ffcf5c) 60%, transparent); background: color-mix(in srgb, var(--rc, #ffcf5c) 10%, transparent); }
+.r-item.lock { opacity: 0.45; }
+.r-head { display: flex; align-items: center; justify-content: space-between; gap: 4px; font-size: 10.5px; font-weight: 900; }
+.r-fx { font-size: 9px; color: var(--sub); line-height: 1.35; }
+.r-acts { display: flex; gap: 4px; margin-top: 2px; }
