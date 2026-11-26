@@ -63,6 +63,19 @@ const WINDUP_RANGED_MS = 470;
 const WINDUP_BOSS_EXTRA_MS = 90;
 const HEAVY_EVERY = 3; // 보스는 3번째 공격마다 강공격 모션(피해량은 동일)
 const DPS_WINDOW_MS = 5000; // 실시간 DPS(초당 공격력) 슬라이딩 윈도우(5초)
+// v7.7.0 피버 타임 & 캔버스 탭 번개 일격 상수
+export const FEVER = {
+  max: 100,
+  durationMs: 15000,
+  spdMul: 0.8,
+  critAdd: 0.15,
+  goldBonus: 0.3,
+  hitGain: 3,
+  killGain: 6,
+  tapGain: 5,
+  tapCdMs: 350,
+  tapDmgMul: 0.65,
+};
 
 /** 몬스터 공격 전조 길이(ms) */
 function windupFor(m) {
@@ -131,6 +144,10 @@ export class Battle {
     this.rift = null;
     // v6.1 🔥 불사조의 깃털 즉시 부활 쿨타임
     this.phoenixAt = 0;
+    // v7.7.0 🔥 피버 게이지 · 피버 타임 · 캔버스 탭 번개 일격
+    this.fever = 0;
+    this.feverUntil = 0;
+    this.lastTapAt = 0;
     this.syncStage();
     this.spawnInitial(startAt);
   }
@@ -598,10 +615,46 @@ export class Battle {
     this.lastSpawn = now;
   }
 
+  /* ───────────── v7.7.0 피버 타임 & 캔버스 탭 일격 ───────────── */
+  isFever(now = Date.now()) {
+    return (this.feverUntil || 0) > now;
+  }
+
+  addFever(amount, now = Date.now()) {
+    if (this.isFever(now) || !(amount > 0)) return;
+    this.fever = Math.min(FEVER.max, (this.fever || 0) + amount);
+    if (this.fever >= FEVER.max) {
+      this.fever = 0;
+      this.feverUntil = now + FEVER.durationMs;
+      this.emit({ t: 'feverStart', until: this.feverUntil, durationMs: FEVER.durationMs });
+    }
+  }
+
+  tapStrike(worldX, now = Date.now()) {
+    if (this.player.dead || (this.rift && this.rift.picking)) return { ok: false, reason: 'busy' };
+    if (now - (this.lastTapAt || 0) < FEVER.tapCdMs) return { ok: false, reason: 'cooldown' };
+    const list = this.targets();
+    if (!list.length) return { ok: false, reason: 'no_target' };
+    let target = list[0];
+    if (Number.isFinite(worldX)) {
+      let best = Math.abs(target.x - worldX);
+      for (const m of list) {
+        const d = Math.abs(m.x - worldX);
+        if (d < best) { best = d; target = m; }
+      }
+    }
+    this.lastTapAt = now;
+    this.hit([target], FEVER.tapDmgMul, 'tap', now);
+    this.addFever(FEVER.tapGain, now);
+    this.emit({ t: 'tapStrike', x: target.x, dmg: this.lastHitDealt });
+    return { ok: true, id: target.id, x: target.x, dmg: this.lastHitDealt, fever: this.fever, feverActive: this.isFever(now) };
+  }
+
   /* ───────────── 공격 ───────────── */
   attack(now, spd = 1) {
     const furyMul = this.berserkUntil > now && this.berserkRune === 'fury' ? 0.80 : 1;
-    if (now - this.player.lastAttack < (this.stats.attackMs * furyMul) / Math.max(1, spd)) return;
+    const feverSpd = this.isFever(now) ? FEVER.spdMul : 1;
+    if (now - this.player.lastAttack < (this.stats.attackMs * furyMul * feverSpd) / Math.max(1, spd)) return;
     const target = this.targets().find((m) => m.x - this.player.x <= ECON.playerRange);
     if (!target) return;
     this.player.lastAttack = now;
@@ -622,7 +675,8 @@ export class Battle {
     // v4.7 궁극기 발동 직후의 공격력 버프
     if (this.ultUntil > now) dmg *= 1 + (this.ultBonus || 0);
     let crit = false;
-    const critChance = Math.min(0.95, this.stats.crit + (extra && extra.critAdd ? extra.critAdd : 0));
+    const feverCrit = this.isFever(now) ? FEVER.critAdd : 0;
+    const critChance = Math.min(0.95, this.stats.crit + feverCrit + (extra && extra.critAdd ? extra.critAdd : 0));
     const furyCd = this.berserkUntil > now && this.berserkRune === 'fury' ? 0.35 : 0;
     if (this.rng() < critChance) {
       crit = true;
@@ -697,6 +751,7 @@ export class Battle {
       }
     }
     this.lastHitDealt = dealt;
+    if (hits > 0 && kind !== 'chain' && kind !== 'tap') this.addFever(FEVER.hitGain * Math.min(3, hits), now);
     if (dealt > 0) this.recordDamage(dealt, now);
     return hits;
   }
@@ -723,6 +778,7 @@ export class Battle {
     if (this.ultUntil > now && this.ultBonus > 0) {
       dps *= 1 + this.ultBonus;
     }
+    if (this.isFever(now)) dps *= 1.25;
     return Math.max(0, dps);
   }
 
@@ -750,6 +806,7 @@ export class Battle {
     m.dying = now;
     m.windupAt = 0;
     m.moving = false;
+    this.addFever(FEVER.killGain, now);
     // 📖 도감: 처치 수 기록(던전 몹 포함) · v4.9 일일 퀘스트 처치 누적
     try { codexKill(this.s, m.name); } catch (e) { /* ignore */ }
     try { trackDailyQuest(this.s, 'kills', 1, now); } catch (e) { /* ignore */ }
@@ -844,6 +901,13 @@ export class Battle {
       this.s.gold += extra;
       if (this.s.records) this.s.records.totalGold = (this.s.records.totalGold || 0) + extra;
       reward.gold += extra;
+    }
+    // v7.7.0 🔥 피버 타임 — 골드 획득 +30%
+    if (this.isFever(now) && reward.gold > 0) {
+      const fExtra = Math.round(reward.gold * FEVER.goldBonus);
+      this.s.gold += fExtra;
+      if (this.s.records) this.s.records.totalGold = (this.s.records.totalGold || 0) + fExtra;
+      reward.gold += fExtra;
     }
     registerKill(this.s, m.isBoss);
     this.emit({

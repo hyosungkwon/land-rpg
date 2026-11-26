@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "7.6.0"
+EXPECTED_VER = "7.7.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui.js", "src/sound.js"]
 
@@ -6070,6 +6070,25 @@ def main():
         ok(all(Image.open(os.path.join(ROOT, f)).size == sz and Image.open(os.path.join(ROOT, f)).getextrema()[3][0] == 0 for f, sz in new_m76), "v7.6 신규 스프라이트 256px/384px 투명 RGBA PNG 규격 검증")
     except Exception as e:
         ok(False, "v7.6 신규 스프라이트 규격 검증", str(e))
+
+    # ── 44) v7.7.0 🔥 피버 타임 & 캔버스 탭 번개 일격 ──
+    section("v7.7.0 피버 타임 & 캔버스 탭 번개 일격")
+    fv77 = js(ctx, """
+      const s = defaultState(1000); s.level = 15; s.stage = 3;
+      const b = new Battle(s, () => ({}), () => 0.5, 1000);
+      const t0 = b.tapStrike(450, 1500);
+      const tCd = b.tapStrike(450, 1600); // 350ms 쿨타임 거부
+      b.addFever(100, 2000);
+      const active = b.isFever(2500);
+      const evs = b.drainEvents();
+      const feverEv = evs.some((e) => e.t === 'feverStart');
+      const tapEv = evs.some((e) => e.t === 'tapStrike');
+      const ended = !b.isFever(2000 + FEVER.durationMs + 10);
+      return { t0: t0.ok && t0.dmg > 0, tCd: !tCd.ok && tCd.reason === 'cooldown', active, feverEv, tapEv, ended };
+    """)
+    ok(fv77["t0"] and fv77["tCd"] and fv77["tapEv"], "캔버스 탭 번개 일격(즉시 피해 · 350ms 쿨타임 · 이벤트 발생)", json.dumps(fv77))
+    ok(fv77["active"] and fv77["feverEv"] and fv77["ended"], "피버 게이지 100% → 15초 피버 타임 자동 발동 및 만료", json.dumps(fv77))
+    ok("drawFeverHud" in read("src/render.js") and "drawTapBolts" in read("src/render.js") and "bindCanvasTap" in read("app.js"), "render.js · app.js — 피버 게이지/오라·탭 번개 연출·포인터 바인딩")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

@@ -201,6 +201,7 @@ class App {
     this.ui.render();
     this.checkNews(now);
     this.bindAudioUnlock();
+    this.bindCanvasTap();
     // PWA 바로가기(?tab=land&sub=buff) — 부동산 서브 탭까지 바로 열기
     try {
       const qs = new URLSearchParams((typeof location !== 'undefined' && location.search) || '');
@@ -222,6 +223,21 @@ class App {
     this.registerSW();
     // ☁️ v4.8: 클라우드를 켜 둔 사용자만 — 게스트 화면이 뜬 뒤에 조용히 세션을 되살린다
     this.startCloudResume();
+  }
+
+  /** v7.7.0 전투 캔버스 탭 번개 일격 바인딩 */
+  bindCanvasTap() {
+    const cv = document.getElementById('battle');
+    if (!cv || cv._tapBound) return;
+    cv._tapBound = true;
+    cv.style.cursor = 'pointer';
+    cv.addEventListener('pointerdown', (e) => {
+      if (!this.battle || !this.renderer) return;
+      this.sound.unlock();
+      const wx = this.renderer.screenToWorldX(e.clientX);
+      const res = this.battle.tapStrike(wx, Date.now());
+      if (res && res.ok) this.sound.hit(false);
+    });
   }
 
   stageMonsterNames(stage) {
@@ -578,6 +594,9 @@ class App {
           actions: [{ label: '확인', style: 'primary', onClick: () => {} }],
         });
         this.ui.renderIfNeeded();
+      } else if (ev.t === 'feverStart') {
+        this.sound.chord([523.25, 659.25, 783.99, 1046.5], 0.14, 0.08);
+        this.ui.toast('🔥 FEVER TIME! 15초간 공속 +25% · 치명타 +15% · 골드 +30%', 'gold');
       } else if (ev.t === 'invasionStart') {
         this.ui.addLog(`🚨 <b>${esc(ev.cityName)} 방어전</b> 시작 — ${esc(ev.waveName)} (${ev.goal}마리 격파)`);
         this.ui.toast(`🚨 ${ev.cityName} 방어전! ${Math.round(ev.duration / 1000)}초 안에 마물 격퇴`, 'gold');

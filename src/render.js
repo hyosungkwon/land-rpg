@@ -131,6 +131,7 @@ export class Renderer {
     this.lastKnightShot = 0;
     this.bossKillFx = null; // v7.3.0 보스 격파 폭발 연출
     this.lightnings = []; // v7.4.0 번개 연쇄/강격 지그재그 전기선
+    this.tapBolts = []; // v7.7.0 캔버스 탭 번개 일격
     this.killShards = []; // v7.4.0 몬스터 처치 파편 분산 연출
     this.resize();
     this.initAmbient();
@@ -332,6 +333,14 @@ export class Renderer {
         this._lastHitX = ev.x;
       } else if (ev.t === 'monsterDeath') {
         this.spawnKillShards(ev.x, ev.isBoss ? '#ffd76a' : '#cde9ff', ev.isBoss ? 14 : 7, now);
+      } else if (ev.t === 'tapStrike') {
+        this.spawnTapBolt(ev.x, now);
+        this.rings.push({ x: ev.x, life: 1, r: 10, color: '#7ff6ff', wide: 1.4 });
+        this.shake = Math.max(this.shake, 2.4);
+      } else if (ev.t === 'feverStart') {
+        this.flash = Math.max(this.flash, 0.26);
+        this.shake = Math.max(this.shake, 4.4);
+        this.rings.push({ x: ECON.playerX, life: 1, r: 18, color: '#ffd76a', wide: 2.2 });
       } else if (ev.t === 'playerHurt') {
         if (ev.ranged) {
           // 원거리: 투사체가 날아가 명중할 때 숫자·플래시를 보여 준다(약 0.24초 뒤)
@@ -1272,6 +1281,14 @@ export class Renderer {
     return (x / 1120) * this.W;
   }
 
+  /** v7.7.0 화면 포인터 X → 전투 월드 X 변환 */
+  screenToWorldX(clientX) {
+    if (!this.canvas || !this.W) return ECON.playerX + 320;
+    const rect = this.canvas.getBoundingClientRect();
+    const lx = clamp(clientX - rect.left, 0, Math.max(1, rect.width));
+    return (lx / Math.max(1, rect.width)) * 1120;
+  }
+
   /* ─────────── 프레임 ─────────── */
   frame(now) {
     const t = typeof now === 'number' && isFinite(now) ? now : Date.now();
@@ -1319,6 +1336,7 @@ export class Renderer {
         this.drawAfterimages(ctx, t);
         this.drawKnightSupport(ctx, dt, t);
         this.drawLightnings(ctx, t);
+        this.drawTapBolts(ctx, t);
         this.drawKillShards(ctx, dt);
         this.drawBossKillFx(ctx, t);
         this.drawProjectiles(ctx, t);
@@ -1353,6 +1371,7 @@ export class Renderer {
       this.drawPromoteBanner(ctx, W, t);
       this.drawGraceBanner(ctx, W, t); // v4.3 부활 가호 남은 시간 배너
       this.drawCombo(ctx, W, t);       // v7.0.0 콤보 히트 카운터
+      this.drawFeverHud(ctx, W, H, t); // v7.7.0 피버 게이지 & 피버 타임 오라
       this.drawBossWarning(ctx, t);    // v7.0.0 보스 강공격 전조 경고 링
     }
     ctx.restore();
@@ -3695,6 +3714,96 @@ export class Renderer {
     ctx.shadowBlur = 10;
     ctx.fillStyle = hot ? '#ffcf5c' : '#fff6d6';
     ctx.fillText(`${hot ? '🔥 ' : ''}${this.combo} HIT!`, 0, 0);
+    ctx.restore();
+  }
+
+  /* ─────────── v7.7.0 캔버스 탭 번개 일격 · 피버 게이지/타임 ─────────── */
+  spawnTapBolt(x, now) {
+    if (!this.effects) return;
+    this.tapBolts.push({ x, t0: now, dur: 240, seed: Math.random() * 99 });
+    if (this.tapBolts.length > 10) this.tapBolts.shift();
+  }
+
+  drawTapBolts(ctx, now) {
+    if (!this.tapBolts || !this.tapBolts.length) return;
+    const gy = this.groundY();
+    const sc = this.scale();
+    const keep = [];
+    ctx.save();
+    for (const b of this.tapBolts) {
+      const k = (now - b.t0) / b.dur;
+      if (k >= 1) continue;
+      keep.push(b);
+      const tx = this.worldX(b.x);
+      const ty = gy - 24 * sc;
+      const alpha = Math.max(0, 1 - k);
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = '#7ff6ff';
+      ctx.lineWidth = (3.4 - k * 1.8) * sc;
+      ctx.shadowColor = '#38bdf8';
+      ctx.shadowBlur = 14;
+      ctx.beginPath();
+      ctx.moveTo(tx + (rnd(b.seed) - 0.5) * 18, 0);
+      const segs = 6;
+      for (let i = 1; i < segs; i++) {
+        const t = i / segs;
+        const jx = (rnd(b.seed + i * 7.3) - 0.5) * 24 * sc;
+        ctx.lineTo(tx + jx, ty * t);
+      }
+      ctx.lineTo(tx, ty);
+      ctx.stroke();
+      ctx.strokeStyle = '#fff9d6';
+      ctx.lineWidth = 1.4 * sc;
+      ctx.stroke();
+    }
+    ctx.restore();
+    this.tapBolts = keep;
+  }
+
+  drawFeverHud(ctx, W, H, now) {
+    const b = this.battle;
+    if (!b) return;
+    const active = (b.feverUntil || 0) > now;
+    const pct = active
+      ? clamp((b.feverUntil - now) / 15000, 0, 1)
+      : clamp((b.fever || 0) / 100, 0, 1);
+    if (!active && pct <= 0.01) return;
+    ctx.save();
+    if (active) {
+      const pulse = 0.55 + 0.45 * Math.sin(now / 110);
+      ctx.strokeStyle = `rgba(255, 207, 92, ${0.38 + 0.32 * pulse})`;
+      ctx.lineWidth = 5;
+      ctx.strokeRect(2.5, 2.5, W - 5, H - 5);
+    }
+    const bw = active ? Math.min(208, W * 0.58) : 108;
+    const bh = 16;
+    const bx = 10;
+    const by = H - bh - 8;
+    ctx.fillStyle = 'rgba(10, 14, 24, 0.78)';
+    roundRect(ctx, bx, by, bw, bh, 8);
+    ctx.fill();
+    const grad = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+    if (active) {
+      grad.addColorStop(0, '#ff6a2a');
+      grad.addColorStop(0.5, '#ffd76a');
+      grad.addColorStop(1, '#fff2b0');
+    } else {
+      grad.addColorStop(0, '#f59e0b');
+      grad.addColorStop(1, '#ffd76a');
+    }
+    ctx.fillStyle = grad;
+    roundRect(ctx, bx + 2, by + 2, Math.max(4, (bw - 4) * pct), bh - 4, 6);
+    ctx.fill();
+    ctx.font = `900 9.5px ${FONT}`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff9e6';
+    ctx.shadowColor = 'rgba(0,0,0,0.85)';
+    ctx.shadowBlur = 4;
+    const label = active
+      ? `🔥 FEVER ${((b.feverUntil - now) / 1000).toFixed(1)}s · 공속·치명·골드↑`
+      : `🔥 FEVER ${Math.round(pct * 100)}%`;
+    ctx.fillText(label, bx + 7, by + bh / 2 + 0.5);
     ctx.restore();
   }
 
