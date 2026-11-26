@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "6.5.0"
+EXPECTED_VER = "6.6.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui.js", "src/sound.js"]
 
@@ -5781,6 +5781,55 @@ def main():
     ok(ui65["emptyLen"] == 0 and ui65["pillIds"] == ["berserk", "shield", "bless", "goldRain", "ult", "grace"], "전투 캔버스 실시간 버프 HUD(6종 활성 칩 · 비활성 시 숨김)", json.dumps(ui65["pillIds"]))
     ok(ui65["homeFilterOk"] and ui65["buffFilterOk"] and not ui65["bad"], "모바일 390px 부동산 홈/버프 빠른 보기 필터 동작 및 렌더 정상", json.dumps(ui65))
     ok('id="battleBuffBar"' in read("index.html") and os.path.exists(os.path.join(ROOT, "src/ui-land.js")) and ".stage-buffs" in read("style.css"), "index.html #battleBuffBar · src/ui-land.js 모듈 분리 · style.css 버프 HUD 스타일")
+
+    # ── 33) v6.6.0 ✨ 장비 신화 초월 · 🔒 장비 잠금 보호 ──
+    section("v6.6.0 장비 신화 초월 · 장비 잠금 보호")
+    my66 = js(ctx, """
+      const now = 1_700_000_000_000;
+      const s = defaultState(now);
+      s.gold = 1_000_000; s.shards = 1000; s.rebirth.points = 50;
+      const comId = GEAR_BY_RARITY.common[0].id;
+      const aLeg = acquireGear(s, 'w_dragon', { autoEquip: true, now });
+      const aCom = acquireGear(s, comId, { autoEquip: false, now });
+      // 일반 등급은 신화 초월 거부
+      const denyCom = transcendGear(s, aCom.uid);
+      // 잠금 시 단건 분해 & 일괄 분해 모두 차단
+      const lk1 = toggleGearLock(s, aCom.uid);
+      const denyDis = dismantleGear(s, aCom.uid);
+      const bulkBlocked = dismantleTargets(s, 'common').length === 0;
+      const lk2 = toggleGearLock(s, aCom.uid);
+      const bulkAllowed = dismantleTargets(s, 'common').length === 1;
+      // 전설 신화 초월 → 스탯 상승(+12강 상당 & 옵션 +35%) + 자동 잠금
+      const stBefore = calcStats(s, {});
+      const tr = transcendGear(s, aLeg.uid);
+      const stAfter = calcStats(s, {});
+      const denyDup = transcendGear(s, aLeg.uid);
+      // 정규화: 전설만 mythic 유지, 일반 mythic은 제거
+      const norm = normalizeState({
+        gear: { items: [{ uid: 1, id: 'w_dragon', mythic: true, locked: true }, { uid: 2, id: comId, mythic: true, locked: true }] },
+      }, now);
+      return {
+        denyCom: !denyCom.ok,
+        lockOk: lk1.ok && lk1.locked && !denyDis.ok && bulkBlocked && lk2.ok && !lk2.locked && bulkAllowed,
+        mythicOk: tr.ok && !denyDup.ok && isMythicSlot(s, 'weapon') && stAfter.atk > stBefore.atk && stAfter.bossDmgPct > stBefore.bossDmgPct,
+        normOk: norm.gear.items[0].mythic === true && norm.gear.items[0].locked === true && !norm.gear.items[1].mythic && norm.gear.items[1].locked === true,
+      };
+    """)
+    ui66 = js(ctx2, """
+      const s = defaultState(Date.now()); s.gold = 1_000_000; s.shards = 1000; s.rebirth.points = 50;
+      const a = acquireGear(s, 'w_dragon', { autoEquip: true });
+      transcendGear(s, a.uid);
+      const b = new Battle(s, () => ({}));
+      const ui = { s, battle: b, app: { buffs: {} }, logs: [], tab: 'gear', gearSub: 'bag', el: {}, install: { hidden: true } };
+      const html = __gearSub(ui, 'bag') + __gearSub(ui, 'enhance');
+      return {
+        ok: html.includes('rb mythic') && html.includes('✨신화') && html.includes('🔒'),
+        bad: /undefined|NaN|\\[object Object\\]/.test(html),
+      };
+    """)
+    ok(my66["denyCom"] and my66["lockOk"], "장비 잠금 보호(단건/일괄 분해 차단·해제 복구) 및 비전설 초월 거부", json.dumps(my66))
+    ok(my66["mythicOk"] and my66["normOk"] and ui66["ok"] and not ui66["bad"], "전설 → 신화 초월(+12강 상당·옵션 +35%·자동 잠금·정규화·UI 배지) 및 캔버스 신화 오라", json.dumps({ **my66, **ui66 }))
+    ok("hasMythic" in read("src/render.js") and "transcendGearItem" in read("app.js"), "render.js 신화 오라/검기 · app.js 초월/잠금 모달 연결")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

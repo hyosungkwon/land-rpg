@@ -583,6 +583,24 @@ export const GEAR_AWAKEN_MAX = 10;
 export const GEAR_AWAKEN_BONUS_LV = 5; // 각성 1단계당 부위 강화 +5강 상당
 export const GEAR_AWAKEN_OPT_PCT = 8;  // 각성 1단계당 장착 장비 고유 옵션 +8% 증폭
 
+/* ────────────────────────────── v6.6.0 ✨ 장비 신화 초월 · 🔒 잠금 보호 ────────────────────────────── */
+export const MYTHIC_BONUS_LV = 12;     // 신화 초월 시 부위 강화 +12강 상당 추가
+export const MYTHIC_OPT_PCT = 35;      // 신화 초월 시 장비 고유/잠재 옵션 +35% 증폭
+export const MYTHIC_COST = { gold: 300000, shards: 350, points: 15 };
+
+export function isMythicRow(row) {
+  return !!(row && row.mythic === true);
+}
+
+export function isMythicSlot(s, slot) {
+  return isMythicRow(equippedRow(s, slot));
+}
+
+export function mythicCount(s) {
+  const items = s && s.gear && Array.isArray(s.gear.items) ? s.gear.items : [];
+  return items.filter((x) => x && x.mythic === true).length;
+}
+
 export function emptyPreset() {
   return { weapon: null, armor: null, helmet: null, ring: null, amulet: null };
 }
@@ -624,6 +642,8 @@ export function normalizeGear(raw, legacyRarity, now = 0) {
     const cleanRow = { uid, id: def.id, at: Math.max(0, Number(row.at) || 0) };
     const af = normalizeAffix(row.affix, def.rarity);
     if (af) cleanRow.affix = af;
+    if (row.mythic === true && def.rarity === 'legend') cleanRow.mythic = true;
+    if (row.locked === true) cleanRow.locked = true;
     g.items.push(cleanRow);
     if (g.items.length >= GEAR_MAX_ITEMS) break;
   }
@@ -746,6 +766,7 @@ export function gearList(s, filter = 'all', setFilter = 'all') {
     .filter((row) => (filter === 'all' || row.def.slot === filter) && (sf === 'all' || row.def.set === sf))
     .sort((a, b) => {
       if (a.equipped !== b.equipped) return a.equipped ? -1 : 1;
+      if (!!a.mythic !== !!b.mythic) return a.mythic ? -1 : 1;
       const d = itemScore(b.def) - itemScore(a.def);
       if (d) return d;
       const s2 = slotOrder(a.def.slot) - slotOrder(b.def.slot);
@@ -812,9 +833,9 @@ export function acquireGear(s, itemId, { autoEquip = true, now = 0, source = 'dr
 
   let overflow = 0;
   if (s.gear.items.length > GEAR_MAX_ITEMS) {
-    const victim = s.gear.items
-      .filter((row) => !Object.values(s.gear.equipped).includes(row.uid))
-      .sort((a, b) => itemScore(gearItem(a.id)) - itemScore(gearItem(b.id)))[0];
+    const unlockedPool = s.gear.items.filter((row) => !Object.values(s.gear.equipped).includes(row.uid) && !row.locked && !row.mythic);
+    const pool = unlockedPool.length ? unlockedPool : s.gear.items.filter((row) => !Object.values(s.gear.equipped).includes(row.uid));
+    const victim = pool.sort((a, b) => itemScore(gearItem(a.id)) - itemScore(gearItem(b.id)))[0];
     if (victim) {
       s.gear.items = s.gear.items.filter((row) => row !== victim);
       const shards = dismantleValue(victim.id);
@@ -840,6 +861,42 @@ export function equipGear(s, uid) {
   return { ok: true, item: it, prevUid: prev || null };
 }
 
+/** v6.6.0 장비 잠금 토글 — 잠긴 장비는 단건/일괄 분해에서 보호된다 */
+export function toggleGearLock(s, uid) {
+  const g = s && s.gear;
+  if (!g || !Array.isArray(g.items)) return { ok: false, reason: '장비 정보가 없습니다.' };
+  const row = g.items.find((x) => x.uid === Math.floor(Number(uid)));
+  const it = row ? gearItem(row.id) : null;
+  if (!it) return { ok: false, reason: '장비를 찾을 수 없습니다.' };
+  row.locked = !row.locked;
+  if (!row.locked) delete row.locked;
+  return { ok: true, uid: row.uid, locked: !!row.locked, item: it };
+}
+
+/** v6.6.0 ✨ 장비 신화 초월 — 전설 장비를 신화 등급으로 승급(+12강 상당 · 옵션 +35% · 자동 잠금) */
+export function transcendGear(s, uid) {
+  const g = s && s.gear;
+  if (!g || !Array.isArray(g.items)) return { ok: false, reason: '장비 정보가 없습니다.' };
+  const row = g.items.find((x) => x.uid === Math.floor(Number(uid)));
+  const it = row ? gearItem(row.id) : null;
+  if (!it) return { ok: false, reason: '장비를 찾을 수 없습니다.' };
+  if (it.rarity !== 'legend') return { ok: false, reason: '전설 등급 장비만 신화 초월할 수 있습니다.' };
+  if (row.mythic) return { ok: false, reason: '이미 신화 초월을 완료한 장비입니다.' };
+  const gold = Math.floor(Number(s.gold) || 0);
+  const shards = Math.floor(Number(s.shards) || 0);
+  const pts = Math.floor(Number(s.rebirth && s.rebirth.points) || 0);
+  if (gold < MYTHIC_COST.gold) return { ok: false, reason: `골드가 부족합니다. (필요 💰${MYTHIC_COST.gold.toLocaleString()})` };
+  if (shards < MYTHIC_COST.shards) return { ok: false, reason: `강화석이 부족합니다. (필요 💎${MYTHIC_COST.shards.toLocaleString()})` };
+  if (pts < MYTHIC_COST.points) return { ok: false, reason: `초월석이 부족합니다. (필요 ✨${MYTHIC_COST.points}P)` };
+  s.gold = Math.max(0, gold - MYTHIC_COST.gold);
+  s.shards = Math.max(0, shards - MYTHIC_COST.shards);
+  if (!s.rebirth || typeof s.rebirth !== 'object') s.rebirth = { count: 0, points: 0, totalPoints: 0, traits: {} };
+  s.rebirth.points = Math.max(0, pts - MYTHIC_COST.points);
+  row.mythic = true;
+  row.locked = true;
+  return { ok: true, uid: row.uid, item: it, spent: { ...MYTHIC_COST } };
+}
+
 /** 분해 — 장착 중이면 슬롯이 비고(등급 common) 강화석이 들어온다 */
 export function dismantleGear(s, uid) {
   const g = s && s.gear;
@@ -848,6 +905,7 @@ export function dismantleGear(s, uid) {
   const row = g.items.find((x) => x.uid === target);
   const it = row ? gearItem(row.id) : null;
   if (!it) return { ok: false, reason: '장비를 찾을 수 없습니다.' };
+  if (row.locked) return { ok: false, reason: '🔒 잠긴 장비는 분해할 수 없습니다. 먼저 잠금을 해제하세요.' };
   const wasEquipped = g.equipped[it.slot] === row.uid;
   g.items = g.items.filter((x) => x.uid !== row.uid);
   if (wasEquipped) g.equipped[it.slot] = null;
@@ -860,7 +918,7 @@ export function dismantleGear(s, uid) {
 
 /** 일괄 분해 — mode: 'low'(장착보다 낮은 등급) | 'common'(일반 등급) | 'threshold'(자동분해 기준 이하) */
 export function dismantleTargets(s, mode = 'low') {
-  const rows = gearOwned(s).filter((row) => !row.equipped);
+  const rows = gearOwned(s).filter((row) => !row.equipped && !row.locked && !row.mythic);
   if (mode === 'common') return rows.filter((row) => row.def.rarity === 'common');
   if (mode === 'threshold') {
     const idx = autoDismantleIdx(s);
@@ -1003,7 +1061,7 @@ export function recommendGearBuild(s, mode = 'hunt') {
     let best = cands[0];
     let bestScore = -1;
     for (const r of cands) {
-      let sc = ridx(r.def.rarity) * 120;
+      let sc = ridx(r.def.rarity) * 120 + (r.mythic ? 200 : 0);
       if (def.sets.includes(r.def.set)) sc += 36;
       for (const [k, v] of Object.entries(r.def.opts || {})) {
         sc += (Number(v) || 0) * (def.weights[k] || 1);
@@ -1092,7 +1150,7 @@ export function gearMods(s) {
     const row = equippedRow(s, slot);
     const it = row ? gearItem(row.id) : null;
     if (!it || !it.opts) continue;
-    const mul = 1 + (awakenLevel(s, slot) * GEAR_AWAKEN_OPT_PCT) / 100;
+    const mul = (1 + (awakenLevel(s, slot) * GEAR_AWAKEN_OPT_PCT) / 100) * (row.mythic ? 1 + MYTHIC_OPT_PCT / 100 : 1);
     for (const k of GEAR_OPT_KEYS) {
       const v = Number(it.opts[k]);
       if (isFinite(v) && v > 0) out[k] += Math.round(v * mul * 10) / 10;

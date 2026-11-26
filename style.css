@@ -2877,3 +2877,31 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   .stage-buffs { top: 48px; }
   .sb-pill { font-size: 9.5px; padding: 2px 6px; }
 }
+
+/* ══════════════ v6.6.0 ✨ 장비 신화 초월 · 🔒 잠금 보호 ══════════════ */
+.rb.mythic {
+  background: linear-gradient(135deg, #ff4d9e, #ffcf5c, #b98bff);
+  color: #1a0612;
+  font-weight: 900;
+  box-shadow: 0 0 8px rgba(255, 82, 168, 0.45);
+}
+.inv-card.mythic {
+  border-color: rgba(255, 102, 196, 0.72);
+  background: linear-gradient(160deg, rgba(255, 77, 158, 0.14), rgba(18, 26, 42, 0.96) 65%);
+}
+.lock-tag, .iv-lock { font-style: normal; font-size: 10px; margin-right: 2px; }
+.mythic-box {
+  margin: 7px 0;
+  padding: 7px 9px;
+  border-radius: 9px;
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--sub);
+  background: rgba(255, 77, 158, 0.08);
+  border: 1px solid rgba(255, 77, 158, 0.32);
+}
+.mythic-box.on {
+  color: #ffe2f2;
+  background: linear-gradient(135deg, rgba(255, 77, 158, 0.18), rgba(255, 207, 92, 0.14));
+  border-color: rgba(255, 207, 92, 0.65);
+}

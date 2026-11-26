@@ -3,7 +3,7 @@
 // v2: 새 스프라이트(대기/공격/스킬 3프레임) + 검기 아크·타격 스파크·스킬 이펙트.
 //     배경은 오프스크린 캔버스에 한 번만 그려 매 프레임 비용을 줄인다(모바일 발열/멈춤 방지).
 import { ECON, THEMES, spriteSrc, bgSrc, RARITIES, RARITY_INDEX, monsterMotion, monsterAttack } from './data.js';
-import { equippedItem } from './gear.js';
+import { equippedItem, isMythicSlot } from './gear.js';
 import { petStageInfo, jobOf, isUpperJob } from './meta.js';
 import { TOWER_GIMMICKS, towerGimmicks } from './tower.js';
 import { DAILY, dailyDpsCap, dailyGradeAt } from './daily.js';
@@ -991,7 +991,9 @@ export class Renderer {
     const gr = s && s.gearRarity;
     if (!gr) { this._rar = { weapon: 0, avg: 0, hasLegend: false, weaponGear: null, pal: null }; return this._rar; }
     const wItem = s ? equippedItem(s, 'weapon') : null;
-    const key = `${gr.weapon}|${gr.armor}|${gr.helmet}|${gr.ring}|${gr.amulet}|${wItem ? wItem.id : '-'}`;
+    const hasMythic = !!(s && ['weapon', 'armor', 'helmet', 'ring', 'amulet'].some((k) => isMythicSlot(s, k)));
+    const wMythic = !!(s && isMythicSlot(s, 'weapon'));
+    const key = `${gr.weapon}|${gr.armor}|${gr.helmet}|${gr.ring}|${gr.amulet}|${wItem ? wItem.id : '-'}|${hasMythic ? 1 : 0}${wMythic ? 1 : 0}`;
     if (this._rarKey === key) return this._rar;
     this._rarKey = key;
     const ids = Object.keys(gr);
@@ -1001,10 +1003,13 @@ export class Renderer {
       weapon: wIdx,
       avg: ids.length ? Math.ceil(sum / ids.length - 1e-9) : 0,
       hasLegend: ids.some((k) => gr[k] === 'legend'),
+      hasMythic,
       weaponGear: wItem,
-      // 무기 고유 검기 색(화염검·빙결검·천둥창…) — 없으면 등급 색을 쓴다
-      pal: wItem && wItem.fx ? wItem.fx : (RARITIES[wIdx] || RARITIES[0]).slash,
-      tint: wItem ? wItem.tint : null,
+      // 무기 고유 검기 색(신화 초월 시 진홍-프리즘 검기 강조)
+      pal: wMythic
+        ? { outer: '#ff4d9e', mid: '#ffcf5c', core: '#fff7fb' }
+        : wItem && wItem.fx ? wItem.fx : (RARITIES[wIdx] || RARITIES[0]).slash,
+      tint: wMythic ? '#ff5ca8' : wItem ? wItem.tint : null,
     };
     return this._rar;
   }
@@ -1058,14 +1063,23 @@ export class Renderer {
         });
       }
     }
-    // 전설: 불타는 적금빛 화염
+    // 전설: 불타는 적금빛 화염 · 신화(v6.6): 프리즘-진홍빛 광휘 링 추가
     if (idx >= 4) {
       const f = ctx.createLinearGradient(px, gy - h * 0.9, px, gy);
       f.addColorStop(0, 'rgba(255,90,40,0)');
-      f.addColorStop(0.6, `rgba(255,122,61,${0.10 + 0.06 * pulse})`);
+      f.addColorStop(0.6, this._rar.hasMythic ? `rgba(255,82,168,${0.14 + 0.08 * pulse})` : `rgba(255,122,61,${0.10 + 0.06 * pulse})`);
       f.addColorStop(1, `rgba(255,210,80,${0.16 + 0.08 * pulse})`);
       ctx.fillStyle = f;
       ctx.fillRect(px - h * 0.34, gy - h * 0.95, h * 0.68, h * 0.95);
+      if (this._rar.hasMythic) {
+        ctx.save();
+        ctx.strokeStyle = hexA('#ff66c4', 0.65 + 0.25 * pulse);
+        ctx.lineWidth = 2.0 * sc;
+        ctx.beginPath();
+        ctx.ellipse(px, gy + 1, h * 0.49 * (1 + 0.04 * pulse), h * 0.16 * (1 + 0.06 * pulse), 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
     }
   }
 

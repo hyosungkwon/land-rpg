@@ -13,6 +13,7 @@ import {
   saveGearPreset as saveGearPresetState, applyGearPreset as applyGearPresetState, awakenSlot as awakenSlotState,
   gearSetOf, gearSetStatus, gearSetBonusText, gearAffixInfo, gearReforgeCost, reforgeGear as reforgeGearState,
   applyRecommendedBuild as applyRecommendedBuildState,
+  MYTHIC_COST, MYTHIC_BONUS_LV, MYTHIC_OPT_PCT, toggleGearLock as toggleGearLockState, transcendGear as transcendGearState,
 } from './src/gear.js';
 
 const GEAR_OPT_LABEL = (k) => (GEAR_OPTS[k] ? `${GEAR_OPTS[k].icon} ${GEAR_OPTS[k].name}` : k);
@@ -3091,12 +3092,21 @@ class App {
     ].filter((html) => !html.includes('class="same">—')).join('');
 
     const rowObj = gearOwned(s).find((x) => x.uid === id);
+    const isMythic = !!(rowObj && rowObj.mythic);
+    const isLocked = !!(rowObj && rowObj.locked);
     const af = rowObj && rowObj.affix ? gearAffixInfo(rowObj.affix) : null;
     const rfCost = gearReforgeCost(it);
     const affixBox = `<div class="cmp-sec">잠재 접두사 <small>강화석 재련으로 변경 가능</small></div>
       <div class="af-box">${af
         ? `<b>✨ ${esc(af.name)}</b><span>${esc(af.text)}</span>`
         : '<span class="dim">잠재 옵션 없음 — 아래 재련 버튼으로 각인할 수 있습니다</span>'}</div>`;
+    const mythicBox = it.rarity === 'legend'
+      ? `<div class="mythic-box${isMythic ? ' on' : ''}">
+          ${isMythic
+            ? `✨ <b>신화 초월 완료</b> — 부위 강화 <b>+${MYTHIC_BONUS_LV}강 상당</b> · 고유/잠재 옵션 <b>+${MYTHIC_OPT_PCT}%</b> · 신화 오라 적용`
+            : `✨ <b>신화 초월 가능</b> — 💰${formatGold(MYTHIC_COST.gold)} · 💎${MYTHIC_COST.shards} · ✨${MYTHIC_COST.points}P → 강화 +${MYTHIC_BONUS_LV}강 상당 & 옵션 +${MYTHIC_OPT_PCT}%`}
+        </div>`
+      : '';
 
     const itSet = gearSetOf(it);
     const setBox = itSet ? (() => {
@@ -3114,7 +3124,7 @@ class App {
       <div class="cmp-head">
         <span class="cmp-ico">${gearIcon(it, 54)}</span>
         <span class="cmp-title">
-          <span class="cmp-name">${esc(it.name)} <span class="rb ${r.id}">${r.name}</span>${itSet ? `<span class="gset-tag" style="--sc:${itSet.color}">${itSet.icon}${itSet.name}</span>` : ''}</span>
+          <span class="cmp-name">${isLocked ? '🔒 ' : ''}${esc(it.name)} ${isMythic ? '<span class="rb mythic">✨신화</span>' : `<span class="rb ${r.id}">${r.name}</span>`}${itSet ? `<span class="gset-tag" style="--sc:${itSet.color}">${itSet.icon}${itSet.name}</span>` : ''}</span>
           <span class="cmp-sub">${EQUIP[it.slot].icon} ${EQUIP[it.slot].name} · ${esc(it.desc || '')} · 강화 +${lv} (부위 공유)</span>
         </span>
       </div>
@@ -3134,6 +3144,7 @@ class App {
       <div class="cmp-sec">고유 옵션 <small>지금 → 이 장비</small></div>
       <div class="cmp-opts">${optRows}</div>
       ${affixBox}
+      ${mythicBox}
       ${setBox}
       <div class="cmp-sec">장착하면 달라지는 것</div>
       <div class="cmp-stats">${stats || '<div class="tiny dim">스탯 변화 없음</div>'}</div>`;
@@ -3142,19 +3153,57 @@ class App {
     if (!isOn) {
       actions.push({ label: `⚔️ 장착하기`, style: 'primary', onClick: () => this.actions.equipGearItem(id) });
     }
+    if (it.rarity === 'legend' && !isMythic) {
+      actions.push({
+        label: `✨ 신화 초월`,
+        style: 'gold',
+        keepOpen: true,
+        onClick: () => this.transcendGearItem(id),
+      });
+    }
+    actions.push({
+      label: isLocked ? '🔓 잠금 해제' : '🔒 잠금 보호',
+      style: 'ghost',
+      keepOpen: true,
+      onClick: () => this.toggleGearLockItem(id),
+    });
     actions.push({
       label: `🔮 재련 · 💎${rfCost}`,
       style: 'ghost',
       keepOpen: true,
       onClick: () => this.reforgeGearItem(id),
     });
-    actions.push({
-      label: `♻️ 분해 · 💎${dismantleValue(it)}`,
-      style: 'ghost',
-      onClick: () => this.confirmDismantleGear(id),
-    });
+    if (!isLocked) {
+      actions.push({
+        label: `♻️ 분해 · 💎${dismantleValue(it)}`,
+        style: 'ghost',
+        onClick: () => this.confirmDismantleGear(id),
+      });
+    }
     actions.push({ label: '닫기', style: 'ghost', onClick: () => {} });
     this.ui.modal({ title: '⚔️ 장비 비교', sub: isOn ? '장착 중' : '장착하면 아래 수치만큼 바뀝니다(부위 강화 레벨은 그대로)', body, actions });
+  }
+
+  toggleGearLockItem(uid) {
+    const r = toggleGearLockState(this.s, uid);
+    if (!r.ok) { this.ui.toast(r.reason || '변경할 수 없습니다', 'red'); return; }
+    this.save(true);
+    this.ui.toast(r.locked ? `🔒 ${r.item.name} 잠금 보호 설정` : `🔓 ${r.item.name} 잠금 해제`);
+    this.ui.render();
+    this.openGearItem(uid);
+  }
+
+  transcendGearItem(uid) {
+    this.sound.unlock();
+    const r = transcendGearState(this.s, uid);
+    if (!r.ok) { this.ui.toast(r.reason || '초월할 수 없습니다', 'red'); return; }
+    this.battle.refreshStats();
+    this.save(true);
+    this.sound.gacha('legend');
+    this.ui.toast(`✨ 신화 초월 완료! ${r.item.name} (+${MYTHIC_BONUS_LV}강 상당 · 옵션 +${MYTHIC_OPT_PCT}%)`, 'gold');
+    this.ui.addLog(`✨ <b>${esc(r.item.name)}</b> 신화 초월! (💰${formatGold(r.spent.gold)} · 💎${r.spent.shards} · ✨${r.spent.points}P)`);
+    this.ui.render();
+    this.openGearItem(uid);
   }
 
   reforgeGearItem(uid) {
