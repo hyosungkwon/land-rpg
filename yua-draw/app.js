@@ -421,8 +421,13 @@
 
     const colorScore = colorFidelity(topic);
 
-    const raw = clamp01(0.70 * f1 + 0.15 * arScore + 0.15 * colorScore);
-    let pct = Math.round(55 + 44 * Math.pow(raw, 1.35));
+    // 형태에서 멀리 떨어진 낙서 비율 (모양을 맞춘 그림과 엉뚱한 낙서를 가르는 지표)
+    let junkN = 0;
+    for (let i = 0; i < GRID * GRID; i++) if (child[i] && dRef[i] > 9) junkN++;
+    const junk = pN ? junkN / pN : 0;
+
+    const raw = clamp01(0.78 * f1 * (1 - 0.75 * junk) + 0.11 * arScore + 0.11 * colorScore);
+    let pct = pctFromRaw(raw);
     pct = Math.max(55, Math.min(99, pct));
 
     // 빠진 부분 찾기
@@ -440,12 +445,24 @@
     missing.sort((a, b) => b.count - a.count);
 
     return {
-      empty: false, pct, raw, recall, precision, f1, arScore, colorScore,
+      empty: false, pct, raw, recall, precision, f1, junk, arScore, colorScore,
       missing: missing.map((m) => m.name)
     };
   }
 
   /* ───────────────────────── 결과 화면 ───────────────────────── */
+
+  // raw(0~1) → 일치율(%). 7세가 실망하지 않도록 아래 구간을 55~99로 부드럽게 편다.
+  const RAW_TO_PCT = [[0, 55], [0.25, 58], [0.40, 66], [0.55, 74], [0.70, 84], [0.85, 93], [1, 99]];
+  function pctFromRaw(raw) {
+    const t = Math.max(0, Math.min(1, raw));
+    for (let i = 1; i < RAW_TO_PCT.length; i++) {
+      const [x1, y1] = RAW_TO_PCT[i];
+      const [x0, y0] = RAW_TO_PCT[i - 1];
+      if (t <= x1) return Math.round(y0 + ((y1 - y0) * (t - x0)) / (x1 - x0));
+    }
+    return 99;
+  }
 
   function starsFor(pct) {
     if (pct >= 85) return 3;
@@ -475,6 +492,7 @@
       tip += ' 힌트 보기를 켜고 점선을 따라 그려 보세요!';
     }
 
+    window.__yuaLast = res;
     $('praiseText').textContent = praise;
     $('tipText').textContent = tip;
     $('resultModal').hidden = false;
