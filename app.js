@@ -47,6 +47,7 @@ import {
 import {
   upgradeKnight as upgradeKnightState, attackRaidBoss as attackRaidBossState, claimRaidPhase as claimRaidPhaseState,
 } from './src/guild.js';
+import { collectTodoSummary, claimAllReady } from './src/hub.js';
 import {
   summonRelic as summonRelicState, toggleEquipRelic as toggleEquipRelicState, upgradeRelic as upgradeRelicState,
 } from './src/relics.js';
@@ -2014,6 +2015,54 @@ class App {
         ].filter(Boolean).join(' · ');
         this.ui.toast(`🎁 레이드 ${r.phase.label} 보상: ${gains}`, 'gold');
         this.ui.addLog(`🎁 레이드 <b>${esc(r.phase.label)}</b> 수령 (${gains})`);
+        this.ui.render();
+      },
+
+      /** 📋 v7.0.0 오늘의 할 일 원탭 통합 수령 허브 */
+      openTodoHub: () => {
+        const now = Date.now();
+        const sum = collectTodoSummary(this.s, this.battle && this.battle.stats, now);
+        const listHtml = sum.items.length
+          ? `<div class="todo-list">${sum.items.map((it) => `
+              <div class="todo-row">
+                <span>${it.icon} <b>${esc(it.label)}</b></span>
+                <small>${esc(it.detail)}</small>
+              </div>`).join('')}</div>`
+          : '<div class="tiny dim" style="margin:8px 0">지금 수령 대기 중인 보상이 없습니다.</div>';
+        const alertHtml = sum.alerts.length
+          ? `<div class="cmp-sec">바로 출격 가능한 이벤트</div>
+             <div class="row gap6" style="flex-wrap:wrap;margin-top:6px">${sum.alerts.map((a) => `
+               <button class="btn small ghost" type="button" data-action="${a.action}">${a.icon} ${esc(a.label)}</button>`).join('')}</div>`
+          : '';
+        const actions = [];
+        if (sum.totalClaimable > 0) {
+          actions.push({ label: `⚡ 전체 보상 일괄 수령 (${sum.totalClaimable}건)`, style: 'primary', onClick: () => this.actions.claimAllTodo() });
+        }
+        actions.push({ label: '닫기', style: 'ghost', onClick: () => {} });
+        this.ui.modal({
+          title: '📋 오늘의 할 일 허브',
+          sub: sum.totalClaimable > 0 ? `지금 받을 수 있는 보상 ${sum.totalClaimable}건을 한 번에 정리합니다.` : '모든 보상을 수령했습니다!',
+          body: `${listHtml}${alertHtml}`,
+          actions,
+        });
+      },
+      claimAllTodo: () => {
+        this.sound.unlock();
+        const now = Date.now();
+        const r = claimAllReady(this.s, this.battle && this.battle.stats, now);
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        this.buffs = computeBuffs(this.s);
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.chord('claimAll');
+        const gains = [
+          r.goldDelta ? `💰+${formatGold(r.goldDelta)}` : '',
+          r.shardsDelta ? `💎+${r.shardsDelta}` : '',
+          r.pointsDelta ? `✨+${r.pointsDelta}P` : '',
+          r.medalsDelta ? `🏅+${r.medalsDelta}` : '',
+        ].filter(Boolean).join(' · ');
+        this.ui.toast(`⚡ 일괄 수령 완료 (${r.count}건)! ${gains}`, 'gold');
+        this.ui.addLog(`📋 <b>오늘의 할 일 일괄 수령</b> (${r.claimed.join(', ')})`);
         this.ui.render();
       },
 

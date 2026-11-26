@@ -266,6 +266,9 @@ export class Renderer {
     for (const ev of events) {
       if (ev.t === 'hit') {
         const bossHit = !!ev.isBoss;
+        // v7.0.0 콤보 히트 카운터(2.4초 내 연속 타격 집계)
+        this.combo = (this.comboAt && now - this.comboAt < 2400) ? (this.combo || 0) + 1 : 1;
+        this.comboAt = now;
         this.addFloater(ev.x, ev.dmg, ev.crit, ev.kind, null, bossHit ? 1.28 : 1, now);
         this.burst(ev.x, ev.crit ? '#ffd76a' : '#fff1cf', ev.crit ? 18 : 8, ev.isBoss);
         if (ev.crit) {
@@ -1273,6 +1276,8 @@ export class Renderer {
       this.drawTowerBanner(ctx, W, t);
       this.drawPromoteBanner(ctx, W, t);
       this.drawGraceBanner(ctx, W, t); // v4.3 부활 가호 남은 시간 배너
+      this.drawCombo(ctx, W, t);       // v7.0.0 콤보 히트 카운터
+      this.drawBossWarning(ctx, t);    // v7.0.0 보스 강공격 전조 경고 링
     }
     ctx.restore();
 
@@ -3115,6 +3120,56 @@ export class Renderer {
   }
 
   /* ─────────── 🛡 v4.3 부활 가호 배너 — 남은 시간 게이지 ─────────── */
+  /* ─────────── v7.0.0 콤보 히트 카운터 · 보스 강공격 전조 경고 ─────────── */
+  drawCombo(ctx, W, now) {
+    if (!this.combo || this.combo < 3 || !this.comboAt || now - this.comboAt > 2400) return;
+    const age = now - this.comboAt;
+    const alpha = age > 1800 ? Math.max(0, 1 - (age - 1800) / 600) : 1;
+    const pop = age < 140 ? 1 + (1 - age / 140) * 0.22 : 1;
+    const sc = this.scale();
+    const x = 16 * sc;
+    const y = Math.max(82, this.H * 0.34);
+    const hot = this.combo >= 15;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(x, y);
+    ctx.scale(pop, pop);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.font = `900 ${Math.round((hot ? 18 : 15) * sc)}px ${FONT}`;
+    ctx.shadowColor = hot ? 'rgba(255,90,40,0.9)' : 'rgba(255,207,92,0.8)';
+    ctx.shadowBlur = 10;
+    ctx.fillStyle = hot ? '#ffcf5c' : '#fff6d6';
+    ctx.fillText(`${hot ? '🔥 ' : ''}${this.combo} HIT!`, 0, 0);
+    ctx.restore();
+  }
+
+  drawBossWarning(ctx, now) {
+    const b = this.battle;
+    if (!b || !Array.isArray(b.monsters)) return;
+    const gy = this.groundY();
+    const sc = this.scale();
+    for (const m of b.monsters) {
+      if (!m || m.dead || m.dying || !m.isBoss || !m.heavy || !m.windupAt || now < m.windupAt) continue;
+      const x = this.worldX(m.x);
+      const y = gy - 78 * sc;
+      const pulse = 0.5 + 0.5 * Math.sin(now / 70);
+      ctx.save();
+      ctx.strokeStyle = `rgba(255, 70, 70, ${0.65 + 0.3 * pulse})`;
+      ctx.lineWidth = 2.6 * sc;
+      ctx.beginPath();
+      ctx.ellipse(x, gy + 2, 48 * sc * (1 + 0.08 * pulse), 13 * sc, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.font = `900 ${Math.round(12 * sc)}px ${FONT}`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#ff9696';
+      ctx.shadowColor = 'rgba(255,40,40,0.85)';
+      ctx.shadowBlur = 8;
+      ctx.fillText('⚠️ 강공격!', x, y);
+      ctx.restore();
+    }
+  }
+
   drawGraceBanner(ctx, W, now) {
     const b = this.battle;
     if (!b || !b.player) return;

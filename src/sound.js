@@ -233,4 +233,20 @@ export class GameSound {
     if (!ctx) return;
     this.tone(ctx.currentTime, { freq: 1200, dur: 0.035, gain: 0.035, type: 'square' });
   }
+
+  /** v7.0.0 화음 리마스터 — 일괄 수령 · 신화 초월 · 균열 축복 전용 화음 */
+  chord(kind = 'claimAll') {
+    const ctx = this.ready();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const seq = kind === 'mythic'
+      ? [64, 68, 71, 76, 80, 83]
+      : kind === 'rift'
+        ? [62, 69, 74, 78]
+        : [60, 67, 72, 76, 79];
+    seq.forEach((n, i) => {
+      this.tone(t + i * 0.065, { freq: NOTE(n), dur: 0.28, gain: 0.085, type: 'triangle' });
+      this.tone(t + i * 0.065, { freq: NOTE(n + 12), dur: 0.22, gain: 0.03, type: 'sine' });
+    });
+  }
 }

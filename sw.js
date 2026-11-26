@@ -1,5 +1,5 @@
 // land-rpg / sw.js — 오프라인 캐시 (게스트 전용: 네트워크가 없어도 처음부터 끝까지 플레이)
-const VERSION = 'land-rpg-v6.9.0';
+const VERSION = 'land-rpg-v7.0.0';
 // 같은 릴리스 안에서 자산을 고친 경우 BUILD 를 올린다 → 열린 탭이 새 캐시로 넘어온다.
 const BUILD = 'r1';
 const CACHE = `${VERSION}-${BUILD}`;
@@ -17,6 +17,7 @@ const CORE = [
   './src/ui-cloud.js',
   './src/ui-gear.js',
   './src/ui-land.js',
+  './src/ui-hunt.js',
   './src/ui.js',
   './src/sound.js',
   './src/land.js',
@@ -40,6 +41,7 @@ const CORE = [
   './src/rift.js',
   './src/bank.js',
   './src/guild.js',
+  './src/hub.js',
   './src/rebirth.js',
   './src/savecode.js',
   './src/cloud.js',

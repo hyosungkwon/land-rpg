@@ -95,9 +95,9 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "6.9.0"
-FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui.js", "src/sound.js"]
+EXPECTED_VER = "7.0.0"
+FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -201,6 +201,8 @@ def main():
     ok("'./src/rift.js'" in read("sw.js"), "sw.js 프리캐시에 rift.js 포함")
     ok("'./src/bank.js'" in read("sw.js"), "sw.js 프리캐시에 bank.js 포함")
     ok("'./src/guild.js'" in read("sw.js"), "sw.js 프리캐시에 guild.js 포함")
+    ok("'./src/hub.js'" in read("sw.js"), "sw.js 프리캐시에 hub.js 포함")
+    ok("'./src/ui-hunt.js'" in read("sw.js"), "sw.js 프리캐시에 ui-hunt.js 포함")
     ok("'./src/ui-land.js'" in read("sw.js"), "sw.js 프리캐시에 ui-land.js 포함")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
@@ -358,7 +360,7 @@ def main():
         )
     }
     ctx2 = quickjs.Context()
-    ctx2.eval(bundle(FILES + ["src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui.js"], ui_extras))
+    ctx2.eval(bundle(FILES + ["src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui.js"], ui_extras))
     tpl = js(ctx2, """
       const s = defaultState(0);
       s.gold = 90000; s.shards = 320; s.level = 12; s.stage = 7; s.maxStage = 7; s.killsInStage = 4;
@@ -5982,6 +5984,27 @@ def main():
     """)
     ok(gd69["knightsOk"] and gd69["raidOk"] and gd69["weekResetOk"], "영지 기사단 4인 영입/스탯반영 · 주간 거대 레이드 합동 공격/페이즈 보상/주간 리셋", json.dumps(gd69))
     ok(ui69["ok"] and not ui69["bad"], "영지 기사단·거대 레이드 UI 카드 렌더 정상", json.dumps(ui69))
+
+    # ── 37) v7.0.0 📋 오늘의 할 일 원탭 허브 · 🎬 전투 연출 2.0 · 🧩 ui-hunt.js 분리 ──
+    section("v7.0.0 오늘의 할 일 원탭 허브 · 전투 연출 2.0 · ui-hunt.js 분리")
+    hb70 = js(ctx, """
+      const now = 1_700_000_000_000;
+      const s = defaultState(now);
+      s.gold = 200000; s.land.owned[CITIES[0].key] = 10; s.land.accruedRent = 5000;
+      openDeposit(s, 'short', 50000, now - 4000 * 1000); // 이미 만기된 예금
+      addPassXp(s, 350, now); // 패스 Lv.3 수령 가능
+      trackDailyQuest(s, 'kills', 60, now); // 일일퀘 1건 완료
+      const before = collectTodoSummary(s, calcStats(s, {}), now);
+      const res = claimAllReady(s, calcStats(s, {}), now, () => 0.2);
+      const after = collectTodoSummary(s, calcStats(s, {}), now);
+      return {
+        beforeCnt: before.totalClaimable,
+        claimOk: res.ok && res.count >= 5 && res.goldDelta > 50000 && res.shardsDelta > 0,
+        afterCnt: after.totalClaimable,
+      };
+    """)
+    ok(hb70["beforeCnt"] >= 5 and hb70["claimOk"] and hb70["afterCnt"] == 0, "오늘의 할 일 원탭 일괄 수령(임대·만기예금·출석·일일퀘·패스 동시 정산 후 0건)", json.dumps(hb70))
+    ok('id="todoBtn"' in read("index.html") and "drawCombo" in read("src/render.js") and "drawBossWarning" in read("src/render.js") and "chord(" in read("src/sound.js") and os.path.exists(os.path.join(ROOT, "src/ui-hunt.js")), "HUD #todoBtn · 전투 연출 2.0(콤보·보스 강공격 경고·사운드 화음) · src/ui-hunt.js 분리")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:
