@@ -419,7 +419,7 @@
 
     var vw = Math.min(window.innerWidth, 440);
     dfW = Math.floor((vw - 32 - 10) / 2);
-    dfH = Math.floor(Math.min(dfW * 1.35, window.innerHeight * 0.46));
+    dfH = Math.floor(Math.min(dfW * 1.5, window.innerHeight * 0.5));
     var lc = $id('df-left'), rc = $id('df-right');
     lc.width = dfW; lc.height = dfH;
     rc.width = dfW; rc.height = dfH;

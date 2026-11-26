@@ -811,3 +811,9 @@ body{font-family:'Jua',sans-serif;background:#0f0c29;min-height:100vh;overflow-x
 .gc-desc{font-size:.7rem;text-shadow:0 1px 2px rgba(0,0,0,.22);}
 .gc-badge{text-shadow:none;}
 #ydraw .tool-btn .tl{font-size:9.5px;}
+
+/* 학습 카드: 밝은 카드 위 안내 글자 대비 + 세로 가운데 정렬 */
+.flash-body{justify-content:center;}
+#math .fc-hint,#english .fc-hint{color:rgba(0,0,0,.38);}
+#math .math-lbl{color:#00796b;}
+#english .math-lbl{color:#4527a0;}
