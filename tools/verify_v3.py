@@ -95,9 +95,9 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "6.4.0"
+EXPECTED_VER = "6.5.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui.js", "src/sound.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -198,6 +198,7 @@ def main():
     ok("'./src/gems.js'" in read("sw.js"), "sw.js 프리캐시에 gems.js 포함")
     ok("'./src/portfolio-ops.js'" in read("sw.js"), "sw.js 프리캐시에 portfolio-ops.js 포함")
     ok("'./src/pass.js'" in read("sw.js"), "sw.js 프리캐시에 pass.js 포함")
+    ok("'./src/ui-land.js'" in read("sw.js"), "sw.js 프리캐시에 ui-land.js 포함")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
     ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
@@ -354,7 +355,7 @@ def main():
         )
     }
     ctx2 = quickjs.Context()
-    ctx2.eval(bundle(FILES + ["src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui.js"], ui_extras))
+    ctx2.eval(bundle(FILES + ["src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui.js"], ui_extras))
     tpl = js(ctx2, """
       const s = defaultState(0);
       s.gold = 90000; s.shards = 320; s.level = 12; s.stage = 7; s.maxStage = 7; s.killsInStage = 4;
@@ -5743,6 +5744,43 @@ def main():
     """)
     ok(pt64["passOk"] and pt64["seasonResetOk"], "영지 성장 패스 30단계(XP·마일스톤 초월석/훈장·Lv.15 전설·일괄수령·월간 리셋)", json.dumps(pt64))
     ok(pt64["titleCount"] == 20 and pt64["titleOk"] and ui64["ok"] and not ui64["bad"], "칭호 20종(해금/장착/스탯반영/랭킹표시) 및 패스·칭호 UI 렌더", json.dumps({ **pt64, **ui64 }))
+
+    # ── 32) v6.5.0 📱 모바일 390px 레이아웃 개편 · ⚡ 전투 버프 HUD · 🧩 UI 모듈 분리(ui-land.js) ──
+    section("v6.5.0 모바일 390px 필터 · 전투 버프 HUD · ui-land.js 분리")
+    ui65 = js(ctx2, """
+      const now = Date.now();
+      const s = defaultState(now);
+      s.land.owned[CITIES[0].key] = 10;
+      const buffs = computeBuffs(s, now);
+      const b = {
+        stats: calcStats(s, buffs), def: stageDef(1), boss: null,
+        player: { hp: 100, shield: 420, shieldUntil: now + 5000, graceUntil: now + 2400 },
+        berserkUntil: now + 4200, berserkRune: 'fury',
+        blessUntil: now + 3100, petGoldUntil: now + 6000, ultUntil: now + 5500,
+      };
+      const emptyPills = activeBuffPills({ player: { hp: 100, shield: 0, shieldUntil: 0, graceUntil: 0 }, berserkUntil: 0, blessUntil: 0, petGoldUntil: 0, ultUntil: 0 }, now);
+      const pills = activeBuffPills(b, now);
+      const ui = { s, battle: b, app: { buffs }, logs: [], tab: 'land', expPick: { petId: '', setId: '', durKey: 'short' }, landHomeFilter: 'all', landBuffFilter: 'all', el: {}, install: { hidden: true } };
+      const homeAll = __landSub(ui, 'home');
+      ui.landHomeFilter = 'holdings';
+      const homeHold = __landSub(ui, 'home');
+      ui.landHomeFilter = 'invest';
+      const homeInv = __landSub(ui, 'home');
+      ui.landBuffFilter = 'citadel';
+      const buffCit = __landSub(ui, 'buff');
+      ui.landBuffFilter = 'pet';
+      const buffPet = __landSub(ui, 'buff');
+      return {
+        emptyLen: emptyPills.length,
+        pillIds: pills.map((p) => p.id),
+        homeFilterOk: homeHold.length < homeAll.length && homeHold.includes('보유 매물') && !homeHold.includes('investDashboardCard') && homeInv.includes('investDashboardCard') && !homeInv.includes('regionMapCard'),
+        buffFilterOk: buffCit.includes('citadelCard') && !buffCit.includes('expeditionCard') && buffPet.includes('expeditionCard') && !buffPet.includes('citadelCard'),
+        bad: /undefined|NaN|\\[object Object\\]/.test(homeHold + homeInv + buffCit + buffPet),
+      };
+    """)
+    ok(ui65["emptyLen"] == 0 and ui65["pillIds"] == ["berserk", "shield", "bless", "goldRain", "ult", "grace"], "전투 캔버스 실시간 버프 HUD(6종 활성 칩 · 비활성 시 숨김)", json.dumps(ui65["pillIds"]))
+    ok(ui65["homeFilterOk"] and ui65["buffFilterOk"] and not ui65["bad"], "모바일 390px 부동산 홈/버프 빠른 보기 필터 동작 및 렌더 정상", json.dumps(ui65))
+    ok('id="battleBuffBar"' in read("index.html") and os.path.exists(os.path.join(ROOT, "src/ui-land.js")) and ".stage-buffs" in read("style.css"), "index.html #battleBuffBar · src/ui-land.js 모듈 분리 · style.css 버프 HUD 스타일")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

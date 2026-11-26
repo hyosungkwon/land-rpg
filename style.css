@@ -2829,3 +2829,51 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   display: inline-block; margin-right: 4px; padding: 0 4px; border-radius: 4px;
   font-size: 8.5px; font-weight: 800; color: #ffe38a; background: rgba(255, 207, 92, 0.15);
 }
+
+/* ══════════════ v6.5.0 ⚡ 전투 캔버스 실시간 버프 HUD · 📱 모바일 390px 개편 ══════════════ */
+.stage-buffs {
+  position: absolute;
+  top: 52px;
+  left: 10px;
+  right: 62px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 3;
+}
+.stage-buffs.hidden { display: none; }
+.sb-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  background: rgba(8, 12, 22, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--txt);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+.sb-pill.atk { border-color: rgba(255, 138, 80, 0.65); color: #ffd2b8; }
+.sb-pill.def { border-color: rgba(105, 192, 255, 0.65); color: #ccebff; }
+.sb-pill.gold { border-color: rgba(255, 207, 92, 0.72); color: #ffe8a3; }
+.sb-pill.ult { border-color: rgba(185, 139, 255, 0.72); color: #e6d1ff; }
+.land-filter { margin: 0 0 8px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.land-filter::-webkit-scrollbar { display: none; }
+.land-filter .chip { white-space: nowrap; flex: 0 0 auto; }
+
+@media (max-width: 420px) {
+  .subtabs .subtab { font-size: 10.5px; padding: 7px 4px; }
+  .land-sum .ls-mid { gap: 5px; }
+  .gem-socks { gap: 3px; }
+  .gs-cell { padding: 4px 1px; font-size: 8.5px; }
+  .relic-slots { gap: 4px; }
+  .r-slot { padding: 5px 3px; font-size: 9px; }
+  .pass-cell { flex: 0 0 68px; }
+  .stage-buffs { top: 48px; }
+  .sb-pill { font-size: 9.5px; padding: 2px 6px; }
+}
