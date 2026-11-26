@@ -1042,13 +1042,14 @@ body{font-family:'Jua',sans-serif;background:#0f0c29;min-height:100vh;overflow-x
   padding:4px 11px;font-size:.8rem;color:#fff;}
 .life-card{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:22px;
   padding:16px 14px;text-align:center;width:100%;margin-bottom:9px;
-  flex:1 1 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;
-  min-height:170px;max-height:330px;}
+  flex:0 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:190px;}
 .life-emoji{font-size:56px;display:block;line-height:1.1;margin-bottom:6px;}
 .life-q{font-family:'Jua',sans-serif;font-size:1.06rem;color:#fff;line-height:1.45;word-break:keep-all;}
 .life-feedback{font-size:.8rem;color:#FFD93D;text-align:center;min-height:2.4em;margin-bottom:7px;
   line-height:1.4;padding:0 4px;word-break:keep-all;}
-.life-choices{display:grid;grid-template-columns:1fr 1fr;gap:9px;width:100%;margin-bottom:10px;}
+.life-choices{display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;gap:9px;width:100%;
+  margin-bottom:10px;flex:1 1 auto;min-height:130px;}
 .life-choices.two{grid-template-columns:1fr;}
 .life-choice{font-family:'Jua',sans-serif;border:2px solid rgba(255,255,255,.22);border-radius:14px;
   padding:16px 8px;font-size:.96rem;line-height:1.3;cursor:pointer;background:rgba(255,255,255,.14);
