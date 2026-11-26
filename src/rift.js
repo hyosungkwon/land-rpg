@@ -10,11 +10,11 @@ const num = (v, d = 0) => (typeof v === 'number' && isFinite(v) ? v : typeof v =
 export const RIFT = {
   cooldownMs: 10 * 60 * 1000, // 10분 쿨타임
   waveTimeMs: 22000,          // 웨이브당 제한 시간 22초 (클리어 시 갱신)
-  normalPerWave: 4,           // 일반 웨이브 4마리
-  bossWaveMinions: 2,         // 3배수 보스 웨이브: 잡몹 2 + 보스 1
+  normalPerWave: 6,           // v7.1.0 일반 웨이브 6마리 (대규모 웨이브 체감)
+  bossWaveMinions: 4,         // 3배수 보스 웨이브: 잡몹 4 + 보스 1
   blessEvery: 3,              // 3웨이브 클리어마다 3택 1 축복 카드
-  maxAlive: 4,
-  spawnMs: 550,
+  maxAlive: 8,
+  spawnMs: 500,
 };
 
 export const RIFT_MONSTERS = [

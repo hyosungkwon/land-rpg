@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "7.0.0"
+EXPECTED_VER = "7.1.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui.js", "src/sound.js"]
 
@@ -6005,6 +6005,13 @@ def main():
     """)
     ok(hb70["beforeCnt"] >= 5 and hb70["claimOk"] and hb70["afterCnt"] == 0, "오늘의 할 일 원탭 일괄 수령(임대·만기예금·출석·일일퀘·패스 동시 정산 후 0건)", json.dumps(hb70))
     ok('id="todoBtn"' in read("index.html") and "drawCombo" in read("src/render.js") and "drawBossWarning" in read("src/render.js") and "chord(" in read("src/sound.js") and os.path.exists(os.path.join(ROOT, "src/ui-hunt.js")), "HUD #todoBtn · 전투 연출 2.0(콤보·보스 강공격 경고·사운드 화음) · src/ui-hunt.js 분리")
+
+    # ── 38) v7.1.0 👾 2.5D 원근 몬스터 배치 · 대규모 웨이브 · 동적 스폰 가속 ──
+    section("v7.1.0 2.5D 원근 몬스터 배치 · 대규모 웨이브 · 동적 스폰 가속")
+    csrc71 = read("src/combat.js")
+    rsrc71 = read("src/render.js")
+    ok("LANE_DEPTH = 25" in csrc71 and "laneAlpha" in rsrc71 and "gy + 2 + depth" in rsrc71, "2.5D 원근 깊이(LANE_DEPTH=25·앞뒤 레인 스케일/명암·발끝 그림자 접지)")
+    ok(js(ctx, "return RIFT.maxAlive === 8 && RIFT.normalPerWave === 6 && INVASION.maxAlive === 7;") is True, "특수 모드 대규모 웨이브(균열 8마리/6웨이브 · 침공 7마리 · 동적 스폰 가속)")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

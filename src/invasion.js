@@ -17,8 +17,8 @@ export const INVASION = {
   durationMs: 35000,          // 35초 제한 방어전
   minionGoal: 8,              // 잡몹 8마리 처치 후 침공 보스 등장
   goal: 9,                    // 총 9마리(잡몹 8 + 보스 1)
-  maxAlive: 5,
-  spawnMs: 650,
+  maxAlive: 7,
+  spawnMs: 560,
   hpSecNormal: 1.35,          // 내 DPS 기준 일반 침공 몹 처치 시간
   hpSecBoss: 7.5,             // 내 DPS 기준 침공 보스 처치 시간
   atkOfHpPct: 1.2,            // 몹 1회 공격 = 내 최대 체력의 1.2%

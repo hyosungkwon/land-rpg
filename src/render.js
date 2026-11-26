@@ -1835,7 +1835,7 @@ export class Renderer {
     const sc = this.scale();
     // v3.8 다굴: 무리가 많을수록 스프라이트를 조금씩 줄여 화면에 겹쳐 쌓이게 한다.
     const crowd = b.monsters.filter((m) => !m.dead && !m.dying && !m.isBoss).length;
-    const crowdK = crowd <= 2 ? 1 : Math.max(0.58, 1 - (crowd - 2) * 0.085);
+    const crowdK = crowd <= 2 ? 1 : Math.max(0.56, 1 - (crowd - 2) * 0.068);
     // 뒤 레인 → 앞 레인 순으로 그려야 앞쪽 몬스터가 위로 올라온다.
     const list = b.monsters
       .filter((m) => Number.isFinite(m.x))
@@ -1850,12 +1850,13 @@ export class Renderer {
       const lungeAge = now - (m.lungeAt || 0);
       const lunge = lungeAge >= 0 && lungeAge < 260 ? Math.sin(Math.PI * clamp(1 - lungeAge / 260, 0, 1)) : 0;
       const lane = m.isBoss ? 0 : (m.lane || 0);
-      const depthScale = 1 + lane * 0.045;
+      // v7.1.0 2.5D 원근 깊이: 뒤 레인(0.88x)·중간(1.0x)·앞 레인(1.10x) + 넓은 Y 분리
+      const depthScale = lane < 0 ? 0.88 : lane > 0 ? 1.1 : 1;
+      const laneAlpha = lane < 0 ? 0.9 : 1;
       let h = (m.isBoss ? 168 : 84 * crowdK) * sc * (m.isBoss ? 1 : m.scale * depthScale);
       h = Math.min(h, this.H * (m.isBoss ? 0.62 : 0.38));
       const w = h;
-      // 레인별 앞뒤 오프셋(뒤 레인은 위로, 앞 레인은 아래로) — 겹쳐도 깊이가 읽힌다
-      const depth = (lane * 18 + ((m.id % 3) - 1) * 2.5) * sc;
+      const depth = (lane * 25 + ((m.id % 3) - 1) * 3) * sc;
       const hitAge = now - (m.hitAt || 0);
       const hitK = hitAge >= 0 && hitAge < 130 ? 1 - hitAge / 130 : 0;
       const pop = 1 + hitK * 0.08;
@@ -1988,17 +1989,17 @@ export class Renderer {
       const ky = sy * pop * depthScale;
       const shadowScale = shadowK * (1 - clamp(lift / (h * 1.4), 0, 1) * 0.45);
 
-      // 1) 지면 그림자
+      // 1) 지면 그림자 (v7.1.0: depth 와 정확히 맞춰 발끝 접지감 개선)
       ctx.save();
       ctx.globalAlpha = Math.max(0, alpha) * shadowA;
       ctx.fillStyle = '#000';
       ctx.beginPath();
-      ctx.ellipse(x, gy + 2, w * 0.28 * shadowScale, w * 0.085 * shadowScale, 0, 0, Math.PI * 2);
+      ctx.ellipse(x, gy + 2 + depth, w * 0.28 * shadowScale, w * 0.085 * shadowScale, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
 
       ctx.save();
-      ctx.globalAlpha = Math.max(0, alpha);
+      ctx.globalAlpha = Math.max(0, alpha) * laneAlpha;
       const auraY = footY - h * 0.5;
       if (m.isBoss) {
         const grd = ctx.createRadialGradient(x, auraY, 6, x, auraY, h * 0.8);
