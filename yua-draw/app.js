@@ -120,6 +120,7 @@
   }
 
   function redraw() {
+    wrap.classList.toggle('has-ink', state.strokes.length > 0);
     drawCtx.save();
     drawCtx.setTransform(1, 0, 0, 1, 0, 0);
     drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
@@ -593,7 +594,7 @@
     const src = drawCanvas;
     const bb = inkBBox(src, 2);
     if (!bb) return null;
-    const pad = Math.max(10, Math.min(bb.x1 - bb.x0, bb.y1 - bb.y0) * 0.07);
+    const pad = Math.max(14, Math.min(bb.x1 - bb.x0, bb.y1 - bb.y0) * 0.1);
     const x = Math.max(0, Math.floor(bb.x0 - pad));
     const y = Math.max(0, Math.floor(bb.y0 - pad));
     const w = Math.min(src.width - x, Math.ceil(bb.x1 - bb.x0 + pad * 2));
