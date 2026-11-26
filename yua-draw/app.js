@@ -500,9 +500,11 @@
 
     // 획의 양 — 모양을 맞춘 그림은 참조와 비슷하지만, 캔버스를 뒤덮은 낙서는 훨씬 많다.
     const lenRatio = childLen / ref.refLen;
-    const excess = clamp01((lenRatio - 2.5) / 7.5);
+    const excess = clamp01((lenRatio - 1.9) / 4.5);
 
-    const raw = clamp01(0.84 * f1 * (1 - 0.55 * junk) * (1 - 0.5 * excess) + 0.08 * arScore + 0.08 * colorScore);
+    // f1을 제곱해 "절반쯤 걸친 그림"과 "제대로 맞춘 그림"의 간격을 벌린다.
+    const fp = f1 * f1;
+    const raw = clamp01(0.86 * fp * (1 - 0.55 * junk) * (1 - 0.6 * excess) + 0.07 * arScore + 0.07 * colorScore);
     let pct = pctFromRaw(raw);
     pct = Math.max(55, Math.min(99, pct));
 

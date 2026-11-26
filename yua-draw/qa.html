@@ -123,8 +123,16 @@
       }
     }
 
-    function scribble() {
+    function scribble(mode) {
       const cols = ['검정', '파랑', '빨강', '초록'];
+      if (mode === 'corner') {
+        for (let s = 0; s < 2; s++) {
+          const pts = [];
+          for (let i = 0; i <= 8; i++) pts.push([10 + Math.random() * 26, 12 + Math.random() * 22]);
+          stroke(pts, cols[s % cols.length]);
+        }
+        return;
+      }
       for (let s = 0; s < 3; s++) {
         const pts = [];
         for (let i = 0; i <= 14; i++) {
@@ -152,7 +160,8 @@
       log(label + ' → ' + score + '% ' + d.getElementById('stars').textContent +
           ' | ' + d.getElementById('tipText').textContent +
           ' :: r=' + f(L.recall) + ' p=' + f(L.precision) + ' f1=' + f(L.f1) +
-          ' junk=' + f(L.junk) + ' ar=' + f(L.arScore) + ' col=' + f(L.colorScore) + ' raw=' + f(L.raw));
+          ' junk=' + f(L.junk) + ' ar=' + f(L.arScore) + ' col=' + f(L.colorScore) +
+          ' len=' + f(L.lenRatio) + ' raw=' + f(L.raw));
       return score;
     }
 
@@ -175,7 +184,7 @@
       const scores = [];
       for (let n = 0; n < rounds; n++) {
         const t = currentTopic();
-        scribble();
+        scribble(q.get('mode') || '');
         await sleep(60);
         const sc = submitAndRead(t.emoji + ' ' + t.word + ' (낙서)');
         if (sc != null) scores.push({ word: t.word, sc: sc });
