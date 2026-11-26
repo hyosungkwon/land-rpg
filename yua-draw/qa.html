@@ -31,8 +31,15 @@
   function log(s) { lines.push(s); out.textContent = lines.join('\n'); }
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  let started = false;
+  frame.addEventListener('load', () => {
+    let href = '';
+    try { href = frame.contentWindow.location.href; } catch (e) { href = ''; }
+    if (started || href.indexOf('index.html') < 0) return;
+    started = true;
+    run().catch((e) => log('FATAL ' + (e && e.stack || e)));
+  });
   frame.src = './index.html?qa=' + Date.now();
-  frame.addEventListener('load', () => { run().catch((e) => log('FATAL ' + (e && e.stack || e))); });
 
   async function run() {
     const w = frame.contentWindow;
