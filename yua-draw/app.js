@@ -610,6 +610,32 @@
     return out.toDataURL(mime || 'image/png', quality);
   }
 
+  // data URL 을 파일로 내려받기 (모바일 브라우저에서 가장 잘 동작하는 방식)
+  function downloadDataUrl(dataUrl, filename) {
+    try {
+      const head = dataUrl.slice(0, dataUrl.indexOf(','));
+      const mime = (head.match(/:(.*?);/) || [])[1] || 'image/png';
+      const bin = atob(dataUrl.slice(dataUrl.indexOf(',') + 1));
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      const url = URL.createObjectURL(new Blob([arr], { type: mime }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (e) {
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+  }
+
   function submit() {
     const topic = TOPICS[state.topicIndex];
     const res = computeScore(topic);
@@ -946,12 +972,7 @@
       const data = exportImage(1400, 'image/png');
       if (!data) { toast('저장할 그림이 없어요'); return; }
       const pct = $('scoreNum').textContent;
-      const a = document.createElement('a');
-      a.href = data;
-      a.download = '유아그림-' + topic.word + '-' + pct + '점.png';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      downloadDataUrl(data, '유아그림-' + topic.word + '-' + pct + '점.png');
       toast('그림을 저장했어요! 💾');
     });
     $('btnConfirmYes').addEventListener('click', () => resolveConfirm(true));
