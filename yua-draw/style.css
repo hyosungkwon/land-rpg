@@ -89,8 +89,9 @@ body{
 /* 굵기 + 도화지 색 */
 .sub-row{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .sizes{ display:flex; gap:4px; }
+.divider{ width:1px; height:22px; background:var(--line); flex:0 0 1px; }
 .size-btn{
-  width:34px; height:30px; border-radius:10px; border:2px solid var(--line); background:#fff;
+  width:32px; height:30px; border-radius:10px; border:2px solid var(--line); background:#fff;
   display:flex; align-items:center; justify-content:center; cursor:pointer; padding:0;
 }
 .size-btn i{ display:block; border-radius:50%; background:#3b4a63; }
@@ -153,20 +154,20 @@ body{
 /* ── 하단 ── */
 .bottom{ display:flex; gap:6px; align-items:stretch; }
 .pad{
-  flex:0 0 46px; border:2px solid var(--line); background:#fff; border-radius:16px;
+  flex:0 0 44px; border:2px solid var(--line); background:#fff; border-radius:16px;
   font-size:18px; cursor:pointer; padding:0;
 }
 .pad:active{ transform:scale(.95); }
 .ghost{
-  flex:0 0 27%; border:2px solid #ffe0b6; background:#fff8ee; color:#b35c00;
-  border-radius:16px; font-weight:800; font-size:13px; padding:12px 4px; cursor:pointer;
+  flex:0 0 26%; border:2px solid #ffe0b6; background:#fff8ee; color:#b35c00;
+  border-radius:16px; font-weight:800; font-size:12.5px; padding:12px 3px; cursor:pointer;
   white-space:nowrap;
 }
 .ghost.on{ background:#fff1d8; border-color:#ffb74d; }
 .ghost:active,.primary:active{ transform:scale(.97); }
 .primary{
   flex:1; border:none; border-radius:16px; color:#fff; cursor:pointer;
-  font-size:16px; font-weight:900; letter-spacing:-.4px; padding:12px 6px;
+  font-size:15px; font-weight:900; letter-spacing:-.5px; padding:12px 3px;
   background:linear-gradient(180deg,#ffb74d 0%,#ff8f00 100%);
   box-shadow:0 8px 18px rgba(255,143,0,.34);
   white-space:nowrap;
