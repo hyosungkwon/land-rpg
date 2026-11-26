@@ -5,6 +5,7 @@ import { RELICS, RELIC_BY_ID, RELIC_SLOTS, RELIC_MAX_LV, RELIC_SUMMON_COST, reli
 import { passInfo, titleStatus } from './pass.js';
 import { riftStatus, RIFT_CARD_BY_ID } from './rift.js';
 import { KNIGHTS, knightLevel, knightCost, guildEffects, raidStatus } from './guild.js';
+import { computeCpBreakdown, recommendGrowth } from './guide.js';
 import { esc, fmt, mmss } from './ui-fmt.js';
 
 /* ───────────── 🏺 고대 유물(아티팩트 12종 · v6.1.0) ───────────── */
@@ -191,5 +192,40 @@ export function titleCard(ui) {
     </div>
     <div class="tiny dim">장착한 칭호의 보너스가 적용되며, 🏆 클라우드 랭킹 닉네임 옆에도 함께 표시됩니다.</div>
     <div class="title-grid">${chips}</div>
+  </div>`;
+}
+
+/* ───────────── 🧭 전투력(CP) 원천 분석기 & 가성비 성장 내비 (v7.9.0) ───────────── */
+export function cpGuideCard(ui) {
+  const s = ui.s;
+  const buffs = (ui.app && ui.app.buffs) || {};
+  const bd = computeCpBreakdown(s, buffs);
+  const recs = recommendGrowth(s, buffs, Date.now());
+  const segs = bd.sources
+    .filter((x) => x.pct > 0)
+    .map((x) => `<i style="width:${Math.max(4, x.pct)}%;background:${x.color}" title="${x.label} ${x.pct}%"></i>`)
+    .join('');
+  const chips = bd.sources
+    .filter((x) => x.pct > 0)
+    .map((x) => `<span class="cp-chip"><b style="color:${x.color}">${x.icon}${x.label}</b> ${x.pct}%</span>`)
+    .join('');
+  const recRows = recs.map((r) => `
+    <div class="gd-row">
+      <span class="gd-ico">${r.icon}</span>
+      <span class="gd-mid">
+        <b>${esc(r.title)} <i class="gd-tag">${esc(r.tag)}</i></b>
+        <small>${esc(r.detail)}</small>
+      </span>
+      <button class="mini up" type="button" data-action="guide-jump" data-value="${r.jumpTab}:${r.jumpSub || ''}">이동 →</button>
+    </div>`).join('');
+  return `
+  <div class="card guide-card" id="cpGuideCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🧭</span>전투력 분석 · 성장 내비<small>CP ${fmt(bd.cp)}</small></div>
+      <span class="tiny" style="color:var(--gold)">추천 Top ${recs.length}</span>
+    </div>
+    <div class="dm-bar" style="margin:2px 0 6px">${segs}</div>
+    <div class="cp-chips">${chips}</div>
+    <div class="gd-list">${recRows}</div>
   </div>`;
 }

@@ -71,7 +71,7 @@ import {
   bankCard, megaProjectCard, buildMarketList, tplLandMarket,
 } from './ui-land.js';
 import { bankStatus } from './bank.js';
-import { relicCard, riftCard, guildRaidCard, passCard, titleCard } from './ui-hunt.js';
+import { relicCard, riftCard, guildRaidCard, passCard, titleCard, cpGuideCard } from './ui-hunt.js';
 
 /** v6.5.0 전투 캔버스 상단 실시간 버프 HUD 바 항목 생성 */
 export function activeBuffPills(b, now = Date.now()) {
@@ -221,6 +221,12 @@ export class UI {
       case 'toggle-shake': actions.toggleShake(); break;
       case 'toggle-dmg-numbers': actions.toggleDmgNumbers(); break;
       case 'reset-dps-meter': actions.resetDpsMeter(); break;
+      case 'guide-jump': {
+        const [tTab, tSub] = String(v || '').split(':');
+        if (tTab === 'hunt' && tSub) this.huntSub = tSub;
+        if (tTab) this.setTab(tTab);
+        break;
+      }
       case 'toggle-sound': actions.toggleSound(); break;
       case 'gacha': actions.pullGacha(Number(v) || 1); break;
       case 'gacha-cur': actions.gachaCur(v); break;
@@ -1648,7 +1654,7 @@ function ultPanel(ui) {
 }
 
 function tplHuntSkill(ui) {
-  return `${huntStatsCard(ui)}${huntSkillCard(ui)}`;
+  return `${huntStatsCard(ui)}${cpGuideCard(ui)}${huntSkillCard(ui)}`;
 }
 
 /* ───────────── ✨ 전직·환생 ───────────── */

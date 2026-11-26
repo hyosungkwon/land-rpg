@@ -95,9 +95,9 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "7.8.0"
-FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui.js", "src/sound.js"]
+EXPECTED_VER = "7.9.0"
+FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -6115,6 +6115,23 @@ def main():
     """)
     ok(dm78["totalDmg"] == 1000 and dm78["topKey"] == "normal" and dm78["topPct"] == 50 and dm78["critRate"] == 67 and dm78["gpm"] > 0 and dm78["spm"] > 0 and dm78["resetZero"], "딜 비중(평타/스킬/펫)·실측 치명률·GPM/SPM·초기화 정상", json.dumps(dm78))
     ok('data-live="dps-meter"' in read("src/ui.js") and 'reset-dps-meter' in read("src/ui.js") and 'resetDpsMeter' in read("app.js"), "ui.js · app.js — 실시간 딜 비중 HUD 및 초기화 버튼 배선")
+
+    # ── 46) v7.9.0 🧭 전투력(CP) 원천 분석기 & 가성비 성장 내비게이션 ──
+    section("v7.9.0 전투력(CP) 원천 분석기 & 가성비 성장 내비")
+    gd79 = js(ctx, """
+      const s = defaultState(1000);
+      s.level = 20; s.gold = 30000; s.shards = 150;
+      const bd = computeCpBreakdown(s, {});
+      const recs = recommendGrowth(s, {}, 1000);
+      return {
+        cpOk: bd.cp > 0 && bd.sources.length === 6 && bd.sources.reduce((a, x) => a + x.pct, 0) >= 96,
+        recCount: recs.length,
+        hasLand: recs.some((r) => r.id === 'buy-land'),
+        hasJump: recs.every((r) => !!r.jumpTab && !!r.title),
+      };
+    """)
+    ok(gd79["cpOk"] and gd79["recCount"] == 3 and gd79["hasLand"] and gd79["hasJump"], "CP 6대 원천 분해(%) · 가성비 성장 추천 Top 3 · 바로가기 탭 생성 정상", json.dumps(gd79))
+    ok("cpGuideCard" in read("src/ui.js") and "'./src/guide.js'" in read("sw.js") and 'case \'guide-jump\':' in read("src/ui.js"), "ui.js · sw.js — cpGuideCard 렌더 · guide-jump 배선 · guide.js 프리캐시")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

@@ -1941,6 +1941,34 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .dm-chip { font-size: 9.5px; color: var(--sub); font-weight: 700; }
 .dm-chip b { font-weight: 900; margin-right: 2px; }
 
+/* v7.9.0 🧭 전투력(CP) 원천 분석 & 가성비 성장 내비 */
+.cp-chips { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-bottom: 8px; }
+.cp-chip { font-size: 9.5px; color: var(--sub); font-weight: 700; }
+.cp-chip b { font-weight: 900; margin-right: 2px; }
+.gd-list { display: flex; flex-direction: column; gap: 6px; }
+.gd-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.035);
+  border: 1px solid var(--line);
+}
+.gd-ico { font-size: 17px; flex: 0 0 auto; }
+.gd-mid { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.gd-mid b { font-size: 11px; font-weight: 800; color: var(--text); display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.gd-mid small { font-size: 9.5px; color: var(--sub); line-height: 1.3; }
+.gd-tag {
+  font-style: normal;
+  font-size: 8.5px;
+  font-weight: 900;
+  padding: 1px 5px;
+  border-radius: 5px;
+  color: #1c1300;
+  background: linear-gradient(180deg, #ffe799, #f5b431);
+}
+
 /* ⚔️ 장착 5부위 슬롯 */
 .gear-slots { display: flex; flex-direction: column; gap: 6px; }
 .gslot {
