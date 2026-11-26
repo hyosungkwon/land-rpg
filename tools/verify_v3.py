@@ -95,9 +95,9 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "6.7.0"
-FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui.js", "src/sound.js"]
+EXPECTED_VER = "6.8.0"
+FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -199,6 +199,7 @@ def main():
     ok("'./src/portfolio-ops.js'" in read("sw.js"), "sw.js 프리캐시에 portfolio-ops.js 포함")
     ok("'./src/pass.js'" in read("sw.js"), "sw.js 프리캐시에 pass.js 포함")
     ok("'./src/rift.js'" in read("sw.js"), "sw.js 프리캐시에 rift.js 포함")
+    ok("'./src/bank.js'" in read("sw.js"), "sw.js 프리캐시에 bank.js 포함")
     ok("'./src/ui-land.js'" in read("sw.js"), "sw.js 프리캐시에 ui-land.js 포함")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
@@ -5886,6 +5887,58 @@ def main():
     """)
     ok(rf67["startOk"] and rf67["rewardOk"] and rf67["cdLock"] and rf67["normOk"], "무한 균열 웨이브 진행·W3 3택 1 축복 카드·W6 보석/초월석 정산·쿨타임·정규화", json.dumps(rf67))
     ok(ui67["ok"] and not ui67["bad"], "무한 균열 도전 카드 UI 렌더 정상", json.dumps(ui67))
+
+    # ── 35) v6.8.0 🏦 영지 은행(정기 예금) · 🏗️ 전국 메가 프로젝트 4종 ──
+    section("v6.8.0 영지 은행 · 전국 메가 프로젝트 4종")
+    bk68 = js(ctx, """
+      const now = 1_700_000_000_000;
+      const s = defaultState(now);
+      s.gold = 10_000_000; s.shards = 5000; s.rebirth.points = 100;
+      for (let i = 0; i < 18; i++) s.land.owned[CITIES[i].key] = 10;
+      // 1) 정기 예금 개설 → 조기 수령 거부 → 중도 해지 원금 100% 복구
+      const gStart = s.gold;
+      const d1 = openDeposit(s, 'short', 100000, now);
+      const denyEarly = claimDeposit(s, d1.slot.id, now + 1000);
+      const can1 = cancelDeposit(s, d1.slot.id);
+      const restored = s.gold === gStart;
+      // 2) 만기 수령 → 원금 + 22% 이자 지급
+      const d2 = openDeposit(s, 'mid', 200000, now);
+      const cl2 = claimDeposit(s, d2.slot.id, d2.slot.maturesAt + 10);
+      // 3) 메가 프로젝트 4종 건설 → 임대/공격/거래세 실반영 + 환생 유지
+      const baseRent = portfolioOf(s, now).incomePerMin;
+      const baseAtk = calcStats(s, {}).atk;
+      const baseFee = quoteTrade(CITIES[0].key, 'buy', 10, s, now).fee;
+      const bKtx = buildMegaProject(s, 'ktx');
+      const bSky = buildMegaProject(s, 'skytower');
+      const bPort = buildMegaProject(s, 'tradeport');
+      const nextRent = portfolioOf(s, now).incomePerMin;
+      const nextAtk = calcStats(s, {}).atk;
+      const nextFee = quoteTrade(CITIES[0].key, 'buy', 10, s, now).fee;
+      s.maxStage = 25; s.stage = 25;
+      doRebirth(s, now);
+      const keptAfterRebirth = megaEffects(s).totalLv === 3;
+      const norm = normalizeState({ mega: { ktx: 99, skytower: -1 } }, now);
+      return {
+        bankOk: d1.ok && !denyEarly.ok && can1.ok && restored && d2.ok && cl2.ok && cl2.interest === 44000 && s.bank.totalInterest === 44000,
+        megaOk: bKtx.ok && bSky.ok && bPort.ok && nextRent > baseRent && nextAtk > baseAtk && nextFee < baseFee && keptAfterRebirth,
+        normOk: norm.mega.ktx === 3 && norm.mega.skytower === 0,
+      };
+    """)
+    ui68 = js(ctx2, """
+      const s = defaultState(Date.now()); s.gold = 500000;
+      for (let i = 0; i < 10; i++) s.land.owned[CITIES[i].key] = 5;
+      s.mega.ktx = 1;
+      const buffs = computeBuffs(s);
+      const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(1), boss: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'land', expPick: { petId: '', setId: '', durKey: 'short' }, el: {}, install: { hidden: true } };
+      const home = __landSub(ui, 'home');
+      const buff = __landSub(ui, 'buff');
+      return {
+        ok: home.includes('bankCard') && home.includes('KTX 고속철도 Lv.1') && buff.includes('megaProjectCard') && buff.includes('data-action="mega-build"'),
+        bad: /undefined|NaN|\\[object Object\\]/.test(home + buff),
+      };
+    """)
+    ok(bk68["bankOk"] and bk68["megaOk"] and bk68["normOk"], "영지 은행(예치·조기차단·중도해지 원금보장·만기이자) · 메가 프로젝트(임대/공격/거래세·환생유지·정규화)", json.dumps(bk68))
+    ok(ui68["ok"] and not ui68["bad"], "영지 은행·메가 프로젝트 카드 및 지도 배지 UI 렌더", json.dumps(ui68))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

@@ -68,8 +68,9 @@ import {
   paybackText, trendHtml, traitBadge,
   LAND_HOME_FILTERS, LAND_BUFF_FILTERS, landHomeFilterBar, landBuffFilterBar,
   invasionCard, regionMapCard, expeditionCard, investDashboardCard, limitOrdersCard, citadelCard,
-  buildMarketList, tplLandMarket,
+  bankCard, megaProjectCard, buildMarketList, tplLandMarket,
 } from './ui-land.js';
+import { bankStatus } from './bank.js';
 
 /** v6.5.0 전투 캔버스 상단 실시간 버프 HUD 바 항목 생성 */
 export function activeBuffPills(b, now = Date.now()) {
@@ -276,6 +277,10 @@ export class UI {
       case 'exp-claim-all': actions.expClaimAll(); break;
       case 'exp-cancel': actions.expCancel(v); break;
       case 'citadel-up': actions.upgradeCitadel(v); break;
+      case 'bank-open': actions.bankOpen(v); break;
+      case 'bank-claim': actions.bankClaim(v); break;
+      case 'bank-cancel': actions.bankCancel(v); break;
+      case 'mega-build': actions.megaBuild(v); break;
       case 'toggle-auto-rent': actions.toggleAutoRent(); break;
       case 'claim-rent': actions.claimRent(); break;
       case 'rent-info': actions.rentInfo(); break;
@@ -2350,7 +2355,8 @@ function landBadges(ui) {
   const unlocked = s.pet && Array.isArray(s.pet.unlocked) ? s.pet.unlocked : [];
   const petReady = PETS.filter((d) => unlocked.includes(d.id) && petEvolveInfo(s, d.id).can).length;
   const expReady = expeditionStatus(s).readyCount;
-  return { home: rentReady, market: 0, buff: petReady + expReady };
+  const bankReady = bankStatus(s).readyCount;
+  return { home: rentReady + bankReady, market: 0, buff: petReady + expReady };
 }
 
 /** 서브 탭 바 — 스크롤해도 위에 붙고, 받을 것이 있으면 배지가 켜진다 */
@@ -2611,8 +2617,8 @@ function tplLandHome(ui) {
   const bar = landHomeFilterBar(ui);
   if (f === 'holdings') return `${bar}${holdCard}${regionSetMini(ui)}${recCard}`;
   if (f === 'events') return `${bar}${invasionCard(ui)}${auctionCard(ui)}${regionMapCard(ui)}`;
-  if (f === 'invest') return `${bar}${limitOrdersCard(ui)}${investDashboardCard(ui)}${recCard}`;
-  return `${bar}${invasionCard(ui)}${auctionCard(ui)}${regionMapCard(ui)}${regionSetMini(ui)}${holdCard}${limitOrdersCard(ui)}${investDashboardCard(ui)}${recCard}`;
+  if (f === 'invest') return `${bar}${bankCard(ui)}${limitOrdersCard(ui)}${investDashboardCard(ui)}${recCard}`;
+  return `${bar}${invasionCard(ui)}${auctionCard(ui)}${regionMapCard(ui)}${regionSetMini(ui)}${holdCard}${bankCard(ui)}${limitOrdersCard(ui)}${investDashboardCard(ui)}${recCard}`;
 }
 
 /* ───────────── 🛒 매물 투자 (v6.5.0: buildMarketList / tplLandMarket 는 ui-land.js 로 분리) ───────────── */
@@ -2679,9 +2685,9 @@ function tplLandBuff(ui) {
   const f = LAND_BUFF_FILTERS.includes(ui && ui.landBuffFilter) ? ui.landBuffFilter : 'all';
   const bar = landBuffFilterBar(ui);
   if (f === 'pet') return `${bar}${petCard(ui)}${expeditionCard(ui)}`;
-  if (f === 'citadel') return `${bar}${citadelCard(ui)}${landmarkCard(ui)}`;
+  if (f === 'citadel') return `${bar}${citadelCard(ui)}${megaProjectCard(ui)}${landmarkCard(ui)}`;
   if (f === 'buff') return `${bar}${buffCard}${regionSetCard(ui)}${landSynergyCard(ui)}${nowCard}`;
-  return `${bar}${buffCard}${petCard(ui)}${expeditionCard(ui)}${citadelCard(ui)}${regionSetCard(ui)}${landmarkCard(ui)}${landSynergyCard(ui)}${nowCard}`;
+  return `${bar}${buffCard}${petCard(ui)}${expeditionCard(ui)}${citadelCard(ui)}${megaProjectCard(ui)}${regionSetCard(ui)}${landmarkCard(ui)}${landSynergyCard(ui)}${nowCard}`;
 }
 
 /* ══════════════════════════ 설정 ══════════════════════════ */

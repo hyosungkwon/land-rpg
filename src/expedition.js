@@ -229,7 +229,9 @@ export function startExpedition(state, petId, setId, durKey = 'short', now = Dat
 
   const rEq = (state && state.relics && Array.isArray(state.relics.equipped)) ? state.relics.equipped : [];
   const compLv = rEq.includes('compass') ? Math.max(0, Math.min(5, Math.floor(num(state.relics.owned && state.relics.owned.compass, 0)))) : 0;
-  const durMs = Math.max(60000, Math.round(dur.ms * (1 - (compLv > 0 ? (8 + 4 * compLv) / 100 : 0))));
+  const ktxLv = Math.max(0, Math.min(3, Math.floor(num(state && state.mega && state.mega.ktx, 0))));
+  const trimPct = (compLv > 0 ? 8 + 4 * compLv : 0) + ktxLv * 5;
+  const durMs = Math.max(60000, Math.round(dur.ms * (1 - Math.min(0.6, trimPct / 100))));
   const slot = {
     id: `${petId}_${Math.floor(now)}_${state.expedition.active.length}`,
     petId,

@@ -10,6 +10,7 @@ import {
 } from './expedition.js';
 import { invasionStatus } from './invasion.js';
 import { CITADEL_FACILITIES, CITADEL_MAX_LV, citadelEffects, citadelUpgradeQuote } from './citadel.js';
+import { BANK_PLANS, bankStatus, MEGA_PROJECTS, MEGA_MAX_LV, megaEffects, megaQuote } from './bank.js';
 import { petStageInfo } from './meta.js';
 import { esc, fmt, hhmmss, mmss } from './ui-fmt.js';
 
@@ -161,6 +162,12 @@ export function regionMapCard(ui) {
     <div class="rmap-wrap">
       <svg class="rmap-svg" viewBox="0 0 320 246" aria-label="대한민국 7권역 영지 지도">${polys}</svg>
     </div>
+    ${(() => {
+      const built = MEGA_PROJECTS.filter((p) => (ui.s && ui.s.mega && ui.s.mega[p.id] > 0));
+      return built.length
+        ? `<div class="inv-booms" style="margin:6px 0 2px">${built.map((p) => `<span class="tag lm">${p.icon} ${esc(p.name)} Lv.${ui.s.mega[p.id]}</span>`).join('')}</div>`
+        : '';
+    })()}
     <div class="rmap-grid">${btns}</div>
   </div>`;
 }
@@ -348,6 +355,79 @@ export function citadelCard(ui) {
       <span class="tiny dim">영구 시설 5종</span>
     </div>
     <div class="tiny muted">골드·강화석·초월석으로 영지 본부를 증축합니다. 모든 시설은 <b>환생 후에도 영구 유지</b>됩니다.</div>
+    <div class="cit-list">${rows}</div>
+  </div>`;
+}
+
+/* ══════════════════ 🏦 영지 은행 (정기 예금 · v6.8.0) ══════════════════ */
+export function bankCard(ui) {
+  const s = ui.s;
+  const now = Date.now();
+  const st = bankStatus(s, now);
+  const slotHtml = st.slots.length
+    ? st.slots.map((sl) => `
+      <div class="bank-row${sl.ready ? ' ready' : ''}">
+        <div class="ord-mid">
+          <div class="ord-t">🏦 ${esc(sl.plan.title)} (${sl.plan.label} · <b>+${sl.ratePct}%</b>) · 💰${formatGold(sl.principal)}</div>
+          <div class="ord-s">${sl.ready ? `만기 도달! 수령액 💰${formatGold(sl.payout)} (+💰${formatGold(sl.interest)})` : `남은 ${hhmmss(sl.leftMs)} · 예상 이자 +💰${formatGold(sl.interest)}`}</div>
+          <div class="prog tiny-prog${sl.ready ? ' gold' : ''}" style="margin-top:3px"><i style="width:${Math.round(sl.pct * 100)}%"></i></div>
+        </div>
+        ${sl.ready
+          ? `<button class="btn small primary" type="button" data-action="bank-claim" data-value="${sl.id}">💰 수령</button>`
+          : `<button class="mini ghost" type="button" data-action="bank-cancel" data-value="${sl.id}">해지</button>`}
+      </div>`).join('')
+    : '<div class="tiny dim" style="margin-top:4px">여유 골드를 정기 예금에 예치해 복리 이자를 받으세요. 중도 해지 시 원금은 100% 반환됩니다.</div>';
+  const full = st.slots.length >= st.maxSlots;
+  const planBtns = BANK_PLANS.map((p) => {
+    const can = !full && (s.gold || 0) >= p.minGold * 2;
+    const canMin = !full && (s.gold || 0) >= p.minGold;
+    return `<button class="btn small ${canMin ? 'ghost' : 'ghost'} wide" type="button" data-action="bank-open" data-value="${p.key}" ${canMin ? '' : 'disabled'}>${p.label} +${p.ratePct}%<small style="display:block;font-size:9px;opacity:.75">${can ? '골드 50%' : `최소 ${formatGold(p.minGold)}`}</small></button>`;
+  }).join('');
+  return `
+  <div class="card bank-card${st.readyCount ? ' ready' : ''}" id="bankCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🏦</span>영지 은행<small>${st.slots.length}/${st.maxSlots}계좌 · 누적 이자 💰${formatGold(st.totalInterest)}</small></div>
+      <span class="tiny dim">${st.readyCount ? `🎁 만기 ${st.readyCount}건` : '중도해지 원금보장'}</span>
+    </div>
+    <div class="ord-list">${slotHtml}</div>
+    <div class="row gap6" style="margin-top:8px">${planBtns}</div>
+  </div>`;
+}
+
+/* ══════════════════ 🏗️ 전국 메가 프로젝트 4종 (v6.8.0) ══════════════════ */
+export function megaProjectCard(ui) {
+  const s = ui.s;
+  const eff = megaEffects(s);
+  const rows = MEGA_PROJECTS.map((p) => {
+    const q = megaQuote(s, p.id);
+    const lv = q.lv || 0;
+    const costTxt = q.max
+      ? '완공 완료'
+      : !q.unlocked
+        ? `🔒 보유 지역 ${p.reqCities}곳 달성 시 해금 (현재 ${q.cities}곳)`
+        : `다음 Lv.${lv + 1}: 💰${formatGold(q.cost.gold)} · 💎${q.cost.shards}${q.cost.points ? ` · ✨${q.cost.points}P` : ''}`;
+    return `
+    <div class="cit-row${q.can ? ' ready' : ''}">
+      <div class="cit-ico" style="--cc:${p.color}">${p.icon}</div>
+      <div class="cit-mid">
+        <div class="cit-name">${esc(p.name)}<span class="lv">Lv.${lv}/${MEGA_MAX_LV}</span></div>
+        <div class="cit-fx">${lv > 0 ? esc(p.effect(lv)) : esc(p.desc)}</div>
+        <div class="cit-cost">${q.max ? '<span style="color:var(--gold)">MAX</span>' : costTxt}</div>
+      </div>
+      <div class="cit-act">
+        ${q.max
+          ? '<button class="mini on" type="button" disabled>완공</button>'
+          : `<button class="btn small ${q.can ? 'primary' : 'ghost'}" type="button" data-action="mega-build" data-value="${p.id}" ${q.can ? '' : 'disabled'}>${lv > 0 ? '증축' : '착공'}</button>`}
+      </div>
+    </div>`;
+  }).join('');
+  return `
+  <div class="card mega-card" id="megaProjectCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🏗️</span>전국 메가 프로젝트<small>총 Lv.${eff.totalLv}/${eff.maxTotalLv} · 환생 유지</small></div>
+      <span class="tiny dim">국가 인프라 4종</span>
+    </div>
+    <div class="tiny muted">전국 영지망을 연결하는 초대형 국가 인프라입니다. 완공된 프로젝트는 <b>전국 영지 지도</b>에 표시되며 환생 후에도 유지됩니다.</div>
     <div class="cit-list">${rows}</div>
   </div>`;
 }

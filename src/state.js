@@ -39,6 +39,7 @@ import { defaultRelics, normalizeRelics, relicEffects } from './relics.js';
 import { defaultGems, normalizeGems, gemEffects } from './gems.js';
 import { defaultPass, normalizePass, defaultTitles, normalizeTitles, titleBonus } from './pass.js';
 import { defaultRift, normalizeRift } from './rift.js';
+import { defaultBank, normalizeBank, defaultMega, normalizeMega, megaEffects } from './bank.js';
 import { normalizeOrders } from './orders.js';
 
 const nowMs = () => Date.now();
@@ -99,6 +100,8 @@ export function defaultState(now = nowMs()) {
     pass: defaultPass(now),
     titles: defaultTitles(),
     rift: defaultRift(),
+    bank: defaultBank(),
+    mega: defaultMega(),
     battleSpeed: 1, // v5.3.0 전투 배속(1 / 1.5 / 2, 환생 1회 해금)
     dungeonCooldown: 0,
     dungeon: { best: 0, runs: 0, last: null },
@@ -275,6 +278,8 @@ export function normalizeState(raw, now = nowMs()) {
 
   // v3.5: 환생 기록 정규화 · 역대 최고 스테이지(환생 후에도 남는 기록)
   s.rift = normalizeRift(raw.rift);
+  s.bank = normalizeBank(raw.bank);
+  s.mega = normalizeMega(raw.mega);
   s.rebirth = normalizeRebirth(raw.rebirth);
   s.peakStage = Math.max(
     1,
@@ -410,6 +415,7 @@ export function calcStats(s, buffs = NO_BUFF) {
   const rel = relicEffects(s);
   const gem = gemEffects(s);
   const tit = titleBonus(s);
+  const meg = megaEffects(s);
   const synCritDmg = add(b.synCritDmgPct) / 100;
   const skillCdr = Math.min(0.4, Math.max(0, add(b.synCdrPct) + cit.skillCdrPct + (gem.cdrPct || 0)) / 100);
   const synBoss = add(b.synBossDmgPct) / 100;
@@ -448,10 +454,10 @@ export function calcStats(s, buffs = NO_BUFF) {
   const rbHpMul = 1 + rb.hpPct / 100;
   const baseAtk = 12 + 2.6 * L + 0.035 * L * L;
   const equipAtk = EQUIP.weapon.per * eLv('weapon');
-  const atk = (baseAtk + equipAtk) * (1 + (b.atkPct + extraAtk + gm.atkPct + cit.atkPct + rel.atkPct + gem.atkPct + tit.atkPct) / 100) * jobAtkMul * petAtkMul * colAtkMul * rbAtkMul;
+  const atk = (baseAtk + equipAtk) * (1 + (b.atkPct + extraAtk + gm.atkPct + cit.atkPct + rel.atkPct + gem.atkPct + tit.atkPct + meg.atkPct) / 100) * jobAtkMul * petAtkMul * colAtkMul * rbAtkMul;
   const hpMax =
     (150 + 30 * L + EQUIP.armor.per * eLv('armor') + EQUIP.helmet.per * eLv('helmet'))
-    * (1 + (b.hpPct + extraHp + gm.hpPct + rel.hpPct + gem.hpPct + tit.hpPct) / 100) * jobHpMul * rbHpMul;
+    * (1 + (b.hpPct + extraHp + gm.hpPct + rel.hpPct + gem.hpPct + tit.hpPct + meg.hpPct) / 100) * jobHpMul * rbHpMul;
   const crit = Math.min(0.5, 0.05 + (EQUIP.ring.per / 100) * eLv('ring') + (b.critPct + extraCrit + gm.critPct + (petPas.critPct || 0) + subCritPct + rel.critPct + tit.critPct) / 100);
   const critDmg = 2.0 + rb.critDmgAdd + (gm.critDmg + petCritDmgPct + gem.critDmgPct) / 100 + synCritDmg;
   // v3.8 방어·회복 — 다굴에서 버티는 힘. 갑옷/투구 강화(등급 환산 포함) + 환생 '수호' 특성 + v4 장비 옵션 + v5.8 펫 + v6.2 보석
@@ -459,9 +465,9 @@ export function calcStats(s, buffs = NO_BUFF) {
   const dmgReduce = Math.min(DEF.cap, (defFromGear + (rb.guardPct || 0) + gm.dmgRed + petDmgRedPct + gem.dmgRedPct) / 100);
   const hpRegen = Math.min(0.1, DEF.regenBase + (rb.regenPct || 0) / 100 + (gm.regen + gem.regenPct) / 100);
   const goldMult =
-    1 + (EQUIP.amulet.per / 100) * eLv('amulet') + (b.goldPct + extraGold + rb.goldPct + gm.goldPct + rel.goldPct + gem.goldPct + tit.goldPct) / 100 + petGold / 100
+    1 + (EQUIP.amulet.per / 100) * eLv('amulet') + (b.goldPct + extraGold + rb.goldPct + gm.goldPct + rel.goldPct + gem.goldPct + tit.goldPct + meg.goldPct) / 100 + petGold / 100
     + (col.goldPct || 0) / 100;
-  const dropMult = 1 + (b.dropPct + extraDrop + rb.shardPct + gm.dropPct + petDropPct + rel.dropPct + gem.dropPct + tit.dropPct) / 100;
+  const dropMult = 1 + (b.dropPct + extraDrop + rb.shardPct + gm.dropPct + petDropPct + rel.dropPct + gem.dropPct + tit.dropPct + meg.dropPct) / 100;
   // v4.0: 공격 속도 옵션 — 기본 공격 간격을 줄인다(하한 300ms · 최대 40% 단축)
   const attackMs = Math.max(300, (ECON.playerAttackMs - L * 2) * (1 - Math.min(0.4, (gm.atkSpd + petAtkSpdPct + gem.atkSpdPct) / 100)));
   const lifesteal = Math.min(0.25, (gm.lifesteal + rel.lifestealPct + gem.lifestealPct) / 100); // 흡혈 상한 25%

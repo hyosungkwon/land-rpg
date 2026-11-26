@@ -445,10 +445,13 @@ export function portfolioOf(state, now = Date.now()) {
     const rOwn = (s && s.relics && s.relics.owned) || {};
     const scrollLv = rEq.includes('scroll') ? Math.max(0, Math.min(5, Math.floor(Number(rOwn.scroll) || 0))) : 0;
     const ledgerLv = rEq.includes('ledger') ? Math.max(0, Math.min(5, Math.floor(Number(rOwn.ledger) || 0))) : 0;
-    const newsBoost = 1 + (scrollLv > 0 ? (20 + 10 * scrollLv) / 100 : 0);
+    const ktxLv = Math.max(0, Math.min(3, Math.floor(Number(s && s.mega && s.mega.ktx) || 0)));
+    const dcLv = Math.max(0, Math.min(3, Math.floor(Number(s && s.mega && s.mega.datacenter) || 0)));
+    const newsBoost = 1 + (scrollLv > 0 ? (20 + 10 * scrollLv) / 100 : 0) + (dcLv * 15) / 100;
     const ledgerMul = ledgerLv > 0 ? 1 + (6 + 4 * ledgerLv) / 100 : 1;
+    const ktxMul = 1 + (ktxLv * 6) / 100;
     const rentMul = (1 + setRentPct / 100) * landmarkRentMul(lm)
-      * (news ? 1 + ((news.rentPct || 0) * newsBoost) / 100 : 1) * (1 + leasePct / 100) * (1 + boomPct / 100) * (1 + exLv * 0.02) * ledgerMul;
+      * (news ? 1 + ((news.rentPct || 0) * newsBoost) / 100 : 1) * (1 + leasePct / 100) * (1 + boomPct / 100) * (1 + exLv * 0.02) * ledgerMul * ktxMul;
     const income = incomePerMinOf(city, qty, qty, now, rentMul);
     const v = qty * info.price;
     const cost = num(totalCost[key]);
@@ -623,7 +626,8 @@ export function quoteTrade(key, side, qty, state, now = Date.now()) {
   const info = priceInfo(city, now);
   const total = info.price * q;
   const exLv = Math.max(0, Math.min(10, Math.floor(Number(s && s.citadel && s.citadel.levels && s.citadel.levels.exchange) || 0)));
-  const feeRate = LAND.feeRate * (1 - Math.min(0.8, exLv * 0.08));
+  const portLv = Math.max(0, Math.min(3, Math.floor(Number(s && s.mega && s.mega.tradeport) || 0)));
+  const feeRate = LAND.feeRate * (1 - Math.min(0.95, exLv * 0.08 + portLv * 0.15));
   const fee = Math.floor(total * feeRate);
 
   if (side === 'buy') {

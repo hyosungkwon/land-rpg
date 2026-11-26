@@ -41,6 +41,10 @@ import {
 } from './src/expedition.js';
 import { upgradeCitadel as upgradeCitadelState } from './src/citadel.js';
 import {
+  BANK_PLAN_BY_KEY, openDeposit as openDepositState, claimDeposit as claimDepositState,
+  cancelDeposit as cancelDepositState, buildMegaProject as buildMegaProjectState,
+} from './src/bank.js';
+import {
   summonRelic as summonRelicState, toggleEquipRelic as toggleEquipRelicState, upgradeRelic as upgradeRelicState,
 } from './src/relics.js';
 import {
@@ -1916,6 +1920,53 @@ class App {
           this.ui.closeModal();
           this.battle.endRift(Date.now(), 'retreat');
         }
+      },
+
+      /** 🏦 v6.8 영지 은행 정기 예금 · 🏗️ 메가 프로젝트 */
+      bankOpen: (planKey) => {
+        this.sound.unlock();
+        const plan = BANK_PLAN_BY_KEY[planKey];
+        const amt = plan && (this.s.gold || 0) >= plan.minGold * 2 ? 0.5 : (plan ? plan.minGold : 10000);
+        const r = openDepositState(this.s, planKey, amt, Date.now());
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        this.save(true);
+        this.sound.coin('gold');
+        this.ui.toast(`🏦 ${r.plan.title} 개설! 💰${formatGold(r.slot.principal)} 예치 (만기 이자 +💰${formatGold(r.interest)})`, 'gold');
+        this.ui.addLog(`🏦 <b>${esc(r.plan.title)}</b> 💰${formatGold(r.slot.principal)} 예치 (+${r.plan.ratePct}%)`);
+        this.ui.render();
+      },
+      bankClaim: (id) => {
+        this.sound.unlock();
+        const r = claimDepositState(this.s, id, Date.now());
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        addPassXp(this.s, 30, Date.now());
+        this.save(true);
+        this.sound.fanfare();
+        this.ui.toast(`🏦 만기 수령! 💰${formatGold(r.payout)} (이자 +💰${formatGold(r.interest)})`, 'gold');
+        this.ui.addLog(`🏦 정기 예금 만기 수령 💰${formatGold(r.payout)} (이자 +💰${formatGold(r.interest)})`);
+        this.ui.render();
+      },
+      bankCancel: (id) => {
+        this.sound.unlock();
+        const r = cancelDepositState(this.s, id);
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        this.save(true);
+        this.sound.ui();
+        this.ui.toast(`🏦 예금 중도 해지 — 원금 💰${formatGold(r.principal)} 반환`);
+        this.ui.render();
+      },
+      megaBuild: (id) => {
+        this.sound.unlock();
+        const r = buildMegaProjectState(this.s, id);
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        this.buffs = computeBuffs(this.s);
+        this.battle.refreshStats();
+        addPassXp(this.s, 60, Date.now());
+        this.save(true);
+        this.sound.fanfare();
+        this.ui.toast(`🏗️ ${r.def.icon} ${r.def.name} Lv.${r.lv} 완공!`, 'gold');
+        this.ui.addLog(`🏗️ 메가 프로젝트 <b>${esc(r.def.name)} Lv.${r.lv}</b> 완공 (${esc(r.def.effect(r.lv))})`);
+        this.ui.render();
       },
 
       evolvePet: (id) => {

@@ -172,6 +172,12 @@ export function compactSave(state) {
   if (c.rift && typeof c.rift === 'object' && !(c.rift.runs > 0) && !(c.rift.bestWave > 0)) {
     delete c.rift;
   }
+  if (c.bank && typeof c.bank === 'object' && (!Array.isArray(c.bank.deposits) || !c.bank.deposits.length) && !(c.bank.count > 0)) {
+    delete c.bank;
+  }
+  if (c.mega && typeof c.mega === 'object' && !Object.values(c.mega).some((v) => Number(v) > 0)) {
+    delete c.mega;
+  }
   if (c.skills && typeof c.skills === 'object') {
     for (const sk of Object.values(c.skills)) {
       if (sk && typeof sk === 'object' && !sk.rune) delete sk.rune;
