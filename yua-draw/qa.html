@@ -48,7 +48,7 @@
     w.addEventListener('error', (e) => { errors++; log('JS ERROR: ' + e.message + ' @' + e.filename + ':' + e.lineno); });
     await sleep(400);
 
-    const cv = d.getElementById('draw');
+    const cv = d.getElementById('paint');
     const r = cv.getBoundingClientRect();
     const side = Math.min(r.width, r.height) * 0.9, k = side / 100;
     const ox = r.left + r.width / 2 - 50 * k, oy = r.top + r.height / 2 - 50 * k;
@@ -61,6 +61,8 @@
     }));
 
     function stroke(pts, colorName) {
+      const crayon = d.getElementById('tool-crayon');
+      if (crayon && !crayon.classList.contains('sel')) crayon.click();
       const b = pick(colorName) || pick('검정');
       b.click();
       const id = ++pid;
@@ -312,6 +314,33 @@
         await sleep(300);
         log('갤러리 항목 수: ' + d.querySelectorAll('.g-item').length);
       }
+      log(errors ? '⚠ JS 오류 ' + errors + '건' : '✓ JS 오류 없음');
+    } else if (scenario === 'tools') {
+      for (const id of ['crayon', 'rainbow', 'neon', 'sparkle']) {
+        d.getElementById('tool-' + id).click();
+        stroke([[28, 38], [44, 33], [60, 41], [72, 56]], '보라');
+        await sleep(40);
+      }
+      const dots = [...d.querySelectorAll('.bg-dot')];
+      for (const dot of dots) { dot.click(); await sleep(25); }
+      log('도화지 색 ' + dots.length + '종 적용 · 현재 ' + w.__yua.state.bgHex + ' · 무지개/네온/반짝이 그리기 완료');
+      d.getElementById('tool-stamp').click();
+      const sb = d.querySelectorAll('.stamp-btn')[4];
+      if (sb) sb.click();
+      const cvr = cv.getBoundingClientRect();
+      ev('pointerdown', { x: cvr.left + 80, y: cvr.top + 90 }, ++pid);
+      await sleep(30);
+      d.getElementById('tool-fill').click();
+      ev('pointerdown', { x: cvr.left + 9, y: cvr.top + 9 }, ++pid);
+      await sleep(160);
+      const st = w.__yua.state;
+      log('명령 수=' + st.cmds.length + ' 채우기=' + st.cmds.some((c) => c.tool === 'fill') +
+          ' 스탬프=' + st.cmds.some((c) => c.tool === 'stamp'));
+      d.getElementById('btnUndo').click();
+      d.getElementById('btnUndo').click();
+      await sleep(80);
+      log('되돌리기 2번 후 명령 수=' + w.__yua.state.cmds.length);
+      submitAndRead('도구 시험');
       log(errors ? '⚠ JS 오류 ' + errors + '건' : '✓ JS 오류 없음');
     } else if (scenario === 'blank') {
       d.getElementById('btnSubmit').click();

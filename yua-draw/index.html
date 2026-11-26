@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>유아의 그림 놀이 🎨</title>
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 <div id="app">
@@ -29,26 +29,28 @@
   </section>
 
   <section class="tools">
-    <div class="palette" id="palette"></div>
-    <div class="tool-row">
-      <button class="tool" id="btnEraser">🧽 <span>지우개</span></button>
-      <div class="sizes" id="sizes"></div>
-      <button class="tool" id="btnUndo">↩︎ <span>되돌리기</span></button>
-      <button class="tool" id="btnClear">🧹 <span>싹 지우기</span></button>
+    <div class="palette" id="palette" aria-label="색 고르기"></div>
+    <div class="tool-row" id="toolRow"></div>
+    <div class="sub-row">
+      <div class="sizes" id="sizes" aria-label="굵기 고르기"></div>
+      <div class="bgs" id="bgs" aria-label="도화지 색"></div>
     </div>
   </section>
 
   <div class="canvas-wrap" id="canvasWrap">
     <canvas id="hint" aria-hidden="true"></canvas>
-    <canvas id="draw" aria-label="그림 그리는 곳"></canvas>
+    <canvas id="paint" aria-label="그림 그리는 곳"></canvas>
     <div class="empty-hint" id="emptyHint">손가락으로 그려 보세요 ✏️</div>
     <div class="hint-badge" id="hintBadge">점선을 따라 그려 보세요</div>
+    <div class="stamp-tray" id="stampTray" hidden></div>
     <div class="toast" id="toast"></div>
   </div>
 
   <footer class="bottom">
-    <button id="btnHint" class="ghost">👀 힌트 보기</button>
-    <button id="btnSubmit" class="primary">다 그렸어요! 제출 ✨</button>
+    <button id="btnUndo" class="pad" aria-label="되돌리기">↩︎</button>
+    <button id="btnClear" class="pad" aria-label="싹 지우기">🧹</button>
+    <button id="btnHint" class="ghost">👀 힌트</button>
+    <button id="btnSubmit" class="primary">다 그렸어요! ✨</button>
   </footer>
 </div>
 
@@ -101,7 +103,7 @@
 
 <canvas id="fx" aria-hidden="true"></canvas>
 
-<script src="topics.js?v=9"></script>
-<script src="app.js?v=9"></script>
+<script src="topics.js?v=10"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>

@@ -1,4 +1,6 @@
-/* yua-draw/app.js — 유아(7세)용 그림 그리기 & 일치율 놀이 */
+/* yua-draw/app.js — 유아(7세)용 그림 그리기 & 일치율 놀이
+   v2: 20색 팔레트 · 붓 7종(크레파스/무지개/네온/반짝이/채우기/스탬프/지우개)
+       · 도화지 배경 6종(배경 레이어 분리, 채점·저장에 안전) · 굵기 4단 */
 (function () {
   'use strict';
 
@@ -6,45 +8,83 @@
   const GRID = 100;
   const STORE_KEY = 'yua-draw-gallery-v1';
   const PREF_KEY = 'yua-draw-prefs-v1';
-  const ERASER_SIZE = 30;
 
+  /* ── 20색 팔레트: 두 줄 × 10칸. fam 은 주제 채점용 색 계열 ── */
   const PALETTE = [
-    { name: '빨강', hex: '#e53935' },
-    { name: '주황', hex: '#fb8c00' },
-    { name: '노랑', hex: '#fdd835' },
-    { name: '초록', hex: '#43a047' },
-    { name: '하늘', hex: '#29b6f6' },
-    { name: '파랑', hex: '#1e88e5' },
-    { name: '보라', hex: '#8e24aa' },
-    { name: '분홍', hex: '#ff7ab6' },
-    { name: '갈색', hex: '#8d6e63' },
-    { name: '검정', hex: '#212121' }
+    { name: '검정', hex: '#212121', fam: '검정' },
+    { name: '회색', hex: '#7b8794', fam: '회색' },
+    { name: '연회색', hex: '#cfd8dc', fam: '회색' },
+    { name: '흰색', hex: '#ffffff', fam: '흰색' },
+    { name: '빨강', hex: '#e53935', fam: '빨강' },
+    { name: '주황', hex: '#fb8c00', fam: '주황' },
+    { name: '노랑', hex: '#fdd835', fam: '노랑' },
+    { name: '연두', hex: '#aed581', fam: '초록' },
+    { name: '초록', hex: '#43a047', fam: '초록' },
+    { name: '하늘', hex: '#4fc3f7', fam: '하늘' },
+    { name: '파랑', hex: '#1e88e5', fam: '파랑' },
+    { name: '남색', hex: '#3949ab', fam: '파랑' },
+    { name: '보라', hex: '#8e24aa', fam: '보라' },
+    { name: '연보라', hex: '#ce93d8', fam: '보라' },
+    { name: '분홍', hex: '#ff7ab6', fam: '분홍' },
+    { name: '연분홍', hex: '#f8bbd0', fam: '분홍' },
+    { name: '청록', hex: '#26c6da', fam: '하늘' },
+    { name: '민트', hex: '#80cbc4', fam: '초록' },
+    { name: '갈색', hex: '#8d6e63', fam: '갈색' },
+    { name: '살구', hex: '#ffcc80', fam: '주황' }
   ];
+
+  const BACKGROUNDS = [
+    { name: '흰색', hex: '#ffffff', dark: false },
+    { name: '크림', hex: '#fff8e7', dark: false },
+    { name: '연초록', hex: '#e8f5e9', dark: false },
+    { name: '연하늘', hex: '#e3f2fd', dark: false },
+    { name: '연분홍', hex: '#fce4ec', dark: false },
+    { name: '밤하늘', hex: '#1b2438', dark: true }
+  ];
+
+  const TOOLS = [
+    { id: 'crayon', emoji: '✏️', label: '크레파스' },
+    { id: 'rainbow', emoji: '🌈', label: '무지개' },
+    { id: 'neon', emoji: '🌟', label: '네온' },
+    { id: 'sparkle', emoji: '✨', label: '반짝이' },
+    { id: 'fill', emoji: '🪣', label: '채우기' },
+    { id: 'stamp', emoji: '⭐', label: '스탬프' },
+    { id: 'eraser', emoji: '🧹', label: '지우개' }
+  ];
+
   const SIZES = [
-    { px: 6, label: '얇게' },
-    { px: 12, label: '보통' },
-    { px: 22, label: '굵게' }
+    { px: 5, label: '가늘게' },
+    { px: 10, label: '보통' },
+    { px: 18, label: '굵게' },
+    { px: 30, label: '아주 굵게' }
   ];
+
+  const STAMPS = ['⭐', '❤️', '🌟', '🌈', '🌸', '🦋', '🐱', '🐶', '🌙', '☀️', '🍎', '🎈'];
+  const ERASER_SIZE = 34;
+  const SHAPE_TOOLS = { crayon: 1, rainbow: 1, neon: 1, sparkle: 1, eraser: 1 };
 
   const $ = (id) => document.getElementById(id);
 
   const state = {
     topicIndex: 0,
-    color: PALETTE[0].hex,
-    colorName: PALETTE[0].name,
+    color: PALETTE[4].hex,
+    colorName: PALETTE[4].name,
+    fam: PALETTE[4].fam,
     size: SIZES[1].px,
-    eraser: false,
+    tool: 'crayon',
+    stamp: STAMPS[0],
+    bgIndex: 0,
+    bgHex: BACKGROUNDS[0].hex,
     hint: false,
-    strokes: [],
-    activePointer: null,
+    cmds: [],
+    active: null,
     recent: [],
-    sound: true,
-    galleryOpen: false
+    sound: true
   };
 
-  const drawCanvas = $('draw');
+  const paintCanvas = $('paint');
   const hintCanvas = $('hint');
-  const drawCtx = drawCanvas.getContext('2d', { willReadFrequently: true });
+  const paintCtx = paintCanvas.getContext('2d', { willReadFrequently: true });
   const hintCtx = hintCanvas.getContext('2d');
   const wrap = $('canvasWrap');
 
@@ -56,9 +96,15 @@
       if (typeof p.sound === 'boolean') state.sound = p.sound;
       if (p.color) {
         const hit = PALETTE.find((c) => c.hex === p.color);
-        if (hit) { state.color = hit.hex; state.colorName = hit.name; }
+        if (hit) { state.color = hit.hex; state.colorName = hit.name; state.fam = hit.fam; }
       }
       if (typeof p.size === 'number' && SIZES.some((s) => s.px === p.size)) state.size = p.size;
+      if (typeof p.tool === 'string' && TOOLS.some((t) => t.id === p.tool)) state.tool = p.tool;
+      if (typeof p.bg === 'number' && BACKGROUNDS[p.bg]) {
+        state.bgIndex = p.bg;
+        state.bgHex = BACKGROUNDS[p.bg].hex;
+      }
+      if (typeof p.stamp === 'string' && STAMPS.indexOf(p.stamp) >= 0) state.stamp = p.stamp;
       if (typeof p.topicId === 'string') {
         const i = TOPICS.findIndex((t) => t.id === p.topicId);
         if (i >= 0) state.topicIndex = i;
@@ -68,7 +114,8 @@
   function savePrefs() {
     try {
       localStorage.setItem(PREF_KEY, JSON.stringify({
-        sound: state.sound, color: state.color, size: state.size,
+        sound: state.sound, color: state.color, size: state.size, tool: state.tool,
+        bg: state.bgIndex, stamp: state.stamp,
         topicId: (TOPICS[state.topicIndex] || {}).id
       }));
     } catch (e) { /* ignore */ }
@@ -83,116 +130,368 @@
     const w = Math.max(1, Math.floor(rect.width));
     const h = Math.max(1, Math.floor(rect.height));
     dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const same = (w === canvasW && h === canvasH);
     canvasW = w; canvasH = h;
-    for (const cv of [drawCanvas, hintCanvas]) {
+    for (const cv of [paintCanvas, hintCanvas]) {
       cv.width = Math.floor(w * dpr);
       cv.height = Math.floor(h * dpr);
     }
-    drawCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawCtx.lineCap = 'round';
-    drawCtx.lineJoin = 'round';
-    redraw();
+    paintCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    paintCtx.lineCap = 'round';
+    paintCtx.lineJoin = 'round';
+    if (same) return; // 크기가 그대로면(주소창 변화 등) 그림을 다시 그리지 않는다
+    replay();
     drawHint();
   }
 
-  function paintDot(ctx, stroke, p) {
+  function clearPaint() {
+    paintCtx.save();
+    paintCtx.setTransform(1, 0, 0, 1, 0, 0);
+    paintCtx.clearRect(0, 0, paintCanvas.width, paintCanvas.height);
+    paintCtx.restore();
+  }
+
+  function syncEmpty() {
+    wrap.classList.toggle('has-ink', state.cmds.length > 0);
+  }
+
+  /* ───────────────────────── 붓 그리기 ───────────────────────── */
+
+  const hash01 = (a, b, s) => {
+    const v = Math.sin(a * 12.9898 + b * 78.233 + s * 37.719) * 43758.5453;
+    return v - Math.floor(v);
+  };
+
+  function sparkle4(ctx, x, y, r, color, white) {
     ctx.save();
-    ctx.globalCompositeOperation = stroke.erase ? 'destination-out' : 'source-over';
-    ctx.fillStyle = stroke.erase ? '#000' : stroke.color;
+    ctx.globalAlpha = 0.96;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = white ? '#ffffff' : color;
+    ctx.lineWidth = Math.max(1, r * 0.5);
     ctx.beginPath();
-    ctx.arc(p.x, p.y, stroke.size / 2, 0, Math.PI * 2);
+    ctx.moveTo(x - r, y); ctx.lineTo(x + r, y);
+    ctx.moveTo(x, y - r); ctx.lineTo(x, y + r);
+    ctx.stroke();
+    ctx.fillStyle = white ? '#ffffff' : color;
+    ctx.beginPath();
+    ctx.arc(x, y, Math.max(0.9, r * 0.45), 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
 
-  function paintSeg(ctx, stroke, a, b) {
+  function paintDot(ctx, c) {
+    const p = c.pts[0];
     ctx.save();
-    ctx.globalCompositeOperation = stroke.erase ? 'destination-out' : 'source-over';
-    ctx.strokeStyle = stroke.erase ? '#000' : stroke.color;
-    ctx.lineWidth = stroke.size;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
+    if (c.tool === 'crayon') {
+      ctx.fillStyle = c.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, c.size / 2, 0, Math.PI * 2); ctx.fill();
+    } else if (c.tool === 'rainbow') {
+      ctx.fillStyle = 'hsl(' + (c.hue0 % 360) + ',92%,58%)';
+      ctx.beginPath(); ctx.arc(p.x, p.y, c.size / 2, 0, Math.PI * 2); ctx.fill();
+    } else if (c.tool === 'neon') {
+      ctx.shadowColor = c.color;
+      ctx.shadowBlur = Math.max(6, c.size * 1.5);
+      ctx.fillStyle = c.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, c.size / 2, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(255,255,255,.85)';
+      ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, c.size * 0.18), 0, Math.PI * 2); ctx.fill();
+    } else if (c.tool === 'sparkle') {
+      sparkle4(ctx, p.x, p.y, Math.max(2.4, c.size * 0.55), c.color, false);
+    } else if (c.tool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = '#000';
+      ctx.beginPath(); ctx.arc(p.x, p.y, c.size / 2, 0, Math.PI * 2); ctx.fill();
+    }
     ctx.restore();
   }
 
-  function redraw() {
-    wrap.classList.toggle('has-ink', state.strokes.length > 0);
-    drawCtx.save();
-    drawCtx.setTransform(1, 0, 0, 1, 0, 0);
-    drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-    drawCtx.restore();
-    for (const s of state.strokes) {
-      if (!s.pts.length) continue;
-      if (s.pts.length === 1) { paintDot(drawCtx, s, s.pts[0]); continue; }
-      for (let i = 1; i < s.pts.length; i++) paintSeg(drawCtx, s, s.pts[i - 1], s.pts[i]);
+  function paintSeg(ctx, c, a, b) {
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    if (c.tool === 'crayon') {
+      ctx.strokeStyle = c.color;
+      ctx.lineWidth = c.size;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    } else if (c.tool === 'rainbow') {
+      ctx.strokeStyle = 'hsl(' + ((c.hue0 + c.dist * 2.4) % 360) + ',92%,58%)';
+      ctx.lineWidth = c.size;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    } else if (c.tool === 'neon') {
+      ctx.shadowColor = c.color;
+      ctx.shadowBlur = Math.max(7, c.size * 1.6);
+      ctx.strokeStyle = c.color;
+      ctx.lineWidth = c.size;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'rgba(255,255,255,.8)';
+      ctx.lineWidth = Math.max(1, c.size * 0.3);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    } else if (c.tool === 'sparkle') {
+      ctx.globalAlpha = 0.32;
+      ctx.strokeStyle = c.color;
+      ctx.lineWidth = Math.max(1.4, c.size * 0.5);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      ctx.globalAlpha = 1;
+      const n = Math.max(1, Math.round(len / 8));
+      for (let k = 0; k <= n; k++) {
+        const t = k / n;
+        const x = a.x + (b.x - a.x) * t;
+        const y = a.y + (b.y - a.y) * t;
+        const r1 = hash01(x * 1.7 + k, y * 1.3, c.seed);
+        const r2 = hash01(y * 2.1, x * 0.9 + k, c.seed + 7);
+        const r3 = hash01(x + y, k * 3.3, c.seed + 13);
+        const ang = r1 * Math.PI * 2;
+        const rad = r2 * c.size * 0.85;
+        const sr = Math.max(1.6, c.size * 0.16 + r3 * c.size * 0.34);
+        sparkle4(ctx, x + Math.cos(ang) * rad, y + Math.sin(ang) * rad, sr, c.color, r3 > 0.62);
+      }
+    } else if (c.tool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = c.size;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    ctx.restore();
+    c.dist += len;
+  }
+
+  function drawStampCmd(ctx, c) {
+    const sz = Math.round(Math.max(22, c.size * 2.7));
+    ctx.save();
+    ctx.font = sz + 'px "Apple Color Emoji","Noto Color Emoji","Segoe UI Emoji",serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (const p of c.pts) ctx.fillText(c.stamp || '⭐', p.x, p.y);
+    ctx.restore();
+  }
+
+  function drawCmd(ctx, c) {
+    if (c.tool === 'fill') {
+      if (c.region) ctx.drawImage(c.region, 0, 0, canvasW, canvasH);
+      return;
+    }
+    if (c.tool === 'stamp') { drawStampCmd(ctx, c); return; }
+    if (!c.pts.length) return;
+    c.dist = 0;
+    if (c.pts.length === 1) { paintDot(ctx, c); return; }
+    for (let i = 1; i < c.pts.length; i++) paintSeg(ctx, c, c.pts[i - 1], c.pts[i]);
+  }
+
+  /* ── 지운 자리는 채점에서도 빠지도록 점을 표시 ── */
+  function distToPath(p, pts) {
+    if (!pts.length) return Infinity;
+    if (pts.length === 1) return Math.hypot(p.x - pts[0].x, p.y - pts[0].y);
+    let best = Infinity;
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const l2 = dx * dx + dy * dy;
+      let t = l2 ? ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      const qx = a.x + dx * t, qy = a.y + dy * t;
+      const d = Math.hypot(p.x - qx, p.y - qy);
+      if (d < best) best = d;
+    }
+    return best;
+  }
+
+  function markErased(cmd, upto) {
+    const r = cmd.size / 2 + 1.5;
+    for (let i = 0; i < upto; i++) {
+      const c = state.cmds[i];
+      if (!SHAPE_TOOLS[c.tool]) continue;
+      for (const p of c.pts) {
+        if (p.dead) continue;
+        if (distToPath(p, cmd.pts) <= r) p.dead = true;
+      }
     }
   }
 
-  function clearCanvas() {
-    state.strokes.length = 0;
-    redraw();
+  function replay() {
+    clearPaint();
+    for (const c of state.cmds) {
+      if (c.pts) for (const p of c.pts) p.dead = false;
+    }
+    for (let i = 0; i < state.cmds.length; i++) {
+      const c = state.cmds[i];
+      drawCmd(paintCtx, c);
+      if (c.tool === 'eraser') markErased(c, i);
+    }
+    syncEmpty();
   }
 
-  /* ───────────────────────── 그리기 입력 ───────────────────────── */
+  /* ───────────────────────── 채우기(Flood Fill) ───────────────────────── */
+
+  function hexRgb(h) {
+    return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  }
+
+  function doFill(cssPt) {
+    const W = paintCanvas.width, H = paintCanvas.height;
+    const sx = Math.round(cssPt.x * dpr), sy = Math.round(cssPt.y * dpr);
+    if (sx < 0 || sy < 0 || sx >= W || sy >= H) return;
+    const img = paintCtx.getImageData(0, 0, W, H);
+    const d = img.data;
+    const bg = hexRgb(state.bgHex);
+    const fi = hexRgb(state.color);
+
+    // 대상 색 = 배경 위에 지금까지 그린 것을 합성한 색
+    const i0 = (sy * W + sx) * 4;
+    const a0 = d[i0 + 3] / 255;
+    const t0 = Math.round(d[i0] * a0 + bg[0] * (1 - a0));
+    const t1 = Math.round(d[i0 + 1] * a0 + bg[1] * (1 - a0));
+    const t2 = Math.round(d[i0 + 2] * a0 + bg[2] * (1 - a0));
+
+    const TOL = 46;
+    const total = W * H;
+    // 같은 색으로 볼 수 있는 픽셀을 먼저 표시해 두고(합성색 기준) 그 위에서 영역을 훑는다
+    const like = new Uint8Array(total);
+    for (let i = 0, p = 0; i < total; i++, p += 4) {
+      const a = d[p + 3] / 255;
+      const r = d[p] * a + bg[0] * (1 - a);
+      const g = d[p + 1] * a + bg[1] * (1 - a);
+      const b = d[p + 2] * a + bg[2] * (1 - a);
+      if (Math.abs(r - t0) <= TOL && Math.abs(g - t1) <= TOL && Math.abs(b - t2) <= TOL) like[i] = 1;
+    }
+    if (!like[sy * W + sx]) return;
+    const mask = new Uint8Array(total);
+    const stack = [sy * W + sx];
+    let filled = 0;
+    while (stack.length) {
+      const idx = stack.pop();
+      if (mask[idx] || !like[idx]) continue;
+      const y = (idx / W) | 0;
+      const x = idx - y * W;
+      // 한 줄(스캔라인)을 통째로 칠하고 위/아래 줄의 시작점을 담는다
+      let lx = x;
+      while (lx > 0 && !mask[y * W + lx - 1] && like[y * W + lx - 1]) lx--;
+      let rx = x;
+      while (rx < W - 1 && !mask[y * W + rx + 1] && like[y * W + rx + 1]) rx++;
+      for (let cx = lx; cx <= rx; cx++) {
+        const ci = y * W + cx;
+        mask[ci] = 1;
+        filled++;
+        if (y > 0 && !mask[ci - W] && like[ci - W]) stack.push(ci - W);
+        if (y < H - 1 && !mask[ci + W] && like[ci + W]) stack.push(ci + W);
+      }
+    }
+    if (!filled) return;
+
+    // 그림 레이어에 바로 칠한다 (배경·힌트 레이어는 건드리지 않는다)
+    for (let i = 0; i < total; i++) {
+      if (!mask[i]) continue;
+      const i4 = i * 4;
+      d[i4] = fi[0]; d[i4 + 1] = fi[1]; d[i4 + 2] = fi[2]; d[i4 + 3] = 255;
+    }
+    paintCtx.putImageData(img, 0, 0);
+
+    // 되돌리기/다시 그리기를 위해 반쪽 해상도 사본을 남긴다 (0.8MB 수준)
+    const hw = Math.max(1, Math.ceil(W / 2)), hh = Math.max(1, Math.ceil(H / 2));
+    const hc = document.createElement('canvas');
+    hc.width = hw; hc.height = hh;
+    const hctx = hc.getContext('2d');
+    const hid = hctx.createImageData(hw, hh);
+    const hd = hid.data;
+    for (let y = 0; y < hh; y++) {
+      const syy = Math.min(H - 1, y * 2);
+      for (let x = 0; x < hw; x++) {
+        const m = mask[syy * W + Math.min(W - 1, x * 2)];
+        if (!m) continue;
+        const o = (y * hw + x) * 4;
+        hd[o] = fi[0]; hd[o + 1] = fi[1]; hd[o + 2] = fi[2]; hd[o + 3] = 255;
+      }
+    }
+    hctx.putImageData(hid, 0, 0);
+
+    state.cmds.push({
+      tool: 'fill', color: state.color, colorName: state.colorName, fam: state.fam,
+      size: state.size, pts: [{ x: cssPt.x, y: cssPt.y }], seed: 0, dist: 0, region: hc
+    });
+    syncEmpty();
+    if (state.sound) blip();
+  }
+
+  /* ───────────────────────── 입력 ───────────────────────── */
 
   function pointOf(e) {
-    const r = drawCanvas.getBoundingClientRect();
+    const r = paintCanvas.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
 
-  drawCanvas.addEventListener('pointerdown', (e) => {
-    if (state.activePointer !== null) return;
-    if (e.pointerType === 'mouse' && e.button !== 0) return;
-    e.preventDefault();
-    state.activePointer = e.pointerId;
-    try { drawCanvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
-    const stroke = {
+  function newCmd(tool, p) {
+    const c = {
+      tool: tool,
       color: state.color,
       colorName: state.colorName,
-      size: state.eraser ? ERASER_SIZE : state.size,
-      erase: state.eraser,
-      pts: []
+      fam: state.fam,
+      size: tool === 'eraser' ? ERASER_SIZE : state.size,
+      pts: [{ x: p.x, y: p.y }],
+      seed: Math.floor(Math.random() * 100000),
+      dist: 0,
+      hue0: Math.floor(Math.random() * 360)
     };
+    if (tool === 'stamp') { c.stamp = state.stamp; c.pts = []; c.pts.push({ x: p.x, y: p.y }); }
+    return c;
+  }
+
+  function addStamp(p) {
+    const c = newCmd('stamp', p);
+    state.cmds.push(c);
+    drawStampCmd(paintCtx, c);
+    syncEmpty();
+    if (state.sound) blip();
+  }
+
+  paintCanvas.addEventListener('pointerdown', (e) => {
+    if (state.active !== null) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
     const p = pointOf(e);
-    stroke.pts.push(p);
-    state.strokes.push(stroke);
-    paintDot(drawCtx, stroke, p);
-    if (state.sound === false) { /* no-op */ }
+
+    if (state.tool === 'fill') { doFill(p); return; }
+    if (state.tool === 'stamp') { addStamp(p); return; }
+
+    state.active = e.pointerId;
+    try { paintCanvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    const c = newCmd(state.tool, p);
+    state.cmds.push(c);
+    paintDot(paintCtx, c);
+    syncEmpty();
   }, { passive: false });
 
-  drawCanvas.addEventListener('pointermove', (e) => {
-    if (state.activePointer !== e.pointerId) return;
+  paintCanvas.addEventListener('pointermove', (e) => {
+    if (state.active !== e.pointerId) return;
     e.preventDefault();
-    const stroke = state.strokes[state.strokes.length - 1];
-    if (!stroke) return;
+    const c = state.cmds[state.cmds.length - 1];
+    if (!c || !c.pts) return;
     const p = pointOf(e);
-    const last = stroke.pts[stroke.pts.length - 1];
+    const last = c.pts[c.pts.length - 1];
     const dx = p.x - last.x, dy = p.y - last.y;
-    if (dx * dx + dy * dy < 1.6) return;
-    stroke.pts.push(p);
-    paintSeg(drawCtx, stroke, last, p);
+    if (dx * dx + dy * dy < 1.4) return;
+    c.pts.push(p);
+    paintSeg(paintCtx, c, last, p);
   }, { passive: false });
 
   function endPointer(e) {
-    if (state.activePointer !== e.pointerId) return;
-    state.activePointer = null;
-    try { drawCanvas.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    if (state.active !== e.pointerId) return;
+    state.active = null;
+    try { paintCanvas.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    const c = state.cmds[state.cmds.length - 1];
+    if (c && c.tool === 'eraser') markErased(c, state.cmds.length - 1);
   }
-  drawCanvas.addEventListener('pointerup', endPointer);
-  drawCanvas.addEventListener('pointercancel', endPointer);
-  drawCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
-  drawCanvas.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+  paintCanvas.addEventListener('pointerup', endPointer);
+  paintCanvas.addEventListener('pointercancel', endPointer);
+  paintCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  paintCanvas.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
 
-  // 두 손가락 확대/스크롤 막기
   ['gesturestart', 'gesturechange'].forEach((ev) => {
     document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
   });
   document.addEventListener('touchmove', (e) => {
-    if (state.activePointer !== null) e.preventDefault();
+    if (state.active !== null) e.preventDefault();
   }, { passive: false });
 
   /* ───────────────────────── 힌트(점선 밑그림) ───────────────────────── */
@@ -244,7 +543,7 @@
     const map = unitMapFromCanvas(canvasW, canvasH);
     hintCtx.save();
     hintCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    hintCtx.strokeStyle = '#c9d8ea';
+    hintCtx.strokeStyle = BACKGROUNDS[state.bgIndex].dark ? 'rgba(255,255,255,.42)' : '#c9d8ea';
     hintCtx.setLineDash([7, 7]);
     pathShapes(hintCtx, topic.shapes, map, Math.max(2, map.k * 2.1));
     hintCtx.restore();
@@ -275,7 +574,6 @@
     return { mask, count, bbox: { x0, y0, x1, y1 } };
   }
 
-  // 참조 도형의 총 길이(단위 좌표). 아이가 그은 획의 양과 비교해 과도한 낙서를 가려낸다.
   function shapeLength(s) {
     if (s.t === 'c') return 2 * Math.PI * s.r;
     if (s.t === 'e') {
@@ -357,87 +655,87 @@
     return d;
   }
 
-  function inkBBox(canvas, step) {
-    const W = canvas.width, H = canvas.height;
-    const data = canvas.getContext('2d').getImageData(0, 0, W, H).data;
-    const s = step || 2;
-    let x0 = W, y0 = H, x1 = -1, y1 = -1, count = 0;
-    for (let y = 0; y < H; y += s) {
-      const row = y * W;
-      for (let x = 0; x < W; x += s) {
-        if (data[(row + x) * 4 + 3] > 28) {
-          count++;
-          if (x < x0) x0 = x;
-          if (x > x1) x1 = x;
-          if (y < y0) y0 = y;
-          if (y > y1) y1 = y;
-        }
-      }
-    }
-    if (!count) return null;
-    return { x0, y0, x1: Math.min(W, x1 + s), y1: Math.min(H, y1 + s), count, W, H };
-  }
+  const clamp01 = (v) => Math.max(0, Math.min(1, v));
 
   function colorFidelity(topic) {
     const allowed = topic.colors;
     if (!allowed || !allowed.length) return 1;
     let total = 0, good = 0;
-    for (const s of state.strokes) {
-      if (s.erase) continue;
-      const w = Math.max(1, s.pts.length) * s.size;
+    for (const c of state.cmds) {
+      if (c.tool === 'rainbow' || c.tool === 'eraser') continue; // 무지개 붓·지우개는 색을 따지지 않는다
+      let w;
+      if (c.tool === 'fill') w = 60;
+      else if (c.tool === 'stamp') w = 6 * c.pts.length;
+      else {
+        let alive = 0;
+        for (const p of c.pts) if (!p.dead) alive++;
+        if (!alive) continue;
+        w = alive * c.size;
+      }
       total += w;
-      if (allowed.indexOf(s.colorName) >= 0) good += w;
+      if (allowed.indexOf(c.colorName) >= 0 || allowed.indexOf(c.fam) >= 0) good += w;
     }
     if (!total) return 1;
     return good / total;
   }
 
-  const clamp01 = (v) => Math.max(0, Math.min(1, v));
-
   function computeScore(topic) {
-    const src = drawCanvas;
-    const W = src.width, H = src.height;
-    const img = drawCtx.getImageData(0, 0, W, H).data;
-
-    // 1) 그린 잉크의 범위와 양
-    const step = 2;
-    let minX = W, minY = H, maxX = -1, maxY = -1, count = 0;
-    for (let y = 0; y < H; y += step) {
-      const row = y * W;
-      for (let x = 0; x < W; x += step) {
-        if (img[(row + x) * 4 + 3] > 28) {
-          count++;
-          if (x < minX) minX = x;
-          if (x > maxX) maxX = x;
-          if (y < minY) minY = y;
-          if (y > maxY) maxY = y;
-        }
+    // 1) 아이가 그은 획(도형)만 모아 범위를 잰다 — 채우기·스탬프는 모양 채점에서 제외
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, ptCount = 0;
+    const strokes = [];
+    for (const c of state.cmds) {
+      if (!SHAPE_TOOLS[c.tool] || c.tool === 'eraser') continue;
+      const alive = [];
+      for (const p of c.pts) if (!p.dead) alive.push(p);
+      if (!alive.length) continue;
+      strokes.push({ c: c, pts: alive });
+      const hw = c.size / 2;
+      for (const p of alive) {
+        ptCount++;
+        if (p.x - hw < minX) minX = p.x - hw;
+        if (p.x + hw > maxX) maxX = p.x + hw;
+        if (p.y - hw < minY) minY = p.y - hw;
+        if (p.y + hw > maxY) maxY = p.y + hw;
       }
     }
-    if (!count) return { empty: true };
-    const inkRatio = (count * 4) / (W * H);
-    if (count < 40 || inkRatio < 0.0035) return { empty: true, tiny: true };
+    if (!ptCount) return { empty: true };
+    const cw = Math.max(3, maxX - minX);
+    const ch = Math.max(3, maxY - minY);
+    if (ptCount < 3 || cw * ch < 26) return { empty: true, tiny: true };
 
     const ref = getRef(topic);
     const rb = ref.bbox;
     const rw = Math.max(1, rb.x1 - rb.x0 + 1);
     const rh = Math.max(1, rb.y1 - rb.y0 + 1);
-    const cw = Math.max(3, Math.min(W, maxX + step) - minX);
-    const ch = Math.max(3, Math.min(H, maxY + step) - minY);
-
-    // 2) 그림 영역(bounding box)을 참조 도형 크기에 맞춰 정규화
-    // 가로·세로를 각각 참조 도형 크기에 맞춘다(비율 차이는 arScore가 따로 감점).
     const sxN = (rw * 1.06) / cw, syN = (rh * 1.06) / ch;
     const ccx = (minX + maxX) / 2, ccy = (minY + maxY) / 2;
     const rcx = (rb.x0 + rb.x1) / 2, rcy = (rb.y0 + rb.y1) / 2;
 
+    // 2) 그은 획을 참조 크기로 정규화해 100×100 마스크로 만든다
     const norm = document.createElement('canvas');
     norm.width = GRID; norm.height = GRID;
     const ng = norm.getContext('2d', { willReadFrequently: true });
     ng.setTransform(sxN, 0, 0, syN, rcx - ccx * sxN, rcy - ccy * syN);
-    ng.drawImage(src, minX, minY, cw, ch, minX, minY, cw, ch);
+    ng.strokeStyle = '#000';
+    ng.fillStyle = '#000';
+    ng.lineCap = 'round';
+    ng.lineJoin = 'round';
+    for (const s of strokes) {
+      ng.lineWidth = s.c.size;
+      if (s.pts.length === 1) {
+        ng.beginPath();
+        ng.arc(s.pts[0].x, s.pts[0].y, s.c.size / 2, 0, Math.PI * 2);
+        ng.fill();
+        continue;
+      }
+      for (let i = 1; i < s.pts.length; i++) {
+        ng.beginPath();
+        ng.moveTo(s.pts[i - 1].x, s.pts[i - 1].y);
+        ng.lineTo(s.pts[i].x, s.pts[i].y);
+        ng.stroke();
+      }
+    }
     const nd = ng.getImageData(0, 0, GRID, GRID).data;
-
     const child = new Uint8Array(GRID * GRID);
     let childCount = 0;
     for (let i = 0; i < child.length; i++) {
@@ -456,13 +754,9 @@
     }
     const recall = rN ? rSum / rN : 0;
 
-    // 4) 정밀도 — 그은 선(획의 중심선)이 참조 도형에서 얼마나 벗어났나
-    //    (칠한 면적이 아니라 획 자체를 보므로, 캔버스를 뒤덮은 낙서와 모양을 맞춘 그림이 갈린다)
+    // 4) 정밀도 — 그은 선이 참조 도형에서 얼마나 벗어났나
     let pSum = 0, pN = 0, junkN = 0, childLen = 0;
     const consider = (x, y) => {
-      const xi = Math.round(x), yi = Math.round(y);
-      if (xi < 0 || yi < 0 || xi >= W || yi >= H) return;
-      if (img[(yi * W + xi) * 4 + 3] <= 28) return; // 지워진 자리는 빼고
       const gx = Math.round(rcx + (x - ccx) * sxN);
       const gy = Math.round(rcy + (y - ccy) * syN);
       pN++;
@@ -471,20 +765,17 @@
       pSum += Math.max(0, 1 - d / TOL);
       if (d > 9) junkN++;
     };
-    const sx = dpr, sy = dpr; // CSS px → 캔버스 px
-    for (const st of state.strokes) {
-      if (st.erase || !st.pts.length) continue;
-      if (st.pts.length === 1) { consider(st.pts[0].x * sx, st.pts[0].y * sy); continue; }
-      for (let i = 1; i < st.pts.length; i++) {
-        const ax = st.pts[i - 1].x * sx, ay = st.pts[i - 1].y * sy;
-        const bx = st.pts[i].x * sx, by = st.pts[i].y * sy;
-        const len = Math.hypot(bx - ax, by - ay);
-        childLen += Math.hypot((bx - ax) * sxN, (by - ay) * syN);
+    for (const s of strokes) {
+      if (s.pts.length === 1) { consider(s.pts[0].x, s.pts[0].y); continue; }
+      for (let i = 1; i < s.pts.length; i++) {
+        const a = s.pts[i - 1], b = s.pts[i];
+        const len = Math.hypot(b.x - a.x, b.y - a.y);
+        childLen += Math.hypot((b.x - a.x) * sxN, (b.y - a.y) * syN);
         const n = Math.max(1, Math.min(40, Math.ceil(len / 3)));
-        for (let k = 0; k < n; k++) consider(ax + ((bx - ax) * k) / n, ay + ((by - ay) * k) / n);
+        for (let k = 0; k < n; k++) consider(a.x + ((b.x - a.x) * k) / n, a.y + ((b.y - a.y) * k) / n);
       }
-      const lastP = st.pts[st.pts.length - 1];
-      consider(lastP.x * sx, lastP.y * sy);
+      const lastP = s.pts[s.pts.length - 1];
+      consider(lastP.x, lastP.y);
     }
     const precision = pN ? pSum / pN : 0;
     const junk = pN ? junkN / pN : 0;
@@ -499,15 +790,13 @@
 
     const colorScore = colorFidelity(topic);
 
-    // 획의 양 — 모양을 맞춘 그림은 참조와 비슷하지만, 캔버스를 뒤덮은 낙서는 훨씬 많다.
+    // 획의 양 — 캔버스를 뒤덮은 낙서는 참조보다 훨씬 길다
     const lenRatio = childLen / ref.refLen;
     const excess = clamp01((lenRatio - 1.9) / 4.5);
 
-    // f1을 제곱해 "절반쯤 걸친 그림"과 "제대로 맞춘 그림"의 간격을 벌린다.
     const fp = f1 * f1;
     const raw = clamp01(0.86 * fp * (1 - 0.55 * junk) * (1 - 0.6 * excess) + 0.07 * arScore + 0.07 * colorScore);
-    let pct = pctFromRaw(raw);
-    pct = Math.max(55, Math.min(99, pct));
+    const pct = Math.max(55, Math.min(99, pctFromRaw(raw)));
 
     // 6) 빠진 부분 찾기
     const missing = [];
@@ -531,7 +820,6 @@
 
   /* ───────────────────────── 결과 화면 ───────────────────────── */
 
-  // raw(0~1) → 일치율(%). 7세가 실망하지 않도록 아래 구간을 55~99로 부드럽게 편다.
   const RAW_TO_PCT = [[0, 55], [0.25, 57], [0.40, 64], [0.55, 72], [0.70, 82], [0.85, 93], [1, 99]];
   function pctFromRaw(raw) {
     const t = Math.max(0, Math.min(1, raw));
@@ -576,7 +864,7 @@
     void $('stars').offsetWidth;
     $('stars').style.animation = '';
 
-    const thumb = exportImage(340, 'image/jpeg', 0.8);
+    const thumb = exportImage(340, 'image/jpeg', 0.82);
     if (thumb) $('resThumb').src = thumb;
     else $('resThumb').removeAttribute('src');
 
@@ -590,8 +878,30 @@
     if (state.sound) chime(res.pct);
   }
 
+  function inkBBox(canvas, step) {
+    const W = canvas.width, H = canvas.height;
+    const data = canvas.getContext('2d').getImageData(0, 0, W, H).data;
+    const s = step || 2;
+    let x0 = W, y0 = H, x1 = -1, y1 = -1, count = 0;
+    for (let y = 0; y < H; y += s) {
+      const row = y * W;
+      for (let x = 0; x < W; x += s) {
+        if (data[(row + x) * 4 + 3] > 28) {
+          count++;
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+      }
+    }
+    if (!count) return null;
+    return { x0, y0, x1: Math.min(W, x1 + s), y1: Math.min(H, y1 + s), count, W, H };
+  }
+
+  // 도화지 색 + 그림을 합쳐 한 장으로 저장 (배경은 늘 함께)
   function exportImage(maxDim, mime, quality) {
-    const src = drawCanvas;
+    const src = paintCanvas;
     const bb = inkBBox(src, 2);
     if (!bb) return null;
     const pad = Math.max(14, Math.min(bb.x1 - bb.x0, bb.y1 - bb.y0) * 0.1);
@@ -605,13 +915,12 @@
     out.width = Math.max(1, Math.round(w * scale));
     out.height = Math.max(1, Math.round(h * scale));
     const g = out.getContext('2d');
-    g.fillStyle = '#ffffff';
+    g.fillStyle = state.bgHex;
     g.fillRect(0, 0, out.width, out.height);
     g.drawImage(src, x, y, w, h, 0, 0, out.width, out.height);
     return out.toDataURL(mime || 'image/png', quality);
   }
 
-  // data URL 을 파일로 내려받기 (모바일 브라우저에서 가장 잘 동작하는 방식)
   function downloadDataUrl(dataUrl, filename) {
     try {
       const head = dataUrl.slice(0, dataUrl.indexOf(','));
@@ -666,7 +975,6 @@
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         localStorage.setItem(STORE_KEY, JSON.stringify(list));
-        state.gallery = list;
         return;
       } catch (e) {
         if (list.length <= 1) return;
@@ -721,6 +1029,7 @@
 
   function renderTopic() {
     const t = TOPICS[state.topicIndex];
+    if (!t) return;
     $('topicEmoji').textContent = t.emoji;
     $('topicWord').textContent = t.word;
     drawHint();
@@ -739,8 +1048,14 @@
     state.topicIndex = idx;
   }
 
+  function clearAll() {
+    state.cmds.length = 0;
+    clearPaint();
+    syncEmpty();
+  }
+
   function clearAndNext() {
-    clearCanvas();
+    clearAll();
     pickNextTopic();
     renderTopic();
   }
@@ -762,7 +1077,7 @@
   }
 
   async function onNextTopic() {
-    if (state.strokes.length) {
+    if (state.cmds.length) {
       const ok = await confirmDialog('그림을 지우고 새 주제로 갈까요?');
       if (!ok) return;
     }
@@ -774,18 +1089,50 @@
 
   function buildPalette() {
     const box = $('palette');
+    box.innerHTML = '';
     PALETTE.forEach((c) => {
       const b = document.createElement('button');
       b.className = 'swatch';
       b.style.background = c.hex;
       b.dataset.name = c.name;
+      b.dataset.hex = c.hex;
       b.setAttribute('aria-label', c.name);
+      b.title = c.name;
       b.addEventListener('click', () => {
         state.color = c.hex;
         state.colorName = c.name;
-        state.eraser = false;
+        state.fam = c.fam;
+        if (state.tool === 'eraser') state.tool = 'crayon';
         syncTools();
         savePrefs();
+        if (state.sound) blip();
+      });
+      box.appendChild(b);
+    });
+  }
+
+  function buildTools() {
+    const box = $('toolRow');
+    box.innerHTML = '';
+    TOOLS.forEach((t) => {
+      const b = document.createElement('button');
+      b.className = 'tool-btn';
+      b.id = 'tool-' + t.id;
+      b.dataset.tool = t.id;
+      b.setAttribute('aria-label', t.label);
+      const i = document.createElement('span');
+      i.className = 'ti';
+      i.textContent = t.emoji;
+      const l = document.createElement('span');
+      l.className = 'tl';
+      l.textContent = t.label;
+      b.appendChild(i);
+      b.appendChild(l);
+      b.addEventListener('click', () => {
+        state.tool = t.id;
+        syncTools();
+        savePrefs();
+        if (state.sound) blip();
       });
       box.appendChild(b);
     });
@@ -793,19 +1140,21 @@
 
   function buildSizes() {
     const box = $('sizes');
+    box.innerHTML = '';
     SIZES.forEach((s) => {
       const b = document.createElement('button');
       b.className = 'size-btn';
       b.dataset.px = String(s.px);
-      b.setAttribute('aria-label', s.label);
+      b.setAttribute('aria-label', '굵기 ' + s.label);
+      b.title = s.label;
       const i = document.createElement('i');
-      const d = Math.max(5, Math.round(s.px * 0.75));
+      const d = Math.max(5, Math.round(s.px * 0.62));
       i.style.width = d + 'px';
       i.style.height = d + 'px';
       b.appendChild(i);
       b.addEventListener('click', () => {
         state.size = s.px;
-        state.eraser = false;
+        if (state.tool === 'eraser') state.tool = 'crayon';
         syncTools();
         savePrefs();
       });
@@ -813,19 +1162,78 @@
     });
   }
 
+  function buildBgs() {
+    const box = $('bgs');
+    box.innerHTML = '';
+    BACKGROUNDS.forEach((bgi, i) => {
+      const b = document.createElement('button');
+      b.className = 'bg-dot';
+      b.style.background = bgi.hex;
+      b.dataset.idx = String(i);
+      b.setAttribute('aria-label', '도화지 ' + bgi.name);
+      b.title = '도화지 ' + bgi.name;
+      b.addEventListener('click', () => {
+        state.bgIndex = i;
+        state.bgHex = bgi.hex;
+        applyBg();
+        syncTools();
+        savePrefs();
+      });
+      box.appendChild(b);
+    });
+  }
+
+  function buildStamps() {
+    const box = $('stampTray');
+    box.innerHTML = '';
+    STAMPS.forEach((em) => {
+      const b = document.createElement('button');
+      b.className = 'stamp-btn';
+      b.textContent = em;
+      b.dataset.em = em;
+      b.setAttribute('aria-label', '스탬프 ' + em);
+      b.addEventListener('click', () => {
+        state.stamp = em;
+        syncTools();
+        savePrefs();
+        if (state.sound) blip();
+      });
+      box.appendChild(b);
+    });
+  }
+
+  function applyBg() {
+    const bg = BACKGROUNDS[state.bgIndex];
+    wrap.style.background = bg.hex;
+    wrap.classList.toggle('dark-bg', !!bg.dark);
+    drawHint();
+  }
+
   function syncTools() {
     document.querySelectorAll('.swatch').forEach((b) => {
-      b.classList.toggle('sel', !state.eraser && b.dataset.name === state.colorName);
+      b.classList.toggle('sel', b.dataset.hex === state.color && state.tool !== 'eraser');
+    });
+    document.querySelectorAll('.tool-btn').forEach((b) => {
+      b.classList.toggle('sel', b.dataset.tool === state.tool);
     });
     document.querySelectorAll('.size-btn').forEach((b) => {
-      b.classList.toggle('sel', !state.eraser && Number(b.dataset.px) === state.size);
+      b.classList.toggle('sel', Number(b.dataset.px) === state.size);
     });
-    $('btnEraser').classList.toggle('on', state.eraser);
+    document.querySelectorAll('.bg-dot').forEach((b) => {
+      b.classList.toggle('sel', Number(b.dataset.idx) === state.bgIndex);
+    });
+    document.querySelectorAll('.stamp-btn').forEach((b) => {
+      b.classList.toggle('sel', b.dataset.em === state.stamp);
+    });
+    $('stampTray').hidden = state.tool !== 'stamp';
     $('btnHint').classList.toggle('on', state.hint);
-    $('btnHint').textContent = state.hint ? '🙈 힌트 끄기' : '👀 힌트 보기';
+    $('btnHint').textContent = state.hint ? '🙈 힌트 끄기' : '👀 힌트';
     wrap.classList.toggle('hinting', state.hint);
     $('btnSound').classList.toggle('off', !state.sound);
     $('btnSound').textContent = state.sound ? '🔊' : '🔇';
+    paintCanvas.style.cursor = state.tool === 'fill' ? 'pointer'
+      : state.tool === 'stamp' ? 'copy'
+        : state.tool === 'eraser' ? 'cell' : 'crosshair';
   }
 
   let toastTimer = null;
@@ -841,7 +1249,7 @@
   let clearTimer = null;
 
   function onClear() {
-    if (!state.strokes.length) { toast('지울 그림이 없어요 😊'); return; }
+    if (!state.cmds.length) { toast('지울 그림이 없어요 😊'); return; }
     if (!clearArmed) {
       clearArmed = true;
       toast('한 번 더 누르면 전부 지워져요 🧹');
@@ -850,7 +1258,7 @@
       return;
     }
     clearArmed = false;
-    clearCanvas();
+    clearAll();
     toast('싹 지웠어요! 다시 그려 볼까요? 🎨');
   }
 
@@ -947,14 +1355,10 @@
       syncTools();
       if (state.hint && state.sound) blip();
     });
-    $('btnEraser').addEventListener('click', () => {
-      state.eraser = !state.eraser;
-      syncTools();
-    });
     $('btnUndo').addEventListener('click', () => {
-      if (!state.strokes.length) { toast('되돌릴 그림이 없어요'); return; }
-      state.strokes.pop();
-      redraw();
+      if (!state.cmds.length) { toast('되돌릴 그림이 없어요'); return; }
+      state.cmds.pop();
+      replay();
     });
     $('btnClear').addEventListener('click', onClear);
     $('btnNext').addEventListener('click', onNextTopic);
@@ -997,7 +1401,7 @@
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', () => {
         clearTimeout(rt);
-        rt = setTimeout(setupCanvas, 200);
+        rt = setTimeout(setupCanvas, 220);
       });
     }
   }
@@ -1011,11 +1415,14 @@
     }
     loadPrefs();
     buildPalette();
+    buildTools();
     buildSizes();
+    buildBgs();
+    buildStamps();
+    applyBg();
     bind();
     renderTopic();
     syncTools();
-    // 레이아웃이 잡힌 뒤 캔버스 크기 확정
     requestAnimationFrame(() => { setupCanvas(); renderTopic(); });
 
     if ('serviceWorker' in navigator) {
@@ -1026,4 +1433,7 @@
   }
 
   init();
+
+  // 자체 점검(qa.html)용 손잡이
+  window.__yua = { state: state, computeScore: computeScore, replay: replay, fill: doFill };
 })();

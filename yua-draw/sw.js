@@ -1,8 +1,14 @@
 /* yua-draw/sw.js — yua-draw 전용 서비스워커 (범위: /yua-draw/)
    상위 land-rpg 서비스워커가 이 폴더의 요청을 캐시우선으로 가로채지 않도록
    더 좁은 범위의 워커로 직접 처리한다. 항상 네트워크 우선 + 캐시는 오프라인 대비. */
-const CACHE = 'yua-draw-v1';
-const CORE = ['./', './index.html', './style.css?v=9', './topics.js?v=9', './app.js?v=9'];
+const CACHE = 'yua-draw-v2';
+const CORE = [
+  './',
+  './index.html',
+  './style.css?v=10',
+  './topics.js?v=10',
+  './app.js?v=10'
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
