@@ -317,29 +317,21 @@
       log(errors ? '⚠ JS 오류 ' + errors + '건' : '✓ JS 오류 없음');
     } else if (scenario === 'showcase') {
       await gotoTopic('apple');
-      const body = [];
-      for (let i = 0; i <= 46; i++) {
-        const a = (i / 46) * Math.PI * 2;
-        body.push([50 + Math.cos(a) * 24, 58 + Math.sin(a) * 26]);
-      }
-      stroke(body, '빨강');
-      await sleep(60);
+      traceTopic(currentTopic());
+      await sleep(80);
       d.getElementById('tool-fill').click();
+      pick('빨강').click();
       ev('pointerdown', P(50, 58), ++pid);
-      await sleep(200);
-      stroke([[50, 34], [51, 27], [52, 21]], '갈색', 'neon');
-      await sleep(60);
-      stroke([[53, 22], [60, 18], [66, 20], [62, 25], [56, 25]], '초록', 'rainbow');
-      await sleep(60);
-      stroke([[30, 86], [36, 89], [42, 85]], '노랑', 'sparkle');
+      await sleep(220);
+      stroke([[28, 86], [34, 89], [40, 85]], '노랑', 'sparkle');
       await sleep(60);
       d.getElementById('tool-stamp').click();
       const sbn = d.querySelectorAll('.stamp-btn')[1];
       if (sbn) sbn.click();
-      ev('pointerdown', P(74, 82), ++pid);
+      ev('pointerdown', P(76, 84), ++pid);
       await sleep(60);
-      ev('pointerdown', P(26, 30), ++pid);
-      await sleep(120);
+      ev('pointerdown', P(24, 28), ++pid);
+      await sleep(140);
       submitAndRead('쇼케이스 사과');
       log(errors ? '⚠ JS 오류 ' + errors + '건' : '✓ JS 오류 없음');
     } else if (scenario === 'tools') {
