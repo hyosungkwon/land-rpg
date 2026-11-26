@@ -192,7 +192,10 @@
     t.textContent = msg;
     t.classList.add('show');
     if (toastTid) clearTimeout(toastTid);
-    toastTid = setTimeout(function () { t.classList.remove('show'); }, 3200);
+    toastTid = setTimeout(function () {
+      t.classList.remove('show');
+      setTimeout(function () { if (!t.classList.contains('show')) t.textContent = ''; }, 450);
+    }, 3200);
   }
 
   function refresh() {
