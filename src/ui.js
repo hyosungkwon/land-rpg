@@ -17,6 +17,7 @@ import {
   AUCTION, auctionStatus, auctionLot, auctionBonusText,
 } from './auction.js';
 import { LIMIT_ORDER_MAX, investmentReport } from './orders.js';
+import { planBulkLandmarks } from './portfolio-ops.js';
 import {
   LAND_SYNERGY, landSynergy, landBuffTotals, landBuffTotalsText, nextLandmarkStep,
 } from './synergy.js';
@@ -225,6 +226,8 @@ export class UI {
       case 'land-fav': actions.landFav(v); break;
       case 'land-order-open': actions.openLimitOrder(v, btn.dataset.side || 'buy'); break;
       case 'land-order-cancel': actions.cancelLimitOrder(v); break;
+      case 'land-auto-invest': actions.openAutoInvest(v); break;
+      case 'land-bulk-lm': actions.openBulkLandmarks(); break;
       case 'land-map-region': actions.landMapRegion(v); break;
       case 'land-region-clear': actions.landRegionClear(); break;
       case 'exp-pick-pet': this.expPick.petId = v; this.render(); break;
@@ -2460,6 +2463,12 @@ function landmarkCard(ui) {
     </div>
     <div class="tiny muted">보유 <b>${LANDMARK.minPyeong}평 이상</b> 지역에 골드를 투자해 <b>상가 → 타워 → 메가 랜드마크</b>로 올립니다. 레벨마다 그 지역 임대수익이 <b>+30% / +70% / +120%</b>로 커집니다.</div>
     ${rows || '<div class="empty">아직 랜드마크가 없습니다.<br>내 부동산 → 보유 매물의 <b>🏛️ 랜드마크</b> 버튼에서 건설하세요.</div>'}
+    ${(() => {
+      const blk = planBulkLandmarks(s);
+      return blk.ok
+        ? `<button class="btn small primary block" style="margin-top:8px" type="button" data-action="land-bulk-lm">🏛️ 가능 랜드마크 일괄 증축 (${blk.count}곳 · 💰${formatGold(blk.totalSpend)})</button>`
+        : '';
+    })()}
     <div class="kv" style="margin-top:8px"><span class="k">랜드마크 보너스</span><span class="v" style="color:var(--green)">공격력 +${lms.atkPct}% · 골드 +${lms.goldPct}%</span></div>
     <div class="kv"><span class="k">누적 투자</span><span class="v">💰${formatGold(s.land.landmarkSpend || 0)}</span></div>
   </div>`;
@@ -2883,6 +2892,11 @@ function tplLandMarket(ui) {
     </div>
     <div class="chips" style="margin-top:8px">${chips}</div>
     <div class="chips" style="margin-top:5px">${sorts}</div>
+    <div class="row gap6" style="margin-top:7px">
+      <button class="btn small ghost wide" type="button" data-action="land-auto-invest" data-value="region">🗺️ 권역 채우기</button>
+      <button class="btn small ghost wide" type="button" data-action="land-auto-invest" data-value="roi">💰 ROI TOP5</button>
+      <button class="btn small ghost wide" type="button" data-action="land-auto-invest" data-value="dip">📉 저점 매수</button>
+    </div>
     ${s.land.regionFilter && SETS_BY_ID[s.land.regionFilter]
       ? `<div class="mkt-reg-pill"><span>🗺️ 권역 필터: ${SETS_BY_ID[s.land.regionFilter].icon} <b>${esc(SETS_BY_ID[s.land.regionFilter].name)}</b></span><button class="mini ghost" type="button" data-action="land-region-clear">✕ 전체 보기</button></div>`
       : ''}

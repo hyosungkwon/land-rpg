@@ -31,6 +31,9 @@ import {
   LIMIT_ORDER_MAX, addLimitOrder as addLimitOrderState, cancelLimitOrder as cancelLimitOrderState,
   processLimitOrders, recordAssetSnapshot,
 } from './src/orders.js';
+import {
+  planAutoInvest, executeAutoInvest, planBulkLandmarks, executeBulkLandmarks,
+} from './src/portfolio-ops.js';
 import { activeNews, newsCovers, SETS_BY_ID } from './src/region.js';
 import {
   startExpedition, claimExpedition, claimAllExpeditions, cancelExpedition,
@@ -1522,6 +1525,8 @@ class App {
         this.ui.render();
       },
       openLimitOrder: (cityKey, defaultSide) => this.openLimitOrderModal(cityKey, defaultSide),
+      openAutoInvest: (mode) => this.openAutoInvestModal(mode),
+      openBulkLandmarks: () => this.openBulkLandmarksModal(),
       cancelLimitOrder: (orderId) => {
         const r = cancelLimitOrderState(this.s, orderId);
         if (!r.ok) {
@@ -3280,6 +3285,80 @@ class App {
              ${deep.join('')}</div>
              <div class="note" style="margin-top:9px">층마다 <b>기믹</b>이 다릅니다 — 다굴·포격·광폭·재생·타임어택·철벽. 장비 조합(흡혈·방어·범위 베기)을 시험해 보세요.<br>11층부터는 <b>자동 생성되는 심층</b>으로, 올라갈수록 적이 강해지고 보상도 커집니다.</div>`,
       actions: [{ label: '닫기', style: 'ghost', onClick: () => {} }],
+    });
+  }
+
+  /** ⚡ v6.3.0 원탭 분산 투자 미리보기 및 일괄 집행 */
+  openAutoInvestModal(mode = 'roi') {
+    const now = Date.now();
+    const plan = planAutoInvest(this.s, mode, 0.85, now);
+    if (!plan.ok) {
+      this.ui.toast(plan.reason || '분산 투자 견적을 만들 수 없습니다', 'red');
+      return;
+    }
+    const listHtml = plan.items.map((it) => `<div class="kv"><span class="k">${it.city.emoji} ${esc(it.city.name)} <b>${it.qty.toLocaleString()}평</b> <small class="dim">(${esc(it.note)})</small></span><span class="v">💰${formatGold(it.cost)}</span></div>`).join('');
+    this.ui.modal({
+      title: `⚡ ${plan.meta.icon} ${esc(plan.meta.title)}`,
+      sub: `${plan.count}곳 · 총 ${plan.totalPyeong.toLocaleString()}평 일괄 매수 견적`,
+      body: `${listHtml}
+             <div class="kv" style="margin-top:6px"><span class="k">총 매수액 (거래세 포함)</span><span class="v" style="color:var(--gold)">💰${formatGold(plan.totalSpend)}</span></div>
+             <div class="kv"><span class="k">매수 후 잔여 골드</span><span class="v">💰${formatGold(plan.afterGold)}</span></div>
+             <div class="note" style="margin-top:8px">${esc(plan.meta.desc)}</div>`,
+      actions: [
+        { label: '취소', onClick: () => {} },
+        {
+          label: `⚡ ${plan.count}곳 일괄 매수`,
+          style: 'primary',
+          onClick: () => {
+            const r = executeAutoInvest(this.s, mode, 0.85, Date.now());
+            if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+            this.buffs = computeBuffs(this.s);
+            this.battle.refreshStats();
+            this.checkPets(Date.now());
+            trackDailyQuest(this.s, 'invest', r.count);
+            this.save(true);
+            this.sound.fanfare();
+            this.ui.toast(`⚡ ${r.meta.title} 완료! ${r.count}곳 ${r.totalPyeong.toLocaleString()}평 (💰${formatGold(r.totalSpend)})`, 'gold');
+            this.ui.addLog(`⚡ <b>${esc(r.meta.title)}</b> · ${r.count}곳 ${r.totalPyeong.toLocaleString()}평 매수`);
+            this.ui.render();
+          },
+        },
+      ],
+    });
+  }
+
+  /** 🏛️ v6.3.0 랜드마크 일괄 증축 미리보기 및 실행 */
+  openBulkLandmarksModal() {
+    const plan = planBulkLandmarks(this.s, Date.now());
+    if (!plan.ok) {
+      this.ui.toast(plan.reason || '증축 가능한 랜드마크가 없습니다', 'red');
+      return;
+    }
+    const listHtml = plan.items.slice(0, 12).map((it) => `<div class="kv"><span class="k">${it.city.emoji} ${esc(it.city.name)} ${it.icon} Lv.${it.lv}→Lv.${it.next}</span><span class="v">💰${formatGold(it.cost)}</span></div>`).join('');
+    this.ui.modal({
+      title: `🏛️ 랜드마크 일괄 증축 (${plan.count}곳)`,
+      sub: '저렴한 지역부터 보유 골드로 한 번에 증축합니다',
+      body: `${listHtml}${plan.count > 12 ? `<div class="tiny dim" style="margin-top:4px">외 ${plan.count - 12}곳 포함</div>` : ''}
+             <div class="kv" style="margin-top:6px"><span class="k">총 건설 비용</span><span class="v" style="color:var(--gold)">💰${formatGold(plan.totalSpend)}</span></div>
+             <div class="kv"><span class="k">증축 후 잔여 골드</span><span class="v">💰${formatGold(plan.afterGold)}</span></div>`,
+      actions: [
+        { label: '취소', onClick: () => {} },
+        {
+          label: `🏛️ ${plan.count}곳 일괄 증축`,
+          style: 'primary',
+          onClick: () => {
+            const r = executeBulkLandmarks(this.s, Date.now());
+            if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+            this.buffs = computeBuffs(this.s);
+            this.battle.refreshStats();
+            this.save(true);
+            this.sound.fanfare();
+            this.ui.toast(`🏛️ 랜드마크 ${r.count}곳 일괄 증축 완료! (💰${formatGold(r.totalSpend)})`, 'gold');
+            this.ui.addLog(`🏛️ <b>랜드마크 ${r.count}곳 일괄 증축</b> · 💰${formatGold(r.totalSpend)}`);
+            this.ui.render();
+          },
+        },
+      ],
     });
   }
 

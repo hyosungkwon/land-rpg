@@ -95,9 +95,9 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "6.2.0"
-FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui.js", "src/sound.js"]
+EXPECTED_VER = "6.3.0"
+FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -196,6 +196,7 @@ def main():
     ok("'./src/orders.js'" in read("sw.js"), "sw.js 프리캐시에 orders.js 포함")
     ok("'./src/relics.js'" in read("sw.js"), "sw.js 프리캐시에 relics.js 포함")
     ok("'./src/gems.js'" in read("sw.js"), "sw.js 프리캐시에 gems.js 포함")
+    ok("'./src/portfolio-ops.js'" in read("sw.js"), "sw.js 프리캐시에 portfolio-ops.js 포함")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
     ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
@@ -5665,6 +5666,43 @@ def main():
     """)
     ok(gm62["cutMergeOk"] and gm62["socketStatOk"] and gm62["unsocketOk"], "보석 세공(대성공)·3합성(Lv.1→5)·5부위 소켓 장착/해제·스탯 실반영", json.dumps(gm62))
     ok(gm62["craftOk"] and gm62["normOk"] and ui62["ok"] and not ui62["bad"], "테마 장비 확정 제작(미보유 우선)·정규화·보석/공방 UI 렌더", json.dumps({ **gm62, **ui62 }))
+
+    # ── 30) v6.3.0 ⚡ 원탭 부동산 분산 투자 · 🏛️ 랜드마크 일괄 증축 ──
+    section("v6.3.0 원탭 부동산 분산 투자 · 랜드마크 일괄 증축")
+    po63 = js(ctx, """
+      const now = 1_700_000_000_000;
+      const s = defaultState(now);
+      s.gold = 5_000_000;
+      const pReg = planAutoInvest(s, 'region', 0.8, now);
+      const rReg = executeAutoInvest(s, 'region', 0.8, now);
+      const rRoi = executeAutoInvest(s, 'roi', 0.5, now);
+      const rDip = executeAutoInvest(s, 'dip', 0.5, now);
+      // 5평 이상 지역 3곳 확보 후 랜드마크 일괄 증축
+      for (let i = 0; i < 3; i++) s.land.owned[CITIES[i].key] = 10;
+      s.gold = 5_000_000;
+      const pLm = planBulkLandmarks(s, now);
+      const rLm = executeBulkLandmarks(s, now);
+      return {
+        regOk: pReg.ok && rReg.ok && rReg.count >= 2 && rReg.totalPyeong >= 6,
+        roiDipOk: rRoi.ok && rRoi.count >= 1 && rDip.ok && rDip.count >= 1,
+        lmOk: pLm.ok && pLm.count >= 3 && rLm.ok && rLm.count >= 3 && landmarkSummary(s).count >= 3,
+      };
+    """)
+    ui63 = js(ctx2, """
+      const now = Date.now();
+      const s = defaultState(now); s.gold = 5_000_000;
+      s.land.owned[CITIES[0].key] = 10;
+      const buffs = computeBuffs(s, now);
+      const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(1), boss: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'land', expPick: { petId: '', setId: '', durKey: 'short' }, el: {}, install: { hidden: true } };
+      const hMkt = __landSub(ui, 'market');
+      const hBuff = __landSub(ui, 'buff');
+      return {
+        ok: hMkt.includes('data-action="land-auto-invest"') && hBuff.includes('data-action="land-bulk-lm"'),
+        bad: /undefined|NaN|\\[object Object\\]/.test(hMkt + hBuff),
+      };
+    """)
+    ok(po63["regOk"] and po63["roiDipOk"] and po63["lmOk"], "원탭 분산 투자 3전략(권역 세트·ROI TOP5·저점 매수) 및 랜드마크 일괄 증축 실행", json.dumps(po63))
+    ok(ui63["ok"] and not ui63["bad"], "원탭 투자 버튼(매물 투자 탭) 및 일괄 랜드마크 버튼(버프 탭) 렌더", json.dumps(ui63))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:
