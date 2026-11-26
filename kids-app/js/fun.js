@@ -827,6 +827,7 @@
     leave: function () { mzClear(); mzTarget = null; },
     _qa: function () { return { size: mzSize, player: { x: mzPlayer.x, y: mzPlayer.y }, goal: { x: mzGoal.x, y: mzGoal.y }, done: mzDone, cell: mzCell, trail: mzTrail.length }; },
     // 자체 점검용: 손가락 위치(칸 좌표)를 지정해 미끄러짐 이동을 확인한다
+    _grid: function () { return mzGrid; },
     _drag: function (x, y) { mzTarget = { x: x, y: y }; },
     _release: function () { mzTarget = null; }
   };
