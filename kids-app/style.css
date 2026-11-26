@@ -1264,7 +1264,7 @@ body.resting{overflow:hidden;}
 .duo-pick.da{background:linear-gradient(135deg,#1565c0,#0d47a1);}
 .duo-pick.dd{background:linear-gradient(135deg,#c2185b,#7B1FA2);}
 .duo-tip{text-align:center;font-family:'Jua',sans-serif;font-size:.68rem;
-  color:rgba(255,255,255,.62);line-height:1.4;margin-top:auto;padding-top:8px;word-break:keep-all;}
+  color:rgba(255,255,255,.62);line-height:1.4;margin-top:6px;word-break:keep-all;}
 .duo-note{text-align:center;font-family:'Jua',sans-serif;font-size:.66rem;
   color:rgba(255,255,255,.5);margin-top:-4px;}
 
