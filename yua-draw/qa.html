@@ -142,6 +142,16 @@
       }
     }
 
+    async function gotoTopic(id) {
+      let guard = 0;
+      while (currentTopic().id !== id && guard++ < 400) {
+        d.getElementById('btnNext').click();
+        await sleep(25);
+        if (!d.getElementById('confirmModal').hidden) d.getElementById('btnConfirmYes').click();
+      }
+      await sleep(50);
+    }
+
     function currentTopic() {
       const word = d.getElementById('topicWord').textContent;
       return w.YUA_TOPICS.find((t) => t.word === word);
@@ -276,6 +286,33 @@
       }
       log('힌트 도형 ' + seen.size + '/' + w.YUA_TOPICS.length + ' 개 렌더' + (errors ? ' · JS 오류 ' + errors : ' · JS 오류 없음'));
       out.style.display = '';
+    } else if (scenario === 'demo') {
+      await gotoTopic(q.get('topic') || 'apple');
+      // 7세가 힌트를 보며 그린 듯한 손그림 (살짝 흔들리는 사과)
+      const body = [];
+      for (let i = 0; i <= 46; i++) {
+        const a = (i / 46) * Math.PI * 2;
+        const rr = 25 + Math.sin(a * 2.3) * 1.8;
+        body.push([49 + Math.cos(a) * rr, 60 + Math.sin(a) * rr]);
+      }
+      stroke(body, '빨강');
+      stroke([[50, 35], [51.5, 28], [53, 22]], '갈색');
+      stroke([[53, 23], [58, 19], [63, 17], [65, 22], [63, 25], [57, 26], [54, 26]], '초록');
+      await sleep(80);
+      const sc = submitAndRead('데모 그림');
+      await sleep(400);
+      if (q.get('save') === '1') {
+        d.getElementById('btnSavePng').click();
+        await sleep(600);
+        log('PNG 저장 버튼 클릭함');
+      }
+      if (q.get('gallery') === '1') {
+        d.getElementById('btnResultClose').click();
+        d.getElementById('btnGallery').click();
+        await sleep(300);
+        log('갤러리 항목 수: ' + d.querySelectorAll('.g-item').length);
+      }
+      log(errors ? '⚠ JS 오류 ' + errors + '건' : '✓ JS 오류 없음');
     } else if (scenario === 'blank') {
       d.getElementById('btnSubmit').click();
       await sleep(120);
