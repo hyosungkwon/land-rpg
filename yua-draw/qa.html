@@ -179,6 +179,61 @@
       await sleep(60);
       submitAndRead(t.emoji + ' ' + t.word + ' (일부만: ' + (part || '전체') + ')');
       log(errors ? '⚠ JS 오류 ' + errors + '건' : '✓ JS 오류 없음');
+    } else if (scenario === 'each') {
+      const results = [];
+      for (const target of w.YUA_TOPICS) {
+        let guard = 0;
+        while (currentTopic().id !== target.id && guard++ < 400) {
+          d.getElementById('btnNext').click();
+          await sleep(30);
+          if (!d.getElementById('confirmModal').hidden) d.getElementById('btnConfirmYes').click();
+        }
+        traceTopic(target);
+        await sleep(40);
+        d.getElementById('btnSubmit').click();
+        const open = !d.getElementById('resultModal').hidden;
+        const score = open ? Number(d.getElementById('scoreNum').textContent) : -1;
+        results.push({ id: target.id, word: target.word, score, tip: open ? d.getElementById('tipText').textContent : d.getElementById('toast').textContent });
+        if (open) d.getElementById('btnNextTopic').click();
+        await sleep(90);
+      }
+      results.forEach((r) => log(r.word + ': ' + r.score + '% | ' + r.tip));
+      log('── 전체 ' + results.length + '주제 최소 ' + Math.min(...results.map((r) => r.score)) +
+          ' / 최대 ' + Math.max(...results.map((r) => r.score)));
+      log(errors ? '⚠ JS 오류 ' + errors + '건' : '✓ JS 오류 없음');
+    } else if (scenario === 'shapes') {
+      if (!d.getElementById('btnHint').classList.contains('on')) d.getElementById('btnHint').click();
+      const grid = document.createElement('div');
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat(7,120px);gap:8px';
+      document.body.appendChild(grid);
+      out.style.display = 'none';
+      const seen = new Set();
+      let guard = 0;
+      while (seen.size < w.YUA_TOPICS.length && guard++ < 900) {
+        const t = currentTopic();
+        if (!seen.has(t.id)) {
+          seen.add(t.id);
+          await sleep(60);
+          const src = d.getElementById('hint');
+          const cell = document.createElement('div');
+          cell.style.cssText = 'background:#fff;border-radius:10px;padding:4px;text-align:center;color:#22314a;font-family:system-ui';
+          const cv2 = document.createElement('canvas');
+          cv2.width = 112; cv2.height = 112;
+          const g2 = cv2.getContext('2d');
+          const s = Math.min(src.width, src.height);
+          g2.drawImage(src, (src.width - s) / 2, (src.height - s) / 2, s, s, 0, 0, 112, 112);
+          const lab = document.createElement('div');
+          lab.style.cssText = 'font-size:11px;font-weight:700';
+          lab.textContent = t.emoji + ' ' + t.word;
+          cell.appendChild(cv2);
+          cell.appendChild(lab);
+          grid.appendChild(cell);
+        }
+        d.getElementById('btnNext').click();
+        await sleep(25);
+      }
+      log('힌트 도형 ' + seen.size + '/' + w.YUA_TOPICS.length + ' 개 렌더' + (errors ? ' · JS 오류 ' + errors : ' · JS 오류 없음'));
+      out.style.display = '';
     } else if (scenario === 'blank') {
       d.getElementById('btnSubmit').click();
       await sleep(120);
