@@ -166,7 +166,7 @@ export function passCard(ui) {
     </button>`;
   }).join('');
   return `
-  <div class="card pass-card${p.readyCount ? ' ready' : ''}" id="passCard">
+  <div class="card pass-card${p.readyCount ? ' ready' : ''}" id="passCard" data-fold="pass">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🎖️</span>영지 성장 패스<small>${p.season} · 무료 Lv.${p.lv}/${p.maxLv}</small></div>
       ${p.readyCount > 0 ? `<button class="mini up" type="button" data-action="pass-claim-all">🎁 ${p.readyCount}개 일괄</button>` : `<span class="tiny dim">${p.curXp}/${p.needXp} XP</span>`}

@@ -1451,8 +1451,8 @@ function questCard(ui) {
  */
 const DEFAULT_COLLAPSED = [
   'battle-detail', 'gems', 'shards', 'craft', 'gacha', 'inventory', 'gear-info',
-  'invest-dash', 'region-set', 'landmark', 'buff-detail', 'expedition',
-  'pet', 'pass', 'codex', 'info', 'records',
+  'invest-dash', 'region-set', 'landmark', 'synergy', 'buff-detail', 'expedition', 'trade-rec',
+  'pass', 'codex', 'info',
 ];
 const isCardOpen = (ui, id) => !(ui && ui.collapsed && typeof ui.collapsed.has === 'function' && ui.collapsed.has(id));
 
@@ -1833,7 +1833,7 @@ function codexCard(ui) {
     <div class="cx-cell"><span>${ico} ${label}</span><b>${seen}<small>/${total}</small></b></div>`;
   const next = c.next;
   return `
-  <div class="card codex-card">
+  <div class="card codex-card" data-fold="codex">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">📖</span>도감·업적<small>수집 ${c.pct}%</small></div>
       <span class="tiny dim">업적 <b style="color:var(--green)">${achClaimed}/${ACHIEVEMENTS.length}</b></span>
@@ -2229,7 +2229,7 @@ function regionSetCard(ui) {
     })
     .join('');
   return `
-  <div class="card set-card">
+  <div class="card set-card" data-fold="region-set">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🗺️</span>권역 세트<small>${active}/${sets.length} 발동</small></div>
       <span class="tiny dim">지역 시너지</span>
@@ -2268,7 +2268,7 @@ function landmarkCard(ui) {
     })
     .join('');
   return `
-  <div class="card lm-card">
+  <div class="card lm-card" data-fold="landmark">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🏛️</span>랜드마크<small>${lms.count}개 건설</small></div>
       <span class="tiny dim">Lv.1~3</span>
@@ -2450,7 +2450,7 @@ function landSynergyCard(ui) {
     .sort((a, b) => (b.held / Math.max(1, b.maxNeed)) - (a.held / Math.max(1, a.maxNeed)))
     .slice(0, 2);
   return `
-  <div class="card syn-card" id="synergyCard">
+  <div class="card syn-card" id="synergyCard" data-fold="synergy">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🏛️</span>부동산 전투 시너지<small>랜드마크 · 권역 완성</small></div>
       <span class="tiny" style="color:${syn.active ? 'var(--green)' : 'var(--dim)'};white-space:nowrap">${syn.active ? `🏛️ ${lm.count}개 · 완성 ${rg.count}/${rg.total}` : '미적용'}</span>
@@ -2469,7 +2469,6 @@ function landSynergyCard(ui) {
         ? `<div class="tiny dim" style="margin-top:5px">${closest.map((st) => `${st.name} ${st.held}/${st.maxNeed}곳 → 완성 시 ${st.masterText}`).join('<br>')}</div>`
         : ''}
     </div>
-    <div class="syn-total"><span>🏘️ 부동산 전투 버프 합계</span><b>${landBuffTotalsText(buffs) || '없음'}</b></div>
     <button class="btn small ghost block" style="margin-top:8px" type="button" data-action="land-sub" data-value="market">🛒 매물·랜드마크 더 사러 가기</button>
   </div>`;
 }

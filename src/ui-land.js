@@ -234,7 +234,7 @@ export function expeditionCard(ui) {
           </div>`;
 
   return `
-  <div class="card exp-card${st.readyCount ? ' ready' : ''}" id="expeditionCard">
+  <div class="card exp-card${st.readyCount ? ' ready' : ''}" id="expeditionCard" data-fold="expedition">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🧭</span>영지 파견 (탐험대)<small>${st.activeCount}/${st.maxSlots}팀 · 완료 ${st.totals.completed}회</small></div>
       ${st.readyCount > 1 ? '<button class="mini up" type="button" data-action="exp-claim-all">🎁 일괄 수령</button>' : `<span class="tiny dim">대성공 ${st.totals.greatCount}회</span>`}
@@ -280,7 +280,7 @@ export function investDashboardCard(ui) {
     ? rep.topHoldings.map((h) => `<div class="kv"><span class="k">${h.city.emoji} ${esc(h.city.name)} (${fmt(h.qty)}평)</span><span class="v"><span class="pnl ${h.profitPct >= 0 ? 'up' : 'dn'}">${h.profitPct >= 0 ? '+' : ''}${h.profitPct.toFixed(1)}%</span> · 💰${formatGold(h.value)}</span></div>`).join('')
     : '<div class="tiny dim" style="margin-top:5px">매물을 매수하면 보유 수익률 상위 지역이 표시됩니다.</div>';
   return `
-  <div class="card invdash-card" id="investDashboardCard">
+  <div class="card invdash-card" id="investDashboardCard" data-fold="invest-dash">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">📈</span>투자 대시보드<small>자산 추이 · 수익 분석</small></div>
       <span class="tiny" style="color:${rep.deltaAsset >= 0 ? 'var(--green)' : '#ff8a8a'}">${rep.deltaAsset >= 0 ? '▲' : '▼'}${Math.abs(rep.deltaPct).toFixed(1)}%</span>
