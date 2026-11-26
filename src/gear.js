@@ -1,5 +1,5 @@
 // land-rpg / src/gear.js — ⚔️ v4.0.0 장비 시스템 대개편
-//  · 5부위 × 5등급 × 여러 종류 = 35종 카탈로그 (이름 · 모양(SVG) · 고유 옵션)
+//  · 5부위 × 5등급 × 여러 종류 = 55종 카탈로그 (이름 · 모양(WebP/SVG) · 고유 옵션)
 //  · 옵션은 calcStats(state.js)와 전투(combat.js: 흡혈·보스 추뎀·범위 베기·공속)에 실제로 반영된다.
 //  · 인벤토리(보유 목록) · 장착 · 분해 · 일괄 분해 · 사냥/보스 드랍. DOM 의존 없음.
 import { EQUIP_SLOTS, RARITIES, RARITY_INDEX, RARITY_IDS } from './data.js';
@@ -275,7 +275,7 @@ export function gearIcon(item, size = 34) {
   return `<span class="gico-wrap ${it.rarity}" style="--gc:${r.color};width:${size}px;height:${size}px"><img class="gimg" src="assets/items/${it.id}.webp" width="${size}" height="${size}" alt="${alt}" loading="lazy" decoding="async" onerror="this.style.display='none';if(this.nextElementSibling)this.nextElementSibling.style.display='block'">${svg}</span>`;
 }
 
-/* ────────────────────────────── 장비 카탈로그 (35종) ──────────────────────────────
+/* ────────────────────────────── 장비 카탈로그 (55종) ──────────────────────────────
  * 부위별 7종 = 일반 2 · 고급 1 · 레어 1 · 영웅 2 · 전설 1 → 모든 부위에 모든 등급이 있다.
  * 같은 등급 안에서도 이름·모양·옵션이 달라 '무엇이 나왔는지'가 곧 재미가 된다.
  *  · fx 는 무기 검기 색(render.js). 없으면 등급 기본 색을 쓴다.

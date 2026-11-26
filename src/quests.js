@@ -100,7 +100,7 @@ export const ACHIEVEMENTS = [
   { id: 'a_landmark5', icon: '🏛️', title: '건축왕', desc: '랜드마크 5개 보유', type: 'landmarks', goal: 5, shards: 60, goldPct: 2 },
   { id: 'a_setComplete', icon: '🗺️', title: '권역 제패', desc: '권역 세트 1곳 완성', type: 'completeSets', goal: 1, shards: 70, atkPct: 1 },
   { id: 'a_auction5', icon: '🔨', title: '경매 큰손', desc: '급매 경매 5회 낙찰', type: 'auctionBids', goal: 5, shards: 60, goldPct: 2 },
-  { id: 'a_gearAll', icon: '⚔️', title: '무기고 완성', desc: '장비 35종 모두 수집', type: 'gearItems', goal: 35, shards: 150, atkPct: 2, goldPct: 2 },
+  { id: 'a_gearAll', icon: '⚔️', title: '무기고 완성', desc: '장비 55종 모두 수집', type: 'gearItems', goal: 55, shards: 150, atkPct: 2, goldPct: 2 },
 ];
 
 export const ACH_IDS = ACHIEVEMENTS.map((a) => a.id);
@@ -223,7 +223,7 @@ export function codexStats(state) {
   let milestone = null;
   for (const m of CODEX_MILESTONES) if (pct >= m.pct) milestone = m;
 
-  // v4.9.0 도감 v2 보조 집계: 35종 장비 카탈로그 · 12종 펫 진화 단계
+  // v4.9.0 도감 v2 보조 집계: 장비 카탈로그(전 종) · 펫 진화 단계
   const gearCol = gearCollection(s);
   let petEvoSeen = 0;
   for (const id of pets) petEvoSeen += 1 + petEvo(s, id); // 해금(1) + 각성(+1) + 신수(+1)

@@ -196,7 +196,7 @@ class App {
     // PWA 바로가기(?tab=hunt&sub=growth) — 사냥 탭 서브 탭까지 바로 열기
     try {
       const subParam = new URLSearchParams((typeof location !== 'undefined' && location.search) || '').get('sub');
-      if (subParam && ['skill', 'growth', 'quest'].includes(subParam)) this.ui.huntSub = subParam;
+      if (subParam && ['battle', 'challenge', 'mission'].includes(subParam)) this.ui.huntSub = subParam;
     } catch (e) { /* ignore */ }
     this.ui.render();
     this.checkNews(now);
@@ -206,7 +206,7 @@ class App {
     try {
       const qs = new URLSearchParams((typeof location !== 'undefined' && location.search) || '');
       const landSub = qs.get('sub');
-      if (qs.get('tab') === 'land' && landSub && ['home', 'market', 'buff'].includes(landSub)) {
+      if (qs.get('tab') === 'land' && landSub && ['home', 'market', 'event'].includes(landSub)) {
         this.s.land.sub = landSub;
       }
     } catch (e) { /* ignore */ }

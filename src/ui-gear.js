@@ -174,7 +174,7 @@ export function gearInventory(s) {
     : '';
 
   return `
-  <div class="card">
+  <div class="card" data-fold="inventory">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🎒</span>보유 장비 <small>${owned.length}/${GEAR_ITEMS.length}종</small></div>
       <span class="tiny dim">도감 ${col.seen}/${col.total}종</span>
@@ -212,7 +212,7 @@ export function gachaCard(ui) {
   ).join('');
 
   return `
-  <div class="card gacha-card">
+  <div class="card gacha-card" data-fold="gacha">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🎁</span>장비 뽑기 <small>일반 → 전설 · ${col.total}종</small></div>
       <span class="tiny dim">최고 <b style="color:var(--gold)">${rarityName(g.best)}</b></span>

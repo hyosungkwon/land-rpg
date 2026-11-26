@@ -195,8 +195,10 @@ export function titleCard(ui) {
   </div>`;
 }
 
-/* ───────────── 🧭 전투력(CP) 원천 분석기 & 가성비 성장 내비 (v7.9.0) ───────────── */
-export function cpGuideCard(ui) {
+/* ───────────── 🧭 전투력(CP) 원천 분석기 & 가성비 성장 내비 (v7.9.0) ─────────────
+ * v8.0.0: '전투 정보' 카드 안쪽 블록으로도 쓸 수 있게 cpGuideInner 로 분리(카드 껍데기 없음).
+ */
+export function cpGuideInner(ui) {
   const s = ui.s;
   const buffs = (ui.app && ui.app.buffs) || {};
   const bd = computeCpBreakdown(s, buffs);
@@ -219,13 +221,23 @@ export function cpGuideCard(ui) {
       <button class="mini up" type="button" data-action="guide-jump" data-value="${r.jumpTab}:${r.jumpSub || ''}">이동 →</button>
     </div>`).join('');
   return `
+    <div class="gd-head"><b>🧭 전투력 분석</b><span class="tiny dim">CP ${fmt(bd.cp)} · 추천 Top ${recs.length}</span></div>
+    <div class="dm-bar" style="margin:2px 0 6px">${segs}</div>
+    <div class="cp-chips">${chips}</div>
+    <div class="gd-list">${recRows}</div>`;
+}
+
+export function cpGuideCard(ui) {
+  const s = ui.s;
+  const buffs = (ui.app && ui.app.buffs) || {};
+  const bd = computeCpBreakdown(s, buffs);
+  const recs = recommendGrowth(s, buffs, Date.now());
+  return `
   <div class="card guide-card" id="cpGuideCard">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🧭</span>전투력 분석 · 성장 내비<small>CP ${fmt(bd.cp)}</small></div>
       <span class="tiny" style="color:var(--gold)">추천 Top ${recs.length}</span>
     </div>
-    <div class="dm-bar" style="margin:2px 0 6px">${segs}</div>
-    <div class="cp-chips">${chips}</div>
-    <div class="gd-list">${recRows}</div>
+    ${cpGuideInner(ui)}
   </div>`;
 }

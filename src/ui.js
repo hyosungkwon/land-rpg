@@ -61,17 +61,20 @@ import {
 import {
   REBIRTH, REBIRTH_TRAITS, rebirthStatus, rebirthBonus, traitLevel, traitCost, traitSummary,
 } from './rebirth.js';
-import { esc, fmt, pct, hhmmss, mmss } from './ui-fmt.js';
+import { esc, fmt, compact, pct, hhmmss, mmss } from './ui-fmt.js';
 import { cloudCard, rankCard } from './ui-cloud.js';
 import { rarityBadge, rarityName, gearSlotCards, gearInventory, gachaCard } from './ui-gear.js';
 import {
   paybackText, trendHtml, traitBadge,
-  LAND_HOME_FILTERS, LAND_BUFF_FILTERS, landHomeFilterBar, landBuffFilterBar,
   invasionCard, regionMapCard, expeditionCard, investDashboardCard, limitOrdersCard, citadelCard,
   bankCard, megaProjectCard, buildMarketList, tplLandMarket,
 } from './ui-land.js';
 import { bankStatus } from './bank.js';
-import { relicCard, riftCard, guildRaidCard, passCard, titleCard, cpGuideCard } from './ui-hunt.js';
+import { invasionStatus } from './invasion.js';
+import { computeCpBreakdown, recommendGrowth } from './guide.js';
+import {
+  relicCard, riftCard, guildRaidCard, passCard, titleCard, cpGuideInner,
+} from './ui-hunt.js';
 
 /** v6.5.0 전투 캔버스 상단 실시간 버프 HUD 바 항목 생성 */
 export function activeBuffPills(b, now = Date.now()) {
@@ -104,12 +107,12 @@ export class UI {
   constructor(app) {
     this.app = app; // { s, battle, buffs, actions ... }
     this.tab = 'hunt';
-    this.huntSub = 'skill'; // 사냥 탭 서브 탭 (세션 동안 유지·저장 안 함)
+    this.huntSub = 'battle'; // 사냥 탭 서브 탭 (전투/도전/미션 · 세션 유지)
     this.growthFilter = 'all'; // v5.5 전직·환생 탭 영역 필터('all' | 'challenge' | 'growth')
-    this.gearSub = 'enhance'; // v5.5 장비 탭 서브 탭('enhance' | 'bag' | 'gacha')
+    this.gearSub = 'equip'; // v8.0.0 성장 탭 서브 탭('equip' | 'job' | 'collect')
     this.landHoldAll = false; // v4.3 부동산 탭 보유 매물 펼치기(기본은 6곳까지)
-    this.landHomeFilter = 'all'; // v6.5 부동산 홈 모바일 섹션 필터
-    this.landBuffFilter = 'all'; // v6.5 부동산 버프·펫 모바일 섹션 필터
+    // v8.0.0: 섹션 칩 필터 제거 — 카드 접힘 상태만 세션에 기억한다
+    this.collapsed = new Set(DEFAULT_COLLAPSED);
     this.expPick = { petId: '', setId: '', durKey: 'short' }; // v5.9 펫 파견 선택 상태
     this.gemSlot = 'weapon'; // v6.2 보석 장착 대상 부위
     this._lastBuffHtml = '';
@@ -223,7 +226,9 @@ export class UI {
       case 'reset-dps-meter': actions.resetDpsMeter(); break;
       case 'guide-jump': {
         const [tTab, tSub] = String(v || '').split(':');
-        if (tTab === 'hunt' && tSub) this.huntSub = tSub;
+        if (tTab === 'hunt') this.huntSub = ['battle', 'challenge', 'mission'].includes(tSub) ? tSub : 'battle';
+        if (tTab === 'gear') this.gearSub = ['equip', 'job', 'collect'].includes(tSub) ? tSub : 'equip';
+        if (tTab === 'land' && tSub) this.s.land.sub = tSub === 'buff' ? 'event' : tSub;
         if (tTab) this.setTab(tTab);
         break;
       }
@@ -263,10 +268,9 @@ export class UI {
       case 'toggle-auto-skill': actions.toggleAutoSkill(); break;
       case 'toggle-auto-ult': actions.toggleAutoUlt(); break;
       case 'open-log': this.showLog(); break;
-      case 'open-pets': this.s.land.sub = 'buff'; this.setTab('land'); break;
+      case 'open-pets': this.gearSub = 'collect'; this.setTab('gear'); break;
       case 'land-sub': this.setLandSub(v); break;
-      case 'land-home-filter': this.setLandHomeFilter(v); break;
-      case 'land-buff-filter': this.setLandBuffFilter(v); break;
+      case 'toggle-fold': this.toggleFold(v); break;
       case 'land-hold-all': this.landHoldAll = !this.landHoldAll; this.render(); break;
       case 'landmark': actions.openLandmark(v); break;
       case 'land-trade': actions.landTrade(v, btn.dataset.side); break;
@@ -373,7 +377,7 @@ export class UI {
   /** 사냥 탭 서브 탭 전환 — 저장 데이터는 건드리지 않고 세션에서만 기억한다 */
   setHuntSub(sub) {
     const ok = HUNT_SUBS.map(([k]) => k);
-    this.huntSub = ok.includes(sub) ? sub : 'skill';
+    this.huntSub = ok.includes(sub) ? sub : 'battle';
     this.el.panel.scrollTop = 0;
     this.render();
   }
@@ -395,7 +399,7 @@ export class UI {
   /** v5.5 장비 탭 서브 탭 전환 */
   setGearSub(sub) {
     const ok = GEAR_SUBS.map(([k]) => k);
-    this.gearSub = ok.includes(sub) ? sub : 'enhance';
+    this.gearSub = ok.includes(sub) ? sub : 'equip';
     this.el.panel.scrollTop = 0;
     this.render();
   }
@@ -465,21 +469,26 @@ export class UI {
 
   setLandSub(sub) {
     const ok = LAND_SUBS.map(([k]) => k);
-    this.s.land.sub = ok.includes(sub) ? sub : 'home';
+    const want = sub === 'buff' ? 'event' : sub; // v7.x 저장/딥링크 호환
+    this.s.land.sub = ok.includes(want) ? want : 'home';
     this.s.land.page = 1;
     this.el.panel.scrollTop = 0;
     this.render();
   }
 
-  /** v6.5.0 모바일 390px 부동산 홈/버프 빠른 보기 필터 */
-  setLandHomeFilter(f) {
-    this.landHomeFilter = LAND_HOME_FILTERS.includes(f) ? f : 'all';
-    this.render();
-  }
-
-  setLandBuffFilter(f) {
-    this.landBuffFilter = LAND_BUFF_FILTERS.includes(f) ? f : 'all';
-    this.render();
+  /** v8.0.0 카드 접힘/펼침 — 세션 상태만 바꾸고 DOM 만 토글(스크롤·입력 유지) */
+  toggleFold(id) {
+    if (!id) return;
+    const open = !this.collapsed.has(id);
+    if (open) this.collapsed.add(id); else this.collapsed.delete(id);
+    const body = document.getElementById(`fold-${id}`);
+    if (body) body.classList.toggle('hidden', !open);
+    document.querySelectorAll(`[data-action="toggle-fold"][data-value="${id}"]`).forEach((h) => {
+      h.setAttribute('aria-expanded', open ? 'true' : 'false');
+      const cv = h.querySelector('.cv');
+      if (cv) cv.textContent = open ? '▾' : '▸';
+    });
+    return open;
   }
 
   /** v6.5.0 전투 캔버스 상단 실시간 버프 HUD 바 갱신 */
@@ -517,8 +526,8 @@ export class UI {
     setW(this.el.expFill, pct((s.exp / need) * 100));
     setT(this.el.expText, `Lv.${s.level} · ${((s.exp / need) * 100).toFixed(1)}%`);
 
-    setT(this.el.gold, fmt(s.gold));
-    setT(this.el.shard, fmt(s.shards));
+    setT(this.el.gold, compact(s.gold));
+    setT(this.el.shard, compact(s.shards));
 
     const def = b.def;
     // v4.2: 탑 도전 중에는 스테이지 칩 대신 층 이름을 보여 준다 · v5.11 영지 방어전
@@ -595,8 +604,24 @@ export class UI {
   refreshHeader() {
     const p = portfolioOf(this.s);
     const setT = (el, v) => { if (el && el.textContent !== v) el.textContent = v; };
-    setT(this.el.asset, p.pyeong.toLocaleString());
-    setT(this.el.rentHr, `+${formatGold(p.incomePerHour)}/h`);
+    // v8.0.0 B2 — 상단 HUD 는 축약형(1.84억 / 127만) + 전체 값은 title/aria 로
+    const pyeongTxt = compact(p.pyeong);
+    const rentTxt = `+${compact(p.incomePerHour)}/h`;
+    setT(this.el.asset, pyeongTxt);
+    setT(this.el.rentHr, rentTxt);
+    if (this.el.assetBadge) {
+      const full = `보유 ${fmt(p.pyeong)}평 · 시간당 +${fmt(p.incomePerHour)} 골드 · ${p.cities}곳`;
+      if (this.el.assetBadge.getAttribute('title') !== full) this.el.assetBadge.setAttribute('title', full);
+      if (this.el.assetBadge.getAttribute('aria-label') !== full) this.el.assetBadge.setAttribute('aria-label', full);
+    }
+    const goldTxt = compact(this.s.gold);
+    const shardTxt = compact(this.s.shards);
+    setT(this.el.gold, goldTxt);
+    setT(this.el.shard, shardTxt);
+    const goldWrap = this.el.gold && this.el.gold.parentElement;
+    if (goldWrap) goldWrap.setAttribute('title', `골드 ${fmt(this.s.gold)}`);
+    const shardWrap = this.el.shard && this.el.shard.parentElement;
+    if (shardWrap) shardWrap.setAttribute('title', `강화석 ${fmt(this.s.shards)}`);
     const on = this.s.soundOn !== false;
     if (this.el.soundIco && this.el.soundIco.textContent !== (on ? '🔊' : '🔇')) this.el.soundIco.textContent = on ? '🔊' : '🔇';
     if (this.el.soundBtn) {
@@ -982,6 +1007,7 @@ export class UI {
       ? { id: active.id, value: active.value, pos: active.selectionStart }
       : null;
     this.el.panelInner.innerHTML = this.template();
+    this.applyFolds();
     this.el.panel.scrollTop = scroll;
     if (keep) {
       const n = document.getElementById(keep.id);
@@ -993,6 +1019,32 @@ export class UI {
     }
     this.lastLive = 0;
     this.refreshHeader();
+  }
+
+  /** data-fold 가 붙은 카드에 ▸ 토글을 달고 본문을 접을 수 있게 감싼다 (v8.0.0) */
+  applyFolds() {
+    const collapsed = (this.collapsed = this.collapsed || new Set(DEFAULT_COLLAPSED));
+    this.el.panelInner.querySelectorAll('.card[data-fold]').forEach((card) => {
+      const id = card.dataset.fold;
+      if (!id || card.dataset.foldDone === '1') return;
+      const head = card.querySelector('.card-head');
+      if (!head) return;
+      card.dataset.foldDone = '1';
+      const open = !collapsed.has(id);
+      head.classList.add('fold-head');
+      head.dataset.action = 'toggle-fold';
+      head.dataset.value = id;
+      head.setAttribute('role', 'button');
+      head.setAttribute('tabindex', '0');
+      head.setAttribute('aria-expanded', open ? 'true' : 'false');
+      head.setAttribute('aria-controls', `fold-${id}`);
+      head.insertAdjacentHTML('beforeend', `<i class="cv">${open ? '▾' : '▸'}</i>`);
+      const body = document.createElement('div');
+      body.className = `card-body${open ? '' : ' hidden'}`;
+      body.id = `fold-${id}`;
+      while (head.nextSibling) body.appendChild(head.nextSibling);
+      card.appendChild(body);
+    });
   }
 
   /** 레벨업·클리어로 패널을 다시 그릴 필요가 없는 탭(부동산)에서는 건너뛴다. */
@@ -1393,17 +1445,32 @@ function questCard(ui) {
   </div>`;
 }
 
-/* ══════════════════════════ 사냥/스킬 — 서브 탭 (v3.9) ══════════════════════════
- * 사냥 탭의 긴 세로 스크롤을 없애기 위해 본문을 3개 서브 탭으로 나눈다.
- *  - skill : 전투 스탯 요약 + 스킬 강화(2×2) + 전투 기록(모달)
- *  - growth: 전직 · 환생(초월) · 황금 던전 · 동료 펫
- *  - quest : 순차 미션 + 도감·업적 요약
- * 서브 탭 상태는 UI 인스턴스에만 둔다(세션 동안 유지, 저장 데이터·기존 기능 불변).
+/* ══════════════════════════ 접힘/펼침 카드 헬퍼 (v8.0.0) ══════════════════════════
+ * 3층 내비(하단 탭 → 서브 탭 → 섹션 칩 11개)를 없애고, 카드 헤더의 ▸ 한 번으로 접는다.
+ * 접힘 상태는 세션 UI 상태(ui.collapsed)에만 둔다 — 저장 데이터·기존 기능 불변.
+ */
+const DEFAULT_COLLAPSED = [
+  'battle-detail', 'gems', 'shards', 'craft', 'gacha', 'inventory', 'gear-info',
+  'invest-dash', 'region-set', 'landmark', 'buff-detail', 'expedition',
+  'pet', 'pass', 'codex', 'info', 'records',
+];
+const isCardOpen = (ui, id) => !(ui && ui.collapsed && typeof ui.collapsed.has === 'function' && ui.collapsed.has(id));
+
+/** 접히는 본문 — 접힌 상태에서도 DOM 에는 남긴다(실시간 data-live 갱신 유지) */
+function foldBody(ui, id, html) {
+  const open = isCardOpen(ui, id);
+  return `<div class="card-body${open ? '' : ' hidden'}" id="fold-${id}">${html}</div>`;
+}
+
+/* ══════════════════════════ 사냥 — 서브 탭 (v8.0.0 재편) ══════════════════════════
+ *  - battle   : 전투 정보 1장(기본 1줄 요약 + 접어서 스탯·DPS·CP 분석) · 스킬 · 펫 1줄
+ *  - challenge: 침공 방어전 · 황금 던전 · 도전의 탑 · 일일 보스 · 무한 균열 · 주간 레이드
+ *  - mission  : 오늘의 할 일 허브 · 출석 · 성장 패스 · 순차 미션 · 일일 퀘스트 · 도감
  */
 const HUNT_SUBS = [
-  ['skill', '💪', '스킬·스탯'],
-  ['growth', '✨', '전직·환생'],
-  ['quest', '🎯', '미션·도감'],
+  ['battle', '⚔️', '전투'],
+  ['challenge', '🏆', '도전'],
+  ['mission', '📋', '미션'],
 ];
 
 /** 서브 탭 배지 — 지금 누르면 보상을 받거나 바로 성장할 수 있는 항목 수 */
@@ -1413,14 +1480,6 @@ function huntBadges(ui) {
   const questReady = !!(q && questProgress(s, q.id).done);
   const dqReady = dailyQuestStatus(s).readyCount;
   const achReady = achievementStatus(s).filter((a) => a.claimable).length;
-  const pr = jobProgress(s);
-  const rb = rebirthStatus(s);
-  const traitReady = REBIRTH_TRAITS.some((t) => {
-    const lv = traitLevel(s, t.id);
-    return lv < t.maxLv && rb.points >= traitCost(lv);
-  });
-  // v4.2: 지금 진화시킬 수 있는 펫이 있으면 성장 배지에 함께 표시
-  const petEvoReady = PETS.filter((d) => (s.pet && s.pet.unlocked && s.pet.unlocked.includes(d.id)) && petEvolveInfo(s, d.id).can).length;
   // v5.4: 주간 보스 마일스톤 · 7일 출석 체크(새 게임 0초 시점에는 과도한 알림 방지)
   const weeklyReady = weeklyBossInfo(s).readyCount;
   const att = attendanceInfo(s);
@@ -1429,16 +1488,16 @@ function huntBadges(ui) {
   const raidReady = raidStatus(s, ui.battle && ui.battle.stats).readyCount;
   // 던전 '무료 입장 가능'은 10분마다 계속 켜지므로 배지에서 뺀다(탭 안에서 바로 보임) — 상시 점등 방지
   return {
-    skill: 0,
-    growth: (pr.canPromote ? 1 : 0) + (rb.can ? 1 : 0) + (traitReady ? 1 : 0) + (petEvoReady > 0 ? 1 : 0) + weeklyReady + raidReady,
-    quest: (questReady ? 1 : 0) + dqReady + achReady + attReady + passReady,
+    battle: 0,
+    challenge: weeklyReady + raidReady,
+    mission: (questReady ? 1 : 0) + dqReady + achReady + attReady + passReady,
   };
 }
 
-/** 현재 서브 탭 키 — 알 수 없는 값이면 스킬·스탯으로 복구한다 */
+/** 현재 서브 탭 키 — 알 수 없는 값이면 전투로 복구한다 */
 function huntSubOf(ui) {
   const k = ui && ui.huntSub;
-  return HUNT_SUBS.some(([id]) => id === k) ? k : 'skill';
+  return HUNT_SUBS.some(([id]) => id === k) ? k : 'battle';
 }
 
 function huntSubBar(ui) {
@@ -1490,48 +1549,31 @@ function dpsMeterInner(b, now = Date.now()) {
     <div class="dm-chips">${chips}</div>`;
 }
 
-function huntStatsCard(ui) {
+function battleInfoCard(ui) {
   const s = ui.s;
   const b = ui.battle;
   const st = b.stats;
   const buffs = ui.app.buffs || {};
   const dps = dpsSnapshot(b, Date.now());
+  const bd = computeCpBreakdown(s, buffs);
+  const top = recommendGrowth(s, buffs, Date.now())[0];
 
   const stat = (cls, k, v, unit = '') => `
     <div class="stat ${cls}"><div class="k">${k}</div><div class="v">${v}${unit ? `<small>${unit}</small>` : ''}</div></div>`;
 
-  const buffParts = [];
-  // v4.6: 건물주 + 권역 세트 + 랜드마크 + 시너지 '합계'를 한 줄로 — 어느 탭에서든 같은 숫자
+  // v8.0.0: 부동산 버프 합계는 '전투 요약 1줄'로만 — 상세 내역은 부동산 → 영지
   const tot = landBuffTotals(buffs);
   const hasLand = buffs.active || tot.atkPct || tot.goldPct || tot.critDmgPct || tot.cdrPct || tot.bossDmgPct || tot.expPct;
-  if (hasLand) {
-    const own = `🏢 건물주 ${buffs.buildings || 0}곳 · 🗺️ 세트 ${buffs.setCount || 0}/${buffs.setTotal || 7} · 🏛️ 랜드마크 ${buffs.landmarkCount || 0}개`;
-    buffParts.push(
-      `<span style="color:var(--green)">🏘️ 부동산 버프 합계 · ${landBuffTotalsText(buffs)}</span><br><span class="dim">${own}</span>`,
-    );
-  }
-  const buffLine = buffParts.length
-    ? `<div class="tiny" style="margin-top:6px;line-height:1.5;color:var(--green)">${buffParts.join('<br>')}</div>`
-    : `<div class="tiny ellip dim" style="margin-top:6px">🏢 부동산을 사면 영구 버프 — <b style="color:var(--gold)">부동산 탭 → 매물 투자</b></div>`;
-
-  const newsNow = activeNews(Date.now());
-  const newsLine = newsNow
-    ? `<div class="tiny ellip" style="margin-top:3px;color:var(--gold)">📰 ${newsNow.icon} ${esc(newsNow.title)} <span class="dim">· ${esc(newsNow.targetLabel)} 시세 ▲${newsNow.pricePct}%</span></div>`
-    : '';
+  const landLine = hasLand
+    ? `<span class="bi-land-k">🏘️ 부동산 버프</span><span class="bi-land-v">${landBuffTotalsText(buffs)}</span><span class="dim">· ${buffs.buildings || 0}곳</span>`
+    : `<span class="bi-land-k">🏘️ 부동산 버프</span><span class="dim">매물을 사면 사냥에 영구 버프 — <b style="color:var(--gold)">부동산 → 매물</b></span>`;
 
   const spdUnlocked = battleSpeedUnlocked(s);
   const spdVal = effectiveBattleSpeed(s);
   const spdBtn = `<button class="spd-btn${spdVal > 1 ? ' on' : ''}${spdUnlocked ? '' : ' lock'}" type="button" data-action="cycle-speed" aria-label="전투 배속 전환">${spdUnlocked ? `⚡ ×${spdVal}` : '🔒 ×2'}</button>`;
 
-  return `
-  <div class="card stats-card">
-    <div class="card-head">
-      <div class="card-title"><span class="t-ico">📊</span>전투 스탯<small>${esc(b.def.themeName)} · S${s.stage}${b.def.infinite ? '<span class="inf-badge">∞</span>' : ''}</small></div>
-      <div class="row gap6">
-        ${spdBtn}
-        <button class="switch sm ${s.autoBoss ? 'on' : ''}" data-action="toggle-auto" aria-label="자동 보스 전환"></button>
-      </div>
-    </div>
+  const detail = `
+    <div class="sec-lbl">전투 스탯</div>
     <div class="dps-hero${dps.boost ? ' boost' : ''}" data-live="dps-hero">
       <div class="dps-left">
         <div class="dps-k">⚡ 실시간 DPS <small>(초당 공격력)</small></div>
@@ -1557,8 +1599,25 @@ function huntStatsCard(ui) {
       ${st.bossDmgPct > 0 ? stat('', '보스 피해', `+${Math.round(st.bossDmgPct * 100)}`, '%') : ''}
       ${st.expMult > 1 ? stat('', '경험치 획득', `+${Math.round((st.expMult - 1) * 100)}`, '%') : ''}
     </div>
-    ${buffLine}
-    ${newsLine}
+    <div class="bi-guide">${cpGuideInner(ui)}</div>`;
+
+  return `
+  <div class="card stats-card" id="battleInfoCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">📊</span>전투 정보<small>${esc(b.def.themeName)} · S${s.stage}${b.def.infinite ? '<span class="inf-badge">∞</span>' : ''}</small></div>
+      <div class="row gap6">
+        ${spdBtn}
+        <button class="switch sm ${s.autoBoss ? 'on' : ''}" data-action="toggle-auto" aria-label="자동 보스 전환"></button>
+      </div>
+    </div>
+    <button class="bi-sum" type="button" data-action="toggle-fold" data-value="battle-detail" aria-expanded="${isCardOpen(ui, 'battle-detail')}">
+      <span class="bi-kpi">⚡ <b data-live="live-dps">${fmt(dps.value)}</b><small>/초</small></span>
+      <span class="bi-kpi">🧭 CP <b>${fmt(bd.cp)}</b></span>
+      <span class="bi-next ellip">🎯 ${top ? `${top.icon} ${esc(top.title)}` : '사냥 계속'}</span>
+      <i class="cv">${isCardOpen(ui, 'battle-detail') ? '▾' : '▸'}</i>
+    </button>
+    <div class="bi-land">${landLine}</div>
+    ${foldBody(ui, 'battle-detail', detail)}
   </div>`;
 }
 
@@ -1653,8 +1712,36 @@ function ultPanel(ui) {
   </div>`;
 }
 
-function tplHuntSkill(ui) {
-  return `${huntStatsCard(ui)}${cpGuideCard(ui)}${huntSkillCard(ui)}`;
+/** ⚔️ 전투 — 전투 정보 1장(접힘) + 스킬 + 펫 1줄 */
+function tplHuntBattle(ui) {
+  return `${battleInfoCard(ui)}${huntSkillCard(ui)}${petLine(ui)}`;
+}
+
+/** 📋 오늘의 할 일 허브 — 미션 탭 첫 카드(개별 화면 대신 한 곳에서 일괄 수령) */
+function todoHubCard(ui) {
+  const now = Date.now();
+  let sum = { totalClaimable: 0, items: [], alerts: [] };
+  try {
+    sum = collectTodoSummary(ui.s, ui.battle && ui.battle.stats, now);
+  } catch (e) { /* ignore */ }
+  const rows = sum.items.length
+    ? sum.items.slice(0, 8).map((it) => `
+      <div class="todo-row"><span>${it.icon} <b>${esc(it.label)}</b></span><small>${esc(it.detail)}</small></div>`).join('')
+    : '<div class="tiny dim" style="margin:6px 0">지금 수령 대기 중인 보상이 없습니다 — 사냥을 계속하면 채워집니다.</div>';
+  const alerts = sum.alerts.length
+    ? `<div class="row gap6 wrap" style="margin-top:6px">${sum.alerts.slice(0, 3).map((a) => `<button class="mini ghost" type="button" data-action="${a.action}">${a.icon} ${esc(a.label)}</button>`).join('')}</div>`
+    : '';
+  const n = sum.totalClaimable;
+  return `
+  <div class="card todo-card${n > 0 ? ' ready' : ''}" id="todoHubCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">📋</span>오늘의 할 일<small>${n > 0 ? `${n}건 수령 가능` : '모두 수령 완료'}</small></div>
+      <button class="btn small ${n > 0 ? 'green' : 'ghost'} todo-all" type="button" data-action="todo-claim-all" ${n > 0 ? '' : 'disabled'}>⚡ 일괄 수령</button>
+    </div>
+    <div class="todo-list">${rows}</div>
+    ${alerts}
+    <div class="tiny dim" style="margin-top:6px">출석·패스·일일퀘·미션·탑 소탕·은행·파견·레이드 보상을 여기서 한 번에 받습니다.</div>
+  </div>`;
 }
 
 /* ───────────── ✨ 전직·환생 ───────────── */
@@ -1683,7 +1770,7 @@ function petLine(ui) {
     <div class="row">
       <div class="grow ellip">
         <div class="card-title"><span class="t-ico">🐾</span>동료 펫<small>${unlockedIds.length}/${PETS.length} 해금 · ★진화 ${evoCount}</small></div>
-        <div class="tiny dim ellip" style="margin-top:3px">${equipped ? `동행 ${equipped.emoji} ${badge ? `<b style="color:var(--gold)">${badge}</b> ` : ''}${esc(info.name)}${subTxt}` : '동행 중인 펫이 없습니다 — 부동산이 자라면 자동 해금'} · 교체·보조·파견은 부동산 → 버프·세트·펫</div>
+        <div class="tiny dim ellip" style="margin-top:3px">${equipped ? `동행 ${equipped.emoji} ${badge ? `<b style="color:var(--gold)">${badge}</b> ` : ''}${esc(info.name)}${subTxt}` : '동행 중인 펫이 없습니다 — 부동산이 자라면 자동 해금'} · 교체·보조·진화는 성장 → 수집 · 파견은 부동산 → 영지</div>
         ${skill ? `<div class="tiny ellip" style="margin-top:2px;color:${stage >= 1 ? 'var(--blue)' : 'var(--dim)'}">${skill.icon} <b>${esc(skill.name)}</b> — ${esc(petSkillText(equipped, stage))}</div>` : ''}
         ${expLine}
       </div>
@@ -1694,18 +1781,9 @@ function petLine(ui) {
 
 /* ───────────── 🏺 유물 · 🌀 무한 균열 · 🛡️ 기사단/레이드 (v7.0.0: ui-hunt.js 분리) ───────────── */
 
-function tplHuntGrowth(ui) {
-  const f = ['all', 'challenge', 'growth'].includes(ui && ui.growthFilter) ? ui.growthFilter : 'all';
-  const bar = `<div class="chips growth-filter" role="tablist" aria-label="전직·도전 보기">
-    <button class="chip${f === 'all' ? ' on' : ''}" type="button" data-action="growth-filter" data-value="all">전체 보기</button>
-    <button class="chip${f === 'challenge' ? ' on' : ''}" type="button" data-action="growth-filter" data-value="challenge">⚔️ 도전 (균열·레이드·탑·보스)</button>
-    <button class="chip${f === 'growth' ? ' on' : ''}" type="button" data-action="growth-filter" data-value="growth">✨ 성장 (전직·환생·유물·펫)</button>
-  </div>`;
-  const growthCards = `${jobCard(ui)}${rebirthCard(ui)}${relicCard(ui)}${petLine(ui)}`;
-  const challengeCards = `${guildRaidCard(ui)}${riftCard(ui)}${invasionCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}`;
-  if (f === 'challenge') return `${bar}${challengeCards}`;
-  if (f === 'growth') return `${bar}${growthCards}`;
-  return `${bar}${jobCard(ui)}${rebirthCard(ui)}${relicCard(ui)}${guildRaidCard(ui)}${riftCard(ui)}${invasionCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}${petLine(ui)}`;
+/** 🏆 도전 — 침공 방어전·던전·탑·일일 보스·무한 균열·주간 레이드 */
+function tplHuntChallenge(ui) {
+  return `${invasionCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}${riftCard(ui)}${guildRaidCard(ui)}`;
 }
 
 /* ───────────── 📅 일일 퀘스트 (v4.9.0 · KST 자정 리셋) ───────────── */
@@ -1807,29 +1885,31 @@ function attendanceCard(ui) {
 
 /* ───────────── 🎖️ 패스 · 🏷️ 칭호 (v7.0.0: ui-hunt.js 분리) ───────────── */
 
-function tplHuntQuest(ui) {
-  return `${attendanceCard(ui)}${passCard(ui)}${questCard(ui)}${dailyQuestCard(ui)}${titleCard(ui)}${codexCard(ui)}`;
+function tplHuntMission(ui) {
+  return `${todoHubCard(ui)}${attendanceCard(ui)}${passCard(ui)}${questCard(ui)}${dailyQuestCard(ui)}${codexCard(ui)}`;
 }
 
 /* ══════════════════════════ 사냥/스킬 (본문) ══════════════════════════ */
 function tplHunt(ui) {
   const sub = huntSubOf(ui);
-  const body = sub === 'growth' ? tplHuntGrowth(ui) : sub === 'quest' ? tplHuntQuest(ui) : tplHuntSkill(ui);
+  const body = sub === 'challenge' ? tplHuntChallenge(ui) : sub === 'mission' ? tplHuntMission(ui) : tplHuntBattle(ui);
   return `${huntSubBar(ui)}${body}`;
 }
 
-/* ══════════════════════════ 장비/강화 (v5.0 모듈화 · v5.5 서브 탭 개편) ══════════════════════════
- * 모바일 스크롤을 줄이기 위해 [🔨 강화·장착 | 🎒 인벤토리 | 🎁 뽑기] 3서브 탭으로 나눈다.
+/* ══════════════════════════ 🎒 성장 (v8.0.0 — 장비/전직·환생/수집 3서브) ══════════════════════════
+ *  - equip  : 장비 장착·강화 + 보석 + 강화석 + 테마 공방 + 뽑기·인벤토리(접힘)
+ *  - job    : 전직 · 환생(초월) · 영구 특성
+ *  - collect: 고대 유물 · 칭호 · 동료 펫(진화·교체)
  */
 const GEAR_SUBS = [
-  ['enhance', '🔨', '강화·장착'],
-  ['bag', '🎒', '인벤토리'],
-  ['gacha', '🎁', '뽑기'],
+  ['equip', '🎒', '장비'],
+  ['job', '✨', '전직·환생'],
+  ['collect', '🏺', '수집'],
 ];
 
 function gearSubOf(ui) {
   if (!ui || ui.gearSub === undefined) return 'all'; // 레거시 헤드리스 호출 호환
-  return GEAR_SUBS.some(([k]) => k === ui.gearSub) ? ui.gearSub : 'enhance';
+  return GEAR_SUBS.some(([k]) => k === ui.gearSub) ? ui.gearSub : 'equip';
 }
 
 function gearBadges(ui) {
@@ -1844,18 +1924,24 @@ function gearBadges(ui) {
   const g = s.gacha || { cur: 'gold' };
   const cur = g.cur === 'shards' ? 'shards' : 'gold';
   const canPull10 = (s[cur] || 0) >= gachaCost(cur, 10).amount;
+  const pr = jobProgress(s);
+  const rb = rebirthStatus(s);
+  const traitReady = REBIRTH_TRAITS.some((t) => traitLevel(s, t.id) < t.maxLv && rb.points >= traitCost(traitLevel(s, t.id)));
+  const petEvoReady = PETS.filter((d) => (s.pet && s.pet.unlocked && s.pet.unlocked.includes(d.id)) && petEvolveInfo(s, d.id).can).length;
+  const rel = s.relics || { owned: {}, equipped: [] };
+  const relicReady = (Object.keys(rel.owned || {}).length > (Array.isArray(rel.equipped) ? rel.equipped.length : 0) || canBulk) ? 1 : 0;
   return {
-    enhance: canEnhance ? 1 : 0,
-    bag: canBulk ? dismantleTargets(s, 'low').length : 0,
-    gacha: canPull10 ? 1 : 0,
+    equip: (canEnhance ? 1 : 0) + (canBulk ? dismantleTargets(s, 'low').length : 0) + (canPull10 ? 1 : 0),
+    job: (pr.canPromote ? 1 : 0) + (rb.can ? 1 : 0) + (traitReady ? 1 : 0),
+    collect: petEvoReady + relicReady,
   };
 }
 
 function gearSubBar(ui) {
   const sub = gearSubOf(ui);
-  const active = sub === 'all' ? 'enhance' : sub;
+  const active = sub === 'all' ? 'equip' : sub;
   const b = gearBadges(ui);
-  return `<div class="subtabs hunt-subbar gear-subbar" role="tablist" aria-label="장비 서브 탭">${GEAR_SUBS.map(
+  return `<div class="subtabs hunt-subbar gear-subbar" role="tablist" aria-label="성장 서브 탭">${GEAR_SUBS.map(
     ([k, ico, label]) => `
     <button class="subtab ${active === k ? 'active' : ''}" type="button" role="tab" aria-selected="${active === k}" data-action="gear-sub" data-value="${k}">${ico} ${label}<i class="nb ${b[k] ? 'on' : ''}" data-gbadge="${k}">${b[k] > 9 ? '9+' : b[k] || ''}</i></button>`,
   ).join('')}</div>`;
@@ -1949,7 +2035,7 @@ function tplGear(ui) {
   </div>`;
 
   const infoCard = `
-  <div class="card">
+  <div class="card" data-fold="gear-info">
     <div class="card-head"><div class="card-title"><span class="t-ico">📈</span>부위별 효과</div><span class="tiny dim">등급 보정 포함</span></div>
     <div class="kv"><span class="k">⚔️ 무기</span><span class="v">공격력 +${EQUIP.weapon.per}/강화</span></div>
     <div class="kv"><span class="k">🛡️ 갑옷</span><span class="v">체력 +${EQUIP.armor.per}/강화</span></div>
@@ -1962,7 +2048,7 @@ function tplGear(ui) {
   </div>`;
 
   const shardCard = `
-  <div class="card">
+  <div class="card" data-fold="shards">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">💱</span>강화석 구매 <small>골드 → 💎</small></div>
       <span class="tiny dim">시세 💰${fmt(price)}/개</span>
@@ -2030,7 +2116,7 @@ function tplGear(ui) {
       </div>`;
     }).join('');
     return `
-    <div class="card gem-card" id="gemSocketCard">
+    <div class="card gem-card" id="gemSocketCard" data-fold="gems">
       <div class="card-head">
         <div class="card-title"><span class="t-ico">💠</span>보석 소켓<small>${ge.socketCount}/5 장착 · 세공 💎${GEM_CUT_COST.shards} 💰${formatGold(GEM_CUT_COST.gold)}</small></div>
         ${curG ? `<button class="mini ghost" type="button" data-action="gem-unsocket" data-value="${curSlot}">${EQUIP[curSlot].name} 해제</button>` : `<span class="tiny dim">대상: ${EQUIP[curSlot].name}</span>`}
@@ -2060,7 +2146,7 @@ function tplGear(ui) {
       </div>`;
     }).join('');
     return `
-    <div class="card craft-card" id="themeCraftCard">
+    <div class="card craft-card" id="themeCraftCard" data-fold="craft">
       <div class="card-head">
         <div class="card-title"><span class="t-ico">🔨</span>테마 장비 제작 공방<small>미보유 우선 확정</small></div>
         <span class="tiny dim">영웅 💎${THEME_CRAFT_COST.hero.shards} · 전설 💎${THEME_CRAFT_COST.legend.shards}</span>
@@ -2071,10 +2157,10 @@ function tplGear(ui) {
   })();
 
   const bar = gearSubBar(ui);
-  if (sub === 'enhance') return `${bar}${gearSlotCards(s)}${enhanceCard}${gemCard}${shardCard}`;
-  if (sub === 'bag') return `${bar}${gearInventory(s)}${infoCard}`;
-  if (sub === 'gacha') return `${bar}${gachaCard(ui)}${themeCraftCard}${gearSlotCards(s)}${landTipCard}`;
-  return `${bar}${gachaCard(ui)}${themeCraftCard}${gearSlotCards(s)}${gearInventory(s)}${enhanceCard}${gemCard}${infoCard}${shardCard}${landTipCard}`;
+  if (sub === 'equip') return `${bar}${gearSlotCards(s)}${enhanceCard}${gemCard}${shardCard}${themeCraftCard}${gachaCard(ui)}${gearInventory(s)}${infoCard}`;
+  if (sub === 'job') return `${bar}${jobCard(ui)}${rebirthCard(ui)}`;
+  if (sub === 'collect') return `${bar}${relicCard(ui)}${titleCard(ui)}${petCard(ui)}${landTipCard}`;
+  return `${bar}${gachaCard(ui)}${themeCraftCard}${gearSlotCards(s)}${gearInventory(s)}${enhanceCard}${gemCard}${infoCard}${shardCard}${jobCard(ui)}${rebirthCard(ui)}${relicCard(ui)}${titleCard(ui)}${petCard(ui)}${landTipCard}`;
 }
 
 /* ══════════════════════════ 부동산 (v6.5.0 운영·분석·시장 카드는 ui-land.js 로 분리) ══════════════════════════ */
@@ -2090,32 +2176,6 @@ const newsOwnText = (s, n) => {
   }
   return hit > 0 ? `내 지역 ${hit}곳 ${fmt(pyeong)}평 적용 중` : `${n.targetLabel} · 내 보유 지역은 해당 없음`;
 };
-
-/** 부동산 탭 맨 위 뉴스 티커/배너 */
-function newsBanner(ui, now = Date.now()) {
-  const s = ui.s;
-  const n = activeNews(now);
-  if (!n) return '';
-  const span = Math.max(1, n.endsAt - n.startsAt);
-  const p = Math.min(100, Math.max(0, ((now - n.startsAt) / span) * 100));
-  return `
-  <div class="card news-card">
-    <div class="news-top">
-      <span class="news-live">● LIVE</span>
-      <span class="news-kicker">📰 부동산 호재</span>
-      <span class="news-clock" data-live="news-left">${mmss(n.endsAt - now)}</span>
-    </div>
-    <div class="news-title">${n.icon} ${esc(n.title)}</div>
-    <div class="news-fx">
-      <b>${esc(n.targetLabel)}</b>
-      <span class="up">시세 ▲${n.pricePct}%</span>
-      <span class="up">임대수익 ▲${n.rentPct}%</span>
-    </div>
-    <div class="news-sub" data-live="news-own">${esc(newsOwnText(s, n))}</div>
-    <div class="prog news-prog"><i data-live="news-prog" style="width:${p}%"></i></div>
-    <div class="tiny dim" style="margin-top:5px">3분마다 새 호재 · 지속 3분 · 해당 지역 매물에 바로 적용</div>
-  </div>`;
-}
 
 /** 압축 뉴스용 짧은 내 지역 문구 — 대상 라벨과 겹치지 않게 */
 function newsOwnShort(s, n) {
@@ -2139,35 +2199,11 @@ function newsSlim(ui) {
       <span class="ns-clock" data-live="news-left">${mmss(n.endsAt - Date.now())}</span>
     </div>
     <div class="ns-fx">${esc(n.targetLabel)} · <span class="up">시세 ▲${n.pricePct}%</span> · <span class="up">임대 ▲${n.rentPct}%</span> · <span data-live="news-own">${esc(newsOwnShort(ui.s, n))}</span></div>
+    <div class="prog news-prog" style="margin-top:4px;height:2px"><i data-live="news-prog" style="width:${Math.min(100, Math.max(0, ((Date.now() - n.startsAt) / Math.max(1, n.endsAt - n.startsAt)) * 100))}%"></i></div>
   </div>`;
 }
 
 /* ══════════════════ 🚨 침공 · 🗺️ 지도 · 🧭 파견 · 📈 대시보드 · 🎯 예약 · 🏰 성채 (v6.5.0: ui-land.js 분리) ══════════════════ */
-
-/** 내 부동산 홈 — 권역 세트 요약 */
-function regionSetMini(ui) {
-  const sets = regionSetStatus(ui.s.land.owned);
-  const active = sets.filter((st) => st.level > 0);
-  const total = {};
-  for (const st of active) {
-    for (const k of Object.keys(st.buffs)) total[k] = (total[k] || 0) + Number(st.buffs[k] || 0);
-  }
-  const chips = active
-    .map((st) => `<span class="set-chip" style="--sc:${st.color}">${st.icon} ${esc(st.name)} Lv.${st.level}</span>`)
-    .join('');
-  return `
-  <div class="card set-mini">
-    <div class="card-head">
-      <div class="card-title"><span class="t-ico">🗺️</span>권역 세트<small>${active.length}/${sets.length} 발동</small></div>
-      <span class="tiny" style="color:${active.length ? 'var(--green)' : 'var(--dim)'}">${active.length ? '지역 시너지 적용 중' : '미발동'}</span>
-    </div>
-    ${active.length
-      ? `<div class="set-chips">${chips}</div>
-         <div class="tiny" style="margin-top:7px;color:var(--blue)">${buffText(total)}</div>`
-      : '<div class="tiny dim">같은 권역 지역을 3곳 이상 모으면 세트 버프가 열립니다 (제주권은 1곳부터).</div>'}
-    <button class="btn small ghost block" style="margin-top:8px" type="button" data-action="land-sub" data-value="buff">세트 현황 보기</button>
-  </div>`;
-}
 
 /** 건물주 버프 탭 — 권역 세트 전체 현황 */
 function regionSetCard(ui) {
@@ -2258,14 +2294,15 @@ function landmarkCard(ui) {
  *  - buff  : 건물주 버프 · 동료 펫 · 권역 세트 · 랜드마크
  */
 const LAND_SUBS = [
-  ['home', '🏠', '내 부동산·수령'],
-  ['market', '🛒', '매물 투자'],
-  ['buff', '⚡', '버프·세트·펫'],
+  ['home', '🏠', '영지'],
+  ['market', '🛒', '매물'],
+  ['event', '🎪', '이벤트'],
 ];
 
-/** 현재 서브 탭 키 — 알 수 없는 값이면 '내 부동산'으로 복구 */
+/** 현재 서브 탭 키 — 알 수 없는 값이면 '영지'로 복구 (v7.x 저장값 'buff' 는 'event' 로) */
 function landSubOf(ui) {
   const k = ui && ui.s && ui.s.land && ui.s.land.sub;
+  if (k === 'buff') return 'event';
   return LAND_SUBS.some(([id]) => id === k) ? k : 'home';
 }
 
@@ -2282,7 +2319,7 @@ function landBadges(ui) {
   const petReady = PETS.filter((d) => unlocked.includes(d.id) && petEvolveInfo(s, d.id).can).length;
   const expReady = expeditionStatus(s).readyCount;
   const bankReady = bankStatus(s).readyCount;
-  return { home: rentReady + bankReady, market: 0, buff: petReady + expReady };
+  return { home: rentReady + bankReady, market: 0, event: petReady + expReady };
 }
 
 /** 서브 탭 바 — 스크롤해도 위에 붙고, 받을 것이 있으면 배지가 켜진다 */
@@ -2439,17 +2476,39 @@ function landSynergyCard(ui) {
 
 function tplLand(ui) {
   const sub = landSubOf(ui);
-  const body = sub === 'market' ? tplLandMarket(ui) : sub === 'buff' ? tplLandBuff(ui) : tplLandHome(ui);
-  // 홈은 카드형 뉴스 전체, 매물·버프 탭은 한 줄 압축 뉴스(스크롤 절약)
-  const news = sub === 'home' ? newsBanner(ui) : newsSlim(ui);
+  const body = sub === 'market' ? tplLandMarketTab(ui) : sub === 'event' ? tplLandEvent(ui) : tplLandHome(ui);
+  // v8.0.0: 어느 서브 탭이든 한 줄 압축 뉴스(카드형 118px 고정 크롬 제거)
+  const news = newsSlim(ui);
   return `${landSummaryBar(ui)}${landTabBar(ui)}${news}${body}`;
 }
 
-/* ───────────── 🏠 내 부동산·수령 ───────────── */
+/* ───────────── 🏠 영지 (v8.0.0) ─────────────
+ * 첫 화면 고정 크롬(요약 111 + 서브탭 41 + 호재 카드 118 + 필터 칩 24 = 294px)을 없애고
+ * 지도 + 접힘 카드 5장으로 정리했다. 보유 매물 목록은 '매물' 탭으로 옮겨 영지 첫 화면을 2~3화면으로 줄인다.
+ */
 function tplLandHome(ui) {
+  return `${regionMapCard(ui)}
+  ${investDashboardCard(ui)}
+  ${regionSetCard(ui)}
+  ${landmarkCard(ui)}
+  ${landSynergyCard(ui)}
+  ${landBuffDetailCard(ui)}
+  ${expeditionCard(ui)}`;
+}
+
+/* ───────────── 🛒 매물 — 보유 매물 + 전국 시장 ───────────── */
+function tplLandMarketTab(ui) {
+  return `${holdingsCard(ui)}${tplLandMarket(ui)}`;
+}
+
+/* ───────────── 🎪 이벤트 — 경매·지정가·은행·성채·메가·거래 기록 ───────────── */
+function tplLandEvent(ui) {
+  return `${auctionCard(ui)}${limitOrdersCard(ui)}${bankCard(ui)}${citadelCard(ui)}${megaProjectCard(ui)}${tradeRecordCard(ui)}`;
+}
+
+function holdingsCard(ui) {
   const s = ui.s;
   const p = portfolioOf(s);
-  const buffs = computeBuffs(s);
   // 보유 매물이 많을 때 세로 스크롤이 길어지지 않게 6곳부터 접어 둔다(펼치기 토글)
   const LIMIT = 6;
   const open = !!ui.landHoldAll;
@@ -2496,7 +2555,7 @@ function tplLandHome(ui) {
     ? `<button class="btn small ghost block" style="margin-top:8px" type="button" data-action="land-hold-all">${open ? `접기 (상위 ${LIMIT}곳만)` : `전체 ${p.holdings.length}곳 보기`}</button>`
     : '';
 
-  const holdCard = `
+  return `
   <div class="card hold-card">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🏘️</span>보유 매물<small>${p.cities}곳 · ${fmt(p.pyeong)}평</small></div>
@@ -2514,12 +2573,17 @@ function tplLandHome(ui) {
     })()}
     <div class="row gap6" style="margin-top:9px">
       <button class="btn small ghost wide" type="button" data-action="land-sub" data-value="market">🛒 매물 투자</button>
-      <button class="btn small ghost wide" type="button" data-action="land-sub" data-value="buff">⚡ 건물주 버프</button>
+      <button class="btn small ghost wide" type="button" data-action="land-sub" data-value="home">🏠 영지 지도</button>
     </div>
   </div>`;
+}
 
-  const recCard = `
-  <div class="card land-rec">
+function tradeRecordCard(ui) {
+  const s = ui.s;
+  const p = portfolioOf(s);
+  const buffs = computeBuffs(s);
+  return `
+  <div class="card land-rec" data-fold="trade-rec">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">📋</span>거래 기록<small>거래세 ${(LAND.feeRate * 100).toFixed(1)}%</small></div>
       <span class="tiny" style="color:${buffs.active ? 'var(--green)' : 'var(--dim)'}">${buffs.active ? '건물주 버프 적용 중' : '버프 없음'}</span>
@@ -2538,23 +2602,16 @@ function tplLandHome(ui) {
     return `<div class="kv" style="margin-top:7px"><span class="k">🔨 급매 경매 낙찰</span><span class="v">${bids}건 · 아낀 골드 💰${formatGold(Math.max(0, Number(auc.saved) || 0))}</span></div>`;
   })()}
   </div>`;
-
-  const f = LAND_HOME_FILTERS.includes(ui && ui.landHomeFilter) ? ui.landHomeFilter : 'all';
-  const bar = landHomeFilterBar(ui);
-  if (f === 'holdings') return `${bar}${holdCard}${regionSetMini(ui)}${recCard}`;
-  if (f === 'events') return `${bar}${invasionCard(ui)}${auctionCard(ui)}${regionMapCard(ui)}`;
-  if (f === 'invest') return `${bar}${bankCard(ui)}${limitOrdersCard(ui)}${investDashboardCard(ui)}${recCard}`;
-  return `${bar}${invasionCard(ui)}${auctionCard(ui)}${regionMapCard(ui)}${regionSetMini(ui)}${holdCard}${bankCard(ui)}${limitOrdersCard(ui)}${investDashboardCard(ui)}${recCard}`;
 }
 
 /* ───────────── 🛒 매물 투자 (v6.5.0: buildMarketList / tplLandMarket 는 ui-land.js 로 분리) ───────────── */
 
 /* ───────────── ⚡ 건물주 버프 · 세트 · 펫 ───────────── */
-function tplLandBuff(ui) {
+/** ⚡ 건물주 버프 상세 — 영지 접힘 카드 1장 (합계는 영지 요약 바 1곳에서만) */
+function landBuffDetailCard(ui) {
   const s = ui.s;
   const buffs = computeBuffs(s);
   const pr = buffProgress(s);
-
   const rows = [
     ['⚔️ 공격력', buffs.atkPct, pr.atk],
     ['💰 골드 획득', buffs.goldPct, pr.gold],
@@ -2571,49 +2628,18 @@ function tplLandBuff(ui) {
       </div>`,
     )
     .join('');
-
   const atkAll = buffs.atkPct + (buffs.setAtkPct || 0) + (buffs.landmarkAtkPct || 0);
   const goldAll = Math.round((buffs.goldPct + (buffs.setGoldPct || 0) + (buffs.landmarkGoldPct || 0)) * 10) / 10;
-  const hpAll = buffs.hpPct + (buffs.setHpPct || 0);
-  const critAll = Math.round((buffs.critPct + (buffs.setCritPct || 0)) * 10) / 10;
-  const dropAll = buffs.dropPct + (buffs.setDropPct || 0);
-  const cell = (cls, k, v, unit = '%') => `<div class="stat ${cls}"><div class="k">${k}</div><div class="v">${v}<small>${unit}</small></div></div>`;
-
-  const buffCard = `
-  <div class="card buff-card">
+  return `
+  <div class="card buff-card" data-fold="buff-detail">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">⚡</span>건물주 버프<small>영구 패시브</small></div>
-      <span class="tiny" style="color:${buffs.active ? 'var(--green)' : 'var(--dim)'}">${buffs.active ? `${buffs.buildings}곳 적용 중` : '미적용'}</span>
+      <span class="tiny" style="color:${buffs.active ? 'var(--green)' : 'var(--dim)'}">${buffs.active ? `${buffs.buildings}곳 · 공격 +${atkAll}% · 골드 +${goldAll}%` : '미적용'}</span>
     </div>
     ${rows}
-    <div class="tiny dim" style="margin-top:6px">매물을 사면 즉시 붙고, 팔면 그만큼 줄어듭니다.</div>
-  </div>`;
-
-  const nowCard = `
-  <div class="card buff-now">
-    <div class="card-head">
-      <div class="card-title"><span class="t-ico">🧮</span>현재 적용 수치<small>건물주 + 세트 + 랜드마크</small></div>
-      <span class="tiny dim">${buffs.cities}곳 · ${fmt(buffs.totalPyeong)}평</span>
-    </div>
-    <div class="stat-grid four">
-      ${cell('atk', '공격력', `+${atkAll}`)}
-      ${cell('gold', '골드', `+${goldAll}`)}
-      ${cell('hp', '최대 체력', `+${hpAll}`)}
-      ${cell('crit', '치명타', `+${critAll}`)}
-      ${cell('', '드롭률', `+${dropAll}`)}
-      ${cell('', '매물 평가', formatGold(buffs.landValue), '')}
-      ${cell('', '권역 세트', `${buffs.setCount || 0}<small>/${buffs.setTotal || 7}</small>`, '')}
-      ${cell('', '랜드마크', `${buffs.landmarkCount || 0}`, '개')}
-    </div>
+    <div class="tiny dim" style="margin-top:6px">매물을 사면 즉시 붙고, 팔면 그만큼 줄어듭니다. 매물 평가 ${formatGold(buffs.landValue)} · 권역 세트 ${buffs.setCount || 0}/${buffs.setTotal || 7} · 랜드마크 ${buffs.landmarkCount || 0}개</div>
     <button class="btn small blue block" style="margin-top:9px" type="button" data-action="land-sub" data-value="market">🛒 매물 더 사러 가기</button>
   </div>`;
-
-  const f = LAND_BUFF_FILTERS.includes(ui && ui.landBuffFilter) ? ui.landBuffFilter : 'all';
-  const bar = landBuffFilterBar(ui);
-  if (f === 'pet') return `${bar}${petCard(ui)}${expeditionCard(ui)}`;
-  if (f === 'citadel') return `${bar}${citadelCard(ui)}${megaProjectCard(ui)}${landmarkCard(ui)}`;
-  if (f === 'buff') return `${bar}${buffCard}${regionSetCard(ui)}${landSynergyCard(ui)}${nowCard}`;
-  return `${bar}${buffCard}${petCard(ui)}${expeditionCard(ui)}${citadelCard(ui)}${megaProjectCard(ui)}${regionSetCard(ui)}${landmarkCard(ui)}${landSynergyCard(ui)}${nowCard}`;
 }
 
 /* ══════════════════════════ 설정 ══════════════════════════ */
@@ -2646,49 +2672,49 @@ function tplSettings(ui) {
   const prevSave = (ui.app && ui.app.prevSave) || null;
   const tp = towerProgress(s);
   const petEvoCount = PETS.filter((d) => petEvo(s, d.id) > 0).length;
+  const rb = rebirthStatus(s);
+
+  // 정보 카드: '내 기록' + '앱 정보'를 1장으로 통합(기본 3줄, 나머지는 접힘)
+  const infoCard = `
+  <div class="card info-card" data-fold="info">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">📊</span>내 기록 · 앱 정보<small>v${APP_VERSION}</small></div>
+      <span class="tiny dim">Lv.${s.level} · S${Math.max(s.peakStage || 1, s.maxStage || 1)} · ♾️${rb.count}회</span>
+    </div>
+    <div class="kv"><span class="k">최고 스테이지</span><span class="v">S${s.peakStage || s.maxStage} · 이번 회차 S${s.maxStage}</span></div>
+    <div class="kv"><span class="k">플레이 시간</span><span class="v">${mins < 60 ? `${mins}분` : `${Math.floor(mins / 60)}시간 ${mins % 60}분`}</span></div>
+    <div class="kv"><span class="k">총자산</span><span class="v">💰${formatGold(p.totalAsset)}</span></div>
+    <div class="kv"><span class="k">총 처치 · 보스</span><span class="v">${fmt(s.totalKills)} · ${fmt(s.bossKills)}</span></div>
+    <div class="kv"><span class="k">누적 사냥 골드</span><span class="v">${formatGold(s.records.totalGold || 0)}</span></div>
+    <div class="kv"><span class="k">뽑기 횟수</span><span class="v">${fmt((s.gacha && s.gacha.total) || 0)}회 · 최고 ${rarityName((s.gacha && s.gacha.best) || 'common')}</span></div>
+    <div class="kv"><span class="k">미션 완료</span><span class="v">${qs.done}/${QUESTS.length}</span></div>
+    <div class="kv"><span class="k">버전</span><span class="v">${APP_VERSION} · 게스트 통합</span></div>
+    <div class="kv"><span class="k">전직</span><span class="v">${jobOf(s).badge} ${esc(jobOf(s).name)}</span></div>
+    <div class="kv"><span class="k">환생 · 특성</span><span class="v">♾️ ${rb.count}회 · 초월석 ${fmt(rb.points)}P · ${esc(traitSummary(s))}</span></div>
+    <div class="kv"><span class="k">동료 펫</span><span class="v">${petDef(s.pet && s.pet.equipped) ? `${petDef(s.pet.equipped).emoji} ${esc(petStageInfo(s, s.pet.equipped).name)}` : '없음'} · ★${petEvoCount}마리 / ${PETS.length}종</span></div>
+    <div class="kv"><span class="k">황금 던전</span><span class="v">${fmt((s.dungeon && s.dungeon.runs) || 0)}회 · 최고 피해 ${fmt((s.dungeon && s.dungeon.best) || 0)}</span></div>
+    <div class="kv"><span class="k">도전의 탑</span><span class="v">🗼 최고 ${tp.best}/${tp.max}층 · 도전 ${fmt((s.tower && s.tower.runs) || 0)}회</span></div>
+    <div class="kv"><span class="k">일일 보스</span><span class="v">🌟 최고 ${fmt((s.dailyBoss && s.dailyBoss.best) || 0)} 피해 · 오늘 ${(s.dailyBoss && s.dailyBoss.used) || 0}/${DAILY.attempts}회</span></div>
+    <div class="kv"><span class="k">장비</span><span class="v">${GEAR_ITEMS.length}종 장비 · 5부위 인벤토리</span></div>
+    <div class="kv"><span class="k">도감 · 업적</span><span class="v">수집 ${c.pct}% · 업적 ${achClaimed}/${ACHIEVEMENTS.length}${achReady ? ` (⚡${achReady})` : ''}</span></div>
+    <div class="kv"><span class="k">경제</span><span class="v">골드 하나 (사냥 = 부동산)</span></div>
+    <div class="kv"><span class="k">부동산</span><span class="v">전국 ${CITIES.length}개 시군구 · 권역 세트 ${setB.activeCount || 0}/${setB.total || 7}</span></div>
+    <div class="kv"><span class="k">랜드마크</span><span class="v">🏛️ ${lms.count}개 · 임대 보너스</span></div>
+    <div class="kv"><span class="k">호재 뉴스</span><span class="v">3분마다 갱신 · 기록 ${(s.news && s.news.seen ? s.news.seen.length : 0)}종</span></div>
+    <div class="kv"><span class="k">저장 위치</span><span class="v">localStorage</span></div>
+    <div class="row gap6" style="margin-top:9px">
+      <button class="btn small ghost wide" type="button" data-action="open-codex" data-value="monster">📖 도감 열기</button>
+      <button class="btn small ghost wide" type="button" data-action="open-achievements">🏆 업적 ${achClaimed}/${ACHIEVEMENTS.length}${achReady ? ' ⚡' : ''}</button>
+    </div>
+    <div class="note" style="margin-top:9px">
+      방치 보상은 최대 <b>${ECON.offlineCapHours}시간</b>까지 정산됩니다. 화면을 닫아도 자동으로 저장됩니다.
+    </div>
+  </div>`;
 
   return `
   ${cloudCard(ui)}
 
   ${rankCard(ui)}
-
-  ${installCard(ui)}
-
-  ${rebirthCard(ui)}
-
-  <div class="card">
-    <div class="card-head">
-      <div class="card-title"><span class="t-ico">📖</span>도감 · 업적<small>수집 메타</small></div>
-      <span class="tiny" style="color:var(--gold)">수집 ${c.pct}%</span>
-    </div>
-    <div class="tiny muted">몬스터 ${c.monsters.seen}/${c.monsters.total} · 지역 ${c.cities.seen}/${c.cities.total} · 장비 ${c.gear.seen}/${c.gear.total} · 펫 ${c.pets.seen}/${c.pets.total}</div>
-    <div class="prog" style="margin-top:7px"><i style="width:${c.pct}%"></i></div>
-    <div class="tiny dim" style="margin-top:6px">${
-      c.milestone ? `마일스톤 ${c.milestone.pct}% · ${c.milestone.label} 적용 중` : '마일스톤 10% 부터 영구 보너스'
-    }${c.next ? ` · 다음 ${c.next.pct}%` : ' · 전체 달성'}</div>
-    <div class="row gap6" style="margin-top:9px">
-      <button class="btn small ghost wide" type="button" data-action="open-codex" data-value="monster">📖 도감 열기</button>
-      <button class="btn small ghost wide" type="button" data-action="open-achievements">🏆 업적 ${achClaimed}/${ACHIEVEMENTS.length}${achReady ? ' ⚡' : ''}</button>
-    </div>
-  </div>
-  <div class="card">
-    <div class="card-head"><div class="card-title"><span class="t-ico">🏆</span>내 기록</div><span class="tiny dim">게스트</span></div>
-    <div class="stat-grid">
-      <div class="stat atk"><div class="k">최고 스테이지</div><div class="v">S${s.peakStage || s.maxStage}</div></div>
-      <div class="stat hp"><div class="k">이번 회차 도달</div><div class="v">S${s.maxStage}</div></div>
-      <div class="stat hp"><div class="k">총 처치</div><div class="v">${fmt(s.totalKills)}</div></div>
-      <div class="stat crit"><div class="k">보스 처치</div><div class="v">${fmt(s.bossKills)}</div></div>
-      <div class="stat gold"><div class="k">누적 사냥 골드</div><div class="v">${formatGold(s.records.totalGold || 0)}</div></div>
-      <div class="stat"><div class="k">플레이 시간</div><div class="v">${mins < 60 ? `${mins}분` : `${Math.floor(mins / 60)}시간 ${mins % 60}분`}</div></div>
-      <div class="stat"><div class="k">총자산</div><div class="v">💰${formatGold(p.totalAsset)}</div></div>
-      <div class="stat gold"><div class="k">뽑기 횟수</div><div class="v">${fmt((s.gacha && s.gacha.total) || 0)}회</div></div>
-      <div class="stat crit"><div class="k">최고 장비 등급</div><div class="v">${rarityName((s.gacha && s.gacha.best) || 'common')}</div></div>
-      <div class="stat gold"><div class="k">미션 완료</div><div class="v">${qs.done}/${QUESTS.length}</div></div>
-      <div class="stat"><div class="k">도감 수집</div><div class="v">${c.pct}%</div></div>
-      <div class="stat crit"><div class="k">환생</div><div class="v">${rebirthStatus(s).count}회</div></div>
-      <div class="stat gold"><div class="k">초월석</div><div class="v">${fmt(rebirthStatus(s).points)}P</div></div>
-    </div>
-  </div>
 
   <div class="card save-card">
     <div class="card-head">
@@ -2700,7 +2726,7 @@ function tplSettings(ui) {
       <span>⭐ Lv.<b>${s.level}</b></span>
       <span>🏔️ S<b>${Math.max(s.peakStage || 1, s.maxStage || 1)}</b></span>
       <span>🏢 <b>${p.cities}</b>곳</span>
-      <span>♾️ <b>${rebirthStatus(s).count}</b>회</span>
+      <span>♾️ <b>${rb.count}</b>회</span>
     </div>
     <div class="row gap6" style="margin-top:9px">
       <button class="btn small blue wide" type="button" data-action="save-export">📤 내보내기 (복사)</button>
@@ -2713,7 +2739,7 @@ function tplSettings(ui) {
   </div>
 
   <div class="card">
-    <div class="card-head"><div class="card-title"><span class="t-ico">⚙️</span>설정</div><span class="tiny dim">v${APP_VERSION}</span></div>
+    <div class="card-head"><div class="card-title"><span class="t-ico">⚙️</span>게임 설정</div><span class="tiny dim">v${APP_VERSION}</span></div>
     <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
       <span class="tiny">자동 보스 전환</span>
       <button class="switch ${s.autoBoss ? 'on' : ''}" data-action="toggle-auto"></button>
@@ -2746,41 +2772,14 @@ function tplSettings(ui) {
       <span class="tiny">저장 방식</span>
       <span class="tiny" style="color:var(--gold)">이 기기에 자동 저장 (로그인 없음)</span>
     </div>
-    <button class="btn small block" style="margin-top:10px;color:#ffb3b3;border-color:rgba(255,107,107,0.3)" data-action="reset">게임 초기화</button>
+    <div class="row gap6" style="margin-top:9px">
+      <button class="btn small ghost wide" type="button" data-action="guide-jump" data-value="gear:job">✨ 전직·환생</button>
+      <button class="btn small ghost wide" type="button" data-action="open-achievements">🏆 업적</button>
+    </div>
+    <button class="btn small block" style="margin-top:8px;color:#ffb3b3;border-color:rgba(255,107,107,0.3)" data-action="reset">게임 초기화</button>
   </div>
 
-  <div class="card">
-    <div class="card-head"><div class="card-title"><span class="t-ico">ℹ️</span>앱 정보</div></div>
-    <div class="kv"><span class="k">버전</span><span class="v">${APP_VERSION} · 게스트 통합</span></div>
-    <div class="kv"><span class="k">전직</span><span class="v">${jobOf(s).badge} ${esc(jobOf(s).name)}</span></div>
-    <div class="kv"><span class="k">환생 · 특성</span><span class="v">♾️ ${rebirthStatus(s).count}회 · ${esc(traitSummary(s))}</span></div>
-    <div class="kv"><span class="k">동료 펫</span><span class="v">${petDef(s.pet && s.pet.equipped) ? `${petDef(s.pet.equipped).emoji} ${esc(petStageInfo(s, s.pet.equipped).name)}${petEvo(s, s.pet.equipped) > 0 ? ` (${petStageInfo(s, s.pet.equipped).def.label})` : ''}` : '없음'}</span></div>
-    <div class="kv"><span class="k">펫 진화</span><span class="v">★${petEvoCount}마리 / ${PETS.length}종</span></div>
-    <div class="kv"><span class="k">황금 던전</span><span class="v">${fmt((s.dungeon && s.dungeon.runs) || 0)}회 · 최고 피해 ${fmt((s.dungeon && s.dungeon.best) || 0)}</span></div>
-    <div class="kv"><span class="k">도전의 탑</span><span class="v">🗼 최고 ${tp.best}/${tp.max}층 · 도전 ${fmt((s.tower && s.tower.runs) || 0)}회</span></div>
-    <div class="kv"><span class="k">일일 보스</span><span class="v">🌟 최고 ${fmt((s.dailyBoss && s.dailyBoss.best) || 0)} 피해 ${s.dailyBoss && s.dailyBoss.best > 0 ? `(${s.dailyBoss.bestGrade})` : ''} · 오늘 ${(s.dailyBoss && s.dailyBoss.used) || 0}/${DAILY.attempts}회</span></div>
-    <div class="kv"><span class="k">장비</span><span class="v">35종 장비 · 5부위 인벤토리</span></div>
-    <div class="kv"><span class="k">도감 · 업적</span><span class="v">수집 ${c.pct}% · 업적 ${achClaimed}/${ACHIEVEMENTS.length}</span></div>
-    <div class="kv"><span class="k">경제</span><span class="v">골드 하나 (사냥 = 부동산)</span></div>
-    <div class="kv"><span class="k">부동산</span><span class="v">전국 ${CITIES.length}개 시군구</span></div>
-    <div class="kv"><span class="k">권역 세트</span><span class="v">${setB.activeCount || 0}/${setB.total || 7} 발동</span></div>
-    <div class="kv"><span class="k">랜드마크</span><span class="v">🏛️ ${lms.count}개 · 임대 보너스</span></div>
-    <div class="kv"><span class="k">호재 뉴스</span><span class="v">3분마다 갱신 · 기록 ${(s.news && s.news.seen ? s.news.seen.length : 0)}종</span></div>
-    <div class="kv"><span class="k">저장 위치</span><span class="v">localStorage</span></div>
-    <div class="note" style="margin-top:9px">
-      방치 보상은 최대 <b>${ECON.offlineCapHours}시간</b>까지 정산됩니다.
-      화면을 닫아도 자동으로 저장됩니다.
-    </div>
-  </div>
+  ${installCard(ui)}
 
-  <div class="card">
-    <div class="card-head"><div class="card-title"><span class="t-ico">📖</span>이렇게 하면 빠릅니다</div></div>
-    <div class="tiny muted" style="line-height:1.9">
-      1. 사냥으로 <b>골드</b>를 모읍니다.<br>
-      2. 부동산 탭에서 <b>회수 빠른(군 지역)</b> 매물부터 삽니다 — 첫 매물은 1분 안쪽.<br>
-      3. 보유 지역이 늘면 <b>공격력 +1.5%/곳</b> 버프가 붙어 사냥이 빨라집니다.<br>
-      4. 쌓인 <b>임대수익</b>을 수령해 매물을 늘리거나 강화석 재료를 모읍니다.<br>
-      5. 10스테이지부터는 장비 강화 + 건물주 버프를 함께 챙겨야 보스가 뚫립니다.
-    </div>
-  </div>`;
+  ${infoCard}`;
 }

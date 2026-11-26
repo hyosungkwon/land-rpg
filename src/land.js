@@ -742,14 +742,27 @@ export function claimRent(state) {
 }
 
 /* ─────────────── 표기 ─────────────── */
+/** 천단위 콤마 — Intl(toLocaleString) 없이 계산한다(검증 샌드박스·구형 웹뷰 동일 결과) */
+const commas = (n) => {
+  const v = Math.floor(Number(n) || 0);
+  const neg = v < 0;
+  const s = String(Math.abs(v));
+  let out = '';
+  for (let i = 0; i < s.length; i++) {
+    if (i && (s.length - i) % 3 === 0) out += ',';
+    out += s[i];
+  }
+  return (neg ? '-' : '') + out;
+};
+
 /** 골드 축약 표기: 12,345 → "1.2만" / 3,400,000 → "340만" / 12,000,000 → "1,200만" */
 export function formatGold(n) {
   const v = Math.floor(Number(n) || 0);
   const abs = Math.abs(v);
   if (abs >= 1e8) return `${(v / 1e8).toFixed(2)}억`;
-  if (abs >= 1e6) return `${Math.round(v / 1e4).toLocaleString()}만`;
+  if (abs >= 1e6) return `${commas(Math.round(v / 1e4))}만`;
   if (abs >= 1e4) return `${(v / 1e4).toFixed(1)}만`;
-  return v.toLocaleString('ko-KR');
+  return commas(v);
 }
 
 export function formatWon(n) {

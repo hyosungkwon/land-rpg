@@ -188,7 +188,9 @@ export function normalizeState(raw, now = nowMs()) {
     ? s.land.assetHistory.filter((h) => h && isFinite(h.t) && isFinite(h.v)).slice(-288)
     : [];
   s.land.page = Math.max(1, Math.floor(num(s.land.page, 1)));
-  if (!['home', 'market', 'buff'].includes(s.land.sub)) s.land.sub = 'home';
+  // v8.0.0: 서브 탭 재편 — 저장값 'buff'(v7.x 버프·세트·펫 탭)는 'event' 로 안전하게 옮긴다
+  if (!['home', 'market', 'event', 'buff'].includes(s.land.sub)) s.land.sub = 'home';
+  if (s.land.sub === 'buff') s.land.sub = 'event';
   if (!['all', '0', '1', '2', 'owned', 'fav'].includes(String(s.land.tier))) s.land.tier = 'all';
   if (s.land.regionFilter !== 'all' && !SETS_BY_ID[s.land.regionFilter]) s.land.regionFilter = 'all';
   if (!['roi', 'price', 'trend', 'name'].includes(s.land.sort)) s.land.sort = 'roi';

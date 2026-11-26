@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "7.9.1"
+EXPECTED_VER = "8.0.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui.js", "src/sound.js"]
 
@@ -346,16 +346,18 @@ def main():
     section("[4] 탭 템플릿 렌더 검사 (DOM 없이)")
     ui_extras = {
         "src/ui.js": (
-            "exports.__tpls = { hunt: tplHunt, gear: tplGear, land: tplLand, settings: tplSettings, market: buildMarketList };"
+            "exports.__tpls = { hunt: tplHunt, gear: tplGear, land: tplLand, settings: tplSettings, market: buildMarketList, map: regionMapCard };"
             "exports.__HUNT_SUBS = HUNT_SUBS.map(([k]) => k);"
             "exports.__huntSub = (ui, sub) => { ui.huntSub = sub; return tplHunt(ui); };"
             "exports.__gearSub = (ui, sub) => { ui.gearSub = sub; return tplGear(ui); };"
+            "exports.__GEAR_SUBS = GEAR_SUBS.map(([k]) => k);"
             "exports.__gearBadges = (ui) => gearBadges(ui);"
             "exports.__huntAll = (ui) => __HUNT_SUBS.map((k) => __huntSub(ui, k)).join('');"
             "exports.__badges = (ui) => huntBadges(ui);"
             "exports.__LAND_SUBS = LAND_SUBS.map(([k]) => k);"
             "exports.__LAND_LABELS = LAND_SUBS.map(([k, i, l]) => i + ' ' + l);"
             "exports.__landSub = (ui, sub) => { ui.s.land.sub = sub; return tplLand(ui); };"
+            "exports.__map = (ui) => regionMapCard(ui);"
             "exports.__lbadges = (ui) => landBadges(ui);"
         )
     }
@@ -784,14 +786,17 @@ def main():
       const buffs = computeBuffs(s, 0);
       const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(7), boss: null, dungeon: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'hunt', el: {} };
       const hunt = __huntAll(ui);
-      s.land.sub = 'buff';
+      const job = __gearSub(ui, 'job');
+      const collect = __gearSub(ui, 'collect');
+      s.land.sub = 'home';
       const land = __tpls.land(ui);
       const set = __tpls.settings(ui);
-      return { hunt, land, set, bad: /undefined|NaN|\\[object Object\\]/.test(hunt + land + set) };
+      return { hunt, job, collect, land, set, bad: /undefined|NaN|\\[object Object\\]/.test(hunt + job + collect + land + set) };
     """)
     ok(tpl2["bad"] is False, "v3.2 템플릿에 undefined/NaN 누출 없음")
-    ok("✨ 전직 가능!" in tpl2["hunt"] and "황금 던전" in tpl2["hunt"] and "동료 펫" in tpl2["hunt"], "사냥 탭에 전직·던전·펫 카드", "")
-    ok("내 동료 펫" in tpl2["land"] and "동행 중" in tpl2["land"], "건물주 버프 탭에도 펫 카드", "")
+    ok("✨ 전직 가능!" in tpl2["job"], "성장 → 전직·환생 탭에 전직 카드(v8)", "")
+    ok("황금 던전" in tpl2["hunt"] and "동료 펫" in tpl2["hunt"], "사냥 탭에 도전·펫 카드(v8: 도전/전투 서브)", "")
+    ok("동료 펫" in tpl2["collect"], "성장 → 수집 탭에 펫 카드(v8)", "")
     ok("전직" in tpl2["set"] and "황금 던전" in tpl2["set"], "설정 탭에 전직/던전 기록", "")
 
     rsrc2 = read("src/render.js")
@@ -1071,7 +1076,7 @@ def main():
       const done = defaultState(0);
       done.quests = { idx: QUESTS.length, claimed: QUESTS.map(q => q.id), done: QUESTS.length, at: 0 };
       const ui2 = { s: done, battle: { stats: calcStats(done, {}), def: stageDef(1), boss: null, player: { hp: 1 } }, app: { buffs: {} }, logs: [], tab: 'hunt', el: {}, install: { hidden: true } };
-      const huntDone = __huntSub(ui2, 'quest');
+      const huntDone = __huntSub(ui2, 'mission');
       return {
         hunt, settings, huntDone,
         bad: /undefined|NaN|\\[object Object\\]/.test(hunt + settings + huntDone),
@@ -1303,7 +1308,7 @@ def main():
       const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(5), boss: null, dungeon: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'land', el: {}, install: { hidden: true } };
       const out = {};
       for (const sub of ['home', 'market', 'buff']) { s.land.sub = sub; out[sub] = __tpls.land(ui); }
-      out.hunt = __huntSub(ui, 'skill');
+      out.hunt = __huntSub(ui, 'battle');
       out.marketList = __tpls.market(ui).html;
       const empty = defaultState(0);
       const ui2 = { s: empty, battle: { stats: calcStats(empty, {}), def: stageDef(1), boss: null, player: { hp: 1 } }, app: { buffs: computeBuffs(empty, 0) }, logs: [], tab: 'land', el: {}, install: { hidden: true } };
@@ -1315,12 +1320,12 @@ def main():
     """)
     ok(tpl4["bad"] is False, "v3.4 템플릿에 undefined/NaN 누출 없음")
     ok(all("📰 부동산 호재" in tpl4[k] for k in ["home", "market", "buff"]), "부동산 탭 상단 뉴스 배너(모든 서브탭)", "")
-    ok("data-live=\"news-left\"" in tpl4["home"] and "data-live=\"news-prog\"" in tpl4["home"], "뉴스 남은 시간·진행 바 실시간 갱신", "")
-    ok("권역 세트" in tpl4["home"] and "권역 세트" in tpl4["buff"] and "서울권" in tpl4["buff"], "내 부동산·건물주 버프 탭에 권역 세트 현황", "")
-    ok("랜드마크" in tpl4["buff"] and "Lv.2" in tpl4["buff"], "건물주 버프 탭에 랜드마크 현황", "")
-    ok('data-action=\"landmark\"' in tpl4["home"] and 'data-action=\"landmark\"' in tpl4["buff"], "랜드마크 건설/업그레이드 버튼", "")
-    ok("아직 랜드마크가 없습니다" in tpl4["emptyBuff"] and "📰 부동산 호재" in tpl4["emptyHome"], "새 게임에서도 뉴스·랜드마크 카드가 깨지지 않음", "")
-    ok("📰" in tpl4["hunt"], "사냥 탭에 현재 호재 요약", "")
+    ok('data-live="news-left"' in tpl4["home"] and 'data-live="news-prog"' in tpl4["home"], "뉴스 남은 시간·진행 바 실시간 갱신(압축 뉴스)", "")
+    ok("권역 세트" in tpl4["home"] and "서울권" in tpl4["home"], "영지 탭에 권역 세트 현황(v8)", "")
+    ok("랜드마크" in tpl4["home"] and "Lv.2" in tpl4["home"], "영지 탭에 랜드마크 현황(v8)", "")
+    ok('data-action="landmark"' in tpl4["market"], "보유 매물에서 랜드마크 건설/업그레이드 버튼(v8: 매물 탭)", "")
+    ok("아직 랜드마크가 없습니다" in tpl4["emptyHome"] and "📰 부동산 호재" in tpl4["emptyHome"], "새 게임에서도 뉴스·랜드마크 카드가 깨지지 않음", "")
+    ok("📰" in tpl4["home"], "부동산 탭에 현재 호재 요약", "")
 
     regsrc = read("src/region.js")
     uisrc3 = read("src/ui.js")
@@ -1334,7 +1339,7 @@ def main():
     ok("news" in lsrc and "pricePct" in lsrc and "setAtkPct" in lsrc, "시세·임대수익에 뉴스·세트 반영")
     ok(all(x in stsrc2 for x in ["recordNews", "normalizeNews", "sanitizeLandmarks", "setAtkPct"]), "state.js 저장 정규화·세트 보너스 반영")
     ok(all(x in appsrc3 for x in ["checkNews", "openLandmark", "doBuildLandmark", "recordNews", "ownedInNews"]), "뉴스·랜드마크 액션 연결(app.js)")
-    ok(all(x in uisrc3 for x in ["newsBanner", "regionSetCard", "regionSetMini", "landmarkCard", 'data-action="landmark"']), "뉴스·세트·랜드마크 UI 구현")
+    ok(all(x in uisrc3 for x in ["newsSlim", "regionSetCard", "regionMapCard", "landmarkCard", 'data-action="landmark"']), "뉴스·세트·랜드마크·지도 UI 구현")
     ok(all(x in css3 for x in [".news-card", ".tag.hot", ".lm-chip", ".set-row", ".lm-step"]), "v3.4 뉴스·세트·랜드마크 CSS")
 
     section("[11] ♾️ 환생(초월) · 무한 스테이지 (v3.5.0)")
@@ -1522,16 +1527,17 @@ def main():
       const set = __tpls.settings(ui);
       const lowS = defaultState(0);
       const ui2 = { s: lowS, battle: { stats: calcStats(lowS, {}), def: stageDef(1), boss: null, player: { hp: 1 } }, app: { buffs: computeBuffs(lowS, 0) }, logs: [], tab: 'hunt', el: {}, install: { hidden: true } };
-      const low = __huntSub(ui2, 'growth');
+      const low = __gearSub(ui2, 'job');
+      const jobRich = __gearSub(ui, 'job');
       const deepS = defaultState(0);
       deepS.stage = 100; deepS.maxStage = 100; deepS.level = 70;
       const ui3 = { s: deepS, battle: { stats: calcStats(deepS, {}), def: stageDef(100), boss: null, player: { hp: 1 } }, app: { buffs: computeBuffs(deepS, 0) }, logs: [], tab: 'hunt', el: {}, install: { hidden: true } };
-      const deepHunt = __huntSub(ui3, 'skill');
-      return { hunt, set, low, deepHunt, bad: /undefined|NaN|\\[object Object\\]/.test(hunt + set + low + deepHunt) };
+      const deepHunt = __huntSub(ui3, 'battle');
+      return { hunt, set, low, jobRich, deepHunt, bad: /undefined|NaN|\\[object Object\\]/.test(hunt + set + low + jobRich + deepHunt) };
     """)
     ok(tpl5["bad"] is False, "v3.5 템플릿에 undefined/NaN 누출 없음")
-    ok("환생 (초월)" in tpl5["hunt"] and 'data-action="rebirth"' in tpl5["hunt"] and 'data-action="rebirth-traits"' in tpl5["hunt"], "사냥 탭에 환생 카드·버튼", "")
-    ok("환생하기 · +" in tpl5["hunt"] and "초월석" in tpl5["hunt"] and "초월 특성" in tpl5["hunt"], "환생 카드에 예정 포인트·획득 특성 요약", "")
+    ok("환생 (초월)" in tpl5["jobRich"] and 'data-action="rebirth"' in tpl5["jobRich"] and 'data-action="rebirth-traits"' in tpl5["jobRich"], "성장 → 전직·환생 탭에 환생 카드·버튼(v8)", "")
+    ok("환생하기 · +" in tpl5["jobRich"] and "초월석" in tpl5["jobRich"] and "초월 특성" in tpl5["jobRich"], "환생 카드에 예정 포인트·획득 특성 요약", "")
     ok("S20 해금" in tpl5["low"] and "환생 · 조건 미달" in tpl5["low"], "S20 미만에서는 잠금 상태로 안내", "")
     ok("환생" in tpl5["set"] and "초월석" in tpl5["set"], "설정 탭에도 환생 카드·기록", "")
     ok("∞" in tpl5["deepHunt"] and "inf-badge" in tpl5["deepHunt"], "S31+ 스테이지에 ∞ 배지 표시", "")
@@ -2045,6 +2051,7 @@ def main():
     subs = js(ctx2, """
       const s = defaultState(0);
       s.gold = 20000; s.shards = 120; s.level = 12; s.stage = 7; s.maxStage = 8; s.totalKills = 321;
+      s.land.owned[CITIES[0].key] = 10; // 침공 카드가 출격 버튼을 그리도록 매물 1곳 보유
       const buffs = computeBuffs(s, 0);
       const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(7), boss: null, dungeon: null, player: { hp: 100 } }, app: { buffs }, logs: [{ t: '00:01', text: '테스트 로그', kind: '' }], tab: 'hunt', el: {} };
       const out = {};
@@ -2052,48 +2059,47 @@ def main():
       out.fallback = __huntSub(ui, 'bogus');
       out.keys = __HUNT_SUBS;
       out.bad = Object.fromEntries(Object.entries(out).filter(([k, v]) => typeof v === 'string' && /undefined|NaN|\\[object Object\\]/.test(v)).map(([k]) => [k, true]));
-      out.badgeAttrs = ['skill', 'growth', 'quest'].map((k) => (out[k].match(new RegExp('data-badge="' + k + '"')) || []).length);
+      out.badgeAttrs = __HUNT_SUBS.map((k) => (out[k].match(new RegExp('data-badge="' + k + '"')) || []).length);
       return out;
     """)
-    ok(subs["keys"] == ["skill", "growth", "quest"], "사냥 탭 서브 탭 3종(스킬·스탯/전직·환생/미션·도감)", json.dumps(subs["keys"], ensure_ascii=False))
-    ok(all(x in subs["skill"] for x in ["스킬·스탯", "전직·환생", "미션·도감", 'data-action="hunt-sub"']), "서브 탭 버튼 렌더·전환 액션 연결")
-    ok(all(x in subs["skill"] for x in ["전투 스탯", "피해 감소", "자연 회복", "골드 획득", "강화석 드롭", "강격", "전투 기록", "data-action=\"toggle-auto\""]), "스킬·스탯 탭 — 전투 스탯 요약 + 스킬 강화 + 자동 보스 + 접이식 기록")
-    ok(all(x in subs["growth"] for x in ["전직", "환생 (초월)", "황금 던전", "동료 펫", 'data-action="promote"', 'data-action="rebirth"', 'data-action="dungeon"', 'data-action="open-pets"']), "전직·환생 탭 — 전직·환생·던전·펫 카드/버튼")
-    ok(all(x in subs["quest"] for x in ["미션", "도감·업적", 'data-action="claim-quest"', 'data-action="open-codex"', 'data-action="open-achievements"', "수집"]), "미션·도감 탭 — 순차 미션 + 도감·업적 요약/버튼")
-    ok("황금 던전" not in subs["skill"] and "전투 스탯" not in subs["growth"] and "claim-quest" not in subs["skill"] and "황금 던전" not in subs["quest"], "각 서브 탭이 자기 카드만 싣는다(중복·스크롤 방지)")
-    ok('class="subtab active" type="button" role="tab" aria-selected="true" data-action="hunt-sub" data-value="skill"' in subs["fallback"], "잘못된 서브 값은 스킬·스탯으로 복구")
+    ok(subs["keys"] == ["battle", "challenge", "mission"], "사냥 탭 서브 탭 3종(전투/도전/미션) — v8.0.0 2층 내비", json.dumps(subs["keys"], ensure_ascii=False))
+    ok(all(x in subs["battle"] for x in ["⚔️ 전투", "🏆 도전", "📋 미션", 'data-action="hunt-sub"']), "서브 탭 버튼 3개 렌더·전환 액션 연결")
+    ok(all(x in subs["battle"] for x in ["전투 정보", "전투 스탯", "피해 감소", "자연 회복", "골드 획득", "강화석 드롭", "강격", "전투 기록", "CP", 'data-action="toggle-auto"']), "전투 탭 — 전투 정보 1장(스탯·DPS·CP) + 스킬 + 펫 1줄")
+    ok("dps-hero" in subs["battle"] and "toggle-fold" in subs["battle"] and 'data-live="live-dps"' in subs["battle"], "전투 정보 1줄 요약 + 접어서 DPS/스탯 펼치기")
+    ok(all(x in subs["challenge"] for x in ["영지 침공 방어전", "황금 던전", "도전의 탑", "일일 보스", "무한 균열", "기사단", 'data-action="invasion"', 'data-action="dungeon"', 'data-action="tower"', 'data-action="daily"', 'data-action="rift-start"', 'data-action="raid-attack"']), "도전 탭 — 침공·던전·탑·일일보스·균열·레이드 6종")
+    ok(all(x in subs["mission"] for x in ["오늘의 할 일", "7일 출석 체크", "영지 성장 패스", "미션", "도감·업적", 'data-action="todo-claim-all"', 'data-action="claim-quest"', 'data-action="open-codex"', 'data-action="open-achievements"']), "미션 탭 — 할 일 허브 + 출석·패스·미션·도감")
+    ok("황금 던전" not in subs["battle"] and "전투 정보" not in subs["challenge"] and "claim-quest" not in subs["battle"] and "황금 던전" not in subs["mission"] and "claim-quest" not in subs["challenge"], "각 서브 탭이 자기 카드만 싣는다(중복·스크롤 방지)")
+    ok('class="subtab active" type="button" role="tab" aria-selected="true" data-action="hunt-sub" data-value="battle"' in subs["fallback"], "잘못된 서브 값은 전투로 복구")
     ok(subs["bad"] == {}, "서브 탭 3종에 undefined/NaN 누출 없음", json.dumps(subs["bad"]))
     ok(subs["badgeAttrs"] == [1, 1, 1], "세 서브 탭 모두 알림 배지 자리 보유", json.dumps(subs["badgeAttrs"]))
 
     badges = js(ctx2, """
       const s = defaultState(0);
       s.level = 40; s.stage = 40; s.maxStage = 40; s.totalKills = 1000;
-      s.rebirth = { count: 0, points: 20, totalPoints: 0, traits: {}, bestStage: 40, at: 0 };
-      s.dungeonCooldown = 0;
       const buffs = computeBuffs(s, 0);
       const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(40), boss: null, dungeon: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'hunt', el: {} };
       const now = __badges(ui);
       const fresh = defaultState(0);
       const ui2 = { s: fresh, battle: { stats: calcStats(fresh, {}), def: stageDef(1), boss: null, player: { hp: 1 } }, app: { buffs: {} }, logs: [], tab: 'hunt', el: {} };
       const zero = __badges(ui2);
-      const html = __huntSub(ui, 'growth');
+      const html = __huntSub(ui, 'mission');
       return { now, zero, html };
     """)
-    ok(badges["now"]["quest"] >= 1, "미션 보상 수령 가능 → 미션·도감 탭 배지", json.dumps(badges["now"]))
-    ok(badges["now"]["growth"] >= 2, "전직 가능·특성 포인트 보유 → 전직·환생 탭 배지", json.dumps(badges["now"]))
-    ok('class="nb on" data-badge="quest">' in badges["html"] or 'class="nb on" data-badge="growth">' in badges["html"], "배지가 서브 탭 버튼에 실제로 표시됨")
-    ok(badges["zero"]["quest"] == 0 and badges["zero"]["growth"] == 0, "새 게임: 배지 없음(던전 무료 입장은 상시 점등 방지를 위해 제외)", json.dumps(badges["zero"]))
+    ok(badges["now"]["mission"] >= 1, "미션 보상 수령 가능 → 미션 탭 배지", json.dumps(badges["now"]))
+    ok('class="nb on" data-badge="mission">' in badges["html"], "배지가 서브 탭 버튼에 실제로 표시됨")
+    ok(badges["zero"]["mission"] == 0 and badges["zero"]["challenge"] == 0, "새 게임: 배지 없음(던전 무료 입장은 상시 점등 방지를 위해 제외)", json.dumps(badges["zero"]))
 
     uisrc39 = read("src/ui.js")
-    ok(all(x in uisrc39 for x in ["this.huntSub = 'skill'", "setHuntSub", "syncHuntBadges", "data-badge", "tplHuntSkill", "tplHuntGrowth", "tplHuntQuest"]), "서브 탭 상태·배지 갱신 구현(ui.js)")
-    ok("this.huntSub = ok.includes(sub) ? sub : 'skill'" in uisrc39 and "save(" not in uisrc39.split("setHuntSub(sub) {")[1].split("setLandSub")[0], "서브 탭 전환은 저장 데이터를 건드리지 않는다(세션 유지)")
+    ok(all(x in uisrc39 for x in ["this.huntSub = 'battle'", "setHuntSub", "syncHuntBadges", "data-badge", "tplHuntBattle", "tplHuntChallenge", "tplHuntMission", "toggleFold"]), "서브 탭 상태·배지·카드 접힘 구현(ui.js)")
+    ok("this.huntSub = ok.includes(sub) ? sub : 'battle'" in uisrc39 and "save(" not in uisrc39.split("setHuntSub(sub) {")[1].split("setLandSub")[0], "서브 탭 전환은 저장 데이터를 건드리지 않는다(세션 유지)")
     ok("case 'hunt-sub': this.setHuntSub(v); break;" in uisrc39, "서브 탭 클릭 → setHuntSub 연결")
+    ok("case 'toggle-fold': this.toggleFold(v); break;" in uisrc39 and "applyFolds()" in uisrc39, "카드 헤더 ▸ 클릭 → 접힘 토글")
     appsrc39 = read("app.js")
-    ok("subParam" in appsrc39 and "['skill', 'growth', 'quest'].includes(subParam)" in appsrc39, "?tab=hunt&sub=growth URL 파라미터 지원")
+    ok("subParam" in appsrc39 and "['battle', 'challenge', 'mission'].includes(subParam)" in appsrc39, "?tab=hunt&sub=challenge URL 파라미터 지원")
     idxsrc = read("index.html")
     ok('id="huntTabDot"' in idxsrc, "하단 사냥 탭 알림 점 요소")
     css39 = read("style.css")
-    ok(all(x in css39 for x in [".hunt-subbar", ".stat-grid.four", ".skill-grid", ".skill-cell", ".pet-line", ".cx-grid", ".subtab .nb.on", ".tab .tab-dot", ".switch.sm"]), "v3.9 압축 레이아웃 CSS(서브 탭·4열 스탯·스킬 2×2·펫 스트립·배지)")
+    ok(all(x in css39 for x in [".hunt-subbar", ".stat-grid.four", ".skill-grid", ".skill-cell", ".pet-line", ".cx-grid", ".subtab .nb.on", ".tab .tab-dot", ".switch.sm", ".bi-sum"]), "압축 레이아웃 CSS(서브 탭·4열 스탯·스킬·펫 스트립·배지·전투 요약)")
 
     section("[16] ⚔️ v4.0 장비 종류 · 고유 옵션 · 장착 인벤토리")
 
@@ -2920,26 +2926,27 @@ def main():
       s.tower = { cleared: [1, 2, 3], best: 3, runs: 4, fails: 1, last: { at: 0, n: 4, how: 'timeout', kills: 6, bossKills: 0, dmg: 1200, gold: 0, shards: 0, points: 0 } };
       const buffs = computeBuffs(s, 0);
       const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(12), boss: null, dungeon: null, tower: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'hunt', el: {}, install: { standalone: false, installed: false, canPrompt: false, hidden: true } };
-      const growth = __huntSub(ui, 'growth');
+      const growth = __huntSub(ui, 'challenge');
+      const petHtml = __gearSub(ui, 'collect');
       s.land.sub = 'buff';
       const land = __tpls.land(ui);
       const settings = __tpls.settings(ui);
       const badges = __badges(ui);
       // 진행 중 상태
       const running = { s, battle: { stats: calcStats(s, buffs), def: stageDef(12), boss: null, dungeon: null, tower: { n: 4, floor: TOWER_FLOORS[3], ends: Date.now() + 30000, t0: Date.now(), kills: 3, bossKills: 0, goal: 10, dmg: 0 }, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'hunt', el: {}, install: { hidden: true } };
-      const growing = __huntSub(running, 'growth');
-      return { growth, land, settings, badges, growing, tiles: (growth.match(/class=\\"tf /g) || []).length,
-               bad: /undefined|NaN|\\[object Object\\]/.test(growth + land + settings + growing) };
+      const growing = __huntSub(running, 'challenge');
+      return { growth, petHtml, land, settings, badges, growing, tiles: (growth.match(/class=\\"tf /g) || []).length,
+               bad: /undefined|NaN|\\[object Object\\]/.test(growth + petHtml + land + settings + growing) };
     """)
     ok(tpl42["bad"] is False, "v4.2 템플릿에 undefined/NaN 누출 없음")
     ok("도전의 탑" in tpl42["growth"] and "tower-tiles" in tpl42["growth"] and tpl42["tiles"] == 10, "전직·환생 탭에 도전의 탑 카드(층 타일 10개)", json.dumps({"tiles": tpl42["tiles"]}))
     ok("4층 재생의 벽" in tpl42["growth"] and "♻️ 재생의 벽" in tpl42["growth"] and "층 선택" in tpl42["growth"], "다음 층·기믹·층 선택 버튼", "")
     ok('data-action="tower"' in tpl42["growth"] and 'data-action="tower-floors"' in tpl42["growth"], "탑 입장·층 선택 버튼 연결", "")
     ok("진행 중" in tpl42["growing"] and "4층 재생의 벽" in tpl42["growing"] and "🗼 도전 중" in tpl42["growing"], "도전 중 카드 표시", "")
-    ok("내 동료 펫" in tpl42["land"] and "pet-evolve" in tpl42["land"] and "사냥의 본능" in tpl42["land"], "건물주 버프 탭 — 펫 카드에 진화 버튼·고유 스킬", "")
-    ok("은빛 늑대" in tpl42["land"] and "★" in tpl42["land"], "진화 단계 이름·배지 표시", "")
-    ok("도전의 탑" in tpl42["settings"] and "펫 진화" in tpl42["settings"], "설정 탭에 탑·펫 진화 기록", "")
-    ok(tpl42["badges"]["growth"] >= 0, "성장 서브 탭 배지 계산", json.dumps(tpl42["badges"]))
+    ok("동료 펫" in tpl42["petHtml"] and "pet-evolve" in tpl42["petHtml"] and "사냥의 본능" in tpl42["petHtml"], "성장 → 수집 탭 — 펫 카드에 진화 버튼·고유 스킬(v8)", "")
+    ok("은빛 늑대" in tpl42["petHtml"] and "★" in tpl42["petHtml"], "진화 단계 이름·배지 표시", "")
+    ok("도전의 탑" in tpl42["settings"] and "동료 펫" in tpl42["settings"], "설정 탭(내 기록·앱 정보)에 탑·펫 진화 기록", "")
+    ok(tpl42["badges"]["challenge"] >= 0, "도전 서브 탭 배지 계산", json.dumps(tpl42["badges"]))
 
     rsrc42 = read("src/render.js")
     csrc42 = read("src/combat.js")
@@ -2984,30 +2991,31 @@ def main():
       out.fallback = __landSub(ui, 'bogus');
       out.badges = __lbadges(ui);
       out.all = __LAND_SUBS.map(k => out[k]).join('');
-      out.shown = (out.home.match(/class="hold/g) || []).length;
+      out.shown = (out.market.match(/class="hold/g) || []).length;
       out.lens = Object.fromEntries(__LAND_SUBS.map(k => [k, out[k].length]));
       out.order = { sum: out.market.indexOf('land-sum'), bar: out.market.indexOf('land-subbar'), news: out.market.indexOf('news-slim'), list: out.market.indexOf('landList') };
       ui.landHoldAll = true;
-      const all_open = __landSub(ui, 'home');
+      const all_open = __landSub(ui, 'market');
       out.open = (all_open.match(/class="hold/g) || []).length;
       out.bad = /undefined|NaN|\\[object Object\\]/.test(out.all + out.fallback + all_open);
       return out;
     """)
-    ok(land43["keys"] == ["home", "market", "buff"], "부동산 서브 탭 3종 키 유지(저장 호환 home/market/buff)", json.dumps(land43["keys"]))
-    ok(all(x in land43["home"] for x in ["내 부동산·수령", "매물 투자", "버프·세트·펫", 'data-action="land-sub"']), "서브 탭 라벨 — 내 부동산·수령 / 매물 투자 / 버프·세트·펫")
+    ok(land43["keys"] == ["home", "market", "event"], "부동산 서브 탭 3종(영지/매물/이벤트) — v8.0.0 2층 내비 · 저장값 'buff'는 event 로 마이그레이션", json.dumps(land43["keys"]))
+    ok(all(x in land43["home"] for x in ["🏠 영지", "🛒 매물", "🎪 이벤트", 'data-action="land-sub"']), "서브 탭 라벨 — 영지 / 매물 / 이벤트")
     ok(land43["home"].count('data-action="land-sub"') >= 3 and 'class="subtabs hunt-subbar land-subbar"' in land43["home"], "서브 탭 버튼 3개 + 사냥 탭과 같은 sticky 바")
-    ok(all(('data-lbadge="%s"' % k) in land43["home"] for k in ["home", "market", "buff"]), "세 서브 탭 모두 알림 배지 자리")
-    ok(all(all(x in land43[k] for x in ["land-sum", "미수령", "일괄 수령", 'data-action="claim-rent"', 'data-action="rent-info"']) for k in ["home", "market", "buff"]), "모든 서브 탭 최상단 요약 바(보유 평수·시간당 임대·미수령·일괄 수령)")
-    ok(all(land43[k].count('data-action="claim-rent"') == 1 for k in ["home", "market", "buff"]), "일괄 수령 버튼은 탭당 하나(중복 카드 제거)", json.dumps({k: land43[k].count('data-action="claim-rent"') for k in ["home", "market", "buff"]}))
+    ok(all(('data-lbadge="%s"' % k) in land43["home"] for k in ["home", "market", "event"]), "세 서브 탭 모두 알림 배지 자리")
+    ok(all(all(x in land43[k] for x in ["land-sum", "미수령", "일괄 수령", 'data-action="claim-rent"', 'data-action="rent-info"']) for k in ["home", "market", "event"]), "모든 서브 탭 최상단 요약 바(보유 평수·시간당 임대·미수령·일괄 수령)")
+    ok(all(land43[k].count('data-action="claim-rent"') == 1 for k in ["home", "market", "event"]), "일괄 수령 버튼은 탭당 하나(중복 카드 제거)", json.dumps({k: land43[k].count('data-action="claim-rent"') for k in land43["keys"]}))
     ok(0 <= land43["order"]["sum"] < land43["order"]["bar"] < land43["order"]["news"] < land43["order"]["list"], "요약 바 → 서브 탭 → 압축 뉴스 → 매물 목록 순서", json.dumps(land43["order"]))
     ok("land-hero" not in land43["all"] and "rent-card" not in land43["all"] and "lh-total" not in land43["all"], "중복 대형 카드(총자산 히어로·미수령 카드) 제거 — 스크롤 절약")
-    ok(all(x in land43["home"] for x in ["보유 매물", "거래 기록", "권역 세트", "stat-grid four"]), "내 부동산 탭 — 보유 매물·권역 세트 요약·거래 기록")
-    ok('data-action="land-hold-all"' in land43["home"] and land43["shown"] == 6 and land43["open"] == 12, "보유 12곳 중 6곳만 보이고 펼치기 토글로 전체", json.dumps({"shown": land43["shown"], "open": land43["open"]}))
-    ok(all(x in land43["market"] for x in ['id="landSearch"', 'data-action="land-tier"', 'data-action="land-sort"', "229", "landList"]), "매물 투자 탭 — 229개 지역 검색·필터·정렬 목록")
-    ok(all(x in land43["buff"] for x in ["건물주 버프", "내 동료 펫", "권역 세트", "랜드마크", "현재 적용 수치", 'data-action="pet-evolve"']), "버프·세트·펫 탭 — 버프·펫·세트·랜드마크·적용 수치")
-    ok('class="subtab active" type="button" role="tab" aria-selected="true" data-action="land-sub" data-value="home"' in land43["fallback"], "잘못된 서브 값은 내 부동산으로 복구")
+    ok(all(x in land43["home"] for x in ["전국 영지 지도", "rmap-svg", "권역 세트", "랜드마크", "건물주 버프", "영지 파견"]), "영지 탭 — 한반도 지도·권역 세트·랜드마크·건물주 버프·파견(접힘 카드)")
+    ok("섹션 chip" not in land43["all"] and 'data-action="land-home-filter"' not in land43["all"] and 'data-action="land-buff-filter"' not in land43["all"], "섹션 필터 칩(3층 내비) 제거")
+    ok('data-action="land-hold-all"' in land43["market"] and land43["shown"] == 6 and land43["open"] == 12, "매물 탭 보유 12곳 중 6곳만 보이고 펼치기 토글로 전체", json.dumps({"shown": land43["shown"], "open": land43["open"]}))
+    ok(all(x in land43["market"] for x in ['id="landSearch"', 'data-action="land-tier"', 'data-action="land-sort"', "229", "landList", "보유 매물"]), "매물 탭 — 보유 매물 + 229개 지역 검색·필터·정렬 목록")
+    ok(all(x in land43["event"] for x in ["급매 경매", "지정가 예약", "영지 은행", "영지 성채", "전국 메가 프로젝트", "거래 기록"]), "이벤트 탭 — 경매·지정가·은행·성채·메가·거래 기록")
+    ok('class="subtab active" type="button" role="tab" aria-selected="true" data-action="land-sub" data-value="home"' in land43["fallback"], "잘못된 서브 값은 영지로 복구")
     ok(land43["bad"] is False, "v4.3 부동산 템플릿에 undefined/NaN 누출 없음")
-    ok(land43["badges"]["home"] == 1 and land43["badges"]["buff"] >= 1 and land43["badges"]["market"] == 0, "미수령 임대수익 → 내 부동산 배지 · 진화 가능 펫 → 버프 배지", json.dumps(land43["badges"]))
+    ok(land43["badges"]["home"] == 1 and land43["badges"]["event"] >= 0 and land43["badges"]["market"] == 0, "미수령 임대수익 → 영지 배지 · 진화/파견 → 이벤트 배지", json.dumps(land43["badges"]))
 
     landbadge = js(ctx2, """
       const fresh = defaultState(0);
@@ -3022,7 +3030,7 @@ def main():
       const ready = __lbadges(mk(s2));
       return { zero, tiny, ready };
     """)
-    ok(landbadge["zero"] == {"home": 0, "market": 0, "buff": 0}, "새 게임: 부동산 배지 없음", json.dumps(landbadge["zero"]))
+    ok(landbadge["zero"] == {"home": 0, "market": 0, "event": 0}, "새 게임: 부동산 배지 없음", json.dumps(landbadge["zero"]))
     ok(landbadge["tiny"]["home"] == 0 and landbadge["ready"]["home"] == 1, "2분치 미만은 점등하지 않는다(상시 점등 방지)", json.dumps(landbadge))
 
     # ── 2) 부동산 서브 탭 상태·배지 배선 ──
@@ -3031,9 +3039,9 @@ def main():
     stsrc43 = read("src/state.js")
     idxsrc43 = read("index.html")
     ok(all(x in usrc43 for x in ["LAND_SUBS", "landSubOf", "landBadges", "landSummaryBar", "newsSlim", "syncLandBadges", "case 'land-hold-all'"]), "ui.js — 부동산 서브 탭·요약 바·배지 구현")
-    ok("this.s.land.sub = ok.includes(sub) ? sub : 'home'" in usrc43 and "const ok = LAND_SUBS.map(([k]) => k)" in usrc43, "서브 탭 전환은 기존 저장 필드(land.sub)만 쓴다")
+    ok("this.s.land.sub = ok.includes(want) ? want : 'home'" in usrc43 and "const ok = LAND_SUBS.map(([k]) => k)" in usrc43 and "sub === 'buff' ? 'event' : sub" in usrc43, "서브 탭 전환은 기존 저장 필드(land.sub)만 쓴다('buff'→'event' 마이그레이션)")
     ok('id="landTabDot"' in idxsrc43 and 'data-tab="land"' in idxsrc43, "하단 부동산 탭 알림 점 요소")
-    ok("['home', 'market', 'buff'].includes(landSub)" in asrc43 and "qs.get('tab') === 'land'" in asrc43, "?tab=land&sub=market 바로가기 지원")
+    ok("['home', 'market', 'event'].includes(landSub)" in asrc43 and "qs.get('tab') === 'land'" in asrc43, "?tab=land&sub=market 바로가기 지원")
     ok(all(x in stsrc43 for x in ["screenShake: true", "s.screenShake = s.screenShake !== false"]), "state.js — 화면 흔들림 설정 기본값·정규화")
     shake_nv = js(ctx, """
       return {
@@ -3550,10 +3558,10 @@ def main():
       for (const c of CITIES.slice(0, 4)) s.land.owned[c.key] = 40;
       const buffs = computeBuffs(s, 0);
       const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(24), boss: null, dungeon: null, tower: null, daily: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'hunt', el: {}, install: { hidden: true } };
-      const growth = __huntSub(ui, 'growth');
+      const growth = __huntSub(ui, 'challenge');
       const settings = __tpls.settings(ui);
       const running = { ...ui, battle: { ...ui.battle, daily: { t0: Date.now(), ends: Date.now() + 20000, dmg: 12345, ko: '보이드 워커', title: '공허의 방랑자', floor: null } } };
-      const growing = __huntSub(running, 'growth');
+      const growing = __huntSub(running, 'challenge');
       return { growth, settings, growing, tiles: (growth.match(/class="tf /g) || []).length,
                bad: /undefined|NaN|\\[object Object\\]/.test(growth + settings + growing) };
     """)
@@ -3929,18 +3937,19 @@ def main():
       Date.now = () => start + 1000;
       const liveS = build();
       const liveUi = mkUi(liveS);
-      const home = __landSub(liveUi, 'home');
-      const buffTab = __landSub(liveUi, 'buff');
-      const hunt = __huntSub(liveUi, 'skill');
+      const home = __landSub(liveUi, 'event');
+      const buffTab = __landSub(liveUi, 'home');
+      const hunt = __huntSub(liveUi, 'battle');
       const a = auctionStatus(liveS, start + 1000);
-      const priceText = a.price.toLocaleString('ko-KR');
+      // Intl 미지원 샌드박스에서도 동작하는 천단위 콤마(앱 ui-fmt 의 group 과 같은 규칙)
+      const priceText = String(a.price).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
       const lotName = a.lot.city.name;
       Date.now = () => start + AUCTION.liveMs + 60000;
       const gapUi = mkUi(build());
-      const gap = __landSub(gapUi, 'home');
+      const gap = __landSub(gapUi, 'event');
       Date.now = () => start + 60000;
       const doneUi = mkUi(build((s) => { s.land.auction.done = block; }));
-      const done = __landSub(doneUi, 'home');
+      const done = __landSub(doneUi, 'event');
       Date.now = realNow;
       return {
         home, buffTab, hunt, gap, done, priceText, lotName,
@@ -3951,12 +3960,12 @@ def main():
         bad: /undefined|NaN|\\[object Object\\]/.test(home + buffTab + hunt + gap + done),
       };
     """)
-    ok('data-action="auction-bid"' in tpl46["home"] and "급매 경매" in tpl46["home"] and tpl46["buy"] == 1, "부동산 홈 — 급매 경매 카드와 낙찰 버튼 1개", str(tpl46["buy"]))
+    ok('data-action="auction-bid"' in tpl46["home"] and "급매 경매" in tpl46["home"] and tpl46["buy"] == 1, "부동산 이벤트 탭 — 급매 경매 카드와 낙찰 버튼 1개(v8)", str(tpl46["buy"]))
     ok(tpl46["lotName"] in tpl46["home"] and tpl46["priceText"] in tpl46["home"] and "시세 -" in tpl46["home"] and "auc-prog" in tpl46["home"], "경매 카드 — 매물·현재 입찰가·할인율·진행 바", json.dumps({"lot": tpl46["lotName"], "price": tpl46["priceText"]}, ensure_ascii=False))
     ok("다음 매물 예고" in tpl46["gap"] and "다음 경매" in tpl46["gap"] and tpl46["gapBuy"] == 0, "준비 시간 — 다음 매물 예고·카운트다운(낙찰 버튼 없음)", "")
     ok("낙찰 완료" in tpl46["done"] and tpl46["doneBuy"] == 0, "낙찰 후 — 완료 표시·추가 낙찰 버튼 없음", "")
-    ok("부동산 전투 시너지" in tpl46["buffTab"] and "권역 완성" in tpl46["buffTab"] and "부동산 전투 버프 합계" in tpl46["buffTab"] and tpl46["synRows"] == 4, "부동산 버프 탭 — 시너지 카드(4개 지표·권역 완성·합계)", json.dumps({"rows": tpl46["synRows"]}))
-    ok("부동산 버프 합계" in tpl46["hunt"] and "치명타 피해" in tpl46["hunt"], "사냥 탭 스탯 카드 — 부동산 전투 버프 합계 한 줄", "")
+    ok("부동산 전투 시너지" in tpl46["buffTab"] and "권역 완성" in tpl46["buffTab"] and tpl46["synRows"] == 4, "영지 탭 — 시너지 카드(4개 지표·권역 완성)", json.dumps({"rows": tpl46["synRows"]}))
+    ok("부동산 버프" in tpl46["hunt"] and "치명타 피해" in tpl46["hunt"], "사냥 탭 전투 정보 — 부동산 전투 버프 합계 한 줄(v8)", "")
     ok(tpl46["bad"] is False, "v4.6 템플릿에 undefined/NaN 누출 없음")
 
     # ── 14) 배선·스타일 ──
@@ -4708,13 +4717,13 @@ def main():
       trackDailyQuest(s, 'kills', 60);
       const buffs = computeBuffs(s, 0);
       const b = { stats: calcStats(s, buffs), def: stageDef(1), boss: null, player: { hp: 100 }, liveDps: () => 0, effectiveDps: () => 100 };
-      const ui = { s, battle: b, app: { buffs }, logs: [], tab: 'hunt', huntSub: 'quest', el: {}, install: { hidden: true } };
-      const h = __huntSub(ui, 'quest');
+      const ui = { s, battle: b, app: { buffs }, logs: [], tab: 'hunt', huntSub: 'mission', el: {}, install: { hidden: true } };
+      const h = __huntSub(ui, 'mission');
       const badges = __badges(ui);
       return {
         hasDq: h.includes('일일 퀘스트') && h.includes('data-action="claim-daily-quest"') && h.includes('data-action="claim-daily-quest-bonus"'),
         hasCodexV2: h.includes('장비 도감') && h.includes('펫 진화'),
-        badgeQuest: badges.quest,
+        badgeQuest: badges.mission,
         bad: /undefined|NaN|\\[object Object\\]/.test(h),
       };
     """)
@@ -4859,16 +4868,18 @@ def main():
       toggleFavoriteCity(s, CITIES[0].key);
       const buffs = computeBuffs(s, 1000);
       const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(1), boss: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'land', el: {}, install: { hidden: true } };
-      const home = __landSub(ui, 'home');
+      const home = __landSub(ui, 'market');
+      const yard = __landSub(ui, 'home');
       s.land.tier = 'fav';
       const marketFav = __landSub(ui, 'market');
       return {
         hasHome: home.includes('data-action="land-fav"') && home.includes('data-action="toggle-auto-rent"') && home.includes('영지 관리인') && home.includes('band-pill'),
+        hasYard: yard.includes('rmap-svg') && yard.includes('전국 영지 지도'),
         hasFavFilter: marketFav.includes('data-value="fav"') && marketFav.includes('band-bar') && (marketFav.match(/class="mkt/g) || []).length === 1,
         bad: /undefined|NaN|\\[object Object\\]/.test(home + marketFav),
       };
     """)
-    ok(ui51["hasHome"] and ui51["hasFavFilter"] and not ui51["bad"], "부동산 홈/매물 탭 — 즐겨찾기 필터·시세 게이지·영지 관리인 렌더", json.dumps(ui51))
+    ok(ui51["hasHome"] and ui51["hasYard"] and ui51["hasFavFilter"] and not ui51["bad"], "매물 탭(보유·관리인·시세 게이지)·영지 탭(한반도 지도)·즐겨찾기 필터 렌더(v8)", json.dumps(ui51))
 
     # ── 16) v5.2.0 장비 테마 세트 효과 (5종 · 2/3/4세트) ──
     section("v5.2.0 장비 테마 세트 효과")
@@ -4980,9 +4991,9 @@ def main():
       s.pet.unlocked = ['wolf', 'owl']; s.pet.equipped = 'wolf'; s.pet.sub = 'owl';
       const buffs = computeBuffs(s, 1000);
       const b = new Battle(s, () => buffs, () => 0.5, 1000);
-      const ui = { s, battle: b, app: { buffs }, logs: [], tab: 'hunt', huntSub: 'skill', el: {}, install: { hidden: true } };
-      const huntHtml = __huntSub(ui, 'skill');
-      const buffHtml = __landSub(ui, 'buff');
+      const ui = { s, battle: b, app: { buffs }, logs: [], tab: 'hunt', huntSub: 'battle', el: {}, install: { hidden: true } };
+      const huntHtml = __huntSub(ui, 'battle');
+      const buffHtml = __gearSub(ui, 'collect');
       return {
         hasSpd: huntHtml.includes('data-action="cycle-speed"') && huntHtml.includes('×1.5'),
         hasSubPet: buffHtml.includes('보조 펫 슬롯') && buffHtml.includes('data-action="pet-sub"') && buffHtml.includes('보조 50%'),
@@ -5043,9 +5054,9 @@ def main():
       recordWeeklyBoss(s, 99999, 2.0, now);
       const buffs = computeBuffs(s, now);
       const b = new Battle(s, () => buffs, () => 0.5, now);
-      const ui = { s, battle: b, app: { buffs }, logs: [], tab: 'hunt', huntSub: 'quest', el: {}, install: { hidden: true } };
-      const qHtml = __huntSub(ui, 'quest');
-      const gHtml = __huntSub(ui, 'growth');
+      const ui = { s, battle: b, app: { buffs }, logs: [], tab: 'hunt', huntSub: 'mission', el: {}, install: { hidden: true } };
+      const qHtml = __huntSub(ui, 'mission');
+      const gHtml = __huntSub(ui, 'challenge');
       return {
         hasAtt: qHtml.includes('7일 출석 체크') && qHtml.includes('data-action="claim-attendance"') && qHtml.includes('7일차'),
         hasWb: gHtml.includes('주간 보스 챌린지') && gHtml.includes('data-action="claim-weekly-milestone"'),
@@ -5062,29 +5073,29 @@ def main():
       acquireGear(s, 'a_abyss', { autoEquip: true });
       acquireGear(s, 'w_iron', { autoEquip: false });
       const b = new Battle(s, () => ({}), () => 0.5, 1000);
-      const ui = { s, battle: b, app: { buffs: {} }, logs: [], tab: 'gear', gearSub: 'enhance', growthFilter: 'all', el: {}, install: { hidden: true } };
-      const gEnh = __gearSub(ui, 'enhance');
-      const gBag = __gearSub(ui, 'bag');
-      const gGac = __gearSub(ui, 'gacha');
+      const ui = { s, battle: b, app: { buffs: {} }, logs: [], tab: 'gear', gearSub: 'equip', el: {}, install: { hidden: true } };
+      const gEquip = __gearSub(ui, 'equip');
+      const gJob = __gearSub(ui, 'job');
+      const gCollect = __gearSub(ui, 'collect');
       s.gear.setFilter = 'dragon';
       const dragOnly = gearList(s, 'all', 'dragon');
       const gb = __gearBadges(ui);
-      ui.growthFilter = 'challenge';
-      const hChal = __huntSub(ui, 'growth');
+      const hChal = __huntSub(ui, 'challenge');
       return {
-        enhOk: gEnh.includes('gear-subbar') && gEnh.includes('장비 강화') && !gEnh.includes('inv-grid'),
-        bagOk: gBag.includes('inv-grid') && gBag.includes('data-action="gear-set-filter"') && !gBag.includes('gacha-card'),
-        gacOk: gGac.includes('gacha-card') && !gGac.includes('inv-grid'),
+        eqOk: gEquip.includes('gear-subbar') && gEquip.includes('장비 강화') && gEquip.includes('inv-grid') && gEquip.includes('data-fold="inventory"'),
+        jobOk: gJob.includes('전직') && gJob.includes('환생 (초월)') && !gJob.includes('inv-grid'),
+        colOk: gCollect.includes('고대 유물') && gCollect.includes('칭호') && !gCollect.includes('inv-grid'),
         dragOnlyLen: dragOnly.length,
         dragOnlyId: dragOnly[0] ? dragOnly[0].def.id : '',
         gb,
+        keys: __GEAR_SUBS,
         chalOk: hChal.includes('황금 던전') && hChal.includes('도전의 탑') && !hChal.includes('전직 단계'),
-        bad: /undefined|NaN|\\[object Object\\]/.test(gEnh + gBag + gGac + hChal),
+        bad: /undefined|NaN|\\[object Object\\]/.test(gEquip + gJob + gCollect + hChal),
       };
     """)
     idx55 = read("index.html")
-    ok(ui55["enhOk"] and ui55["bagOk"] and ui55["gacOk"] and not ui55["bad"], "장비 3서브 탭(강화·장착 / 인벤토리 / 뽑기) 분리 렌더", json.dumps(ui55))
-    ok(ui55["dragOnlyLen"] == 1 and ui55["dragOnlyId"] == "w_dragon" and ui55["gb"]["enhance"] == 1 and ui55["chalOk"], "인벤토리 테마 세트 필터 · 장비 알림 배지 · 사냥 도전 영역 필터", json.dumps(ui55))
+    ok(ui55["keys"] == ["equip", "job", "collect"] and ui55["eqOk"] and ui55["jobOk"] and ui55["colOk"] and not ui55["bad"], "성장 3서브 탭(장비 / 전직·환생 / 수집) 분리 렌더 — 장비 탭은 접힘 카드로 통합(v8)", json.dumps(ui55))
+    ok(ui55["dragOnlyLen"] == 1 and ui55["dragOnlyId"] == "w_dragon" and ui55["gb"]["equip"] >= 1 and ui55["chalOk"], "인벤토리 테마 세트 필터 · 장비 알림 배지 · 사냥 도전 탭", json.dumps(ui55))
     ok('id="stageSpeedBtn"' in idx55 and 'id="gearTabDot"' in idx55, "index.html 캔버스 배속 칩 · 장비 탭 알림 점 추가")
 
     # ── 20) v5.6.0 장비 55종 대확장 · 잠재 접두사 & 재련 ──
@@ -5279,11 +5290,11 @@ def main():
       const buffs = computeBuffs(s, now);
       const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(1), boss: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'land', expPick: { petId: '', setId: '', durKey: 'short' }, el: {}, install: { hidden: true } };
       const hHome = __landSub(ui, 'home');
-      const hBuff = __landSub(ui, 'buff');
+      const hBuff = __landSub(ui, 'home');
       s.land.regionFilter = 'jeju';
       const hMkt = __landSub(ui, 'market');
       return {
-        uiOk: hHome.includes('regionMapCard') && hHome.includes('<svg') && hBuff.includes('expeditionCard') && hMkt.includes('mkt-reg-pill') && hMkt.includes('제주권'),
+        uiOk: hHome.includes('regionMapCard') && hHome.includes('<svg') && hHome.includes('expeditionCard') && hMkt.includes('mkt-reg-pill') && hMkt.includes('제주권'),
         bad: /undefined|NaN|\\[object Object\\]/.test(hHome + hBuff + hMkt),
       };
     """)
@@ -5431,15 +5442,15 @@ def main():
       const buffs = computeBuffs(s, now);
       const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(1), boss: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'land', expPick: { petId: '', setId: '', durKey: 'short' }, growthFilter: 'challenge', el: {}, install: { hidden: true } };
       const home = __landSub(ui, 'home');
-      const chal = __huntSub(ui, 'growth');
+      const chal = __huntSub(ui, 'challenge');
       return {
-        ok: home.includes('invasionCard') && home.includes('호황 +50%') && chal.includes('invasionCard'),
+        ok: chal.includes('invasionCard') && chal.includes('임대 +50%') && chal.includes('호황'),
         bad: /undefined|NaN|\\[object Object\\]/.test(home + chal),
       };
     """)
     ok(iv511["denyNoLand"] and iv511["st0Ok"] and iv511["startedOk"] and iv511["cleared"], "영지 침공 경보(랜드마크 우선) · 35초 방어전 출격·9마리 격파 승리 · 중복 모드 차단", json.dumps(iv511))
     ok(iv511["rewardsOk"] and abs(iv511["boomRentRatio"] - 1.5) < 0.05 and iv511["blockLock"] and len(iv511["normBoomKeys"]) == 1, "승리 보상(골드·강화석·초월석·훈장) · 해당 지역 임대 +50% 호황 실반영 · 블록 쿨타임·정규화", json.dumps(iv511))
-    ok(ui511["ok"] and not ui511["bad"], "영지 침공 방어전 카드(부동산 홈·사냥 도전) 및 호황 배지 렌더", json.dumps(ui511))
+    ok(ui511["ok"] and not ui511["bad"], "영지 침공 방어전 카드(사냥 도전)·호황 배지(부동산 영지 뉴스/침공) 렌더 — v8 배치", json.dumps(ui511))
 
     # ── 26) v5.12.0 🏰 영지 성채 (영구 시설 5종) ──
     section("v5.12.0 영지 성채 영구 시설 5종")
@@ -5558,8 +5569,9 @@ def main():
       const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(1), boss: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'land', expPick: { petId: '', setId: '', durKey: 'short' }, el: {}, install: { hidden: true } };
       const home = __landSub(ui, 'home');
       const mkt = __landSub(ui, 'market');
+      const event = __landSub(ui, 'event');
       return {
-        ok: home.includes('investDashboardCard') && home.includes('chart-svg') && home.includes('limitOrdersCard') && mkt.includes('data-action="land-order-open"'),
+        ok: home.includes('investDashboardCard') && home.includes('chart-svg') && event.includes('limitOrdersCard') && mkt.includes('data-action="land-order-open"'),
         bad: /undefined|NaN|\\[object Object\\]/.test(home + mkt),
       };
     """)
@@ -5619,8 +5631,8 @@ def main():
       s.invasion.medals = 2;
       s.relics.owned = { hourglass: 2 }; s.relics.equipped = ['hourglass'];
       const b = new Battle(s, () => ({}));
-      const ui = { s, battle: b, app: { buffs: {} }, logs: [], tab: 'hunt', huntSub: 'growth', growthFilter: 'growth', el: {}, install: { hidden: true } };
-      const html = __huntSub(ui, 'growth');
+      const ui = { s, battle: b, app: { buffs: {} }, logs: [], tab: 'gear', gearSub: 'collect', el: {}, install: { hidden: true } };
+      const html = __gearSub(ui, 'collect');
       return {
         ok: html.includes('relicCard') && html.includes('시간의 모래시계') && html.includes('data-action="relic-summon"'),
         bad: /undefined|NaN|\\[object Object\\]/.test(html),
@@ -5702,14 +5714,14 @@ def main():
       const buffs = computeBuffs(s, now);
       const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(1), boss: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'land', expPick: { petId: '', setId: '', durKey: 'short' }, el: {}, install: { hidden: true } };
       const hMkt = __landSub(ui, 'market');
-      const hBuff = __landSub(ui, 'buff');
+      const hBuff = __landSub(ui, 'home');
       return {
         ok: hMkt.includes('data-action="land-auto-invest"') && hBuff.includes('data-action="land-bulk-lm"'),
         bad: /undefined|NaN|\\[object Object\\]/.test(hMkt + hBuff),
       };
     """)
     ok(po63["regOk"] and po63["roiDipOk"] and po63["lmOk"], "원탭 분산 투자 3전략(권역 세트·ROI TOP5·저점 매수) 및 랜드마크 일괄 증축 실행", json.dumps(po63))
-    ok(ui63["ok"] and not ui63["bad"], "원탭 투자 버튼(매물 투자 탭) 및 일괄 랜드마크 버튼(버프 탭) 렌더", json.dumps(ui63))
+    ok(ui63["ok"] and not ui63["bad"], "원탭 투자 버튼(매물 탭) 및 일괄 랜드마크 버튼(영지 탭) 렌더", json.dumps(ui63))
 
     # ── 31) v6.4.0 🎖️ 영지 성장 패스(무료 30단계) · 🏷️ 칭호(20종) ──
     section("v6.4.0 영지 성장 패스 30단계 · 칭호 20종")
@@ -5740,8 +5752,8 @@ def main():
       const s = defaultState(Date.now());
       addPassXp(s, 250, Date.now());
       const b = new Battle(s, () => ({}));
-      const ui = { s, battle: b, app: { buffs: {} }, logs: [], tab: 'hunt', huntSub: 'quest', el: {}, install: { hidden: true } };
-      const html = __huntSub(ui, 'quest');
+      const ui = { s, battle: b, app: { buffs: {} }, logs: [], tab: 'hunt', huntSub: 'mission', el: {}, install: { hidden: true } };
+      const html = __huntSub(ui, 'mission') + __gearSub(ui, 'collect');
       return {
         ok: html.includes('passCard') && html.includes('titleCard') && html.includes('data-action="pass-claim-all"') && html.includes('data-action="title-equip"'),
         bad: /undefined|NaN|\\[object Object\\]/.test(html),
@@ -5765,26 +5777,23 @@ def main():
       };
       const emptyPills = activeBuffPills({ player: { hp: 100, shield: 0, shieldUntil: 0, graceUntil: 0 }, berserkUntil: 0, blessUntil: 0, petGoldUntil: 0, ultUntil: 0 }, now);
       const pills = activeBuffPills(b, now);
-      const ui = { s, battle: b, app: { buffs }, logs: [], tab: 'land', expPick: { petId: '', setId: '', durKey: 'short' }, landHomeFilter: 'all', landBuffFilter: 'all', el: {}, install: { hidden: true } };
+      const ui = { s, battle: b, app: { buffs }, logs: [], tab: 'land', expPick: { petId: '', setId: '', durKey: 'short' }, el: {}, install: { hidden: true } };
       const homeAll = __landSub(ui, 'home');
-      ui.landHomeFilter = 'holdings';
-      const homeHold = __landSub(ui, 'home');
-      ui.landHomeFilter = 'invest';
+      const homeHold = __landSub(ui, 'market');
       const homeInv = __landSub(ui, 'home');
-      ui.landBuffFilter = 'citadel';
-      const buffCit = __landSub(ui, 'buff');
-      ui.landBuffFilter = 'pet';
-      const buffPet = __landSub(ui, 'buff');
+      const buffCit = __landSub(ui, 'event');
+      const buffPet = __landSub(ui, 'home');
       return {
         emptyLen: emptyPills.length,
         pillIds: pills.map((p) => p.id),
-        homeFilterOk: homeHold.length < homeAll.length && homeHold.includes('보유 매물') && !homeHold.includes('investDashboardCard') && homeInv.includes('investDashboardCard') && !homeInv.includes('regionMapCard'),
+        // v8.0.0: 섹션 필터 칩 → 3서브 탭으로 대체(영지=지도·대시보드 / 매물=보유·시장 / 이벤트=성채·은행)
+        homeFilterOk: homeHold.length > 0 && homeHold.includes('보유 매물') && !homeHold.includes('investDashboardCard') && homeInv.includes('investDashboardCard') && homeInv.includes('regionMapCard'),
         buffFilterOk: buffCit.includes('citadelCard') && !buffCit.includes('expeditionCard') && buffPet.includes('expeditionCard') && !buffPet.includes('citadelCard'),
         bad: /undefined|NaN|\\[object Object\\]/.test(homeHold + homeInv + buffCit + buffPet),
       };
     """)
     ok(ui65["emptyLen"] == 0 and ui65["pillIds"] == ["berserk", "shield", "bless", "goldRain", "ult", "grace"], "전투 캔버스 실시간 버프 HUD(6종 활성 칩 · 비활성 시 숨김)", json.dumps(ui65["pillIds"]))
-    ok(ui65["homeFilterOk"] and ui65["buffFilterOk"] and not ui65["bad"], "모바일 390px 부동산 홈/버프 빠른 보기 필터 동작 및 렌더 정상", json.dumps(ui65))
+    ok(ui65["homeFilterOk"] and ui65["buffFilterOk"] and not ui65["bad"], "부동산 3서브 탭(영지/매물/이벤트) 콘텐츠 분리 및 렌더 정상 — v8.0.0 필터 칩 대체", json.dumps(ui65))
     ok('id="battleBuffBar"' in read("index.html") and os.path.exists(os.path.join(ROOT, "src/ui-land.js")) and ".stage-buffs" in read("style.css"), "index.html #battleBuffBar · src/ui-land.js 모듈 분리 · style.css 버프 HUD 스타일")
 
     # ── 33) v6.6.0 ✨ 장비 신화 초월 · 🔒 장비 잠금 보호 ──
@@ -5881,8 +5890,8 @@ def main():
     ui67 = js(ctx2, """
       const s = defaultState(Date.now());
       const b = new Battle(s, () => ({}));
-      const ui = { s, battle: b, app: { buffs: {} }, logs: [], tab: 'hunt', huntSub: 'growth', growthFilter: 'challenge', el: {}, install: { hidden: true } };
-      const html = __huntSub(ui, 'growth');
+      const ui = { s, battle: b, app: { buffs: {} }, logs: [], tab: 'hunt', huntSub: 'challenge', el: {}, install: { hidden: true } };
+      const html = __huntSub(ui, 'challenge');
       return {
         ok: html.includes('riftCard') && html.includes('무한 균열') && html.includes('data-action="rift-start"'),
         bad: /undefined|NaN|\\[object Object\\]/.test(html),
@@ -5934,9 +5943,9 @@ def main():
       const buffs = computeBuffs(s);
       const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(1), boss: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'land', expPick: { petId: '', setId: '', durKey: 'short' }, el: {}, install: { hidden: true } };
       const home = __landSub(ui, 'home');
-      const buff = __landSub(ui, 'buff');
+      const buff = __landSub(ui, 'event');
       return {
-        ok: home.includes('bankCard') && home.includes('KTX 고속철도 Lv.1') && buff.includes('megaProjectCard') && buff.includes('data-action="mega-build"'),
+        ok: buff.includes('bankCard') && home.includes('KTX 고속철도 Lv.1') && buff.includes('megaProjectCard') && buff.includes('data-action="mega-build"'),
         bad: /undefined|NaN|\\[object Object\\]/.test(home + buff),
       };
     """)
@@ -5975,8 +5984,8 @@ def main():
     ui69 = js(ctx2, """
       const s = defaultState(Date.now());
       const b = new Battle(s, () => ({}));
-      const ui = { s, battle: b, app: { buffs: {} }, logs: [], tab: 'hunt', huntSub: 'growth', growthFilter: 'challenge', el: {}, install: { hidden: true } };
-      const html = __huntSub(ui, 'growth');
+      const ui = { s, battle: b, app: { buffs: {} }, logs: [], tab: 'hunt', huntSub: 'challenge', el: {}, install: { hidden: true } };
+      const html = __huntSub(ui, 'challenge');
       return {
         ok: html.includes('guildRaidCard') && html.includes('성기사 아서') && html.includes('data-action="raid-attack"') && html.includes('data-action="knight-up"'),
         bad: /undefined|NaN|\\[object Object\\]/.test(html),
@@ -6131,7 +6140,61 @@ def main():
       };
     """)
     ok(gd79["cpOk"] and gd79["recCount"] == 3 and gd79["hasLand"] and gd79["hasJump"], "CP 6대 원천 분해(%) · 가성비 성장 추천 Top 3 · 바로가기 탭 생성 정상", json.dumps(gd79))
-    ok("cpGuideCard" in read("src/ui.js") and "'./src/guide.js'" in read("sw.js") and 'case \'guide-jump\':' in read("src/ui.js"), "ui.js · sw.js — cpGuideCard 렌더 · guide-jump 배선 · guide.js 프리캐시")
+    ok("cpGuideInner" in read("src/ui.js") and "'./src/guide.js'" in read("sw.js") and 'case \'guide-jump\':' in read("src/ui.js"), "ui.js · sw.js — CP 분석을 전투 정보 카드에 통합 렌더 · guide-jump 배선 · guide.js 프리캐시")
+
+    # ── 47) v8.0.0 🧹 2층 내비 · 카드 다이어트 · P0 버그 · 실제 한반도 지도 ──
+    section("v8.0.0 2층 내비 · 카드 접힘 · P0 버그 · 실제 한반도 지도")
+    import subprocess as _sp
+    chi = _sp.run([sys.executable, os.path.join(ROOT, "tools", "check_imports.py")], capture_output=True, text=True)
+    ok(chi.returncode == 0 and "✓" in chi.stdout, "정적 모듈 정합성 검사(check_imports.py) — import/export 누락 0", (chi.stdout or chi.stderr).strip()[:200])
+    ok(os.path.exists(os.path.join(ROOT, "tools/check_imports.py")), "tools/check_imports.py 존재(v7.9.1 invasionStatus·landBuffTotals 사고 재발 차단)")
+
+    v80 = js(ctx2, """
+      const s = defaultState(0);
+      // 제주권 2곳 보유 → 권역 완주(★) 표시 경로까지 검증
+      CITIES.filter((c) => citySetId(c.key) === 'jeju').slice(0, 2).forEach((c) => { s.land.owned[c.key] = 5; });
+      const ward = normalizeState({ ver: 3, land: { sub: 'buff' } }, 0);
+      const ward2 = normalizeState({ ver: 3, land: { sub: 'event' } }, 0);
+      const ui = { s, battle: { stats: calcStats(s, {}), def: stageDef(1), boss: null, player: { hp: 1 } }, app: { buffs: {} }, logs: [], tab: 'land', el: {}, install: { hidden: true } };
+      s.land.sub = 'home'; const home = __tpls.land(ui);
+      s.land.sub = 'market'; const mkt = __tpls.land(ui);
+      s.land.sub = 'event'; const evt = __tpls.land(ui);
+      const map = __tpls.map(ui);
+      const badges = __lbadges(ui);
+      return {
+        keys: { hunt: __HUNT_SUBS, gear: __GEAR_SUBS, land: __LAND_SUBS },
+        oldSubMigrated: ward.land.sub, newSubKept: ward2.land.sub,
+        fmtComma: fmt(1234), fmtBig: fmt(1234567),
+        compactGold: compact(183626587), compactPyeong: compact(1279000),
+        mapRegions: (map.match(/data-action="land-map-region"/g) || []).length,
+        mapCounts: (map.match(/class="rmap-cnt"/g) || []).length,
+        mapViewBox: (map.match(/viewBox="0 0 (\\d+) (\\d+)"/) || []).slice(1),
+        mapSeoulCallout: map.includes('rmap-seoul') && map.includes('서울'),
+        mapStar: map.includes('★'),
+        lashed: !evt.includes('현재 적용 수치') && evt.includes('bankCard') && mkt.includes('hold-card') && mkt.includes('landList'),
+        buffOnce: (home + mkt + evt).split('부동산 전투 버프 합계').length - 1,
+        chips: (home + mkt + evt).includes('land-home-filter'),
+        badges,
+        bad: /undefined|NaN|\\[object Object\\]/.test(home + mkt + evt + map),
+      };
+    """)
+    ok(v80["keys"]["hunt"] == ["battle", "challenge", "mission"] and v80["keys"]["gear"] == ["equip", "job", "collect"] and v80["keys"]["land"] == ["home", "market", "event"] and v80["bad"] is False, "하단 4탭 → 서브 탭 2층 내비(사냥 3 · 성장 3 · 부동산 3 · 설정 단일)", json.dumps(v80["keys"]))
+    ok(v80["oldSubMigrated"] == "event" and v80["newSubKept"] == "event", "v7.x 저장 land.sub='buff' → 'event' 마이그레이션(세이브 호환)")
+    ok(v80["fmtComma"] == "1,234" and v80["fmtBig"] == "1,234,567", "Intl 비의존 천단위 구분(fmt) — QuickJS·구형 웹뷰 동일", json.dumps([v80["fmtComma"], v80["fmtBig"]]))
+    ok(v80["compactGold"] == "1.84억" and v80["compactPyeong"] == "127만", "상단 HUD 축약 표기(1.84억 / 127만) — 잘림 없음", json.dumps([v80["compactGold"], v80["compactPyeong"]]))
+    ok(v80["mapRegions"] >= 7 and v80["mapCounts"] == 7 and v80["mapSeoulCallout"] and v80["mapStar"], "한반도 지도 — 7권역 + 서울 콜아웃 + 전 권역 보유/전체·★ 표시", json.dumps({k: v80[k] for k in ["mapRegions", "mapCounts", "mapSeoulCallout"]}))
+    ok(v80["mapViewBox"] == ["0", "0", "340", "400"] or (len(v80["mapViewBox"]) == 2 and int(v80["mapViewBox"][1]) > int(v80["mapViewBox"][0])), "지도 viewBox 세로형(가로<세로) — 남한 실제 비율", json.dumps(v80["mapViewBox"]))
+    ok(v80["lashed"] and v80["buffOnce"] <= 1 and v80["chips"] is False, "카드 통폐합 — 부동산 버프 합계 1곳 · '현재 적용 수치' 중복 카드/섹션 칩 제거", json.dumps({"once": v80["buffOnce"], "chips": v80["chips"]}))
+
+    css80 = read("style.css")
+    hud80 = read("src/ui.js")
+    ok(".rmap-lbl {\n  font-size: 12.5px" in css80 and ".rmap-cnt {\n  font-size: 12px" in css80, "지도 라벨 12px 이상(화면 11px+) CSS")
+    ok("max-width: 210px" not in css80.split(".badge {")[1].split("}")[0] and ".badge b { flex: 0 0 auto" in css80, "HUD 평수 b 는 줄어들지 않음(flex:0 0 auto) — 말줄임 제거")
+    ok("top: calc(env(safe-area-inset-top) + var(--hud-h) + 6px)" in css80 and "bottom: calc(var(--tab-h)" not in css80, "토스트는 HUD 아래 1줄 배너(하단 버튼 안 가림)")
+    ok("compact(p.pyeong)" in hud80 and "compact(this.s.gold)" in hud80 and "title" in hud80, "HUD 값 축약 + 전체 값은 title/aria")
+    ok("case 'toggle-fold': this.toggleFold(v); break;" in hud80 and "applyFolds()" in hud80 and "DEFAULT_COLLAPSED" in hud80, "카드 ▸ 접기 — 기본 접힘 목록·DOM 토글(재렌더 없이)")
+    idx80 = read("index.html")
+    ok("<b>사냥</b>" in idx80 and "<b>성장</b>" in idx80 and "<b>부동산</b>" in idx80 and "<b>설정</b>" in idx80, "하단 탭 라벨 — 사냥/성장/부동산/설정")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

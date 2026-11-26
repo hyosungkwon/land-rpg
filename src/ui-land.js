@@ -43,29 +43,7 @@ export const traitBadge = (key) => {
   return info ? `<span class="tag">${info.icon} ${info.n}</span>` : '';
 };
 
-/* ══════════════════ 📱 v6.5.0 모바일 390px 부동산 섹션 필터 바 ══════════════════ */
-export const LAND_HOME_FILTERS = ['all', 'holdings', 'events', 'invest'];
-export const LAND_BUFF_FILTERS = ['all', 'pet', 'citadel', 'buff'];
-
-export function landHomeFilterBar(ui) {
-  const f = LAND_HOME_FILTERS.includes(ui && ui.landHomeFilter) ? ui.landHomeFilter : 'all';
-  return `<div class="chips land-filter" role="tablist" aria-label="내 부동산 섹션 보기">
-    <button class="chip${f === 'all' ? ' on' : ''}" type="button" data-action="land-home-filter" data-value="all">전체</button>
-    <button class="chip${f === 'holdings' ? ' on' : ''}" type="button" data-action="land-home-filter" data-value="holdings">🏠 보유 매물</button>
-    <button class="chip${f === 'events' ? ' on' : ''}" type="button" data-action="land-home-filter" data-value="events">🚨 침공·경매·지도</button>
-    <button class="chip${f === 'invest' ? ' on' : ''}" type="button" data-action="land-home-filter" data-value="invest">📈 대시보드·예약</button>
-  </div>`;
-}
-
-export function landBuffFilterBar(ui) {
-  const f = LAND_BUFF_FILTERS.includes(ui && ui.landBuffFilter) ? ui.landBuffFilter : 'all';
-  return `<div class="chips land-filter" role="tablist" aria-label="버프·펫·성채 섹션 보기">
-    <button class="chip${f === 'all' ? ' on' : ''}" type="button" data-action="land-buff-filter" data-value="all">전체</button>
-    <button class="chip${f === 'pet' ? ' on' : ''}" type="button" data-action="land-buff-filter" data-value="pet">🐾 펫·파견</button>
-    <button class="chip${f === 'citadel' ? ' on' : ''}" type="button" data-action="land-buff-filter" data-value="citadel">🏰 성채·랜드마크</button>
-    <button class="chip${f === 'buff' ? ' on' : ''}" type="button" data-action="land-buff-filter" data-value="buff">⚡ 버프·세트</button>
-  </div>`;
-}
+/* v8.0.0: v6.5 의 모바일 섹션 필터 칩(3층 내비)은 제거 — 3서브 탭(영지/매물/이벤트)으로 대체 */
 
 /* ══════════════════ 🚨 영지 침공 방어전 (v5.11.0) ══════════════════ */
 export function invasionCard(ui) {
@@ -115,42 +93,70 @@ export function invasionCard(ui) {
   </div>`;
 }
 
-/* ══════════════════ 🗺️ 전국 권역 지도 · 🧭 펫 영지 파견 (v5.9.0) ══════════════════ */
+/* ══════════════════ 🗺️ 전국 권역 지도 · 🧭 펫 영지 파견 (v5.9.0 · v8.0.0 실제 한반도형) ══════════════════
+ * v8.0.0 B4: 손으로 찍은 5~6각형(가로 320×246)을 버리고 **남한 실제 비율(세로형)** 7권역으로 교체.
+ *  - viewBox 340×400 · 6개 권역 폴리곤이 빈틈없이 맞물린다(겹침 0).
+ *  - 서울은 폴리곤이 아니라 **경기 밖 콜아웃 배지**로 분리 → 경기·인천 글자와 절대 겹치지 않는다.
+ *  - 모든 권역에 `보유/전체` + 완주 ★ 를 11.5~12px 로 표시(카드 폭 342px 기준 화면 11px 이상).
+ */
 const REGION_MAP_SHAPES = {
-  gyeonggi:    { pts: '68,28 148,22 152,92 104,102 64,84', cx: 112, cy: 48, lx: 112, ly: 43 },
-  seoul:       { pts: '96,52 126,50 128,74 96,76',          cx: 112, cy: 64, lx: 112, ly: 66 },
-  gangwon:     { pts: '150,18 228,16 254,88 232,102 154,92', cx: 196, cy: 56, lx: 198, ly: 55 },
-  chungcheong: { pts: '66,94 152,94 198,100 184,142 98,144 64,126', cx: 128, cy: 118, lx: 128, ly: 117 },
-  jeolla:      { pts: '64,132 142,146 140,204 82,210 56,178', cx: 100, cy: 174, lx: 100, ly: 173 },
-  gyeongsang:  { pts: '186,102 252,94 266,162 238,202 146,202 146,144', cx: 204, cy: 152, lx: 204, ly: 150 },
-  jeju:        { pts: '88,220 144,218 150,236 90,238',     cx: 118, cy: 229, lx: 118, ly: 230 },
+  gyeonggi:    { pts: '75,30 110,24 150,18 168,40 172,80 158,104 120,112 86,104 58,92 78,66', lx: 116, ly: 70 },
+  gangwon:     { pts: '150,18 190,14 232,10 272,8 300,6 310,40 300,75 312,110 300,150 280,160 250,150 215,140 185,120 158,104 172,80 168,40', lx: 240, ly: 86 },
+  chungcheong: { pts: '58,92 86,104 120,112 158,104 185,120 200,145 165,170 155,205 120,190 85,180 66,168 52,140 68,118', lx: 120, ly: 152 },
+  gyeongsang:  { pts: '185,120 215,140 250,150 280,160 300,150 290,185 300,215 288,248 268,262 240,272 215,266 195,278 170,268 160,240 155,205 165,170 200,145', lx: 226, ly: 203 },
+  jeolla:      { pts: '66,168 85,180 120,190 155,205 160,240 170,268 148,282 128,272 105,282 80,272 58,282 40,262 48,240 62,215 50,190', lx: 104, ly: 226 },
+  jeju:        { pts: '80,296 140,294 162,310 138,332 92,330 72,308', lx: 112, ly: 308 },
 };
+/** 서울권 — 경기 폴리곤 위가 아니라 왼쪽 여백의 콜아웃 배지 + 지시선 */
+const SEOUL_CALLOUT = { x: 2, y: 44, w: 64, h: 38, cx: 34, toX: 92, toY: 78 };
 
 export function regionMapCard(ui) {
   const now = Date.now();
   const data = regionMapData(ui.s, now);
   const totalHeld = data.reduce((a, r) => a + r.held, 0);
   const totalAll = data.reduce((a, r) => a + r.total, 0);
-  const polys = data.map((r) => {
-    const sh = REGION_MAP_SHAPES[r.id];
-    if (!sh) return '';
-    const op = r.held > 0 ? (0.24 + Math.min(0.62, r.pct * 0.72)).toFixed(2) : '0.07';
-    const stroke = r.hasNews ? '#ffcf5c' : r.complete ? r.color : r.held > 0 ? r.color : 'rgba(255,255,255,0.22)';
-    const sw = r.hasNews ? '2.2' : r.complete ? '1.8' : '1.1';
-    const petTxt = r.pets.length ? r.pets.map((p) => p.emoji).join('') : '';
-    const tag = r.hasNews ? '📈' : r.landmarks > 0 ? '🏛️' : '';
-    return `
-      <g class="rmap-poly${r.hasNews ? ' news' : ''}" data-action="land-map-region" data-value="${r.id}" role="button" aria-label="${esc(r.name)} 매물 보기">
-        <polygon points="${sh.pts}" fill="${r.color}" fill-opacity="${op}" stroke="${stroke}" stroke-width="${sw}" stroke-linejoin="round"/>
-        <text class="rmap-lbl" x="${sh.lx}" y="${sh.ly}" text-anchor="middle">${esc(r.name.replace('권', ''))}${tag}${petTxt}</text>
-        ${r.id !== 'seoul' && r.id !== 'jeju' ? `<text class="rmap-cnt" x="${sh.lx}" y="${sh.ly + 11}" text-anchor="middle">${r.held}/${r.total}</text>` : ''}
+  const byId = {};
+  for (const r of data) byId[r.id] = r;
+
+  const fillOf = (r) => (r.held > 0 ? (0.22 + Math.min(0.6, r.pct * 0.7)).toFixed(2) : '0.07');
+  const strokeOf = (r) => (r.hasNews ? '#ffcf5c' : r.complete ? r.color : r.held > 0 ? r.color : 'rgba(255,255,255,0.28)');
+  const widthOf = (r) => (r.hasNews ? '2.4' : r.complete ? '2' : '1.2');
+
+  const polys = data
+    .map((r) => {
+      const sh = REGION_MAP_SHAPES[r.id];
+      if (!sh) return '';
+      const name = esc(r.name.replace('권', ''));
+      const cnt = `${r.held}/${r.total}${r.complete ? ' ★' : ''}`;
+      const cntY = sh.one ? 0 : sh.ly + 16;
+      return `
+      <g class="rmap-poly${r.hasNews ? ' news' : ''}${r.complete ? ' done' : ''}" data-action="land-map-region" data-value="${r.id}" role="button" tabindex="0" aria-label="${name} ${cnt} — ${r.name} 매물 보기">
+        <polygon points="${sh.pts}" fill="${r.color}" fill-opacity="${fillOf(r)}" stroke="${strokeOf(r)}" stroke-width="${widthOf(r)}" stroke-linejoin="round"/>
+        ${sh.one
+          ? `<text class="rmap-lbl" x="${sh.lx}" y="${sh.ly}" text-anchor="middle">${name}</text>
+             <text class="rmap-cnt" x="${sh.lx}" y="${sh.ly + 15}" text-anchor="middle">${cnt}</text>`
+          : `<text class="rmap-lbl" x="${sh.lx}" y="${sh.ly}" text-anchor="middle">${name}</text>
+             <text class="rmap-cnt" x="${sh.lx}" y="${cntY}" text-anchor="middle">${cnt}</text>`}
       </g>`;
-  }).join('');
+    })
+    .join('');
+
+  // 서울 콜아웃 배지 — 폴리곤과 분리해 글자 겹침을 구조적으로 없앤다
+  const se = byId.seoul || { held: 0, total: 1, complete: false, hasNews: false, color: '#69c0ff' };
+  const seCnt = `${se.held}/${se.total}${se.complete ? ' ★' : ''}`;
+  const seoul = `
+    <g class="rmap-poly rmap-seoul${se.hasNews ? ' news' : ''}" data-action="land-map-region" data-value="seoul" role="button" tabindex="0" aria-label="서울 ${seCnt} — 서울권 매물 보기">
+      <line x1="${SEOUL_CALLOUT.x + SEOUL_CALLOUT.w}" y1="${SEOUL_CALLOUT.y + 18}" x2="${SEOUL_CALLOUT.toX}" y2="${SEOUL_CALLOUT.toY}" stroke="${se.color}" stroke-width="1" stroke-dasharray="3 3" opacity="0.75"/>
+      <circle cx="${SEOUL_CALLOUT.toX}" cy="${SEOUL_CALLOUT.toY}" r="2.4" fill="${se.color}"/>
+      <rect x="${SEOUL_CALLOUT.x}" y="${SEOUL_CALLOUT.y}" width="${SEOUL_CALLOUT.w}" height="${SEOUL_CALLOUT.h}" rx="9" fill="${se.color}" fill-opacity="${se.held > 0 ? '0.2' : '0.08'}" stroke="${se.color}" stroke-width="${se.held > 0 ? '1.6' : '1.1'}"/>
+      <text class="rmap-lbl" x="${SEOUL_CALLOUT.cx}" y="${SEOUL_CALLOUT.y + 17}" text-anchor="middle">서울</text>
+      <text class="rmap-cnt" x="${SEOUL_CALLOUT.cx}" y="${SEOUL_CALLOUT.y + 31}" text-anchor="middle">${seCnt}</text>
+    </g>`;
 
   const btns = data.map((r) => `
     <button class="rmap-btn${r.held > 0 ? ' on' : ''}${r.hasNews ? ' news' : ''}" style="--sc:${r.color}" type="button" data-action="land-map-region" data-value="${r.id}">
-      <span>${r.icon} ${esc(r.name)}${r.hasNews ? ' 📈' : ''}${r.pets.length ? ` ${r.pets.map((p) => p.emoji).join('')}` : ''}</span>
-      <small>${r.held}/${r.total}${r.complete ? ' ★' : ''}</small>
+      <span>${r.icon} ${esc(r.name)}${r.hasNews ? ' 📈' : ''}${r.complete ? ' ★' : ''}</span>
+      <small>${r.held}/${r.total}</small>
     </button>`).join('');
 
   return `
@@ -160,7 +166,7 @@ export function regionMapCard(ui) {
       <span class="tiny dim">권역 탭 → 바로 투자</span>
     </div>
     <div class="rmap-wrap">
-      <svg class="rmap-svg" viewBox="0 0 320 246" aria-label="대한민국 7권역 영지 지도">${polys}</svg>
+      <svg class="rmap-svg" viewBox="0 0 340 400" aria-label="대한민국 7권역 영지 지도">${polys}${seoul}</svg>
     </div>
     ${(() => {
       const built = MEGA_PROJECTS.filter((p) => (ui.s && ui.s.mega && ui.s.mega[p.id] > 0));
