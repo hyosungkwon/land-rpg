@@ -1232,18 +1232,18 @@ body.resting{overflow:hidden;}
 
 /* ── 놀이 탭: 둘이 같이하기 카드(전폭) ── */
 .gc-duo{grid-column:1/-1;flex-direction:row;align-items:center;justify-content:flex-start;
-  gap:12px;padding:13px 15px;background:linear-gradient(135deg,#5b3fd8,#e91e63);text-align:left;}
+  gap:12px;padding:13px 15px 15px;background:linear-gradient(135deg,#5b3fd8,#e91e63);text-align:left;}
 .duo-banner-info{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;}
 .duo-banner-title{font-family:'Jua',sans-serif;font-size:1rem;color:#fff;}
-.duo-banner-desc{font-family:'Jua',sans-serif;font-size:.68rem;color:rgba(255,255,255,.88);line-height:1.32;}
+.duo-banner-desc{font-family:'Jua',sans-serif;font-size:.68rem;color:rgba(255,255,255,.88);line-height:1.4;}
 .duo-banner-badge{flex-shrink:0;font-family:'Jua',sans-serif;font-size:.55rem;color:#5a3e00;
   background:#FFD93D;border-radius:9px;padding:4px 8px;line-height:1.25;white-space:nowrap;
   box-shadow:0 3px 8px rgba(0,0,0,.22);}
 
 /* ── 허브 ── */
 #duo{background:linear-gradient(160deg,#1a1033,#2b2350 55%,#3b2560);}
-.duo-body{flex:1;display:flex;flex-direction:column;justify-content:center;gap:11px;
-  padding:12px 14px 22px;width:100%;max-width:430px;margin:0 auto;}
+.duo-body{flex:1;display:flex;flex-direction:column;gap:10px;
+  padding:10px 14px 20px;width:100%;max-width:430px;margin:0 auto;}
 .duo-hero{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.08);
   border:1px solid rgba(255,255,255,.14);border-radius:18px;padding:13px 14px;}
 .duo-hero-em{font-size:2rem;}
@@ -1264,7 +1264,7 @@ body.resting{overflow:hidden;}
 .duo-pick.da{background:linear-gradient(135deg,#1565c0,#0d47a1);}
 .duo-pick.dd{background:linear-gradient(135deg,#c2185b,#7B1FA2);}
 .duo-tip{text-align:center;font-family:'Jua',sans-serif;font-size:.68rem;
-  color:rgba(255,255,255,.62);line-height:1.4;margin-top:4px;word-break:keep-all;}
+  color:rgba(255,255,255,.62);line-height:1.4;margin-top:auto;padding-top:8px;word-break:keep-all;}
 .duo-note{text-align:center;font-family:'Jua',sans-serif;font-size:.66rem;
   color:rgba(255,255,255,.5);margin-top:-4px;}
 
