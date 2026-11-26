@@ -370,28 +370,45 @@
 
   function computeScore(topic) {
     const src = drawCanvas;
-    const bb = inkBBox(src, 2);
-    if (!bb) return { empty: true };
-    const inkRatio = (bb.count * 4) / (bb.W * bb.H);
-    if (bb.count < 40 || inkRatio < 0.0035) return { empty: true, tiny: true };
+    const W = src.width, H = src.height;
+    const img = drawCtx.getImageData(0, 0, W, H).data;
+
+    // 1) 그린 잉크의 범위와 양
+    const step = 2;
+    let minX = W, minY = H, maxX = -1, maxY = -1, count = 0;
+    for (let y = 0; y < H; y += step) {
+      const row = y * W;
+      for (let x = 0; x < W; x += step) {
+        if (img[(row + x) * 4 + 3] > 28) {
+          count++;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (!count) return { empty: true };
+    const inkRatio = (count * 4) / (W * H);
+    if (count < 40 || inkRatio < 0.0035) return { empty: true, tiny: true };
 
     const ref = getRef(topic);
     const rb = ref.bbox;
     const rw = Math.max(1, rb.x1 - rb.x0 + 1);
     const rh = Math.max(1, rb.y1 - rb.y0 + 1);
-    const cw = Math.max(3, bb.x1 - bb.x0);
-    const ch = Math.max(3, bb.y1 - bb.y0);
+    const cw = Math.max(3, Math.min(W, maxX + step) - minX);
+    const ch = Math.max(3, Math.min(H, maxY + step) - minY);
 
-    // 그림 영역(bounding box)을 참조 도형 크기에 맞춰 정규화
+    // 2) 그림 영역(bounding box)을 참조 도형 크기에 맞춰 정규화
     const s = Math.min((rw * 1.08) / cw, (rh * 1.08) / ch);
-    const ccx = (bb.x0 + bb.x1) / 2, ccy = (bb.y0 + bb.y1) / 2;
+    const ccx = (minX + maxX) / 2, ccy = (minY + maxY) / 2;
     const rcx = (rb.x0 + rb.x1) / 2, rcy = (rb.y0 + rb.y1) / 2;
 
     const norm = document.createElement('canvas');
     norm.width = GRID; norm.height = GRID;
     const ng = norm.getContext('2d', { willReadFrequently: true });
     ng.setTransform(s, 0, 0, s, rcx - ccx * s, rcy - ccy * s);
-    ng.drawImage(src, bb.x0, bb.y0, cw, ch, bb.x0, bb.y0, cw, ch);
+    ng.drawImage(src, minX, minY, cw, ch, minX, minY, cw, ch);
     const nd = ng.getImageData(0, 0, GRID, GRID).data;
 
     const child = new Uint8Array(GRID * GRID);
@@ -405,32 +422,60 @@
     const dRef = distanceField(ref.mask);
     const TOL = 5.0;
 
-    let rSum = 0, rN = 0, pSum = 0, pN = 0;
+    // 3) 재현율 — 참조 도형의 각 부분을 얼마나 덮었나
+    let rSum = 0, rN = 0;
     for (let i = 0; i < GRID * GRID; i++) {
       if (ref.mask[i]) { rSum += Math.max(0, 1 - dChild[i] / TOL); rN++; }
-      if (child[i]) { pSum += Math.max(0, 1 - dRef[i] / TOL); pN++; }
     }
     const recall = rN ? rSum / rN : 0;
+
+    // 4) 정밀도 — 그은 선(획의 중심선)이 참조 도형에서 얼마나 벗어났나
+    //    (칠한 면적이 아니라 획 자체를 보므로, 캔버스를 뒤덮은 낙서와 모양을 맞춘 그림이 갈린다)
+    let pSum = 0, pN = 0, junkN = 0;
+    const consider = (x, y) => {
+      const xi = Math.round(x), yi = Math.round(y);
+      if (xi < 0 || yi < 0 || xi >= W || yi >= H) return;
+      if (img[(yi * W + xi) * 4 + 3] <= 28) return; // 지워진 자리는 빼고
+      const gx = Math.round(rcx + (x - ccx) * s);
+      const gy = Math.round(rcy + (y - ccy) * s);
+      pN++;
+      if (gx < 0 || gy < 0 || gx >= GRID || gy >= GRID) { junkN++; return; }
+      const d = dRef[gy * GRID + gx];
+      pSum += Math.max(0, 1 - d / TOL);
+      if (d > 9) junkN++;
+    };
+    const sx = dpr, sy = dpr; // CSS px → 캔버스 px
+    for (const st of state.strokes) {
+      if (st.erase || !st.pts.length) continue;
+      if (st.pts.length === 1) { consider(st.pts[0].x * sx, st.pts[0].y * sy); continue; }
+      for (let i = 1; i < st.pts.length; i++) {
+        const ax = st.pts[i - 1].x * sx, ay = st.pts[i - 1].y * sy;
+        const bx = st.pts[i].x * sx, by = st.pts[i].y * sy;
+        const len = Math.hypot(bx - ax, by - ay);
+        const n = Math.max(1, Math.min(40, Math.ceil(len / 3)));
+        for (let k = 0; k < n; k++) consider(ax + ((bx - ax) * k) / n, ay + ((by - ay) * k) / n);
+      }
+      const lastP = st.pts[st.pts.length - 1];
+      consider(lastP.x * sx, lastP.y * sy);
+    }
     const precision = pN ? pSum / pN : 0;
+    const junk = pN ? junkN / pN : 0;
+    if (pN < 6) return { empty: true, tiny: true };
+
     const f1 = recall + precision > 0 ? (2 * recall * precision) / (recall + precision) : 0;
 
-    // 특징 비율 — 가로세로 비율이 참조와 얼마나 비슷한가
+    // 5) 특징 비율 — 가로세로 비율이 참조와 얼마나 비슷한가
     const arC = cw / ch;
-    const rr = arC / ref.ar;
+    const rr = arC / (rw / rh);
     const arScore = clamp01(Math.min(rr, 1 / rr));
 
     const colorScore = colorFidelity(topic);
 
-    // 형태에서 멀리 떨어진 낙서 비율 (모양을 맞춘 그림과 엉뚱한 낙서를 가르는 지표)
-    let junkN = 0;
-    for (let i = 0; i < GRID * GRID; i++) if (child[i] && dRef[i] > 9) junkN++;
-    const junk = pN ? junkN / pN : 0;
-
-    const raw = clamp01(0.78 * f1 * (1 - 0.75 * junk) + 0.11 * arScore + 0.11 * colorScore);
+    const raw = clamp01(0.84 * f1 * (1 - 0.55 * junk) + 0.08 * arScore + 0.08 * colorScore);
     let pct = pctFromRaw(raw);
     pct = Math.max(55, Math.min(99, pct));
 
-    // 빠진 부분 찾기
+    // 6) 빠진 부분 찾기
     const missing = [];
     for (const part of ref.parts) {
       let sum = 0, n = 0;
@@ -453,7 +498,7 @@
   /* ───────────────────────── 결과 화면 ───────────────────────── */
 
   // raw(0~1) → 일치율(%). 7세가 실망하지 않도록 아래 구간을 55~99로 부드럽게 편다.
-  const RAW_TO_PCT = [[0, 55], [0.25, 58], [0.40, 66], [0.55, 74], [0.70, 84], [0.85, 93], [1, 99]];
+  const RAW_TO_PCT = [[0, 55], [0.25, 57], [0.40, 64], [0.55, 72], [0.70, 82], [0.85, 93], [1, 99]];
   function pctFromRaw(raw) {
     const t = Math.max(0, Math.min(1, raw));
     for (let i = 1; i < RAW_TO_PCT.length; i++) {
