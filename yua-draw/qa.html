@@ -15,7 +15,7 @@
 </style>
 </head>
 <body>
-  <iframe id="app" src="./index.html" title="yua-draw app"></iframe>
+  <iframe id="app" title="yua-draw app"></iframe>
   <div>
     <h1>yua-draw 자체 점검 (?s=trace|scribble|partial|blank)</h1>
     <pre id="log">준비 중…</pre>
@@ -31,6 +31,7 @@
   function log(s) { lines.push(s); out.textContent = lines.join('\n'); }
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  frame.src = './index.html?qa=' + Date.now();
   frame.addEventListener('load', () => { run().catch((e) => log('FATAL ' + (e && e.stack || e))); });
 
   async function run() {
