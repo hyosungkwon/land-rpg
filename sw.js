@@ -1,5 +1,5 @@
 // land-rpg / sw.js — 오프라인 캐시 (게스트 전용: 네트워크가 없어도 처음부터 끝까지 플레이)
-const VERSION = 'land-rpg-v7.5.0';
+const VERSION = 'land-rpg-v7.6.0';
 // 같은 릴리스 안에서 자산을 고친 경우 BUILD 를 올린다 → 열린 탭이 새 캐시로 넘어온다.
 const BUILD = 'r1';
 const CACHE = `${VERSION}-${BUILD}`;
@@ -131,7 +131,34 @@ const CORE = [
   './assets/sprites/boss/LichKing.png',
   './assets/sprites/boss/Phoenix.png',
   './assets/sprites/boss/Kraken.png',
-  './assets/sprites/boss/Behemoth.png'
+  './assets/sprites/boss/Behemoth.png',
+  // v7.6 신규 일러스트 몬스터 4종 · 보스 1종
+  './assets/sprites/monster/CrystalGolem.png',
+  './assets/sprites/monster/LavaHound.png',
+  './assets/sprites/monster/SandGolem.png',
+  './assets/sprites/monster/VampireKnight.png',
+  './assets/sprites/boss/StormTitan.png',
+  // v7.6 장비 55종 고퀄리티 일러스트 아이콘 (WebP)
+  './assets/items/w_iron.webp', './assets/items/w_steel.webp', './assets/items/w_axe.webp',
+  './assets/items/w_flame.webp', './assets/items/w_frost.webp', './assets/items/w_thunder.webp',
+  './assets/items/w_dragon.webp', './assets/items/w_katana.webp', './assets/items/w_hammer.webp',
+  './assets/items/w_stormbow.webp', './assets/items/w_scythe.webp',
+  './assets/items/a_leather.webp', './assets/items/a_chain.webp', './assets/items/a_plate.webp',
+  './assets/items/a_guard.webp', './assets/items/a_scale.webp', './assets/items/a_holy.webp',
+  './assets/items/a_abyss.webp', './assets/items/a_windmail.webp', './assets/items/a_goldrobe.webp',
+  './assets/items/a_aegis.webp', './assets/items/a_dragonlord.webp',
+  './assets/items/h_cloth.webp', './assets/items/h_iron.webp', './assets/items/h_hood.webp',
+  './assets/items/h_horn.webp', './assets/items/h_crown.webp', './assets/items/h_dragon.webp',
+  './assets/items/h_abyss.webp', './assets/items/h_visor.webp', './assets/items/h_stormcirc.webp',
+  './assets/items/h_paladin.webp', './assets/items/h_midas.webp',
+  './assets/items/r_copper.webp', './assets/items/r_silver.webp', './assets/items/r_ruby.webp',
+  './assets/items/r_sharp.webp', './assets/items/r_storm.webp', './assets/items/r_sage.webp',
+  './assets/items/r_eye.webp', './assets/items/r_guard.webp', './assets/items/r_fortune.webp',
+  './assets/items/r_tempest.webp', './assets/items/r_titan.webp',
+  './assets/items/m_wood.webp', './assets/items/m_silver.webp', './assets/items/m_clover.webp',
+  './assets/items/m_crystal.webp', './assets/items/m_ember.webp', './assets/items/m_star.webp',
+  './assets/items/m_grail.webp', './assets/items/m_stormrel.webp', './assets/items/m_guardrel.webp',
+  './assets/items/m_phoenix.webp', './assets/items/m_midas.webp'
 ];
 
 self.addEventListener('install', (event) => {

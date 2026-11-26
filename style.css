@@ -1882,10 +1882,31 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 
 /* ══════════════════ v4.0: 장비 종류 · 장착 슬롯 · 인벤토리 · 비교 ══════════════════ */
 
-/* 아이콘(SVG) 공통 */
+/* 아이콘(SVG / v7.6.0 일러스트 WebP) 공통 */
 .gsvg { display: block; flex: 0 0 auto; }
 .gs-ico .gsvg, .iv-ico .gsvg, .cmp-ico .gsvg, .cv-body .gsvg, .g-ico .gsvg { width: 100%; height: 100%; }
 .gs-ico .gsvg, .iv-ico .gsvg { width: 40px; height: 40px; }
+.gico-wrap {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 9px;
+  padding: 2px;
+  background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--gc, #9fb4cc) 24%, transparent), rgba(8, 12, 22, 0.32) 78%);
+}
+.gico-wrap .gimg {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55));
+}
+.gico-wrap.hero .gimg, .gico-wrap.legend .gimg {
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--gc, #ffd76a) 58%, transparent)) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.62));
+}
+.gico-wrap .gsvg { display: none; }
+.gs-ico .gico-wrap, .iv-ico .gico-wrap, .cmp-ico .gico-wrap, .cv-body .gico-wrap, .g-ico .gico-wrap { width: 100%; height: 100%; }
 
 /* ⚔️ 장착 5부위 슬롯 */
 .gear-slots { display: flex; flex-direction: column; gap: 6px; }

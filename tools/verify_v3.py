@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "7.5.0"
+EXPECTED_VER = "7.6.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui.js", "src/sound.js"]
 
@@ -881,7 +881,7 @@ def main():
     ok(len(qdef["achIds"]) == 36 and len(set(qdef["achIds"])) == 36, "업적 36종 정의(중복 없음)", str(len(qdef["achIds"])))
     ok(all(s > 0 for s in qdef["achShards"]) and qdef["achAtk"] >= 2 and qdef["achGold"] >= 2, "업적 보상 = 💎 + 영구 스탯 보너스", json.dumps({"atk": qdef["achAtk"], "gold": qdef["achGold"]}))
     ok(qdef["weights"] == [30, 40, 20, 10] and qdef["milestones"] == [10, 25, 50, 75, 100], "도감 가중치 합 100 · 마일스톤 5단계", json.dumps(qdef["weights"]))
-    ok(qdef["monsters"] == 45 and qdef["bosses"] == 16 and qdef["petIds"] == ["wolf", "fox", "owl", "dragon", "golem", "hawk"], "도감 몬스터 45종(보스 16)·펫 6종", json.dumps({"m": qdef["monsters"], "b": qdef["bosses"]}))
+    ok(qdef["monsters"] == 50 and qdef["bosses"] == 17 and qdef["petIds"] == ["wolf", "fox", "owl", "dragon", "golem", "hawk"], "도감 몬스터 50종(보스 17)·펫 6종", json.dumps({"m": qdef["monsters"], "b": qdef["bosses"]}))
 
     mq = js(ctx, """
       const s = defaultState(0);
@@ -1005,7 +1005,7 @@ def main():
     ok(cxr["pct0"] < 10 and cxr["met0"] == 0 and cxr["slime"] == {"m": 1, "k": 4}, "몬스터 도감 — 만남·처치 수 기록", json.dumps(cxr["slime"]))
     ok(cxr["ownedAfterSell"] == 0 and len(cxr["cityNames"]) == 1 and cxr["cityPyeong"] == 5, "부동산 도감 — 매도해도 지역·최대 평수 기록 유지", json.dumps(cxr["cityNames"], ensure_ascii=False))
     ok("legend" in cxr["gearGot"] and "common" in cxr["gearGot"], "장비 등급 도감 — 획득 등급 기록", json.dumps(cxr["gearGot"]))
-    ok(cxr["monsterTotal"] == 45 and cxr["monstersMet"] == 1 and cxr["petsUnlocked"] == 0, "도감 상세 목록(45종·펫 4종)", json.dumps({"met": cxr["monstersMet"]}))
+    ok(cxr["monsterTotal"] == 50 and cxr["monstersMet"] == 1 and cxr["petsUnlocked"] == 0, "도감 상세 목록(50종·펫 6종)", json.dumps({"met": cxr["monstersMet"]}))
 
     msb = js(ctx, """
       const s = defaultState(0);
@@ -1752,9 +1752,9 @@ def main():
         sprite: [spriteSrc('fx_claw'), spriteSrc('fx_burst'), spriteSrc('Slime'), spriteSrc('SlimeKing')],
       };
     """)
-    ok(mod["total"] == 45 and mod["missingMotion"] == [] and mod["missingAtk"] == [], "45종 몬스터 모두 이동/공격 모션 정의", json.dumps({"missing": mod["missingMotion"] + mod["missingAtk"]}))
-    ok(mod["arch"] == {"slime": 4, "flyer": 14, "walker": 27}, "슬라임 4 · 비행 14 · 보행 27 아키타입 분류", json.dumps(mod["arch"]))
-    ok(len(mod["ranged"]) == 19 and len(mod["melee"]) == 26 and mod["badProj"] == [], "원거리 19종(투사체 보유) · 근접 26종", json.dumps({"r": mod["ranged"], "bad": mod["badProj"]}, ensure_ascii=False))
+    ok(mod["total"] == 50 and mod["missingMotion"] == [] and mod["missingAtk"] == [], "50종 몬스터 모두 이동/공격 모션 정의", json.dumps({"missing": mod["missingMotion"] + mod["missingAtk"]}))
+    ok(mod["arch"] == {"slime": 4, "flyer": 14, "walker": 32}, "슬라임 4 · 비행 14 · 보행 32 아키타입 분류", json.dumps(mod["arch"]))
+    ok(len(mod["ranged"]) == 20 and len(mod["melee"]) == 30 and mod["badProj"] == [], "원거리 20종(투사체 보유) · 근접 30종", json.dumps({"r": mod["ranged"], "bad": mod["badProj"]}, ensure_ascii=False))
     ok(set(mod["moves"]) == {"claw", "slam", "bite", "fire", "feather", "dark", "holy", "acid", "ice", "sonic"}, "공격 모션 10종(할퀴기·내려찍기·물기·화염·깃털·암흑·신성·산성·얼음·음파)", json.dumps(mod["moves"]))
     ok(mod["fallback"] == ["walker", "melee", "claw"], "알 수 없는 이름은 보행·근접 할퀴기로 폴백", json.dumps(mod["fallback"]))
     ok(mod["sprite"] == ["assets/sprites/fx/fx_claw.png", "assets/sprites/fx/fx_burst.png", "assets/sprites/monster/Slime.png", "assets/sprites/boss/SlimeKing.png"], "이펙트/몬스터/보스 스프라이트 경로", json.dumps(mod["sprite"]))
@@ -1960,7 +1960,7 @@ def main():
       };
     """ % (json.dumps(NEW_MONSTERS), json.dumps(NEW_BOSSES)))
     ok(newmeta["inCatalog"] and newmeta["bossesIn"], "신규 일반 11종 + 보스 5종이 도감(MONSTERS)에 등록")
-    ok(newmeta["total"] == 45 and newmeta["bossesTotal"] == 16, "몬스터 총 45종(일반 29 · 보스 16)", json.dumps({"t": newmeta["total"], "b": newmeta["bossesTotal"]}))
+    ok(newmeta["total"] == 50 and newmeta["bossesTotal"] == 17, "몬스터 총 50종(일반 33 · 보스 17)", json.dumps({"t": newmeta["total"], "b": newmeta["bossesTotal"]}))
     ok(not newmeta["motion"] and not newmeta["atk"] and not newmeta["proj"], "신규 16종 모두 이동 모션·공격(투사체) 정의", json.dumps(newmeta["motion"] + newmeta["atk"] + newmeta["proj"]))
     ok(all(p.startswith("assets/sprites/monster/") for p in newmeta["paths"][:len(NEW_MONSTERS)]) and all(p.startswith("assets/sprites/boss/") for p in newmeta["paths"][len(NEW_MONSTERS):]), "스프라이트 경로가 일반/보스 폴더로 갈린다", json.dumps(newmeta["paths"][:2]))
 
@@ -2019,8 +2019,8 @@ def main():
     """)
     ok(stages["badNormals"] == 0 and stages["badBoss"] == 0, "모든 스테이지의 몬스터·보스가 도감에 존재", json.dumps(stages))
     ok(stages["aligned"] is True and stages["stagesPerTheme"] == 3, "8개 테마 × 3스테이지 = 24스테이지(테마 정렬)", json.dumps({"s": stages["stages"], "t": stages["themes"]}))
-    ok(stages["bossesUsed"] == 16, "16종 보스가 모두 스테이지에 등장", json.dumps({"bosses": stages["bossesUsed"]}))
-    ok(stages["uniqueNormals"] == 28, "28종 일반 필드 몬스터가 모두 스테이지에 등장(보물 고블린은 이벤트 스폰)", json.dumps({"normals": stages["uniqueNormals"]}))
+    ok(stages["bossesUsed"] == 17, "17종 보스가 모두 스테이지에 등장", json.dumps({"bosses": stages["bossesUsed"]}))
+    ok(stages["uniqueNormals"] == 32, "32종 일반 필드 몬스터가 모두 스테이지에 등장(보물 고블린은 이벤트 스폰)", json.dumps({"normals": stages["uniqueNormals"]}))
 
     codex_new = js(ctx, """
       const s = defaultState(0);
@@ -6043,6 +6043,33 @@ def main():
     usrc75 = read("src/ui.js")
     ok(all(x in rsrc75 for x in ["function fmtDmg(", "this.dmgNumbersOn", "topBusy", "b.invasion || b.rift"]), "render.js — K/M/B 데미지 축약·dmgNumbersOn 토글·상단 안전 구역(콤보/가호 배너)")
     ok("toggleDmgNumbers" in asrc75 and "this.renderer.dmgNumbersOn" in asrc75 and 'data-action="toggle-dmg-numbers"' in usrc75 and "case 'toggle-dmg-numbers':" in usrc75, "app.js · ui.js — 설정 탭 데미지 숫자 표시 토글 배선")
+
+    # ── 43) v7.6.0 🎨 55종 장비 일러스트 WebP · 신규 몬스터/보스 5종 스프라이트 ──
+    section("v7.6.0 55종 장비 일러스트 · 신규 몬스터/보스 5종")
+    sw76 = read("sw.js")
+    g76 = js(ctx, """
+      const ids = GEAR_ITEMS.map((it) => it.id);
+      const htmls = GEAR_ITEMS.map((it) => gearIcon(it, 40));
+      const allImg = htmls.every((h, i) => h.includes(`assets/items/${ids[i]}.webp`) && h.includes('<svg'));
+      const newM = ['CrystalGolem', 'LavaHound', 'SandGolem', 'VampireKnight', 'StormTitan'];
+      const monOk = newM.every((n) => MONSTERS[n] && MONSTER_MOTION[n] && MONSTER_ATTACKS[n]);
+      return { ids, allImg, monOk };
+    """)
+    missing_items = [iid for iid in g76["ids"] if not os.path.exists(os.path.join(ROOT, f"assets/items/{iid}.webp")) or f"'./assets/items/{iid}.webp'" not in sw76]
+    ok(g76["allImg"] and not missing_items, "장비 55종 WebP 일러스트 존재 · gearIcon <img>+SVG 폴백 · sw.js 프리캐시 동기화", ", ".join(missing_items[:5]))
+    new_m76 = [
+        ("assets/sprites/monster/CrystalGolem.png", (256, 256)),
+        ("assets/sprites/monster/LavaHound.png", (256, 256)),
+        ("assets/sprites/monster/SandGolem.png", (256, 256)),
+        ("assets/sprites/monster/VampireKnight.png", (256, 256)),
+        ("assets/sprites/boss/StormTitan.png", (384, 384)),
+    ]
+    ok(g76["monOk"] and all(os.path.exists(os.path.join(ROOT, f)) and f"'./{f}'" in sw76 for f, _ in new_m76), "신규 몬스터 4종 + 보스 1종(폭풍 타이탄) 정의·PNG·sw.js 프리캐시 동기화")
+    try:
+        from PIL import Image
+        ok(all(Image.open(os.path.join(ROOT, f)).size == sz and Image.open(os.path.join(ROOT, f)).getextrema()[3][0] == 0 for f, sz in new_m76), "v7.6 신규 스프라이트 256px/384px 투명 RGBA PNG 규격 검증")
+    except Exception as e:
+        ok(False, "v7.6 신규 스프라이트 규격 검증", str(e))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

@@ -2,7 +2,7 @@
 // 밸런스·몬스터·장비·스킬 정의. DOM 의존 없음(헤드리스 테스트 가능).
 // v3: 게스트 전용 통합 경제 — 골드 하나로 사냥과 부동산을 함께 굴린다.
 
-export const APP_VERSION = '7.5.0';
+export const APP_VERSION = '7.6.0';
 export const SAVE_KEY = 'land_rpg_unified_v3';
 export const SAVE_VERSION = 3;
 
@@ -191,7 +191,12 @@ export const MONSTERS = {
   DarkElf: { ko: '다크엘프', boss: false },
   FrostGolem: { ko: '서리 골렘', boss: false },
   AbyssKnight: { ko: '심연 기사', boss: false },
-  // 보스 16종 (v3.8: +5, v5.7: +4)
+  //  · v7.6 신규 일러스트 몬스터 4종
+  CrystalGolem: { ko: '수정 골렘', boss: false },
+  LavaHound: { ko: '용암 사냥개', boss: false },
+  SandGolem: { ko: '사막 골렘', boss: false },
+  VampireKnight: { ko: '흡혈 기사', boss: false },
+  // 보스 17종 (v3.8: +5, v5.7: +4, v7.6: +1)
   SlimeKing: { ko: '슬라임 킹', boss: true },
   Troll: { ko: '트롤', boss: true },
   Cerberus: { ko: '케르베로스', boss: true },
@@ -208,6 +213,7 @@ export const MONSTERS = {
   Phoenix: { ko: '피닉스', boss: true },
   Kraken: { ko: '크라켄', boss: true },
   Behemoth: { ko: '베히모스', boss: true },
+  StormTitan: { ko: '폭풍 타이탄', boss: true },
 };
 
 /* ────────────────────────────── v5.7.0 엘리트 변종 · 보물 고블린 ────────────────────────────── */
@@ -285,6 +291,12 @@ export const MONSTER_MOTION = {
   Phoenix: 'flyer',
   Kraken: 'slime',
   Behemoth: 'walker',
+  // v7.6 신규 5종
+  CrystalGolem: 'walker',
+  LavaHound: 'walker',
+  SandGolem: 'walker',
+  VampireKnight: 'walker',
+  StormTitan: 'walker',
 };
 
 /** 몬스터 이름 → 모션 아키타입(모르면 보행형) */
@@ -343,6 +355,12 @@ export const MONSTER_ATTACKS = {
   Phoenix: { kind: 'ranged', move: 'fire', proj: 'fire', color: '#ff8a3d' },
   Kraken: { kind: 'ranged', move: 'acid', proj: 'acid', color: '#5ecbff' },
   Behemoth: { kind: 'melee', move: 'slam', color: '#ff5a3d' },
+  // v7.6 신규 5종
+  CrystalGolem: { kind: 'melee', move: 'slam', color: '#6fd3ff' },
+  LavaHound: { kind: 'melee', move: 'bite', color: '#ff7a2a' },
+  SandGolem: { kind: 'melee', move: 'slam', color: '#f0c869' },
+  VampireKnight: { kind: 'melee', move: 'claw', color: '#ff4d6a' },
+  StormTitan: { kind: 'ranged', move: 'sonic', proj: 'sonic', color: '#7fd3ff' },
 };
 
 /** 몬스터 이름 → 공격 정의(모르면 근접 할퀴기) */
@@ -386,21 +404,21 @@ export const STAGES = [
   // ・폐허
   { normals: ['Skeleton', 'Zombie', 'Minotaur'], boss: 'DeathLord' },
   // ・모래벌
-  { normals: ['Scorpion', 'Sandworm', 'Mummy'], boss: 'Anubis' },
+  { normals: ['Scorpion', 'Sandworm', 'SandGolem'], boss: 'Anubis' },
   // ・지하 동굴
   { normals: ['Batling', 'CaveSpider', 'Golem'], boss: 'CaveTroll' },
   // ・용암 지대
-  { normals: ['FireImp', 'MagmaGolem', 'Drake'], boss: 'RedDragon' },
+  { normals: ['FireImp', 'LavaHound', 'Drake'], boss: 'RedDragon' },
   // ・빙원
-  { normals: ['IceWolf', 'FrostWisp', 'Cyclops'], boss: 'IceGiant' },
+  { normals: ['IceWolf', 'FrostWisp', 'CrystalGolem'], boss: 'IceGiant' },
   // ・심연
   { normals: ['ShadowWraith', 'AbyssEye', 'Minotaur'], boss: 'VoidWalker' },
   // ・초원
   { normals: ['Slime', 'Goblin', 'Lizardman'], boss: 'SlimeKing' },
   // ・고목림
-  { normals: ['Werewolf', 'Lizardman', 'Harpy'], boss: 'Troll' },
+  { normals: ['Werewolf', 'Lizardman', 'Harpy'], boss: 'StormTitan' },
   // ・폐허
-  { normals: ['Gargoyle', 'DarkElf', 'Minotaur'], boss: 'Seraphim' },
+  { normals: ['Gargoyle', 'VampireKnight', 'DarkElf'], boss: 'Seraphim' },
   // ・모래벌
   { normals: ['Mummy', 'Scorpion', 'Lizardman'], boss: 'Behemoth' },
   // ・지하 동굴

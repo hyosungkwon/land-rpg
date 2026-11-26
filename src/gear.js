@@ -255,7 +255,13 @@ const FORMS = {
     <circle cx="16" cy="13" r="2.6" fill="${g}"/>`,
 };
 
-/** 아이템 아이콘 SVG 문자열 */
+/** v7.6.0 장비 고퀄리티 일러스트 아이콘 경로 */
+export function gearImgSrc(item) {
+  const it = typeof item === 'string' ? gearItem(item) : item;
+  return it ? `assets/items/${it.id}.webp` : '';
+}
+
+/** 아이템 아이콘 HTML (v7.6.0 일러스트 WebP 우선 + 실패 시 인라인 SVG 자동 폴백) */
 export function gearIcon(item, size = 34) {
   const it = typeof item === 'string' ? gearItem(item) : item;
   if (!it) return '';
@@ -264,7 +270,9 @@ export function gearIcon(item, size = 34) {
   const glow = (RARITY_INDEX[it.rarity] || 0) >= 3
     ? `<circle cx="16" cy="16" r="14.6" fill="${r.color}" opacity=".16"/>`
     : `<circle cx="16" cy="16" r="14.2" fill="${it.tint}" opacity=".09"/>`;
-  return `${SVG_HEAD(size, `${it.name} (${r.name})`)}${glow}${form(it.tint, it.accent || '#8b98a6', it.gem || '#ffcf5c')}</svg>`;
+  const svg = `${SVG_HEAD(size, `${it.name} (${r.name})`)}${glow}${form(it.tint, it.accent || '#8b98a6', it.gem || '#ffcf5c')}</svg>`;
+  const alt = `${it.name} (${r.name})`.replace(/"/g, '&quot;');
+  return `<span class="gico-wrap ${it.rarity}" style="--gc:${r.color};width:${size}px;height:${size}px"><img class="gimg" src="assets/items/${it.id}.webp" width="${size}" height="${size}" alt="${alt}" loading="lazy" decoding="async" onerror="this.style.display='none';if(this.nextElementSibling)this.nextElementSibling.style.display='block'">${svg}</span>`;
 }
 
 /* ────────────────────────────── 장비 카탈로그 (35종) ──────────────────────────────
