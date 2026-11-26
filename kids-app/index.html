@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0f0c29">
 <title>🌟 유아의 놀이터</title>
 <link rel="manifest" href="../manifest.json">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=20261126b">
 </head>
 <body>
 
@@ -488,9 +488,9 @@
 
 <!-- ══════════ 풍선 터뜨리기 ══════════ -->
 <div id="balloon" class="screen">
-  <div class="sub-header" style="color:#006064;background:rgba(0,0,0,.12);">
-    <button class="back-btn" style="color:#006064;background:rgba(0,0,0,.1);" onclick="Balloon.stop();App.home()">← 홈</button>
-    <span class="sub-title" style="color:#006064;">🎈 풍선 터뜨리기</span>
+  <div class="sub-header">
+    <button class="back-btn" onclick="Balloon.stop();App.home()">← 홈</button>
+    <span class="sub-title">🎈 풍선 터뜨리기</span>
   </div>
   <div class="bal-body">
     <div id="bal-start-screen">
@@ -700,7 +700,7 @@
 <div id="sp">
   <div class="sp-card">
     <span style="font-size:60px;display:block;margin-bottom:6px;" id="sp-em">🌟</span>
-    <div style="font-size:1.3rem;color:#FF6B9D;margin-bottom:3px;">스티커 획득! 🎉</div>
+    <div id="sp-title" style="font-size:1.3rem;color:#FF6B9D;margin-bottom:3px;">스티커 획득! 🎉</div>
     <div style="font-size:.85rem;color:#777;margin-bottom:13px;line-height:1.4;" id="sp-msg">잘 했어요!</div>
     <button class="gbtn gpk" onclick="App.closeSp()">좋아요! 😊</button>
   </div>
@@ -717,16 +717,16 @@
 </div>
 <canvas id="conf"></canvas>
 
-<script src="js/data.js?v=20261126"></script>
-<script src="js/topics.js?v=20261126"></script>
-<script src="js/core.js?v=20261126"></script>
-<script src="js/draw.js?v=20261126"></script>
-<script src="js/puzzle.js?v=20261126"></script>
-<script src="js/fun.js?v=20261126"></script>
-<script src="js/music.js?v=20261126"></script>
-<script src="js/art.js?v=20261126"></script>
-<script src="js/learn.js?v=20261126"></script>
-<script src="js/fishing.js?v=20261126"></script>
+<script src="js/data.js?v=20261126b"></script>
+<script src="js/topics.js?v=20261126b"></script>
+<script src="js/core.js?v=20261126b"></script>
+<script src="js/draw.js?v=20261126b"></script>
+<script src="js/puzzle.js?v=20261126b"></script>
+<script src="js/fun.js?v=20261126b"></script>
+<script src="js/music.js?v=20261126b"></script>
+<script src="js/art.js?v=20261126b"></script>
+<script src="js/learn.js?v=20261126b"></script>
+<script src="js/fishing.js?v=20261126b"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); });

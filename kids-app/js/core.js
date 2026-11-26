@@ -62,13 +62,27 @@
   }
 
   function showSp(em, msg) {
+    showPop(em, msg, '스티커 획득! 🎉', true);
+  }
+
+  // 스티커를 주지 않는 다독임/안내용 팝업
+  function showTip(em, msg) {
+    showPop(em, msg, '한 번 더 해볼까요?', true);
+  }
+
+  function showPop(em, msg, title, confetti) {
     var e = document.getElementById('sp-em');
     var m = document.getElementById('sp-msg');
+    var t = document.getElementById('sp-title');
     if (e) e.textContent = em || '🌟';
     if (m) m.textContent = msg || '잘 했어요!';
+    if (t) {
+      t.textContent = title || '스티커 획득! 🎉';
+      t.style.color = title && title.indexOf('스티커') < 0 ? '#42a5f5' : '#FF6B9D';
+    }
     var sp = document.getElementById('sp');
     if (sp) sp.classList.add('show');
-    doConfetti();
+    if (confetti) doConfetti();
     beep('win');
   }
   function closeSp() {
@@ -351,6 +365,7 @@
     checkAch: checkAch,
     updateHomeStatus: updateHomeStatus,
     showSp: showSp,
+    showTip: showTip,
     closeSp: closeSp,
     closeLup: closeLup,
     closeOverlay: closeOverlay,

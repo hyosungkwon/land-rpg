@@ -93,7 +93,7 @@
         }
         App.writeSave();
         if (cnt > 0) setTimeout(function () { App.earnReward('🎣', '낚시 ' + cnt + '마리 ' + sc + '점! 🐠'); }, 400);
-        else App.showSp('🎣', '다음엔 꼭 잡아봐요! 💪');
+        else App.showTip('🎣', '다음엔 꼭 잡아봐요! 💪');
       }
     }, 1000);
     raf = requestAnimationFrame(loop);

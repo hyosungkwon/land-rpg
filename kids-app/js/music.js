@@ -137,7 +137,7 @@
     keyEls = {};
     var W = Math.min(wrap.clientWidth || 360, 460);
     var wkW = Math.floor(W / 8);
-    var wkH = Math.min(168, Math.max(120, Math.floor(window.innerHeight * 0.22)));
+    var wkH = Math.min(230, Math.max(150, Math.floor(window.innerHeight * 0.28)));
     wrap.style.height = wkH + 'px';
 
     WHITE.forEach(function (n, i) {

@@ -166,8 +166,8 @@
     balBubbles = [];
     balClearAll();
 
-    var spawnMs = diff === 'easy' ? 1300 : diff === 'normal' ? 850 : 560;
-    var speed = diff === 'easy' ? 1.7 : diff === 'normal' ? 2.8 : 4.2;
+    var spawnMs = diff === 'easy' ? 1500 : diff === 'normal' ? 1000 : 700;
+    var speed = diff === 'easy' ? 1.2 : diff === 'normal' ? 1.9 : 2.9;
 
     balCountdown = setInterval(function () {
       balTimeLeft--;
@@ -182,8 +182,8 @@
   function balloonEnd() {
     balClearAll();
     if (balSc >= 60) App.earnReward('🎈', '풍선 ' + balSc + '점! 정말 대단해요! 💥');
-    else if (balSc >= 20) App.showSp('🎈', balSc + '점! 잘했어요! 한 번 더?');
-    else App.showSp('🎈', balSc + '점! 다시 해봐요! 💪');
+    else if (balSc >= 20) App.showTip('🎈', balSc + '점! 잘했어요! 한 번 더?');
+    else App.showTip('🎈', balSc + '점! 다시 해봐요! 💪');
     balloonInit();
   }
 
@@ -191,9 +191,9 @@
 
   function pickType() {
     var r = Math.random();
-    if (r < 0.10) return 'gold';
-    if (r < 0.22) return 'rainbow';
-    if (r < 0.38) return 'bomb';
+    if (r < 0.12) return 'gold';
+    if (r < 0.24) return 'rainbow';
+    if (r < 0.34) return 'bomb';
     return 'normal';
   }
 
@@ -419,7 +419,7 @@
 
     var vw = Math.min(window.innerWidth, 440);
     dfW = Math.floor((vw - 32 - 10) / 2);
-    dfH = Math.floor(dfW * 1.12);
+    dfH = Math.floor(Math.min(dfW * 1.35, window.innerHeight * 0.46));
     var lc = $id('df-left'), rc = $id('df-right');
     lc.width = dfW; lc.height = dfH;
     rc.width = dfW; rc.height = dfH;
@@ -825,7 +825,10 @@
   window.Maze = {
     begin: mazeBegin, newMaze: newMaze, diffSel: mzStartScreen,
     leave: function () { mzClear(); mzTarget = null; },
-    _qa: function () { return { size: mzSize, player: { x: mzPlayer.x, y: mzPlayer.y }, goal: { x: mzGoal.x, y: mzGoal.y }, done: mzDone, cell: mzCell, trail: mzTrail.length }; }
+    _qa: function () { return { size: mzSize, player: { x: mzPlayer.x, y: mzPlayer.y }, goal: { x: mzGoal.x, y: mzGoal.y }, done: mzDone, cell: mzCell, trail: mzTrail.length }; },
+    // 자체 점검용: 손가락 위치(칸 좌표)를 지정해 미끄러짐 이동을 확인한다
+    _drag: function (x, y) { mzTarget = { x: x, y: y }; },
+    _release: function () { mzTarget = null; }
   };
 
   App.openMemory = openMemory;
