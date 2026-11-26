@@ -20,6 +20,7 @@
 
   var resting = false;
   var gateAnswer = 0, gateInput = '', gateCb = null;
+  var parentOkAt = 0;   // 부모님 확인을 막 통과한 시각(바로 이어지는 변경은 다시 묻지 않는다)
   var dirty = false, lastSaveAt = 0, lastPlayAt = Date.now();
 
   function $(id) { return document.getElementById(id); }
@@ -167,7 +168,8 @@
     min = Math.max(0, Math.round(num(min, 0)));
     var left = leftMs();
     var active = timerActive() && (left > 0 || resting);
-    var needGate = active && (min === 0 || min * MIN > left);
+    var justChecked = (Date.now() - parentOkAt) < 90000;
+    var needGate = active && (min === 0 || min * MIN > left) && !justChecked;
 
     if (!active && min === 0) {
       closeMenu();
@@ -271,6 +273,7 @@
     }
     var cb = gateCb;
     gateCb = null;
+    parentOkAt = Date.now();
     gateInput = '';
     renderGateInput();
     var g = $('pgate');

@@ -179,6 +179,7 @@
     setText('stat-fish', String(SD.fishCaught || 0));
 
     if (window.Pet && window.Pet.refresh) window.Pet.refresh();
+    if (window.Exhibit && window.Exhibit.refreshCount) window.Exhibit.refreshCount();
   }
 
   function greeting() {
