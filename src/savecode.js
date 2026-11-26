@@ -163,6 +163,12 @@ export function compactSave(state) {
     const anySock = c.gems.sockets && Object.values(c.gems.sockets).some(Boolean);
     if (!anyBag && !anySock && !(c.gems.crafted > 0)) delete c.gems;
   }
+  if (c.pass && typeof c.pass === 'object' && !(c.pass.xp > 0) && (!Array.isArray(c.pass.claimed) || !c.pass.claimed.length)) {
+    delete c.pass;
+  }
+  if (c.titles && typeof c.titles === 'object' && !c.titles.equipped) {
+    delete c.titles;
+  }
   if (c.skills && typeof c.skills === 'object') {
     for (const sk of Object.values(c.skills)) {
       if (sk && typeof sk === 'object' && !sk.rune) delete sk.rune;

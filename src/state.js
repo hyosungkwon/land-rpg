@@ -36,6 +36,7 @@ import { defaultInvasion, normalizeInvasion } from './invasion.js';
 import { defaultCitadel, normalizeCitadel, citadelEffects } from './citadel.js';
 import { defaultRelics, normalizeRelics, relicEffects } from './relics.js';
 import { defaultGems, normalizeGems, gemEffects } from './gems.js';
+import { defaultPass, normalizePass, defaultTitles, normalizeTitles, titleBonus } from './pass.js';
 import { normalizeOrders } from './orders.js';
 
 const nowMs = () => Date.now();
@@ -92,6 +93,9 @@ export function defaultState(now = nowMs()) {
     relics: defaultRelics(),
     // v6.2.0 💠 장비 5부위 보석 소켓 · 테마 제작 공방
     gems: defaultGems(),
+    // v6.4.0 🎖️ 영지 성장 패스(무료 30단계) · 🏷️ 칭호(20종)
+    pass: defaultPass(now),
+    titles: defaultTitles(),
     battleSpeed: 1, // v5.3.0 전투 배속(1 / 1.5 / 2, 환생 1회 해금)
     dungeonCooldown: 0,
     dungeon: { best: 0, runs: 0, last: null },
@@ -230,6 +234,8 @@ export function normalizeState(raw, now = nowMs()) {
   s.citadel = normalizeCitadel(raw.citadel);
   s.relics = normalizeRelics(raw.relics);
   s.gems = normalizeGems(raw.gems);
+  s.pass = normalizePass(raw.pass, now);
+  s.titles = normalizeTitles(raw.titles);
   s.battleSpeed = normalizeBattleSpeed(raw.battleSpeed);
   s.jobTier = clamp(Math.floor(num(raw.jobTier, 0)), 0, JOB_MAX);
   s.jobAt = Math.max(0, num(raw.jobAt, 0));
@@ -395,10 +401,11 @@ export function calcStats(s, buffs = NO_BUFF) {
   const extraHp = add(b.setHpPct);
   const extraCrit = add(b.setCritPct);
   const extraDrop = add(b.setDropPct) + add(b.synDropPct);
-  // v4.6 부동산 전투 시너지 + v5.12 영지 성채 + v6.1 고대 유물 + v6.2 보석 소켓
+  // v4.6 부동산 전투 시너지 + v5.12 영지 성채 + v6.1 고대 유물 + v6.2 보석 소켓 + v6.4 칭호
   const cit = citadelEffects(s);
   const rel = relicEffects(s);
   const gem = gemEffects(s);
+  const tit = titleBonus(s);
   const synCritDmg = add(b.synCritDmgPct) / 100;
   const skillCdr = Math.min(0.4, Math.max(0, add(b.synCdrPct) + cit.skillCdrPct + (gem.cdrPct || 0)) / 100);
   const synBoss = add(b.synBossDmgPct) / 100;
@@ -437,20 +444,20 @@ export function calcStats(s, buffs = NO_BUFF) {
   const rbHpMul = 1 + rb.hpPct / 100;
   const baseAtk = 12 + 2.6 * L + 0.035 * L * L;
   const equipAtk = EQUIP.weapon.per * eLv('weapon');
-  const atk = (baseAtk + equipAtk) * (1 + (b.atkPct + extraAtk + gm.atkPct + cit.atkPct + rel.atkPct + gem.atkPct) / 100) * jobAtkMul * petAtkMul * colAtkMul * rbAtkMul;
+  const atk = (baseAtk + equipAtk) * (1 + (b.atkPct + extraAtk + gm.atkPct + cit.atkPct + rel.atkPct + gem.atkPct + tit.atkPct) / 100) * jobAtkMul * petAtkMul * colAtkMul * rbAtkMul;
   const hpMax =
     (150 + 30 * L + EQUIP.armor.per * eLv('armor') + EQUIP.helmet.per * eLv('helmet'))
-    * (1 + (b.hpPct + extraHp + gm.hpPct + rel.hpPct + gem.hpPct) / 100) * jobHpMul * rbHpMul;
-  const crit = Math.min(0.5, 0.05 + (EQUIP.ring.per / 100) * eLv('ring') + (b.critPct + extraCrit + gm.critPct + (petPas.critPct || 0) + subCritPct + rel.critPct) / 100);
+    * (1 + (b.hpPct + extraHp + gm.hpPct + rel.hpPct + gem.hpPct + tit.hpPct) / 100) * jobHpMul * rbHpMul;
+  const crit = Math.min(0.5, 0.05 + (EQUIP.ring.per / 100) * eLv('ring') + (b.critPct + extraCrit + gm.critPct + (petPas.critPct || 0) + subCritPct + rel.critPct + tit.critPct) / 100);
   const critDmg = 2.0 + rb.critDmgAdd + (gm.critDmg + petCritDmgPct + gem.critDmgPct) / 100 + synCritDmg;
   // v3.8 방어·회복 — 다굴에서 버티는 힘. 갑옷/투구 강화(등급 환산 포함) + 환생 '수호' 특성 + v4 장비 옵션 + v5.8 펫 + v6.2 보석
   const defFromGear = EQUIP.armor.defPer * eLv('armor') + EQUIP.helmet.defPer * eLv('helmet');
   const dmgReduce = Math.min(DEF.cap, (defFromGear + (rb.guardPct || 0) + gm.dmgRed + petDmgRedPct + gem.dmgRedPct) / 100);
   const hpRegen = Math.min(0.1, DEF.regenBase + (rb.regenPct || 0) / 100 + (gm.regen + gem.regenPct) / 100);
   const goldMult =
-    1 + (EQUIP.amulet.per / 100) * eLv('amulet') + (b.goldPct + extraGold + rb.goldPct + gm.goldPct + rel.goldPct + gem.goldPct) / 100 + petGold / 100
+    1 + (EQUIP.amulet.per / 100) * eLv('amulet') + (b.goldPct + extraGold + rb.goldPct + gm.goldPct + rel.goldPct + gem.goldPct + tit.goldPct) / 100 + petGold / 100
     + (col.goldPct || 0) / 100;
-  const dropMult = 1 + (b.dropPct + extraDrop + rb.shardPct + gm.dropPct + petDropPct + rel.dropPct + gem.dropPct) / 100;
+  const dropMult = 1 + (b.dropPct + extraDrop + rb.shardPct + gm.dropPct + petDropPct + rel.dropPct + gem.dropPct + tit.dropPct) / 100;
   // v4.0: 공격 속도 옵션 — 기본 공격 간격을 줄인다(하한 300ms · 최대 40% 단축)
   const attackMs = Math.max(300, (ECON.playerAttackMs - L * 2) * (1 - Math.min(0.4, (gm.atkSpd + petAtkSpdPct + gem.atkSpdPct) / 100)));
   const lifesteal = Math.min(0.25, (gm.lifesteal + rel.lifestealPct + gem.lifestealPct) / 100); // 흡혈 상한 25%

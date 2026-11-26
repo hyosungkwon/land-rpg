@@ -47,6 +47,7 @@ import {
   QUESTS, ACHIEVEMENTS, questStateOf, currentQuest, questProgress, codexStats,
   achievementStatus, claimedAchievementCount, dailyQuestStatus,
 } from './quests.js';
+import { passInfo, titleStatus } from './pass.js';
 import {
   GEAR_ITEMS, GEAR_SETS, GEAR_FILTERS, GEAR_SET_FILTERS, GEAR_OPTS, GEAR_DROP,
   gearIcon, gearItem, gearList, gearOwned, gearOptionList, gearOptionSummary,
@@ -271,6 +272,9 @@ export class UI {
       case 'claim-daily-quest': actions.claimDailyQuest(v); break;
       case 'claim-daily-quest-bonus': actions.claimDailyQuestBonus(); break;
       case 'claim-achievement': actions.claimAchievement(v); break;
+      case 'pass-claim': actions.claimPass(Number(v)); break;
+      case 'pass-claim-all': actions.claimAllPass(); break;
+      case 'title-equip': actions.equipTitle(v); break;
       case 'open-codex': actions.openCodex(v || 'monster'); break;
       case 'open-achievements': actions.openAchievements(); break;
       case 'reset': actions.resetGame(); break;
@@ -1313,11 +1317,12 @@ function huntBadges(ui) {
   const weeklyReady = weeklyBossInfo(s).readyCount;
   const att = attendanceInfo(s);
   const attReady = att.canClaim && (s.totalKills > 0 || att.total > 0) ? 1 : 0;
+  const passReady = passInfo(s).readyCount;
   // 던전 '무료 입장 가능'은 10분마다 계속 켜지므로 배지에서 뺀다(탭 안에서 바로 보임) — 상시 점등 방지
   return {
     skill: 0,
     growth: (pr.canPromote ? 1 : 0) + (rb.can ? 1 : 0) + (traitReady ? 1 : 0) + (petEvoReady > 0 ? 1 : 0) + weeklyReady,
-    quest: (questReady ? 1 : 0) + dqReady + achReady + attReady,
+    quest: (questReady ? 1 : 0) + dqReady + achReady + attReady + passReady,
   };
 }
 
@@ -1718,8 +1723,54 @@ function attendanceCard(ui) {
   </div>`;
 }
 
+/* ───────────── 🎖️ 영지 성장 패스(무료 30단계) · 🏷️ 칭호(20종 · v6.4.0) ───────────── */
+function passCard(ui) {
+  const p = passInfo(ui.s, Date.now());
+  const cells = p.tiers.map((t) => {
+    const cls = `${t.milestone ? 'ms ' : ''}${t.claimed ? 'done' : t.claimable ? 'ready' : ''}`;
+    const rw = t.legend
+      ? `👑전설<br>✨${t.points}P 🏅1`
+      : t.milestone
+        ? `✨${t.points}P 🏅1<br>💎${t.shards}`
+        : `💰${formatGold(t.gold)}<br>💎${t.shards}`;
+    const act = t.claimable ? ` data-action="pass-claim" data-value="${t.lv}"` : ' disabled';
+    return `<button class="pass-cell ${cls}" type="button"${act}>
+      <b>Lv.${t.lv}${t.claimed ? ' ✓' : ''}</b>
+      <span>${t.claimable ? '🎁 받기' : rw}</span>
+    </button>`;
+  }).join('');
+  return `
+  <div class="card pass-card${p.readyCount ? ' ready' : ''}" id="passCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🎖️</span>영지 성장 패스<small>${p.season} · 무료 Lv.${p.lv}/${p.maxLv}</small></div>
+      ${p.readyCount > 0 ? `<button class="mini up" type="button" data-action="pass-claim-all">🎁 ${p.readyCount}개 일괄</button>` : `<span class="tiny dim">${p.curXp}/${p.needXp} XP</span>`}
+    </div>
+    <div class="prog tiny-prog${p.readyCount ? ' gold' : ''}" style="margin:4px 0 4px"><i style="width:${Math.round(p.pct * 100)}%"></i></div>
+    <div class="pass-strip">${cells}</div>
+    <div class="tiny dim" style="margin-top:4px">사냥·일일퀘·파견·방어전·강화로 무료 XP 획득 · Lv.15/30 전설 확정 · 5단계마다 ✨초월석·🏅훈장</div>
+  </div>`;
+}
+
+function titleCard(ui) {
+  const ts = titleStatus(ui.s);
+  const chips = ts.list.map((t) => `
+    <button class="title-chip${t.equipped ? ' on' : ''}${t.unlocked ? '' : ' lock'}" type="button" data-action="title-equip" data-value="${t.id}" ${t.unlocked ? '' : 'disabled'}>
+      <span>${t.icon} ${esc(t.name)}${t.equipped ? ' ✓' : ''}</span>
+      <small>${t.unlocked ? esc(t.bonusText) : `🔒 ${esc(t.cond)}`}</small>
+    </button>`).join('');
+  return `
+  <div class="card title-card" id="titleCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🏷️</span>칭호<small>${ts.unlockedCount}/${ts.total} 해금</small></div>
+      <span class="tiny" style="color:${ts.active ? 'var(--gold)' : 'var(--dim)'}">${ts.active ? `${ts.active.icon} ${esc(ts.active.name)}` : '미장착'}</span>
+    </div>
+    <div class="tiny dim">장착한 칭호의 보너스가 적용되며, 🏆 클라우드 랭킹 닉네임 옆에도 함께 표시됩니다.</div>
+    <div class="title-grid">${chips}</div>
+  </div>`;
+}
+
 function tplHuntQuest(ui) {
-  return `${attendanceCard(ui)}${questCard(ui)}${dailyQuestCard(ui)}${codexCard(ui)}`;
+  return `${attendanceCard(ui)}${passCard(ui)}${questCard(ui)}${dailyQuestCard(ui)}${titleCard(ui)}${codexCard(ui)}`;
 }
 
 /* ══════════════════════════ 사냥/스킬 (본문) ══════════════════════════ */

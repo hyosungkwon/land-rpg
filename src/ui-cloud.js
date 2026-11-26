@@ -4,6 +4,7 @@ import {
   CLOUD, normalizeRankKey, cloudStatusText, rankOf, rankValueText, rankMetricLabel, sanitizeNick, nickOf,
 } from './cloud.js';
 import { esc, relTime } from './ui-fmt.js';
+import { TITLE_BY_ID } from './pass.js';
 
 /** ☁️ 클라우드 세이브 카드 — 기본은 꺼짐(게스트). 켜고 싶은 사람만 로그인한다. */
 export function cloudCard(ui) {
@@ -72,9 +73,11 @@ export function rankCard(ui) {
   const count = R.count || (R.rows || []).length;
   const rows = (R.rows || []).map((r) => {
     const medal = r.rank === 1 ? '🥇' : r.rank === 2 ? '🥈' : r.rank === 3 ? '🥉' : '';
+    const tDef = r.title && TITLE_BY_ID[r.title];
+    const tBadge = tDef ? `<span class="rank-title">${tDef.icon}${esc(tDef.name)}</span>` : '';
     return `<div class="rank-row${r.uid === myUid ? ' me' : ''}">
       <span class="rank-pos${r.rank <= 3 ? ' top' : ''}">${medal || r.rank}</span>
-      <span class="rank-name">${esc(r.name)}<small>Lv.${r.level}</small></span>
+      <span class="rank-name">${tBadge}${esc(r.name)}<small>Lv.${r.level}</small></span>
       <span class="rank-val">${rankValueText(key, r)}</span>
     </div>`;
   }).join('');

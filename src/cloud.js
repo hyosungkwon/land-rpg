@@ -265,6 +265,10 @@ export function rankEntryOf(state, opts = {}) {
     towerBest: sum.towerBest,
     dailyBest: sum.dailyBest,
     dailyGrade: sum.dailyGrade,
+    title: (() => {
+      const id = state && state.titles && state.titles.equipped;
+      return typeof id === 'string' ? id.slice(0, 20) : '';
+    })(),
     time: now,
     v: APP_VERSION,
   };
@@ -288,6 +292,7 @@ export function normalizeRankRow(entry, uid) {
     towerBest: int(e.towerBest),
     dailyBest: int(e.dailyBest),
     dailyGrade: typeof e.dailyGrade === 'string' ? e.dailyGrade.slice(0, 2) : 'D',
+    title: typeof e.title === 'string' ? e.title.slice(0, 20) : '',
     time: int(e.time, int(e.ts)),
     hasAsset,
     hasTower,

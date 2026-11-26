@@ -95,9 +95,9 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "6.3.0"
-FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui.js", "src/sound.js"]
+EXPECTED_VER = "6.4.0"
+FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -197,6 +197,7 @@ def main():
     ok("'./src/relics.js'" in read("sw.js"), "sw.js 프리캐시에 relics.js 포함")
     ok("'./src/gems.js'" in read("sw.js"), "sw.js 프리캐시에 gems.js 포함")
     ok("'./src/portfolio-ops.js'" in read("sw.js"), "sw.js 프리캐시에 portfolio-ops.js 포함")
+    ok("'./src/pass.js'" in read("sw.js"), "sw.js 프리캐시에 pass.js 포함")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
     ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
@@ -4297,7 +4298,7 @@ def main():
     ok(cl_d["assetFirst"] == ["b:900", "c:500", "a:200"], "총자산 정렬 — 금액 기준", json.dumps(cl_d["assetFirst"]))
     ok(cl_d["top1"] == "u24" and cl_d["topLast"] == "u5", "25명 중 TOP 20 절단", json.dumps([cl_d["top1"], cl_d["topLast"]]))
     ok(cl_d["me"] == [2, "감마"], "내 순위 조회(동점 포함 전체 기준)", json.dumps(cl_d["me"], ensure_ascii=False))
-    ok(cl_d["old"] == {"uid": "old", "name": "HyosungK", "level": 33, "stage": 17, "gold": 0, "totalAsset": 0, "cities": 0, "rebirth": 0, "towerBest": 0, "dailyBest": 0, "dailyGrade": "D", "time": 1795426582912, "hasAsset": False, "hasTower": False, "hasDaily": False}, "옛 랭킹 항목 정규화(없는 값은 0 · 총자산/탑/일일 없음 표시)", json.dumps(cl_d["old"], ensure_ascii=False))
+    ok(cl_d["old"] == {"uid": "old", "name": "HyosungK", "level": 33, "stage": 17, "gold": 0, "totalAsset": 0, "cities": 0, "rebirth": 0, "towerBest": 0, "dailyBest": 0, "dailyGrade": "D", "title": "", "time": 1795426582912, "hasAsset": False, "hasTower": False, "hasDaily": False}, "옛 랭킹 항목 정규화(없는 값은 0 · 총자산/탑/일일 없음 표시)", json.dumps(cl_d["old"], ensure_ascii=False))
     ok(cl_d["values"] == ["S24", "💰1.20조", "💰5.50억"], "랭킹 값 표기 — S24 · 조/억 축약", json.dumps(cl_d["values"], ensure_ascii=False))
     ok(js(ctx, "return rankValueText('asset', { totalAsset: 0, hasAsset: false });") == "—", "총자산 기록이 없는 옛 항목은 '—' (0으로 보이지 않게)")
     ok(cl_d["fmt"][:2] == ["1.20조", "5.50억"] and cl_d["fmt"][2].replace(",", "") == "1234", "총자산 포맷 — 조·억·원 단위", json.dumps(cl_d["fmt"], ensure_ascii=False))
@@ -5703,6 +5704,45 @@ def main():
     """)
     ok(po63["regOk"] and po63["roiDipOk"] and po63["lmOk"], "원탭 분산 투자 3전략(권역 세트·ROI TOP5·저점 매수) 및 랜드마크 일괄 증축 실행", json.dumps(po63))
     ok(ui63["ok"] and not ui63["bad"], "원탭 투자 버튼(매물 투자 탭) 및 일괄 랜드마크 버튼(버프 탭) 렌더", json.dumps(ui63))
+
+    # ── 31) v6.4.0 🎖️ 영지 성장 패스(무료 30단계) · 🏷️ 칭호(20종) ──
+    section("v6.4.0 영지 성장 패스 30단계 · 칭호 20종")
+    pt64 = js(ctx, """
+      const now = 1_700_000_000_000;
+      const s = defaultState(now);
+      s.stage = 25; s.maxStage = 25; s.peakStage = 25; s.totalKills = 200;
+      addPassXp(s, 1550, now); // Lv.15 도달 (Lv.15 전설 확정 + 5/10/15 마일스톤)
+      const pi = passInfo(s, now);
+      const c1 = claimPassTier(s, 1, now);
+      const cAll = claimAllPassTiers(s, now, () => 0.1);
+      const nextMonth = now + 35 * 86400 * 1000;
+      const normReset = normalizePass(s.pass, nextMonth);
+      // 칭호 20종: 미해금 거부, 해금 장착 → 스탯 반영 + 랭킹 entry 포함
+      const denyLock = equipTitle(s, 'stage100');
+      const baseAtk = calcStats(s, {}).atk;
+      const eqOk = equipTitle(s, 'stage20');
+      const nextAtk = calcStats(s, {}).atk;
+      const rk = rankEntryOf(s, { uid: 'u1', now });
+      return {
+        passOk: pi.lv === 15 && pi.readyCount === 15 && c1.ok && cAll.ok && cAll.count === 14 && cAll.items.length === 1 && cAll.medals === 3,
+        seasonResetOk: normReset.xp === 0 && normReset.claimed.length === 0 && normReset.totalClaimed === 15,
+        titleCount: TITLES.length,
+        titleOk: !denyLock.ok && eqOk.ok && nextAtk > baseAtk && rk.title === 'stage20',
+      };
+    """)
+    ui64 = js(ctx2, """
+      const s = defaultState(Date.now());
+      addPassXp(s, 250, Date.now());
+      const b = new Battle(s, () => ({}));
+      const ui = { s, battle: b, app: { buffs: {} }, logs: [], tab: 'hunt', huntSub: 'quest', el: {}, install: { hidden: true } };
+      const html = __huntSub(ui, 'quest');
+      return {
+        ok: html.includes('passCard') && html.includes('titleCard') && html.includes('data-action="pass-claim-all"') && html.includes('data-action="title-equip"'),
+        bad: /undefined|NaN|\\[object Object\\]/.test(html),
+      };
+    """)
+    ok(pt64["passOk"] and pt64["seasonResetOk"], "영지 성장 패스 30단계(XP·마일스톤 초월석/훈장·Lv.15 전설·일괄수령·월간 리셋)", json.dumps(pt64))
+    ok(pt64["titleCount"] == 20 and pt64["titleOk"] and ui64["ok"] and not ui64["bad"], "칭호 20종(해금/장착/스탯반영/랭킹표시) 및 패스·칭호 UI 렌더", json.dumps({ **pt64, **ui64 }))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

@@ -71,6 +71,10 @@ import {
   trackDailyQuest, claimDailyQuest as claimDailyQuestState, claimDailyQuestBonus as claimDailyQuestBonusState,
 } from './src/quests.js';
 import {
+  addPassXp, claimPassTier as claimPassTierState, claimAllPassTiers as claimAllPassTiersState,
+  equipTitle as equipTitleState,
+} from './src/pass.js';
+import {
   REBIRTH, REBIRTH_TRAITS, rebirthStatus, rebirthBonus, rebirthStartGold, rebirthPointsFor,
   doRebirth as doRebirthState, upgradeTrait as upgradeRebirthTraitState,
   traitLevel, traitCost, traitSummary,
@@ -440,6 +444,7 @@ class App {
         this.ui.renderIfNeeded();
         this.sound.levelUp();
       } else if (ev.t === 'stageClear') {
+        addPassXp(this.s, 15, now);
         this.ui.toast(`🏅 스테이지 ${ev.stage} 클리어! 💎+${ev.bonus}`, 'gold');
         this.ui.addLog(`<b>스테이지 ${ev.stage} 클리어</b> → ${ev.next} (보너스 💎${ev.bonus})`);
         this.ui.renderIfNeeded();
@@ -536,6 +541,7 @@ class App {
         this.checkPets(now);
         this.save(true);
         if (ev.how === 'clear') {
+          addPassXp(this.s, 45, now);
           this.sound.fanfare();
           const gains = [`💰+${ev.gold.toLocaleString()}`, `💎+${ev.shards}`, ev.points ? `✨+${ev.points}P` : '', `🎉임대 +${ev.boomPct}%(30분)`].filter(Boolean).join(' ');
           this.ui.addLog(`🏅 <b>${esc(ev.cityName)} 방어 성공!</b> · ${gains}`);
@@ -562,6 +568,7 @@ class App {
         this.checkPets(now);
         this.save(true);
         if (ev.how === 'clear') {
+          addPassXp(this.s, 45, now);
           this.sound.fanfare();
           const gains = [ev.gold ? `💰+${ev.gold.toLocaleString()}` : '', ev.shards ? `💎+${ev.shards}` : '', ev.points ? `✨+${ev.points}P` : '', ev.item ? `🎒${ev.item.name}` : '', ev.autoItem ? `♻️${ev.autoItem}` : '']
             .filter(Boolean).join(' ');
@@ -2007,11 +2014,44 @@ class App {
           this.ui.toast(r.reason || '보상을 받을 수 없습니다', 'red');
           return;
         }
+        addPassXp(this.s, 40, Date.now());
         this.save(true);
         this.sound.levelUp();
         const gains = `💰${r.gold.toLocaleString()} 💎${r.shards}`;
-        this.ui.toast(`📅 일일 퀘스트 완료 · ${r.quest.title} (${gains})`, 'gold');
+        this.ui.toast(`📅 일일 퀘스트 완료 · ${r.quest.title} (${gains}) · 패스 +40XP`, 'gold');
         this.ui.addLog(`📅 <b>${esc(r.quest.title)}</b> 완료 · ${gains}`);
+        this.ui.render();
+      },
+      /* ── v6.4.0: 🎖️ 영지 성장 패스 · 🏷️ 칭호 ── */
+      claimPass: (lv) => {
+        this.sound.unlock();
+        const r = claimPassTierState(this.s, lv, Date.now());
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        if (r.acq && r.acq.equipped) this.battle.refreshStats();
+        this.save(true);
+        this.sound.fanfare();
+        const gains = [`💰${formatGold(r.gold)}`, `💎${r.shards}`, r.points ? `✨${r.points}P` : '', r.medals ? `🏅${r.medals}` : '', r.item ? `👑${r.item.name}` : ''].filter(Boolean).join(' ');
+        this.ui.toast(`🎖️ 패스 Lv.${r.lv} 수령 · ${gains}`, 'gold');
+        this.ui.render();
+      },
+      claimAllPass: () => {
+        this.sound.unlock();
+        const r = claimAllPassTiersState(this.s, Date.now());
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.fanfare();
+        const gains = [`💰${formatGold(r.gold)}`, `💎${r.shards}`, r.points ? `✨${r.points}P` : '', r.medals ? `🏅${r.medals}` : '', r.items.length ? `👑전설 ${r.items.length}개` : ''].filter(Boolean).join(' ');
+        this.ui.toast(`🎖️ 패스 ${r.count}단계 일괄 수령 · ${gains}`, 'gold');
+        this.ui.render();
+      },
+      equipTitle: (id) => {
+        const r = equipTitleState(this.s, id);
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.ui();
+        this.ui.toast(r.cleared ? '🏷️ 칭호 장착 해제' : `🏷️ ${r.title.icon} ${r.title.name} 칭호 장착!`, r.cleared ? '' : 'gold');
         this.ui.render();
       },
 
