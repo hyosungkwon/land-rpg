@@ -11,7 +11,7 @@ window.__errs = [];
 addEventListener('error', function (e) { try { window.__errs.push(String(e.message || 'error')); } catch (_) {} });
 addEventListener('unhandledrejection', function (e) { try { window.__errs.push('promise: ' + String((e.reason && e.reason.message) || e.reason)); } catch (_) {} });
 </script>
-<link rel="stylesheet" href="style.css?v=46db03e9">
+<link rel="stylesheet" href="style.css?v=33b36ef6">
 </head>
 <body>
 
@@ -91,6 +91,14 @@ addEventListener('unhandledrejection', function (e) { try { window.__errs.push('
 
   <div id="panel-game" class="home-panel active">
     <div class="card-grid">
+      <button class="game-card gc-duo" onclick="Duo.open()" aria-label="둘이 같이하기 열기">
+        <span class="gc-icon">🤝</span>
+        <span class="duo-banner-info">
+          <span class="duo-banner-title">둘이 같이하기</span>
+          <span class="duo-banner-desc">폰 하나로 아빠랑! 기억력 대결 · 마주 보고 덧셈 · 이어 그리기</span>
+        </span>
+        <span class="duo-banner-badge">NEW · 아빠랑 유아</span>
+      </button>
       <button class="game-card gc-puzzle" onclick="App.openPuzzle()">
         <span class="gc-icon">🧩</span><span class="gc-title">퍼즐</span>
         <span class="gc-desc">동물 그림 조각 맞추기</span><span class="gc-badge">30스테이지</span>
@@ -816,6 +824,195 @@ addEventListener('unhandledrejection', function (e) { try { window.__errs.push('
   </div>
 </div>
 
+<!-- ══════════ 🤝 둘이 같이하기 (허브 · 4단계) ══════════ -->
+<div id="duo" class="screen">
+  <div class="sub-header">
+    <button class="back-btn" onclick="Duo.back()">← 홈</button>
+    <span class="sub-title">🤝 둘이 같이하기</span>
+  </div>
+  <div class="duo-body">
+    <div class="duo-hero">
+      <span class="duo-hero-em">👨‍👧</span>
+      <div>
+        <div class="duo-hero-title">폰 하나로 둘이 같이!</div>
+        <div class="duo-hero-sub">유아는 분홍 · 아빠는 파랑 · 차례대로 눌러요</div>
+      </div>
+    </div>
+
+    <button class="duo-pick dm" onclick="Duo.openMem()" aria-label="기억력 턴제 대결 열기">
+      <span class="duo-pick-em">🃏</span>
+      <span class="duo-pick-main">
+        <span class="duo-pick-title">기억력 턴제 대결</span>
+        <span class="duo-pick-desc">번갈아 카드를 뒤집어 짝 맞추기 · 맞추면 한 번 더!</span>
+      </span>
+      <span class="duo-pick-badge">1P·2P 턴제</span>
+    </button>
+
+    <button class="duo-pick da" onclick="Duo.openAdd()" aria-label="마주 보고 덧셈 대결 열기">
+      <span class="duo-pick-em">⚡</span>
+      <span class="duo-pick-main">
+        <span class="duo-pick-title">마주 보고 덧셈 대결</span>
+        <span class="duo-pick-desc">위·아래로 마주 앉아 같은 문제를 동시에! 먼저 정답을 누르면 +1점</span>
+      </span>
+      <span class="duo-pick-badge">스플릿 화면</span>
+    </button>
+
+    <button class="duo-pick dd" onclick="Duo.openDraw()" aria-label="둘이 이어 그리기 열기">
+      <span class="duo-pick-em">🎨</span>
+      <span class="duo-pick-main">
+        <span class="duo-pick-title">둘이 이어 그리기</span>
+        <span class="duo-pick-desc">번갈아 이어서 그림 완성! 전시관에 저장까지</span>
+      </span>
+      <span class="duo-pick-badge">10초·5획</span>
+    </button>
+
+    <div class="duo-note" id="duo-count">지금까지 같이 놀기 0판</div>
+  </div>
+</div>
+
+<!-- ══════════ 🃏 기억력 턴제 대결 ══════════ -->
+<div id="duo-mem" class="screen">
+  <div class="sub-header">
+    <button class="back-btn" onclick="Duo.toHub()">← 같이하기</button>
+    <span class="sub-title">🃏 기억력 턴제 대결</span>
+  </div>
+  <div id="dm-intro" class="dm-intro">
+    <div class="dm-intro-em">🃏</div>
+    <div class="dm-intro-t">번갈아 카드를 뒤집어요!</div>
+    <div class="dm-intro-rules">
+      <span>① 유아(분홍)부터 · 카드를 <b>두 장</b> 뒤집기</span>
+      <span>② 짝을 맞추면 <b>+1점</b> · <b>한 번 더!</b></span>
+      <span>③ 못 맞추면 <b>다음 사람 차례</b></span>
+    </div>
+    <div class="dm-themes" id="dm-themes"></div>
+    <button class="gbtn gpk dm-start" onclick="Duo.memStart()">시작! 🤝</button>
+  </div>
+  <div id="dm-game" class="dm-game" style="display:none;">
+    <div class="dm-scores">
+      <div class="dm-p p0" id="dm-p0">
+        <span class="dm-p-tag">1P</span><span class="dm-p-name">유아</span>
+        <b id="dm-sc-0">0</b><span class="dm-p-turn">내 차례!</span>
+      </div>
+      <div class="dm-vs">:</div>
+      <div class="dm-p p1" id="dm-p1">
+        <span class="dm-p-tag">2P</span><span class="dm-p-name">아빠</span>
+        <b id="dm-sc-1">0</b><span class="dm-p-turn">내 차례!</span>
+      </div>
+    </div>
+    <div class="dm-status" id="dm-status">유아 차례! 카드를 두 장 뒤집어요 🃏</div>
+    <div class="dm-grid" id="dm-grid"></div>
+    <div class="dm-row">
+      <button class="gbtn gb" onclick="Duo.memStart()">🔄 새 판</button>
+      <button class="gbtn gpk" onclick="Duo.toHub()">🤝 다른 놀이</button>
+    </div>
+  </div>
+  <div id="dm-result" class="duo-result" style="display:none;">
+    <span class="dr-em" id="dm-r-em">🎉</span>
+    <div class="dr-title" id="dm-r-title">유아 승리!</div>
+    <div class="dr-score" id="dm-r-score">유아 4 : 2 아빠</div>
+    <div class="dr-praise">둘 다 최고! 오늘 환상의 짝꿍이에요 👏</div>
+    <div class="dr-sub" id="dm-r-sub"></div>
+    <div class="dr-btns">
+      <button class="gbtn gpk" onclick="Duo.memStart()">🔄 한 번 더</button>
+      <button class="gbtn gb" onclick="Duo.toHub()">🤝 다른 놀이</button>
+      <button class="gbtn gyd" onclick="Duo.back()">🏠 홈</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ ⚡ 마주 보고 덧셈 대결 (스플릿 · 위쪽 180도) ══════════ -->
+<div id="duo-add" class="screen">
+  <div class="sub-header">
+    <button class="back-btn" onclick="Duo.toHub()">← 같이하기</button>
+    <span class="sub-title">⚡ 마주 보고 덧셈 대결</span>
+  </div>
+  <div id="da-intro" class="da-intro">
+    <div class="da-intro-em">⚡</div>
+    <div class="da-intro-t">폰을 사이에 두고 마주 앉아요!</div>
+    <div class="da-intro-d">위쪽은 아빠 자리(글자가 180도 돌아가요). 같은 문제가 동시에 뜨고, <b>먼저 정답을 누른 쪽이 +1점!</b> 아빠는 0.6초만 참아요 🙌</div>
+    <div class="da-intro-row">
+      <button class="gbtn gpk" style="padding:12px 18px;" onclick="Duo.addStart(5)">5문제<br><small>합 10 이하</small></button>
+      <button class="gbtn gb" style="padding:12px 18px;" onclick="Duo.addStart(7)">7문제<br><small>합 13 이하</small></button>
+    </div>
+  </div>
+  <div id="da-game" class="da-game" style="display:none;">
+    <div class="da-side da-top" id="da-top">
+      <div class="da-who"><span class="da-pill">2P 아빠</span><span class="da-score" id="da-sc-t">0</span><span class="da-pill">점</span></div>
+      <div class="da-q" id="da-q-t">3 + 4 = ?</div>
+      <div class="da-choices" id="da-ch-t"></div>
+      <div class="da-fb" id="da-fb-t"></div>
+    </div>
+    <div class="da-mid">
+      <div class="da-mid-row"><span id="da-round">문제 1 / 5</span><b id="da-mid-0">0</b><span>:</span><b id="da-mid-1">0</b></div>
+      <div class="da-timebar"><i id="da-timefill"></i></div>
+    </div>
+    <div class="da-side da-bot" id="da-bot">
+      <div class="da-who"><span class="da-pill">1P 유아</span><span class="da-score" id="da-sc-b">0</span><span class="da-pill">점</span></div>
+      <div class="da-q" id="da-q-b">3 + 4 = ?</div>
+      <div class="da-choices" id="da-ch-b"></div>
+      <div class="da-fb" id="da-fb-b"></div>
+    </div>
+  </div>
+  <div id="da-result" class="duo-result" style="display:none;">
+    <span class="dr-em" id="da-r-em">🎉</span>
+    <div class="dr-title" id="da-r-title">유아 승리!</div>
+    <div class="dr-score" id="da-r-score">유아 3 : 2 아빠</div>
+    <div class="dr-praise">둘 다 최고! 오늘 환상의 짝꿍이에요 👏</div>
+    <div class="dr-sub" id="da-r-sub"></div>
+    <div class="dr-btns">
+      <button class="gbtn gpk" onclick="Duo.addStart(5)">🔁 다시 5문제</button>
+      <button class="gbtn gb" onclick="Duo.addStart(7)">🔁 다시 7문제</button>
+      <button class="gbtn gyd" onclick="Duo.back()">🏠 홈</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 🎨 둘이 이어 그리기 (릴레이 스케치) ══════════ -->
+<div id="duo-draw" class="screen">
+  <div class="sub-header">
+    <button class="back-btn" onclick="Duo.toHub()">← 같이하기</button>
+    <span class="sub-title">🎨 둘이 이어 그리기</span>
+  </div>
+  <div id="dd-intro" class="dd-intro">
+    <div class="dd-intro-em">🎨</div>
+    <div class="dd-intro-t">번갈아 이어서 그림을 완성해요!</div>
+    <div class="dd-intro-d">유아는 분홍, 아빠는 파랑 붓이에요. 한 사람이 다 그리면 <b>“다음 사람 차례!”</b> 가 뜨고, 다른 사람이 이어서 그려요. 다 그리면 🖼️ 전시관에 담겨요.</div>
+    <div class="da-intro-row">
+      <button class="gbtn gpk" style="padding:12px 16px;" onclick="Duo.drawStart('time')">⏱ 10초씩<br><small>시간이 다 되면 교대</small></button>
+      <button class="gbtn gb" style="padding:12px 16px;" onclick="Duo.drawStart('stroke')">✏️ 5획씩<br><small>5획을 그으면 교대</small></button>
+    </div>
+  </div>
+  <div id="dd-game" class="dd-game" style="display:none;">
+    <div class="dd-turnbar">
+      <span class="dd-p p0" id="dd-p0">1P 유아</span>
+      <span class="dd-count" id="dd-count">⏱ 10</span>
+      <span class="dd-p p1" id="dd-p1">2P 아빠</span>
+    </div>
+    <div class="dd-topic">
+      <span>오늘은 <b id="dd-topic">🐉 공룡</b></span>
+      <button onclick="Duo.drawTopic()">🎲 다른 주제</button>
+    </div>
+    <div class="dd-hint" id="dd-hint">유아가 분홍색으로 그려요 · 10초 안에!</div>
+    <div class="dd-wrap" id="dd-wrap">
+      <canvas id="dd-canvas"></canvas>
+      <div class="dd-banner" id="dd-banner">
+        <div class="dd-banner-card">
+          <div class="dd-banner-title" id="dd-banner-title">다음 사람 차례!</div>
+          <div class="dd-banner-sub" id="dd-banner-sub">아빠가 파란색으로 이어서 그려요.</div>
+          <button class="gbtn gpk" onclick="Duo.drawNextTurn()">준비됐어요! ✏️</button>
+        </div>
+      </div>
+    </div>
+    <div class="dd-saved" id="dd-saved"></div>
+    <div class="dd-tools">
+      <div class="dd-sizes" id="dd-sizes" aria-label="붓 굵기"></div>
+      <button class="dd-btn" onclick="Duo.drawUndo()">↩ 되돌리기</button>
+      <button class="dd-btn" id="dd-clear" onclick="Duo.drawClear()">🧹 처음부터</button>
+      <button class="dd-btn save" onclick="Duo.drawSave()">💾 완성!</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════ 👨‍👩‍👧 부모님 메뉴 (사용 타이머 · 오늘의 요약) ══════════ -->
 <div id="parent-modal">
   <div class="pm-card">
@@ -950,7 +1147,7 @@ addEventListener('unhandledrejection', function (e) { try { window.__errs.push('
 
 <script src="js/data.js?v=b7c4ec98"></script>
 <script src="js/topics.js?v=5f3602fe"></script>
-<script src="js/core.js?v=342969cd"></script>
+<script src="js/core.js?v=02dc412c"></script>
 <script src="js/draw.js?v=b2aa3181"></script>
 <script src="js/puzzle.js?v=f9b16dc0"></script>
 <script src="js/fun.js?v=13faf798"></script>
@@ -961,8 +1158,9 @@ addEventListener('unhandledrejection', function (e) { try { window.__errs.push('
 <script src="js/pet.js?v=ef859fc2"></script>
 <script src="js/mission.js?v=cd7f8b66"></script>
 <script src="js/life.js?v=f3408133"></script>
-<script src="js/exhibit.js?v=e5c4ee1f"></script>
+<script src="js/exhibit.js?v=83f0bcb0"></script>
 <script src="js/parent.js?v=6499d582"></script>
+<script src="js/duo.js?v=41297bf7"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); });

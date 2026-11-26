@@ -26,7 +26,9 @@
     petTreatDate: '', petTickAt: 0, petFed: 0, petPets: 0, petSound: true,
     /* ⏰ 사용 타이머 · 오늘의 요약(parent.js, 3단계) */
     timerMin: 0, timerLeftMs: 0, timerSetAt: 0,
-    dayDate: '', dayEv: {}, dayMs: 0
+    dayDate: '', dayEv: {}, dayMs: 0,
+    /* 🤝 둘이 같이하기(duo.js, 4단계) — 완주한 판 수 */
+    duoMem: 0, duoAdd: 0, duoDraw: 0
   };
 
   function loadSave() {

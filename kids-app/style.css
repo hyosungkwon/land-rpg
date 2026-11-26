@@ -1225,3 +1225,194 @@ body.resting{overflow:hidden;}
   .ex-tab{font-size:.68rem;}
   .pm-timer-btn{font-size:.66rem;}
 }
+
+/* ══════════════════════════════════════════════════
+   🤝 둘이 같이하기 (4단계 · 아빠랑 2인 모드)
+   ══════════════════════════════════════════════════ */
+
+/* ── 놀이 탭: 둘이 같이하기 카드(전폭) ── */
+.gc-duo{grid-column:1/-1;flex-direction:row;align-items:center;justify-content:flex-start;
+  gap:12px;padding:13px 15px;background:linear-gradient(135deg,#5b3fd8,#e91e63);text-align:left;}
+.duo-banner-info{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;}
+.duo-banner-title{font-family:'Jua',sans-serif;font-size:1rem;color:#fff;}
+.duo-banner-desc{font-family:'Jua',sans-serif;font-size:.68rem;color:rgba(255,255,255,.88);line-height:1.32;}
+.duo-banner-badge{flex-shrink:0;font-family:'Jua',sans-serif;font-size:.55rem;color:#5a3e00;
+  background:#FFD93D;border-radius:9px;padding:4px 8px;line-height:1.25;white-space:nowrap;
+  box-shadow:0 3px 8px rgba(0,0,0,.22);}
+
+/* ── 허브 ── */
+#duo{background:linear-gradient(160deg,#1a1033,#2b2350 55%,#3b2560);}
+.duo-body{flex:1;display:flex;flex-direction:column;gap:9px;padding:10px 14px 24px;
+  width:100%;max-width:430px;margin:0 auto;}
+.duo-hero{display:flex;align-items:center;gap:11px;background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.14);border-radius:18px;padding:11px 13px;}
+.duo-hero-em{font-size:2rem;}
+.duo-hero-title{font-family:'Jua',sans-serif;font-size:.95rem;color:#FFD93D;}
+.duo-hero-sub{font-family:'Jua',sans-serif;font-size:.68rem;color:rgba(255,255,255,.72);line-height:1.35;margin-top:2px;}
+.duo-pick{display:flex;align-items:center;gap:12px;text-align:left;border:none;border-radius:18px;
+  padding:14px;cursor:pointer;font-family:'Jua',sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.32);
+  transition:transform .12s,box-shadow .12s;}
+.duo-pick:active{transform:scale(.97);box-shadow:0 2px 8px rgba(0,0,0,.32);}
+.duo-pick-em{font-size:1.9rem;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3));}
+.duo-pick-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.duo-pick-title{font-family:'Jua',sans-serif;font-size:.98rem;color:#fff;display:block;}
+.duo-pick-desc{font-family:'Jua',sans-serif;font-size:.67rem;color:rgba(255,255,255,.88);
+  line-height:1.32;display:block;}
+.duo-pick-badge{flex-shrink:0;font-family:'Jua',sans-serif;font-size:.55rem;background:rgba(0,0,0,.26);
+  color:#FFE082;border-radius:9px;padding:3px 7px;white-space:nowrap;}
+.duo-pick.dm{background:linear-gradient(135deg,#7B1FA2,#4527A0);}
+.duo-pick.da{background:linear-gradient(135deg,#1565c0,#0d47a1);}
+.duo-pick.dd{background:linear-gradient(135deg,#c2185b,#7B1FA2);}
+.duo-note{text-align:center;font-family:'Jua',sans-serif;font-size:.68rem;
+  color:rgba(255,255,255,.55);margin-top:2px;}
+
+/* ── 🃏 기억력 턴제 대결 ── */
+#duo-mem{background:linear-gradient(160deg,#2a1b4d,#12204a);}
+.dm-intro{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;
+  gap:11px;padding:16px;text-align:center;}
+.dm-intro-em{font-size:56px;animation:float 3s ease-in-out infinite;}
+.dm-intro-t{font-family:'Jua',sans-serif;font-size:1.05rem;color:#FFD93D;}
+.dm-intro-rules{display:flex;flex-direction:column;gap:4px;background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.14);border-radius:14px;padding:10px 14px;
+  font-family:'Jua',sans-serif;font-size:.72rem;color:rgba(255,255,255,.84);line-height:1.5;text-align:left;}
+.dm-intro-rules b{color:#FFD93D;}
+.dm-themes{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;}
+.dm-start{padding:12px 26px;font-size:1rem;}
+.dm-game{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:6px 12px 12px;width:100%;max-width:440px;margin:0 auto;}
+.dm-scores{display:flex;align-items:center;gap:8px;width:100%;}
+.dm-p{flex:1;display:flex;align-items:center;gap:5px;border-radius:14px;padding:6px 9px;
+  background:rgba(255,255,255,.08);border:2px solid transparent;transition:.15s;
+  font-family:'Jua',sans-serif;}
+.dm-p.p0{color:#FFC1DA;}
+.dm-p.p1{color:#B3E5FC;}
+.dm-p.active.p0{border-color:#FF6B9D;background:rgba(255,107,157,.2);}
+.dm-p.active.p1{border-color:#42A5F5;background:rgba(66,165,245,.2);}
+.dm-p-tag{font-size:.55rem;background:rgba(0,0,0,.3);border-radius:7px;padding:2px 5px;color:#fff;}
+.dm-p-name{font-size:.78rem;}
+.dm-p b{font-size:1.2rem;color:#fff;margin-left:auto;}
+.dm-p-turn{font-size:.6rem;color:#FFD93D;display:none;}
+.dm-p.active .dm-p-turn{display:inline;}
+.dm-vs{color:rgba(255,255,255,.5);font-size:.9rem;}
+.dm-status{font-family:'Jua',sans-serif;font-size:.76rem;color:rgba(255,255,255,.84);
+  min-height:1.2em;text-align:center;}
+.dm-status.good{color:#B9F6CA;}
+.dm-grid{display:grid;justify-content:center;margin:2px 0;}
+.dm-row{display:flex;gap:8px;margin-top:6px;}
+
+/* ── 결과(두 놀이 공통) ── */
+.duo-result{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:8px;padding:18px;text-align:center;}
+.dr-em{font-size:60px;animation:float 3s ease-in-out infinite;}
+.dr-title{font-family:'Jua',sans-serif;font-size:1.3rem;color:#FFD93D;}
+.dr-score{font-family:'Jua',sans-serif;font-size:1rem;color:#fff;background:rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.16);border-radius:12px;padding:5px 14px;}
+.dr-praise{font-family:'Jua',sans-serif;font-size:.9rem;color:#FFC1DA;line-height:1.4;
+  margin-top:2px;word-break:keep-all;}
+.dr-sub{font-family:'Jua',sans-serif;font-size:.72rem;color:rgba(255,255,255,.72);
+  line-height:1.45;word-break:keep-all;}
+.dr-btns{display:flex;flex-direction:column;gap:7px;width:100%;max-width:260px;margin-top:8px;}
+
+/* ── ⚡ 마주 보고 덧셈 대결 (스플릿) ── */
+#duo-add{background:linear-gradient(160deg,#0f1f36,#123152);}
+.da-intro{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;padding:18px;text-align:center;}
+.da-intro-em{font-size:56px;animation:float 3s ease-in-out infinite;}
+.da-intro-t{font-family:'Jua',sans-serif;font-size:1.02rem;color:#FFD93D;word-break:keep-all;}
+.da-intro-d{font-family:'Jua',sans-serif;font-size:.74rem;color:rgba(255,255,255,.82);
+  line-height:1.55;max-width:310px;word-break:keep-all;}
+.da-intro-d b{color:#FFD93D;}
+.da-intro-row{display:flex;gap:9px;}
+.da-intro-row small{font-size:.6rem;opacity:.8;}
+.da-game{flex:1;display:flex;flex-direction:column;gap:5px;padding:6px 8px 8px;min-height:0;}
+.da-side{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:5px;border-radius:20px;padding:8px 10px;}
+.da-top{transform:rotate(180deg);background:linear-gradient(180deg,#0b3c7a,#1565c0);
+  border:2px solid rgba(66,165,245,.6);}
+.da-bot{background:linear-gradient(180deg,#a8124f,#e91e63);
+  border:2px solid rgba(255,158,196,.65);}
+.da-who{display:flex;align-items:center;gap:6px;font-family:'Jua',sans-serif;
+  font-size:.76rem;color:#fff;justify-content:center;}
+.da-pill{border-radius:9px;padding:2px 8px;font-size:.58rem;background:rgba(0,0,0,.28);color:#fff;}
+.da-score{font-size:1.05rem;color:#FFD93D;}
+.da-q{font-family:'Jua',sans-serif;font-size:1.75rem;color:#fff;line-height:1.15;letter-spacing:1px;}
+.da-choices{display:grid;grid-template-columns:1fr 1fr;gap:7px;width:100%;max-width:320px;}
+.da-choice{font-family:'Jua',sans-serif;border:none;border-radius:14px;background:rgba(255,255,255,.94);
+  color:#23304a;font-size:1.4rem;padding:13px 0;cursor:pointer;box-shadow:0 4px 0 rgba(0,0,0,.22);}
+.da-top .da-choice{font-size:1.12rem;padding:9px 0;box-shadow:0 3px 0 rgba(0,0,0,.22);}
+.da-choice:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,.22);}
+.da-choice.correct{background:linear-gradient(135deg,#66BB6A,#2E7D32);color:#fff;}
+.da-choice.wrong{background:linear-gradient(135deg,#EF9A9A,#c62828);color:#fff;}
+.da-choices.wait{pointer-events:none;}
+.da-choices.wait .da-choice{opacity:.5;}
+.da-fb{font-family:'Jua',sans-serif;font-size:.72rem;color:#FFE082;min-height:1.1em;text-align:center;}
+.da-fb.bad{color:#FFCDD2;}
+.da-fb.good{color:#B9F6CA;}
+.da-mid{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:4px;padding:2px 0;}
+.da-mid-row{display:flex;align-items:center;gap:8px;font-family:'Jua',sans-serif;
+  font-size:.72rem;color:rgba(255,255,255,.85);}
+.da-mid-row b{color:#FFD93D;font-size:.92rem;}
+.da-timebar{width:100%;max-width:330px;height:5px;border-radius:3px;
+  background:rgba(255,255,255,.18);overflow:hidden;}
+.da-timebar i{display:block;height:100%;width:100%;border-radius:3px;
+  background:linear-gradient(90deg,#FFD93D,#FF9800);}
+
+/* ── 🎨 둘이 이어 그리기 ── */
+#duo-draw{background:linear-gradient(160deg,#1f2a44,#2d1b3d);}
+.dd-intro{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;padding:18px;text-align:center;}
+.dd-intro-em{font-size:56px;animation:float 3s ease-in-out infinite;}
+.dd-intro-t{font-family:'Jua',sans-serif;font-size:1.02rem;color:#FFD93D;word-break:keep-all;}
+.dd-intro-d{font-family:'Jua',sans-serif;font-size:.74rem;color:rgba(255,255,255,.82);
+  line-height:1.55;max-width:315px;word-break:keep-all;}
+.dd-intro-d b{color:#FFD93D;}
+.dd-game{flex:1;display:flex;flex-direction:column;gap:5px;padding:6px 10px 10px;min-height:0;}
+.dd-turnbar{display:flex;align-items:center;gap:6px;justify-content:space-between;}
+.dd-p{font-family:'Jua',sans-serif;font-size:.66rem;color:rgba(255,255,255,.68);
+  border-radius:11px;padding:4px 9px;background:rgba(255,255,255,.08);}
+.dd-p.active{color:#fff;}
+.dd-p.p0.active{background:linear-gradient(135deg,#FF6B9D,#c2185b);
+  box-shadow:0 0 0 2px rgba(255,107,157,.3);}
+.dd-p.p1.active{background:linear-gradient(135deg,#42A5F5,#1565c0);
+  box-shadow:0 0 0 2px rgba(66,165,245,.3);}
+.dd-count{font-family:'Jua',sans-serif;font-size:.82rem;color:#FFD93D;
+  background:rgba(0,0,0,.3);border-radius:11px;padding:3px 10px;min-width:66px;text-align:center;}
+.dd-topic{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  font-family:'Jua',sans-serif;font-size:.76rem;color:#fff;}
+.dd-topic b{color:#FFD93D;}
+.dd-topic button{font-family:'Jua',sans-serif;font-size:.64rem;border:1px solid rgba(255,255,255,.24);
+  background:rgba(255,255,255,.1);color:#fff;border-radius:10px;padding:4px 9px;cursor:pointer;}
+.dd-hint{font-family:'Jua',sans-serif;font-size:.66rem;color:rgba(255,255,255,.62);text-align:center;}
+.dd-wrap{position:relative;flex:1;min-height:0;border-radius:16px;overflow:hidden;background:#fffdf7;
+  box-shadow:0 6px 20px rgba(0,0,0,.35),inset 0 0 0 2px rgba(255,255,255,.55);}
+#dd-canvas{display:block;width:100%;height:100%;touch-action:none;}
+.dd-banner{position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+  padding:12px;background:rgba(18,10,36,.74);backdrop-filter:blur(3px);}
+.dd-banner.show{display:flex;}
+.dd-banner-card{text-align:center;padding:16px 18px;border-radius:20px;background:#fff;
+  max-width:270px;animation:popIn .24s ease;box-shadow:0 14px 34px rgba(0,0,0,.4);}
+.dd-banner-title{font-family:'Jua',sans-serif;font-size:1.15rem;color:#c2185b;}
+.dd-banner-sub{font-family:'Jua',sans-serif;font-size:.72rem;color:#6b7280;
+  margin:5px 0 11px;line-height:1.45;word-break:keep-all;}
+.dd-saved{font-family:'Jua',sans-serif;font-size:.68rem;color:#B9F6CA;text-align:center;
+  min-height:1.1em;line-height:1.35;}
+.dd-tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;}
+.dd-sizes{display:flex;gap:4px;background:rgba(255,255,255,.1);border-radius:12px;padding:3px;}
+.dd-size{width:30px;height:27px;border:none;border-radius:9px;background:transparent;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;}
+.dd-size i{display:block;border-radius:50%;background:rgba(255,255,255,.78);}
+.dd-size.sel{background:#fff;}
+.dd-size.sel i{background:#3b2560;}
+.dd-btn{font-family:'Jua',sans-serif;font-size:.7rem;border:none;border-radius:11px;padding:7px 10px;
+  background:rgba(255,255,255,.14);color:#fff;cursor:pointer;}
+.dd-btn:active{transform:scale(.96);}
+.dd-btn.save{background:linear-gradient(135deg,#FFD93D,#f9a825);color:#5a3e00;}
+
+@media (max-width:360px){
+  .duo-banner-desc,.duo-pick-desc{font-size:.62rem;}
+  .da-choice{font-size:1.24rem;padding:11px 0;}
+  .da-top .da-choice{font-size:1rem;padding:8px 0;}
+  .da-q{font-size:1.55rem;}
+  .dd-btn{font-size:.64rem;padding:6px 8px;}
+}
+.ex-badge.duo{color:#FFC9E2;}

@@ -54,7 +54,7 @@
       out.push({
         type: 'draw', id: String(it.id || ''), emoji: it.emoji || '🎨',
         title: (it.word || '그림'), pct: free ? 0 : it.pct, free: free,
-        stars: it.stars || 0, ts: it.ts || 0, img: it.img
+        duo: !!it.duo, stars: it.stars || 0, ts: it.ts || 0, img: it.img
       });
     });
     return out;
@@ -108,6 +108,7 @@
 
   function itemBadge(it) {
     if (it.type === 'color') return '🖍️ 색칠';
+    if (it.duo) return '🤝 같이';
     if (it.free) return '✏️ 자유';
     return it.pct + '%';
   }
@@ -125,7 +126,7 @@
     btn.appendChild(img);
 
     var badge = document.createElement('span');
-    badge.className = 'ex-badge' + (it.type === 'color' ? ' color' : (it.free ? ' free' : ''));
+    badge.className = 'ex-badge' + (it.type === 'color' ? ' color' : (it.duo ? ' duo' : (it.free ? ' free' : '')));
     badge.textContent = itemBadge(it);
     btn.appendChild(badge);
 
@@ -205,7 +206,7 @@
     if (img) { img.src = it.img; img.alt = it.title; }
     var meta = it.type === 'color'
       ? (dateLabel(it.ts) + ' · 색칠 작품')
-      : (dateLabel(it.ts) + (it.free ? ' · 자유 그림' : ' · 주제 일치율 ' + it.pct + '%'));
+      : (dateLabel(it.ts) + (it.duo ? ' · 🤝 둘이 같이 그린 그림' : (it.free ? ' · 자유 그림' : ' · 주제 일치율 ' + it.pct + '%')));
     setText('exv-meta', meta);
     cancelDelete();
     var view = $('exhibit-view');
