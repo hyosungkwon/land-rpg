@@ -139,10 +139,13 @@
 
     var hat = wornItem('hat', wear.hat);
     var acc = wornItem('acc', wear.acc);
-    var bg = wornItem('bg', wear.bg);
     setText('hero-hat', hat ? hat.em : '');
     setText('hero-acc', acc ? acc.em : '');
-    setText('hero-bg-em', bg ? bg.em : '');
+
+    // 고른 배경(bg)은 히어로 뒤의 은은한 빛무리로 보여 준다.
+    var HALO = { b1: '#ffd6e7', b2: '#c8e6ff', b3: '#fff3c4', b4: '#ffd9c0', b5: '#ffd0d0', b6: '#cdefff', b7: '#d8f0d8', b8: '#c9c6ff' };
+    var wrap = document.querySelector('.hero-wrap');
+    if (wrap) wrap.style.setProperty('--hero-halo', HALO[wear.bg] || 'rgba(255,255,255,0)');
 
     var maxS = 1;
     if (SD.pCleared) for (var i = 1; i <= 30; i++) if (SD.pCleared[i]) maxS = i;
