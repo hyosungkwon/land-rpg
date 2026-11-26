@@ -796,3 +796,4 @@ body{font-family:'Jua',sans-serif;background:#0f0c29;min-height:100vh;overflow-x
 /* 화면 세로 가운데 정렬(짧은 내용이 위에 몰리지 않게) */
 .diff-body,.mem-body,.maze-body{justify-content:center;}
 .piano-body{justify-content:center;}
+.col-body{justify-content:center;}
