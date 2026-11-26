@@ -46,7 +46,8 @@ self.addEventListener('fetch', (event) => {
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
     try {
-      const fresh = await fetch(req);
+      // 화면(HTML)은 항상 서버에 확인해서, 새로 배포한 화면이 바로 보이게 한다.
+      const fresh = await fetch(req, req.mode === 'navigate' ? { cache: 'no-cache' } : undefined);
       if (fresh && fresh.ok) cache.put(req, fresh.clone()).catch(() => {});
       return fresh;
     } catch (e) {

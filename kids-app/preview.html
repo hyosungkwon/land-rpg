@@ -18,8 +18,15 @@
 <body>
   <div class="wrap">
     <div class="cap">📱 모바일 미리보기 · iframe 390×844</div>
-    <div class="phone"><iframe src="./index.html" title="유아의 놀이터 미리보기"></iframe></div>
+    <div class="phone"><iframe id="frame" src="./index.html" title="유아의 놀이터 미리보기"></iframe></div>
     <div class="cap">실제 폰에서는 <a href="./index.html">이 링크</a>로 열어요 · 홈 화면에 추가하면 앱처럼 실행됩니다</div>
   </div>
+<script>
+  // 미리보기 주소의 ?v= 를 iframe 에도 넘겨, 배포 직후 예전 화면이 남지 않게 한다.
+  (function () {
+    var v = new URLSearchParams(location.search).get('v') || '0';
+    document.getElementById('frame').src = './index.html?pv=' + encodeURIComponent(v);
+  })();
+</script>
 </body>
 </html>
