@@ -558,7 +558,10 @@
     buildDressItems();
   }
 
-  window.Coloring = { undo: undo, reset: reset, save: save };
+  window.Coloring = {
+    undo: undo, reset: reset, save: save,
+    _qa: function () { return { design: curDesign, name: DESIGNS[curDesign].name, regions: DESIGNS[curDesign].regions.length, painted: colors.filter(function (c) { return c !== '#ffffff'; }).length, history: history.length }; }
+  };
   window.Dress = {
     removeCur: removeCur,
     homeHero: function () { App.updateHomeStatus(); App.showSp('🏠', '홈 화면 캐릭터에 그대로 입혔어요!'); }

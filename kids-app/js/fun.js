@@ -809,12 +809,23 @@
     mzStartScreen();
   }
 
-  window.Memory = { begin: memBegin, beginCur: memBeginCur, diffSel: memDiffSel };
-  window.Balloon = { begin: balloonBegin, stop: balloonStop };
-  window.DiffGame = { newScene: newScene, hint: diffHint };
+  window.Memory = {
+    begin: memBegin, beginCur: memBeginCur, diffSel: memDiffSel,
+    // 자체 점검용(화면에는 영향 없음)
+    _qa: function () { return { pairs: memPairs, matched: memMatched, tries: memTries, cards: memCards.length, theme: memTheme, diff: memDiff }; }
+  };
+  window.Balloon = {
+    begin: balloonBegin, stop: balloonStop,
+    _qa: function () { return { score: balSc, miss: balMiss, combo: balCombo, left: balTimeLeft, live: balBubbles.length }; }
+  };
+  window.DiffGame = {
+    newScene: newScene, hint: diffHint,
+    _qa: function () { return { scene: dfScene ? dfScene.name : '', diffs: dfDiffs.map(function (d) { return { x: d.x, y: d.y, type: d.type, found: d.found }; }), found: dfFound, total: dfTotal, hints: dfHints, stage: dfStage }; }
+  };
   window.Maze = {
     begin: mazeBegin, newMaze: newMaze, diffSel: mzStartScreen,
-    leave: function () { mzClear(); mzTarget = null; }
+    leave: function () { mzClear(); mzTarget = null; },
+    _qa: function () { return { size: mzSize, player: { x: mzPlayer.x, y: mzPlayer.y }, goal: { x: mzGoal.x, y: mzGoal.y }, done: mzDone, cell: mzCell, trail: mzTrail.length }; }
   };
 
   App.openMemory = openMemory;

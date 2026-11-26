@@ -599,10 +599,22 @@
     mathFlip: mathFlip, mathNext: mathNext, mathPrev: mathPrev, mathShuffle: mathShuffle,
     engFlip: engFlip, engNext: engNext, engPrev: engPrev, engShuffle: engShuffle, speakEng: speakEng
   };
-  window.Clock = { next: clockNext, speakQuestion: clockSpeakQ };
-  window.Word = { next: wordNext, speakHint: wordSpeakHint };
-  window.Dict = { next: dictNext, speak: dictSpeak };
-  window.Addq = { begin: addqBegin, stop: addqStop, diffSel: addqDiffSel };
+  window.Clock = {
+    next: clockNext, speakQuestion: clockSpeakQ,
+    _qa: function () { return { q: ckQ, score: ckSc, answered: ckAnswered, tts: App.ttsOk }; }
+  };
+  window.Word = {
+    next: wordNext, speakHint: wordSpeakHint,
+    _qa: function () { return { idx: wqIdx, score: wqSc, combo: wqCombo, answered: wqAnswered, card: wqCards[wqIdx] }; }
+  };
+  window.Dict = {
+    next: dictNext, speak: dictSpeak,
+    _qa: function () { return { idx: dIdx, score: dSc, combo: dCombo, answered: dAnswered, card: dCards[dIdx], tts: App.ttsOk }; }
+  };
+  window.Addq = {
+    begin: addqBegin, stop: addqStop, diffSel: addqDiffSel,
+    _qa: function () { return { score: addqSc, correct: addqCorrect, combo: addqCombo, done: addqDone, ans: addqAns }; }
+  };
 
   App.onLeave.push(ckClear);
   App.onLeave.push(addqStop);

@@ -347,7 +347,10 @@
     setTimeout(buildKeys, 180);
   }
 
-  window.Piano = { setMode: setMode, listen: listen, stop: stopListen };
+  window.Piano = {
+    setMode: setMode, listen: listen, stop: stopListen,
+    _qa: function () { return { mode: mode, song: SONGS[songIdx].name, pos: pos, len: SONGS[songIdx].seq.length, timbre: timbre, keys: Object.keys(keyEls).length, playing: playing }; }
+  };
   App.openPiano = open;
   App.onLeave.push(stopListen);
 })();
