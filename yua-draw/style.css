@@ -19,8 +19,8 @@ body{
   -webkit-touch-callout:none;
 }
 #app{
-  height:100dvh;
   height:100vh;
+  height:100dvh;
   display:flex; flex-direction:column; gap:7px;
   padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));
   max-width:540px; margin:0 auto;
