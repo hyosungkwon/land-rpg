@@ -11,7 +11,7 @@ import { jobOf, equippedPet, subPet, petDmgPct, petEvo } from './meta.js';
 import { citadelEffects } from './citadel.js';
 import { megaEffects } from './bank.js';
 import { titleStatus } from './pass.js';
-import { landBuffTotals } from './land.js';
+import { landBuffTotals } from './synergy.js';
 
 /** 종합 전투력(CP) + 6대 성장 원천별 기여도(%) 분석 */
 export function computeCpBreakdown(state, buffs = {}) {

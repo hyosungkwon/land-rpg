@@ -16,6 +16,44 @@
 <link rel="stylesheet" href="style.css">
 <!-- 오류 수집(검증·현장 진단용): window.__errs 에 로드/실행 오류를 모은다. 화면·동작에는 영향 없음 -->
 <script>window.__errs=[];(function(){function push(v){try{window.__errs.push(String(v));if(window.__errs.length>40)window.__errs.shift();}catch(e){}}addEventListener("error",function(e){try{if(e.target&&e.target.tagName&&e.target.tagName!=="WINDOW"){push("res:"+(e.target.tagName+" "+(e.target.src||e.target.href||"")));}else{push("err:"+(e.message||String(e.error)));}}catch(x){}},true);addEventListener("unhandledrejection",function(e){push("reject:"+String((e.reason&&e.reason.message)||e.reason));});})();</script>
+<!-- 부팅 안전망(v7.9.1): app.js 가 실행되지 못해 스플래시에 갇혀도 서비스워커를 새로 받아 한 번 새로고침한다.
+     index.html 은 항상 네트워크 우선으로 받으므로, 구버전 캐시에 갇힌 사용자도 이 코드로 빠져나온다. -->
+<script>
+(function () {
+  if (!('serviceWorker' in navigator)) return;
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
+  var KEY = 'land_rpg_boot_reload';
+  var hadController = !!navigator.serviceWorker.controller;
+  function once() {
+    try { if (sessionStorage.getItem(KEY) === '1') return false; sessionStorage.setItem(KEY, '1'); return true; } catch (e) { return false; }
+  }
+  function reload() { setTimeout(function () { location.reload(); }, 350); }
+
+  // 이미 제어 중이다 = 업데이트 상황 → 새 워커가 잡으면 한 번 새로고침(첫 설치 때는 app.js 가 처리)
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (!hadController) return;
+    if (!once()) return;
+    reload();
+  });
+
+  // 스플래시에 갇혔는지 8초 뒤 확인 — 갇혔다면 캐시 갱신을 강제하고 한 번만 새로고침
+  setTimeout(function () {
+    var boot = document.getElementById('boot');
+    if (!boot || boot.classList.contains('out')) return;
+    if (!navigator.serviceWorker.controller && !hadController) return; // 워커가 없으면 새로고침으로 달라지지 않는다
+    if (!once()) return;
+    try {
+      navigator.serviceWorker.getRegistration().then(function (reg) {
+        if (!reg) { reload(); return; }
+        (reg.update ? reg.update() : Promise.resolve()).catch(function () {}).then(function () {
+          if (reg.waiting) { try { reg.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {} }
+          setTimeout(reload, 1200);
+        });
+      }).catch(reload);
+    } catch (e) { reload(); }
+  }, 8000);
+})();
+</script>
 </head>
 <body>
 
