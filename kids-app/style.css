@@ -803,3 +803,4 @@ body{font-family:'Jua',sans-serif;background:#0f0c29;min-height:100vh;overflow-x
 #p-tray{display:flex;}
 /* 낚시 화면 세로 가운데 */
 .fish-body{justify-content:center;}
+#p-game{justify-content:center;}

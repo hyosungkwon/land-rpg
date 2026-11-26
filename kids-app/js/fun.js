@@ -166,8 +166,8 @@
     balBubbles = [];
     balClearAll();
 
-    var spawnMs = diff === 'easy' ? 1500 : diff === 'normal' ? 1000 : 700;
-    var speed = diff === 'easy' ? 1.2 : diff === 'normal' ? 1.9 : 2.9;
+    var spawnMs = diff === 'easy' ? 1600 : diff === 'normal' ? 1050 : 700;
+    var speed = diff === 'easy' ? 1.0 : diff === 'normal' ? 1.7 : 2.7;
 
     balCountdown = setInterval(function () {
       balTimeLeft--;
@@ -243,7 +243,7 @@
           balCombo = 0;
           setText('bal-combo', '0');
           Util.beep('ng');
-          if (balMiss >= 5) { balloonEnd(); return; }
+          if (balMiss >= 10) { balloonEnd(); return; }
         }
         continue;
       }
