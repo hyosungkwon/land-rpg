@@ -429,6 +429,29 @@
     render();
   }
 
+  /* 색칠한 화면을 전시관 앨범에 담을 작은 그림(JPEG)으로 만든다. */
+  function thumbUrl(maxDim) {
+    try {
+      var src = colCv;
+      var scale = Math.min(1, maxDim / Math.max(src.width, src.height));
+      var out = document.createElement('canvas');
+      out.width = Math.max(1, Math.round(src.width * scale));
+      out.height = Math.max(1, Math.round(src.height * scale));
+      var g = out.getContext('2d');
+      g.fillStyle = '#ffffff';
+      g.fillRect(0, 0, out.width, out.height);
+      g.drawImage(src, 0, 0, out.width, out.height);
+      return out.toDataURL('image/jpeg', 0.82);
+    } catch (e) { return ''; }
+  }
+
+  // '🐱 고양이' → { emoji:'🐱', title:'고양이' }
+  function splitName(name) {
+    var parts = String(name || '').trim().split(/\s+/);
+    if (parts.length > 1) return { emoji: parts[0], title: parts.slice(1).join(' ') };
+    return { emoji: '🖍️', title: String(name || '색칠 작품') };
+  }
+
   function save() {
     try {
       var a = document.createElement('a');
@@ -436,12 +459,18 @@
       a.href = colCv.toDataURL('image/png');
       a.click();
     } catch (e) {}
+    // 🖼️ 내 작품 전시관에도 담는다(그림 놀이 작품과 한 앨범).
+    var design = DESIGNS[curDesign];
+    var nm = splitName(design.name);
+    var img = thumbUrl(420);
+    if (window.Exhibit && img) window.Exhibit.addColor({ name: nm.title, emoji: nm.emoji, img: img });
+
     App.SD.drawSaved = (App.SD.drawSaved || 0) + 1;
     App.writeSave();
     App.checkAch();
     if (window.Mission) window.Mission.add('color');
     setTimeout(function () {
-      App.earnReward('🖍️', DESIGNS[curDesign].name + ' 색칠 완성! 멋진 화가! 🎨');
+      App.earnReward('🖍️', nm.title + ' 색칠 완성! 전시관에 담았어요! 🎨');
     }, 250);
   }
 

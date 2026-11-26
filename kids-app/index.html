@@ -11,7 +11,7 @@ window.__errs = [];
 addEventListener('error', function (e) { try { window.__errs.push(String(e.message || 'error')); } catch (_) {} });
 addEventListener('unhandledrejection', function (e) { try { window.__errs.push('promise: ' + String((e.reason && e.reason.message) || e.reason)); } catch (_) {} });
 </script>
-<link rel="stylesheet" href="style.css?v=a75b122c">
+<link rel="stylesheet" href="style.css?v=f46b8fc6">
 </head>
 <body>
 
@@ -33,6 +33,12 @@ addEventListener('unhandledrejection', function (e) { try { window.__errs.push('
         <div class="home-char-nm" id="hc-nm">꼬마친구</div>
       </div>
     </div>
+  </div>
+
+  <!-- 👨‍👩‍👧 부모님 · ⏰ 사용 시간 타이머 (상단 바) -->
+  <div class="parent-bar">
+    <button class="pb-btn" id="pb-parent" onclick="Parent.openMenu()" aria-label="부모님 메뉴">👨‍👩‍👧 부모님</button>
+    <button class="pb-chip" id="pb-chip" onclick="Parent.openMenu()" aria-label="사용 시간 타이머">⏰ 타이머 꺼짐</button>
   </div>
 
   <div class="home-hero">
@@ -147,6 +153,14 @@ addEventListener('unhandledrejection', function (e) { try { window.__errs.push('
 
   <div id="panel-create" class="home-panel">
     <div class="card-grid">
+      <button class="game-card gc-exhibit ex-card" onclick="Exhibit.open()" aria-label="내 작품 전시관 열기">
+        <span class="gc-icon">🖼️</span>
+        <span class="ex-card-info">
+          <span class="ex-card-title">내 작품 전시관</span>
+          <span class="ex-card-desc">그림·색칠 작품을 한 앨범에 · 크게 보기·저장·지우기</span>
+        </span>
+        <span class="ex-count-chip" id="ex-count-chip">0</span>
+      </button>
       <button class="game-card gc-ydraw" onclick="App.openDraw('topic')" style="grid-column:1/-1;flex-direction:row;text-align:left;gap:14px;padding:16px 18px;">
         <span class="gc-icon">🎨</span>
         <span class="gc-new">NEW</span>
@@ -373,7 +387,7 @@ addEventListener('unhandledrejection', function (e) { try { window.__errs.push('
       <div class="result-topic">🖼️ 내 그림 갤러리</div>
       <button class="x" id="btnGalleryClose" aria-label="닫기">✕</button>
     </div>
-    <p class="gallery-sub">최근 12개까지 모여요</p>
+    <p class="gallery-sub">최근 18개까지 모여요</p>
     <div class="gallery" id="galleryList"></div>
   </div>
 </div>
@@ -761,6 +775,110 @@ addEventListener('unhandledrejection', function (e) { try { window.__errs.push('
   </div>
 </div>
 
+<!-- ══════════ 🖼️ 내 작품 전시관 (통합 앨범) ══════════ -->
+<div id="exhibit" class="screen">
+  <div class="sub-header">
+    <button class="back-btn" onclick="App.home()">← 홈</button>
+    <span class="sub-title">🖼️ 내 작품 전시관</span>
+    <span class="ex-total" id="ex-total">0개</span>
+  </div>
+  <div class="ex-body">
+    <div class="ex-tabs" id="ex-tabs">
+      <button class="ex-tab active" data-filter="all" onclick="Exhibit.filter('all')">전체 <b id="ex-n-all">0</b></button>
+      <button class="ex-tab" data-filter="draw" onclick="Exhibit.filter('draw')">🎨 그림 <b id="ex-n-draw">0</b></button>
+      <button class="ex-tab" data-filter="color" onclick="Exhibit.filter('color')">🖍️ 색칠 <b id="ex-n-color">0</b></button>
+    </div>
+    <div class="ex-grid" id="ex-grid"></div>
+    <div class="ex-note" id="ex-note"></div>
+  </div>
+</div>
+
+<!-- 작품 크게 보기 -->
+<div id="exhibit-view">
+  <div class="exv-card">
+    <div class="exv-head">
+      <span class="exv-title" id="exv-title">내 작품</span>
+      <button class="exv-x" onclick="Exhibit.closeView()" aria-label="닫기">✕</button>
+    </div>
+    <img class="exv-img" id="exv-img" alt="내 작품 크게 보기">
+    <div class="exv-meta" id="exv-meta"></div>
+    <div class="exv-actions" id="exv-actions">
+      <button class="gbtn gb" onclick="Exhibit.savePng()">💾 PNG 저장</button>
+      <button class="gbtn exv-del" onclick="Exhibit.askDelete()">🗑️ 지우기</button>
+    </div>
+    <div class="exv-confirm" id="exv-confirm">
+      <span>이 작품을 지울까요?</span>
+      <button class="gbtn exv-yes" onclick="Exhibit.doDelete()">응, 지우기</button>
+      <button class="gbtn gb" onclick="Exhibit.cancelDelete()">아니야</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ 👨‍👩‍👧 부모님 메뉴 (사용 타이머 · 오늘의 요약) ══════════ -->
+<div id="parent-modal">
+  <div class="pm-card">
+    <div class="pm-head">
+      <span>👨‍👩‍👧 부모님 메뉴</span>
+      <button class="pm-x" onclick="Parent.closeMenu()" aria-label="닫기">✕</button>
+    </div>
+    <div class="pm-sec">
+      <div class="pm-sec-t">⏰ 사용 시간 타이머</div>
+      <div class="pm-now" id="pm-now">지금은 타이머가 꺼져 있어요</div>
+      <div class="pm-timer-row">
+        <button class="pm-timer-btn" data-min="0">해제</button>
+        <button class="pm-timer-btn" data-min="10">10분</button>
+        <button class="pm-timer-btn" data-min="15">15분</button>
+        <button class="pm-timer-btn" data-min="20">20분</button>
+        <button class="pm-timer-btn" data-min="30">30분</button>
+      </div>
+      <div class="pm-tip">노는 동안에만 시간이 줄어들어요. 다 되면 친구가 😴 졸린 얼굴로 쉬자고 알려 주고, 끄거나 늘릴 때는 부모님 확인(곱셈)을 거쳐요.</div>
+    </div>
+    <div class="pm-sec">
+      <div class="pm-sec-t">📊 오늘의 놀이 요약</div>
+      <div class="pm-sum">
+        <div class="pm-tile"><b id="pm-learn">0</b><span>🔢 학습 문제</span></div>
+        <div class="pm-tile"><b id="pm-art">0</b><span>🖼️ 그린 작품</span></div>
+        <div class="pm-tile"><b id="pm-mission">0/3</b><span>🎯 오늘 미션</span></div>
+        <div class="pm-tile"><b id="pm-time">0</b><span>⏱ 놀이 시간(분)</span></div>
+      </div>
+      <div class="pm-line" id="pm-line1">🎮 놀이 0번 · 🍎 간식 0번 · 🏷️ 스티커 0개(전체)</div>
+      <div class="pm-line" id="pm-line2">🎯 지금까지 미션 0개 · 모두 완료한 날 0일</div>
+    </div>
+    <button class="gbtn gpk" onclick="Parent.closeMenu()">닫기</button>
+  </div>
+</div>
+
+<!-- 부모님 확인(곱셈) -->
+<div id="pgate">
+  <div class="pg-card">
+    <div class="pg-title">👨‍👩‍👧 부모님 확인</div>
+    <div class="pg-sub" id="pg-sub">부모님 확인이 필요해요.</div>
+    <div class="pg-q" id="pg-q">7 × 8 = ?</div>
+    <div class="pg-ans" id="pg-ans">_</div>
+    <div class="pg-pad" id="pg-pad"></div>
+    <div class="pg-row">
+      <button class="gbtn pg-cancel" onclick="Parent.gateCancel()">취소</button>
+      <button class="gbtn gpk" onclick="Parent.gateSubmit()">확인</button>
+    </div>
+  </div>
+</div>
+
+<!-- 😴 쉬자고 알려 주는 화면(타이머가 다 되었을 때) -->
+<div id="rest-overlay">
+  <div class="rest-card">
+    <div class="rest-moon">🌙 ✨</div>
+    <span class="rest-face" id="rest-face">😴</span>
+    <span class="rest-zzz">💤</span>
+    <div class="rest-title" id="rest-title">오늘 신나게 놀았다~</div>
+    <div class="rest-msg" id="rest-msg">잠깐 눈 쉬고 나중에 또 놀자!</div>
+    <div class="rest-sub" id="rest-sub">🐣 꼬마친구도 같이 쉴까요? 💤</div>
+    <button class="rest-parent" onclick="Parent.restParentTap()">👨‍👩‍👧 부모님이에요</button>
+  </div>
+</div>
+
+<!-- 부모님 메뉴 짧은 알림 -->
+<div id="parent-toast"></div>
+
 <!-- ══════════ 공통 팝업 ══════════ -->
 <div id="overlay">
   <div class="popup-card">
@@ -830,17 +948,19 @@ addEventListener('unhandledrejection', function (e) { try { window.__errs.push('
 
 <script src="js/data.js?v=b7c4ec98"></script>
 <script src="js/topics.js?v=5f3602fe"></script>
-<script src="js/core.js?v=ccef43f6"></script>
-<script src="js/draw.js?v=5247a429"></script>
+<script src="js/core.js?v=547df8ee"></script>
+<script src="js/draw.js?v=b2aa3181"></script>
 <script src="js/puzzle.js?v=f9b16dc0"></script>
 <script src="js/fun.js?v=13faf798"></script>
 <script src="js/music.js?v=5583be97"></script>
-<script src="js/art.js?v=ef9525d0"></script>
+<script src="js/art.js?v=ba39b74a"></script>
 <script src="js/learn.js?v=5ea8bf8d"></script>
 <script src="js/fishing.js?v=21358929"></script>
 <script src="js/pet.js?v=ef859fc2"></script>
 <script src="js/mission.js?v=cd7f8b66"></script>
 <script src="js/life.js?v=f3408133"></script>
+<script src="js/exhibit.js?v=e5c4ee1f"></script>
+<script src="js/parent.js?v=e700114d"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); });

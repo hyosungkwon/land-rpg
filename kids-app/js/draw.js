@@ -83,7 +83,8 @@
     recent: [],
     sound: true,
     mode: 'topic',   // 'topic' 주제 도전 | 'free' 자유 그리기
-    awarded: false   // 이번 그림으로 스티커를 줬는지
+    awarded: false,  // 이번 그림으로 스티커를 줬는지
+    freeSaved: false // 자유 그림을 전시관에 이미 담았는지
   };
 
   const paintCanvas = $('paint');
@@ -976,6 +977,17 @@
       : '유아그림-' + topic.word + '-' + ($('scoreNum') ? $('scoreNum').textContent : '') + '점.png';
     downloadDataUrl(data, name);
     toast('그림을 저장했어요! 💾');
+    // 🖼️ 내 작품 전시관에도 담는다. 자유 그림은 한 번만 담는다(같은 그림을 여러 번 저장해도 한 장).
+    if (state.mode === 'free' && !state.freeSaved) {
+      const thumb = exportImage(340, 'image/jpeg', 0.82);
+      if (thumb) {
+        saveToGallery({
+          id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+          emoji: '✏️', word: '자유그림', pct: 0, stars: 0, ts: Date.now(), img: thumb
+        });
+        state.freeSaved = true;
+      }
+    }
     if (window.App) {
       window.App.SD.drawSaved = (window.App.SD.drawSaved || 0) + 1;
       window.App.writeSave();
@@ -1037,7 +1049,7 @@
   function saveToGallery(entry) {
     let list = loadGallery();
     list.unshift(entry);
-    list = list.slice(0, 12);
+    list = list.slice(0, 18);
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         localStorage.setItem(STORE_KEY, JSON.stringify(list));
@@ -1117,6 +1129,7 @@
   function clearAll() {
     state.cmds.length = 0;
     state.awarded = false;
+    state.freeSaved = false;
     const line = $('rewardLine');
     if (line) line.textContent = '';
     clearPaint();
@@ -1444,7 +1457,11 @@
     });
     $('btnClear').addEventListener('click', onClear);
     $('btnNext').addEventListener('click', onNextTopic);
-    $('btnGallery').addEventListener('click', openGallery);
+    $('btnGallery').addEventListener('click', () => {
+      // 3단계부터는 그림 놀이 + 색칠 작품을 한 앨범(내 작품 전시관)에서 본다.
+      if (window.Exhibit) window.Exhibit.open();
+      else openGallery();
+    });
     $('btnGalleryClose').addEventListener('click', () => { $('galleryModal').hidden = true; });
     $('btnSound').addEventListener('click', () => {
       state.sound = !state.sound;

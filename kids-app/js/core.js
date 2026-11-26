@@ -23,7 +23,10 @@
     fishCodex: [], fishRodLv: 1, fishRodExp: 0,
     /* 친구 교감(pet.js) — 예전 저장본에는 없으므로 기본값을 여기서 채운다 */
     petName: '꼬마친구', petHunger: 70, petHappy: 60, petTreats: 3,
-    petTreatDate: '', petTickAt: 0, petFed: 0, petPets: 0, petSound: true
+    petTreatDate: '', petTickAt: 0, petFed: 0, petPets: 0, petSound: true,
+    /* ⏰ 사용 타이머 · 오늘의 요약(parent.js, 3단계) */
+    timerMin: 0, timerLeftMs: 0, timerSetAt: 0,
+    dayDate: '', dayEv: {}, dayMs: 0
   };
 
   function loadSave() {

@@ -1065,3 +1065,162 @@ body{font-family:'Jua',sans-serif;background:#0f0c29;min-height:100vh;overflow-x
   .mis-bar-title{font-size:.74rem;}
   .mis-dot{width:20px;height:20px;font-size:.72rem;}
 }
+
+/* ══════════════════════════════════════════════════════════
+   3단계 (2026-11-26) — 🖼️ 내 작품 전시관 · ⏰ 사용 타이머
+   ══════════════════════════════════════════════════════════ */
+
+/* ── 홈 상단: 👨‍👩‍👧 부모님 · ⏰ 타이머 바 ── */
+.parent-bar{position:relative;z-index:3;display:flex;align-items:center;justify-content:flex-end;
+  gap:6px;padding:0 16px 4px;}
+.pb-btn,.pb-chip{border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);
+  color:rgba(255,255,255,.86);font-family:'Jua',sans-serif;font-size:.68rem;line-height:1;
+  padding:6px 9px;border-radius:11px;cursor:pointer;white-space:nowrap;}
+.pb-btn:active,.pb-chip:active{transform:scale(.97);}
+.pb-chip.on{background:linear-gradient(135deg,rgba(255,217,61,.3),rgba(255,152,0,.24));
+  border-color:rgba(255,217,61,.6);color:#FFF3C4;}
+.pb-chip.soon{color:#FFCC80;border-color:rgba(255,171,64,.75);animation:pbPulse 1.4s ease-in-out infinite;}
+@keyframes pbPulse{0%,100%{opacity:1;}50%{opacity:.5;}}
+
+/* ── 창작 탭: 내 작품 전시관 카드 ── */
+.gc-exhibit{grid-column:1/-1;flex-direction:row;align-items:center;justify-content:flex-start;
+  gap:12px;padding:13px 16px;background:linear-gradient(135deg,#6a4fd8,#c2185b);text-align:left;}
+.ex-card-info{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;}
+.ex-card-title{font-family:'Jua',sans-serif;font-size:1rem;color:#fff;}
+.ex-card-desc{font-family:'Jua',sans-serif;font-size:.7rem;color:rgba(255,255,255,.82);line-height:1.3;}
+.ex-count-chip{flex-shrink:0;font-family:'Jua',sans-serif;font-size:.9rem;color:#3b2560;
+  background:#FFD93D;border-radius:12px;padding:4px 10px;box-shadow:0 3px 8px rgba(0,0,0,.22);}
+
+/* ── 내 작품 전시관 화면 ── */
+#exhibit{background:linear-gradient(160deg,#1a1033,#2b2350 55%,#3b2560);}
+.ex-total{margin-left:auto;font-family:'Jua',sans-serif;font-size:.72rem;color:rgba(255,255,255,.62);}
+.ex-body{flex:1;display:flex;flex-direction:column;padding:10px 14px 24px;width:100%;max-width:430px;margin:0 auto;}
+.ex-tabs{display:flex;gap:6px;margin-bottom:10px;}
+.ex-tab{flex:1;font-family:'Jua',sans-serif;font-size:.74rem;color:rgba(255,255,255,.72);
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:12px;
+  padding:7px 4px;cursor:pointer;}
+.ex-tab b{font-weight:normal;color:#FFD93D;}
+.ex-tab.active{background:#fff;color:#3b2560;border-color:#fff;}
+.ex-tab.active b{color:#c2185b;}
+.ex-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;}
+.ex-item{position:relative;padding:0;border:2px solid rgba(255,255,255,.16);border-radius:16px;
+  overflow:hidden;background:#fff;cursor:pointer;aspect-ratio:1/1;display:block;
+  box-shadow:0 5px 14px rgba(0,0,0,.28);}
+.ex-item img{width:100%;height:100%;object-fit:contain;background:#fff;display:block;}
+.ex-item:active{transform:scale(.97);}
+.ex-badge{position:absolute;left:6px;top:6px;font-family:'Jua',sans-serif;font-size:.62rem;
+  background:rgba(0,0,0,.58);color:#FFD93D;border-radius:8px;padding:2px 6px;}
+.ex-badge.color{color:#FFE0B2;}
+.ex-badge.free{color:#B3E5FC;}
+.ex-kind{position:absolute;right:6px;bottom:6px;font-size:.92rem;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));}
+.ex-empty{grid-column:1/-1;text-align:center;color:rgba(255,255,255,.68);font-size:.82rem;line-height:1.65;
+  padding:30px 14px;white-space:pre-line;background:rgba(255,255,255,.05);
+  border:1px dashed rgba(255,255,255,.18);border-radius:18px;}
+.ex-note{text-align:center;font-family:'Jua',sans-serif;font-size:.74rem;color:#FFE082;min-height:1.2em;margin-top:9px;}
+
+/* ── 작품 크게 보기 ── */
+#exhibit-view{position:fixed;inset:0;z-index:1050;display:none;align-items:center;justify-content:center;
+  padding:16px;background:rgba(10,8,24,.84);backdrop-filter:blur(6px);}
+#exhibit-view.show{display:flex;}
+.exv-card{width:100%;max-width:360px;max-height:92vh;display:flex;flex-direction:column;
+  border-radius:22px;padding:14px;background:linear-gradient(160deg,#2b2350,#3b2560);
+  border:1px solid rgba(255,255,255,.16);box-shadow:0 18px 44px rgba(0,0,0,.5);animation:popIn .2s ease;}
+.exv-head{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.exv-title{flex:1;min-width:0;font-family:'Jua',sans-serif;font-size:.95rem;color:#FFD93D;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.exv-x{width:30px;height:30px;border:none;border-radius:50%;background:rgba(255,255,255,.14);
+  color:#fff;font-size:.9rem;cursor:pointer;}
+.exv-img{flex:1;min-height:0;width:100%;max-height:52vh;object-fit:contain;background:#fff;border-radius:14px;}
+.exv-meta{font-family:'Jua',sans-serif;font-size:.7rem;color:rgba(255,255,255,.66);text-align:center;margin:8px 0 10px;}
+.exv-actions{display:flex;gap:8px;}
+.exv-actions .gbtn{flex:1;padding:10px 6px;font-size:.82rem;}
+.exv-del{background:linear-gradient(135deg,#ef5350,#c62828);color:#fff;}
+.exv-confirm{display:none;gap:6px;align-items:center;justify-content:center;margin-top:2px;flex-wrap:wrap;}
+.exv-confirm.show{display:flex;}
+.exv-confirm span{font-family:'Jua',sans-serif;font-size:.74rem;color:#FFCDD2;}
+.exv-confirm .gbtn{padding:7px 10px;font-size:.76rem;}
+.exv-yes{background:linear-gradient(135deg,#ef5350,#b71c1c);color:#fff;}
+
+/* ── 👨‍👩‍👧 부모님 메뉴 ── */
+#parent-modal{position:fixed;inset:0;z-index:1200;display:none;align-items:center;justify-content:center;
+  padding:16px;background:rgba(10,8,24,.74);backdrop-filter:blur(6px);}
+#parent-modal.show{display:flex;}
+.pm-card{width:100%;max-width:340px;max-height:88vh;overflow-y:auto;border-radius:24px;padding:16px 15px 14px;
+  background:linear-gradient(160deg,#fdfaf3,#eef4ff);box-shadow:0 20px 50px rgba(0,0,0,.5);animation:popIn .22s ease;}
+.pm-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.pm-head>span{flex:1;font-family:'Jua',sans-serif;font-size:1.02rem;color:#3b2560;}
+.pm-x{width:30px;height:30px;border:none;border-radius:50%;background:#e8e2f5;color:#5b4a7a;
+  font-size:.9rem;cursor:pointer;}
+.pm-sec{background:#fff;border-radius:16px;padding:11px 11px 12px;margin-bottom:10px;
+  box-shadow:0 3px 10px rgba(90,70,130,.08);}
+.pm-sec-t{font-family:'Jua',sans-serif;font-size:.86rem;color:#5b4a7a;margin-bottom:7px;}
+.pm-now{font-family:'Jua',sans-serif;font-size:.74rem;color:#7a6a92;margin-bottom:8px;}
+.pm-now b{color:#c2185b;font-size:.86rem;}
+.pm-timer-row{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;}
+.pm-timer-btn{border:2px solid #e3d9f2;background:#f8f5ff;border-radius:12px;padding:9px 2px;
+  font-family:'Jua',sans-serif;font-size:.72rem;color:#5b4a7a;cursor:pointer;}
+.pm-timer-btn:active{transform:scale(.96);}
+.pm-timer-btn.sel{background:linear-gradient(135deg,#7c4dff,#c2185b);border-color:transparent;color:#fff;}
+.pm-tip{font-size:.62rem;color:#9b8bb4;line-height:1.5;margin-top:8px;}
+.pm-sum{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.pm-tile{background:#f7f4ff;border-radius:12px;padding:7px 6px;text-align:center;}
+.pm-tile b{display:block;font-family:'Jua',sans-serif;font-size:1.05rem;color:#5b3fa8;line-height:1.3;}
+.pm-tile span{font-family:'Jua',sans-serif;font-size:.6rem;color:#8d7fac;}
+.pm-line{font-family:'Jua',sans-serif;font-size:.64rem;color:#7a6a92;line-height:1.5;margin-top:7px;text-align:center;}
+.pm-card>.gbtn{width:100%;padding:11px 0;font-size:.88rem;}
+
+/* ── 부모님 확인(곱셈) ── */
+#pgate{position:fixed;inset:0;z-index:1300;display:none;align-items:center;justify-content:center;
+  padding:18px;background:rgba(10,8,24,.86);backdrop-filter:blur(7px);}
+#pgate.show{display:flex;}
+.pg-card{width:100%;max-width:310px;border-radius:22px;padding:18px 16px 16px;text-align:center;
+  background:linear-gradient(160deg,#ffffff,#eef1ff);box-shadow:0 20px 46px rgba(0,0,0,.5);animation:popIn .2s ease;}
+.pg-title{font-family:'Jua',sans-serif;font-size:1rem;color:#3b2560;}
+.pg-sub{font-family:'Jua',sans-serif;font-size:.68rem;color:#8d7fac;margin:5px 0 9px;line-height:1.45;word-break:keep-all;}
+.pg-q{font-family:'Jua',sans-serif;font-size:1.7rem;color:#c2185b;}
+.pg-ans{font-family:'Jua',sans-serif;font-size:1.5rem;color:#3b2560;background:#f3f0ff;border-radius:12px;
+  margin:7px 0 9px;padding:3px 0;letter-spacing:2px;min-height:1.9em;}
+.pg-card.shake{animation:pgShake .32s ease;}
+@keyframes pgShake{0%,100%{transform:translateX(0);}25%{transform:translateX(-7px);}75%{transform:translateX(7px);}}
+.pg-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.pg-key{border:none;border-radius:12px;background:#f0ecfb;color:#3b2560;font-family:'Jua',sans-serif;
+  font-size:1.05rem;padding:10px 0;cursor:pointer;}
+.pg-key:active{background:#e0d8f6;}
+.pg-key.ok{background:linear-gradient(135deg,#7c4dff,#c2185b);color:#fff;}
+.pg-key.del{background:#f6e6ef;color:#a2456c;}
+.pg-row{display:flex;gap:7px;margin-top:9px;}
+.pg-row .gbtn{flex:1;padding:9px 0;font-size:.8rem;}
+.pg-cancel{background:linear-gradient(135deg,#e6dbe1,#cbb7c2);color:#7a5b6a;}
+
+/* ── 😴 쉬자고 알려 주는 화면 ── */
+#rest-overlay{position:fixed;inset:0;z-index:1100;display:none;align-items:center;justify-content:center;
+  padding:22px;background:radial-gradient(circle at 50% 28%,#2b2350,#0f0c29 72%);}
+#rest-overlay.show{display:flex;}
+body.resting{overflow:hidden;}
+.rest-card{width:100%;max-width:320px;text-align:center;animation:popIn .3s ease;}
+.rest-moon{font-size:1.5rem;margin-bottom:4px;letter-spacing:3px;}
+.rest-face{font-size:76px;display:block;line-height:1.05;animation:restFloat 3.4s ease-in-out infinite;}
+@keyframes restFloat{0%,100%{transform:translateY(0) rotate(-3deg);}50%{transform:translateY(-8px) rotate(3deg);}}
+.rest-zzz{display:block;font-size:1.5rem;margin-top:-4px;animation:zzzFloat 2.4s ease-in-out infinite;}
+@keyframes zzzFloat{0%{opacity:.2;transform:translateY(3px);}50%{opacity:1;transform:translateY(-4px);}100%{opacity:.2;transform:translateY(3px);}}
+.rest-title{font-family:'Jua',sans-serif;font-size:1.24rem;color:#FFD93D;margin:12px 0 4px;word-break:keep-all;}
+.rest-msg{font-family:'Jua',sans-serif;font-size:.94rem;color:#fff;line-height:1.5;word-break:keep-all;}
+.rest-sub{font-family:'Jua',sans-serif;font-size:.76rem;color:rgba(255,255,255,.62);margin-top:8px;}
+.rest-parent{margin-top:20px;border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.1);
+  color:rgba(255,255,255,.82);font-family:'Jua',sans-serif;font-size:.76rem;padding:10px 16px;
+  border-radius:14px;cursor:pointer;}
+.rest-parent:active{background:rgba(255,255,255,.2);}
+
+/* ── 부모님 메뉴 짧은 알림 ── */
+#parent-toast{position:fixed;left:50%;top:14px;transform:translate(-50%,-180%);z-index:1400;
+  pointer-events:none;background:linear-gradient(135deg,#7c4dff,#c2185b);color:#fff;
+  font-family:'Jua',sans-serif;font-size:.8rem;line-height:1.35;padding:9px 14px;border-radius:15px;
+  max-width:88%;text-align:center;box-shadow:0 8px 24px rgba(0,0,0,.4);
+  transition:transform .34s cubic-bezier(.2,1.4,.4,1);}
+#parent-toast.show{transform:translate(-50%,0);}
+
+@media (max-width:360px){
+  .pb-btn,.pb-chip{font-size:.64rem;padding:5px 7px;}
+  .ex-tab{font-size:.68rem;}
+  .pm-timer-btn{font-size:.66rem;}
+}
