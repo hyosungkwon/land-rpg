@@ -458,7 +458,7 @@
   function dressEnsure() {
     var SD = App.SD;
     if (!SD.dressOwned) SD.dressOwned = { hat: ['h1'], acc: ['a1'], bg: ['b1'] };
-    if (!SD.dressWearing) SD.dressWearing = { hat: 'h1', acc: '', bg: 'b1' };
+    if (!SD.dressWearing) SD.dressWearing = { hat: 'h1', acc: '', bg: '' };
   }
 
   function dressApply() {
