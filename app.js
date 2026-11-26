@@ -1294,6 +1294,13 @@ class App {
         this.ui.render();
         this.ui.toast(this.s.screenShake ? '📳 화면 흔들림 켜짐' : '화면 흔들림 꺼짐');
       },
+      // v7.8.0: 실시간 DPS/딜 비중 미터기 초기화
+      resetDpsMeter: () => {
+        if (this.battle && typeof this.battle.resetMeter === 'function') this.battle.resetMeter(Date.now());
+        this.ui._lastMeterAt = 0;
+        this.ui.refreshLive(Date.now());
+        this.ui.toast('📊 DPS 미터기 초기화 — 새 세팅 측정을 시작합니다');
+      },
       // v7.5.0: 전투 데미지 숫자 표시 토글
       toggleDmgNumbers: () => {
         this.s.dmgNumbers = this.s.dmgNumbers === false;

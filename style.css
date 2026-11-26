@@ -1908,6 +1908,39 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .gico-wrap .gsvg { display: none; }
 .gs-ico .gico-wrap, .iv-ico .gico-wrap, .cmp-ico .gico-wrap, .cv-body .gico-wrap, .g-ico .gico-wrap { width: 100%; height: 100%; }
 
+/* v7.8.0 📊 실시간 DPS 미터기 & 딜 비중 막대 */
+.dps-meter {
+  margin: 0 0 8px;
+  padding: 7px 9px;
+  border-radius: 10px;
+  background: rgba(10, 15, 28, 0.56);
+  border: 1px solid var(--line);
+}
+.dm-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 5px; }
+.dm-kpi { font-size: 10px; color: var(--sub); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dm-kpi b { color: var(--text); font-weight: 900; }
+.dm-rst {
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--line);
+  color: var(--sub);
+}
+.dm-bar {
+  display: flex;
+  height: 6px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.07);
+  gap: 1px;
+  margin-bottom: 5px;
+}
+.dm-bar i { display: block; height: 100%; transition: width 0.25s ease; }
+.dm-chips { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+.dm-chip { font-size: 9.5px; color: var(--sub); font-weight: 700; }
+.dm-chip b { font-weight: 900; margin-right: 2px; }
+
 /* ⚔️ 장착 5부위 슬롯 */
 .gear-slots { display: flex; flex-direction: column; gap: 6px; }
 .gslot {

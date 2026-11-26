@@ -63,6 +63,14 @@ const WINDUP_RANGED_MS = 470;
 const WINDUP_BOSS_EXTRA_MS = 90;
 const HEAVY_EVERY = 3; // 보스는 3번째 공격마다 강공격 모션(피해량은 동일)
 const DPS_WINDOW_MS = 5000; // 실시간 DPS(초당 공격력) 슬라이딩 윈도우(5초)
+const METER_WINDOW_MS = 15000; // v7.8.0 실시간 딜 비중 · GPM/SPM 슬라이딩 윈도우(15초)
+export const DPS_BUCKETS = [
+  { key: 'normal', label: '평타', icon: '⚔️', color: '#e2e8f0' },
+  { key: 'skill', label: '스킬', icon: '💥', color: '#ff8a4d' },
+  { key: 'pet', label: '펫', icon: '🐾', color: '#5ee1a3' },
+  { key: 'dot', label: '연쇄/탭', icon: '⚡', color: '#6fd3ff' },
+  { key: 'ult', label: '궁극기', icon: '🐉', color: '#c084fc' },
+];
 // v7.7.0 피버 타임 & 캔버스 탭 번개 일격 상수
 export const FEVER = {
   max: 100,
@@ -119,9 +127,12 @@ export class Battle {
     this.ultUntil = 0;
     this.ultBonus = 0;
     this.lastHitDealt = 0;
-    // v4.8.1 실시간 DPS 추적(최근 5초간 입힌 실제 피해 슬라이딩 윈도우)
+    // v4.8.1 실시간 DPS 추적(최근 5초간 입힌 실제 피해 슬라이딩 윈도우) · v7.8.0 딜 비중/수익 미터기
     this.dmgLog = [];
     this.dpsStartAt = 0;
+    this.meterLog = [];
+    this.gainLog = [];
+    this.meterStartAt = 0;
     this.lastSpawn = 0;
     this.lastRegen = 0;
     this.lastStatsAt = 0;
@@ -463,7 +474,7 @@ export class Battle {
         if (this.dungeon) this.dungeon.dmg += bDmg;
         if (this.tower) this.tower.dmg += bDmg;
         if (this.daily) { this.daily.dmg += bDmg; this.daily.hits = (this.daily.hits || 0) + 1; }
-        this.recordDamage(bDmg, now);
+        this.recordDamage(bDmg, now, 'dot', false);
         this.emit({ t: 'hit', id: m.id, dmg: bDmg, crit: false, x: m.x, isBoss: m.isBoss, kind: 'burn' });
         if (m.hp <= 0) { this.killMonster(m, now); continue; }
       }
@@ -688,6 +699,9 @@ export class Battle {
   hit(list, mul, kind, now, extra = null) {
     let hits = 0;
     let dealt = 0;
+    let critHits = 0;
+    let mainDealt = 0;
+    let chainDealt = 0;
     this.lastHitDealt = 0;
     const rm = this.riftMods();
     for (const m of list) {
@@ -714,6 +728,8 @@ export class Battle {
       if (this.tower) this.tower.dmg += dmg;
       if (this.daily) { this.daily.dmg += dmg; this.daily.hits = (this.daily.hits || 0) + 1; }
       dealt += dmg;
+      mainDealt += dmg;
+      if (crit) critHits++;
       hits++;
       // v6.7 🌩️ 균열 번개 연쇄 — 주변 모든 생존 몬스터에 추가 피해
       if (rm && rm.chainPct > 0 && kind !== 'chain') {
@@ -723,6 +739,7 @@ export class Battle {
           o.hp -= cDmg;
           o.hitAt = now;
           dealt += cDmg;
+          chainDealt += cDmg;
           this.emit({ t: 'hit', id: o.id, dmg: cDmg, crit: false, x: o.x, isBoss: o.isBoss, kind: 'chain' });
           if (o.hp <= 0) this.killMonster(o, now);
         }
@@ -752,12 +769,14 @@ export class Battle {
     }
     this.lastHitDealt = dealt;
     if (hits > 0 && kind !== 'chain' && kind !== 'tap') this.addFever(FEVER.hitGain * Math.min(3, hits), now);
-    if (dealt > 0) this.recordDamage(dealt, now);
+    const srcBucket = kind === 'ultimate' ? 'ult' : kind === 'normal' ? 'normal' : (kind === 'chain' || kind === 'burn' || kind === 'tap') ? 'dot' : 'skill';
+    if (mainDealt > 0) this.recordDamage(mainDealt, now, srcBucket, critHits > 0, hits, critHits);
+    if (chainDealt > 0) this.recordDamage(chainDealt, now, 'dot', false, 1, 0);
     return hits;
   }
 
-  /** v4.8.1 실시간 DPS 집계용 피해 기록(최근 5초 슬라이딩 윈도우) */
-  recordDamage(dmg, now = Date.now()) {
+  /** v4.8.1 실시간 DPS · v7.8.0 딜 비중/치명타율 집계 기록 */
+  recordDamage(dmg, now = Date.now(), src = 'normal', crit = false, hitCount = 1, critCount = null) {
     const v = Number(dmg);
     if (!(v > 0) || !Number.isFinite(v)) return;
     if (!Array.isArray(this.dmgLog)) this.dmgLog = [];
@@ -765,6 +784,78 @@ export class Battle {
     while (this.dmgLog.length && this.dmgLog[0].t < cutoff) this.dmgLog.shift();
     if (!this.dmgLog.length) this.dpsStartAt = now;
     this.dmgLog.push({ t: now, d: v });
+    // v7.8.0 15초 딜 비중·치명률 미터기 로그
+    if (!Array.isArray(this.meterLog)) this.meterLog = [];
+    const mCut = now - METER_WINDOW_MS;
+    while (this.meterLog.length && this.meterLog[0].t < mCut) this.meterLog.shift();
+    if (!this.meterStartAt) this.meterStartAt = now;
+    const hc = Math.max(1, Math.floor(Number(hitCount) || 1));
+    const cc = critCount !== null ? Math.max(0, Math.min(hc, Math.floor(Number(critCount) || 0))) : (crit ? hc : 0);
+    this.meterLog.push({ t: now, d: v, src: src || 'normal', h: hc, c: cc });
+  }
+
+  /** v7.8.0 실시간 분당 골드/강화석(GPM/SPM) 집계용 획득 기록 */
+  recordGain(gold = 0, shards = 0, now = Date.now()) {
+    const g = Math.max(0, Number(gold) || 0);
+    const sh = Math.max(0, Number(shards) || 0);
+    if (!(g > 0 || sh > 0)) return;
+    if (!Array.isArray(this.gainLog)) this.gainLog = [];
+    const cut = now - METER_WINDOW_MS;
+    while (this.gainLog.length && this.gainLog[0].t < cut) this.gainLog.shift();
+    if (!this.meterStartAt) this.meterStartAt = now;
+    this.gainLog.push({ t: now, g, sh });
+  }
+
+  /** v7.8.0 실시간 DPS 미터기 초기화(장비/룬 교체 후 벤치마크용) */
+  resetMeter(now = Date.now()) {
+    this.dmgLog = [];
+    this.dpsStartAt = 0;
+    this.meterLog = [];
+    this.gainLog = [];
+    this.meterStartAt = now;
+  }
+
+  /** v7.8.0 최근 15초 딜 비중 · 실측 치명률 · 분당 골드/강화석(GPM/SPM) 스냅샷 */
+  dpsBreakdown(now = Date.now()) {
+    const cut = now - METER_WINDOW_MS;
+    if (!Array.isArray(this.meterLog)) this.meterLog = [];
+    if (!Array.isArray(this.gainLog)) this.gainLog = [];
+    while (this.meterLog.length && this.meterLog[0].t < cut) this.meterLog.shift();
+    while (this.gainLog.length && this.gainLog[0].t < cut) this.gainLog.shift();
+    const sums = { normal: 0, skill: 0, pet: 0, dot: 0, ult: 0 };
+    let totalDmg = 0;
+    let totalHits = 0;
+    let totalCrits = 0;
+    for (const e of this.meterLog) {
+      const k = Object.prototype.hasOwnProperty.call(sums, e.src) ? e.src : 'normal';
+      sums[k] += e.d;
+      totalDmg += e.d;
+      totalHits += e.h || 1;
+      totalCrits += e.c || 0;
+    }
+    let gSum = 0;
+    let shSum = 0;
+    for (const g of this.gainLog) { gSum += g.g; shSum += g.sh; }
+    const earliest = Math.min(
+      this.meterLog.length ? this.meterLog[0].t : now,
+      this.gainLog.length ? this.gainLog[0].t : now,
+    );
+    const baseAt = this.meterStartAt ? Math.max(cut, Math.min(this.meterStartAt, earliest)) : earliest;
+    const spanSec = Math.max(1, Math.min(METER_WINDOW_MS / 1000, (now - baseAt) / 1000));
+    const parts = DPS_BUCKETS.map((b) => ({
+      ...b,
+      dmg: sums[b.key],
+      pct: totalDmg > 0 ? Math.round((sums[b.key] / totalDmg) * 100) : 0,
+    })).sort((a, b) => b.dmg - a.dmg);
+    return {
+      dps: totalDmg / spanSec,
+      totalDmg,
+      spanSec,
+      critRate: totalHits > 0 ? Math.round((totalCrits / totalHits) * 100) : 0,
+      gpm: Math.round((gSum / spanSec) * 60),
+      spm: Math.round((shSum / spanSec) * 60),
+      parts,
+    };
   }
 
   /** 현재 활성 공격 버프(광폭·축복·궁극기)가 반영된 기본 이론 DPS */
@@ -910,6 +1001,7 @@ export class Battle {
       reward.gold += fExtra;
     }
     registerKill(this.s, m.isBoss);
+    this.recordGain(reward.gold, reward.shards, now);
     this.emit({
       t: 'monsterDeath',
       id: m.id,
@@ -1026,7 +1118,7 @@ export class Battle {
     if (this.dungeon) this.dungeon.dmg += dmg;
     if (this.tower) this.tower.dmg += dmg;
     if (this.daily) { this.daily.dmg += dmg; this.daily.hits = (this.daily.hits || 0) + 1; }
-    if (dmg > 0) this.recordDamage(dmg, now);
+    if (dmg > 0) this.recordDamage(dmg, now, 'pet', crit, 1, crit ? 1 : 0);
     this.emit({ t: 'petHit', id: target.id, dmg, crit, x: target.x, pet: pet.id, ko: pet.name, color: pet.color, kind: kind || 'hit' });
     if (target.hp <= 0) this.killMonster(target, now);
     return dmg;

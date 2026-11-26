@@ -220,6 +220,7 @@ export class UI {
       case 'toggle-effects': actions.toggleEffects(); break;
       case 'toggle-shake': actions.toggleShake(); break;
       case 'toggle-dmg-numbers': actions.toggleDmgNumbers(); break;
+      case 'reset-dps-meter': actions.resetDpsMeter(); break;
       case 'toggle-sound': actions.toggleSound(); break;
       case 'gacha': actions.pullGacha(Number(v) || 1); break;
       case 'gacha-cur': actions.gachaCur(v); break;
@@ -725,6 +726,11 @@ export class UI {
       } else if (k === 'dps-hero') {
         const d = dpsNow || dpsSnapshot(b, now);
         el.classList.toggle('boost', d.boost);
+      } else if (k === 'dps-meter') {
+        if (!this._lastMeterAt || now - this._lastMeterAt >= 450) {
+          this._lastMeterAt = now;
+          el.innerHTML = dpsMeterInner(b, now);
+        }
       } else if (k === 'dungeon-cd') {
         const ds = dungeonState(s, now);
         el.textContent = ds.ready ? '무료 입장 가능' : `무료까지 ${mmss(ds.leftMs)}`;
@@ -1454,7 +1460,28 @@ function dpsSnapshot(b, now = Date.now()) {
   if (b && b.blessUntil > now) buffs.push('🌟축복');
   if (b && b.player && b.player.shield > 0 && b.player.shieldUntil > now) buffs.push('✨보호막');
   if (b && b.ultUntil > now) buffs.push('⚡궁극');
+  if (b && b.feverUntil > now) buffs.push('🔥피버');
   return { value, base, src, hasLive, boost: buffs.length > 0, buffText: buffs.join(' ') };
+}
+
+/** v7.8.0 실시간 딜 비중 & 분당 골드/강화석(GPM/SPM) 미터기 HTML */
+function dpsMeterInner(b, now = Date.now()) {
+  const m = b && typeof b.dpsBreakdown === 'function' ? b.dpsBreakdown(now) : null;
+  if (!m) return '';
+  const activeParts = m.parts.filter((p) => p.dmg > 0);
+  const segs = activeParts.length
+    ? activeParts.map((p) => `<i style="width:${Math.max(4, p.pct)}%;background:${p.color}" title="${p.label} ${p.pct}%"></i>`).join('')
+    : '<i style="width:100%;background:rgba(255,255,255,0.12)"></i>';
+  const chips = activeParts.length
+    ? activeParts.slice(0, 4).map((p) => `<span class="dm-chip"><b style="color:${p.color}">${p.icon}${p.label}</b> ${p.pct}%</span>`).join('')
+    : '<span class="dm-chip dim">전투 데이터 수집 중…</span>';
+  return `
+    <div class="dm-top">
+      <span class="dm-kpi">🎯 실측 치명 <b>${m.critRate}%</b> · 💰 <b>${fmt(m.gpm)}</b>/분 · 💎 <b>${fmt(m.spm)}</b>/분</span>
+      <button class="dm-rst" type="button" data-action="reset-dps-meter" title="측정 초기화">🔄</button>
+    </div>
+    <div class="dm-bar">${segs}</div>
+    <div class="dm-chips">${chips}</div>`;
 }
 
 function huntStatsCard(ui) {
@@ -1509,6 +1536,7 @@ function huntStatsCard(ui) {
         <div class="dps-src" data-live="dps-src">${dps.src}</div>
       </div>
     </div>
+    <div class="dps-meter" data-live="dps-meter">${dpsMeterInner(b, Date.now())}</div>
     <div class="stat-grid four">
       ${stat('atk', '공격력', fmt(st.atk))}
       ${stat('hp', '최대 체력', fmt(st.hpMax))}

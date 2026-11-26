@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "7.7.0"
+EXPECTED_VER = "7.8.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui.js", "src/sound.js"]
 
@@ -6089,6 +6089,32 @@ def main():
     ok(fv77["t0"] and fv77["tCd"] and fv77["tapEv"], "캔버스 탭 번개 일격(즉시 피해 · 350ms 쿨타임 · 이벤트 발생)", json.dumps(fv77))
     ok(fv77["active"] and fv77["feverEv"] and fv77["ended"], "피버 게이지 100% → 15초 피버 타임 자동 발동 및 만료", json.dumps(fv77))
     ok("drawFeverHud" in read("src/render.js") and "drawTapBolts" in read("src/render.js") and "bindCanvasTap" in read("app.js"), "render.js · app.js — 피버 게이지/오라·탭 번개 연출·포인터 바인딩")
+
+    # ── 45) v7.8.0 📊 실시간 DPS 미터기 & 딜 비중 · GPM/SPM 분석 HUD ──
+    section("v7.8.0 실시간 DPS 미터기 & 딜 비중 분석 HUD")
+    dm78 = js(ctx, """
+      const s = defaultState(1000); s.level = 15;
+      const b = new Battle(s, () => ({}), () => 0.1, 1000);
+      b.recordDamage(500, 2000, 'normal', true, 1, 1);
+      b.recordDamage(300, 2200, 'skill', false, 1, 0);
+      b.recordDamage(200, 2400, 'pet', true, 1, 1);
+      b.recordGain(1200, 6, 2500);
+      const bd = b.dpsBreakdown(3000);
+      const top = bd.parts[0];
+      b.resetMeter(4000);
+      const after = b.dpsBreakdown(4100);
+      return {
+        totalDmg: bd.totalDmg,
+        topKey: top.key,
+        topPct: top.pct,
+        critRate: bd.critRate,
+        gpm: bd.gpm,
+        spm: bd.spm,
+        resetZero: after.totalDmg === 0 && after.gpm === 0,
+      };
+    """)
+    ok(dm78["totalDmg"] == 1000 and dm78["topKey"] == "normal" and dm78["topPct"] == 50 and dm78["critRate"] == 67 and dm78["gpm"] > 0 and dm78["spm"] > 0 and dm78["resetZero"], "딜 비중(평타/스킬/펫)·실측 치명률·GPM/SPM·초기화 정상", json.dumps(dm78))
+    ok('data-live="dps-meter"' in read("src/ui.js") and 'reset-dps-meter' in read("src/ui.js") and 'resetDpsMeter' in read("app.js"), "ui.js · app.js — 실시간 딜 비중 HUD 및 초기화 버튼 배선")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:
