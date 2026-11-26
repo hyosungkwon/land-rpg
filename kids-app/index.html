@@ -11,7 +11,7 @@ window.__errs = [];
 addEventListener('error', function (e) { try { window.__errs.push(String(e.message || 'error')); } catch (_) {} });
 addEventListener('unhandledrejection', function (e) { try { window.__errs.push('promise: ' + String((e.reason && e.reason.message) || e.reason)); } catch (_) {} });
 </script>
-<link rel="stylesheet" href="style.css?v=33b36ef6">
+<link rel="stylesheet" href="style.css?v=dd3fe948">
 </head>
 <body>
 
@@ -843,7 +843,7 @@ addEventListener('unhandledrejection', function (e) { try { window.__errs.push('
       <span class="duo-pick-em">🃏</span>
       <span class="duo-pick-main">
         <span class="duo-pick-title">기억력 턴제 대결</span>
-        <span class="duo-pick-desc">번갈아 카드를 뒤집어 짝 맞추기 · 맞추면 한 번 더!</span>
+        <span class="duo-pick-desc">번갈아 뒤집어 짝 맞추기 · 맞추면 한 번 더!</span>
       </span>
       <span class="duo-pick-badge">1P·2P 턴제</span>
     </button>
@@ -852,7 +852,7 @@ addEventListener('unhandledrejection', function (e) { try { window.__errs.push('
       <span class="duo-pick-em">⚡</span>
       <span class="duo-pick-main">
         <span class="duo-pick-title">마주 보고 덧셈 대결</span>
-        <span class="duo-pick-desc">위·아래로 마주 앉아 같은 문제를 동시에! 먼저 정답을 누르면 +1점</span>
+        <span class="duo-pick-desc">위·아래로 마주 앉아 먼저 정답! · 아빠는 0.6초 참아요</span>
       </span>
       <span class="duo-pick-badge">스플릿 화면</span>
     </button>
@@ -861,7 +861,7 @@ addEventListener('unhandledrejection', function (e) { try { window.__errs.push('
       <span class="duo-pick-em">🎨</span>
       <span class="duo-pick-main">
         <span class="duo-pick-title">둘이 이어 그리기</span>
-        <span class="duo-pick-desc">번갈아 이어서 그림 완성! 전시관에 저장까지</span>
+        <span class="duo-pick-desc">번갈아 이어 그리기 → 전시관에 저장</span>
       </span>
       <span class="duo-pick-badge">10초·5획</span>
     </button>
@@ -907,11 +907,13 @@ addEventListener('unhandledrejection', function (e) { try { window.__errs.push('
     </div>
   </div>
   <div id="dm-result" class="duo-result" style="display:none;">
-    <span class="dr-em" id="dm-r-em">🎉</span>
-    <div class="dr-title" id="dm-r-title">유아 승리!</div>
-    <div class="dr-score" id="dm-r-score">유아 4 : 2 아빠</div>
-    <div class="dr-praise">둘 다 최고! 오늘 환상의 짝꿍이에요 👏</div>
-    <div class="dr-sub" id="dm-r-sub"></div>
+    <div class="dr-box">
+      <span class="dr-em" id="dm-r-em">🎉</span>
+      <div class="dr-title" id="dm-r-title">유아 승리!</div>
+      <div class="dr-score" id="dm-r-score">유아 4 : 2 아빠</div>
+      <div class="dr-praise">둘 다 최고! 오늘 환상의 짝꿍이에요 👏</div>
+      <div class="dr-sub" id="dm-r-sub"></div>
+    </div>
     <div class="dr-btns">
       <button class="gbtn gpk" onclick="Duo.memStart()">🔄 한 번 더</button>
       <button class="gbtn gb" onclick="Duo.toHub()">🤝 다른 놀이</button>
@@ -954,11 +956,13 @@ addEventListener('unhandledrejection', function (e) { try { window.__errs.push('
     </div>
   </div>
   <div id="da-result" class="duo-result" style="display:none;">
-    <span class="dr-em" id="da-r-em">🎉</span>
-    <div class="dr-title" id="da-r-title">유아 승리!</div>
-    <div class="dr-score" id="da-r-score">유아 3 : 2 아빠</div>
-    <div class="dr-praise">둘 다 최고! 오늘 환상의 짝꿍이에요 👏</div>
-    <div class="dr-sub" id="da-r-sub"></div>
+    <div class="dr-box">
+      <span class="dr-em" id="da-r-em">🎉</span>
+      <div class="dr-title" id="da-r-title">유아 승리!</div>
+      <div class="dr-score" id="da-r-score">유아 3 : 2 아빠</div>
+      <div class="dr-praise">둘 다 최고! 오늘 환상의 짝꿍이에요 👏</div>
+      <div class="dr-sub" id="da-r-sub"></div>
+    </div>
     <div class="dr-btns">
       <button class="gbtn gpk" onclick="Duo.addStart(5)">🔁 다시 5문제</button>
       <button class="gbtn gb" onclick="Duo.addStart(7)">🔁 다시 7문제</button>
@@ -1006,7 +1010,7 @@ addEventListener('unhandledrejection', function (e) { try { window.__errs.push('
     <div class="dd-saved" id="dd-saved"></div>
     <div class="dd-tools">
       <div class="dd-sizes" id="dd-sizes" aria-label="붓 굵기"></div>
-      <button class="dd-btn" onclick="Duo.drawUndo()">↩ 되돌리기</button>
+      <button class="dd-btn" onclick="Duo.drawUndo()">↩︎ 되돌리기</button>
       <button class="dd-btn" id="dd-clear" onclick="Duo.drawClear()">🧹 처음부터</button>
       <button class="dd-btn save" onclick="Duo.drawSave()">💾 완성!</button>
     </div>
@@ -1160,7 +1164,7 @@ addEventListener('unhandledrejection', function (e) { try { window.__errs.push('
 <script src="js/life.js?v=f3408133"></script>
 <script src="js/exhibit.js?v=83f0bcb0"></script>
 <script src="js/parent.js?v=6499d582"></script>
-<script src="js/duo.js?v=41297bf7"></script>
+<script src="js/duo.js?v=2bb2f3c7"></script>
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); });

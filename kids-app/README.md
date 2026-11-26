@@ -157,4 +157,5 @@ git add -A && git commit -m "..." && git push origin main
 - `💾 완성!` 을 누르면 **🖼️ 내 작품 전시관**의 그림 앨범(`yua-draw-gallery-v1`)에 `🤝 같이` 배지로 담기고,
   전시관에서 크게 보기 · PNG 저장 · 지우기를 그대로 쓸 수 있습니다.
 - 저장 필드(kidsapp4, 예전 저장본은 기본값): `duoMem` `duoAdd` `duoDraw` (각 놀이 완주한 판 수)
-- 자체 점검: `Duo._qa()` (화면·각 놀이 상태·저장 값), `Duo._memFlip(i)` · `Duo._addAnswer(side, val)` · `Duo._drawEndTurn(이유)`
+- 자체 점검: `Duo._qa()` (화면·각 놀이 상태·저장 값), `Duo._memFlip(i)` · `Duo._addAnswer(side, val)` ·
+  `Duo._drawEndTurn(이유)` · `Duo._stroke([{x,y},…])`(손가락 드래그와 같은 경로로 한 획)

@@ -848,6 +848,20 @@
     _memFlip: dmFlip,
     _addAnswer: daAnswer,
     _drawEndTurn: ddEndTurn,
+    /* 자체 점검용: 좌표 목록으로 한 획(손가락 드래그와 같은 ddDown→ddMove→ddUp 경로)을 그린다 */
+    _stroke: function (pts) {
+      if (!pts || !pts.length) return false;
+      var cv = $('dd-canvas');
+      if (!cv) return false;
+      var r = cv.getBoundingClientRect();
+      function ev(p) {
+        return { clientX: r.left + p.x, clientY: r.top + p.y, pointerId: 9, preventDefault: function () {} };
+      }
+      ddDown(ev(pts[0]));
+      for (var i = 1; i < pts.length; i++) ddMove(ev(pts[i]));
+      ddUp();
+      return DD.strokes.length ? DD.strokes[DD.strokes.length - 1].pts.length : 0;
+    },
     _topics: DD_TOPICS
   };
 
