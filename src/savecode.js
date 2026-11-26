@@ -133,10 +133,16 @@ export function compactSave(state) {
     c.land.q = '';
     delete c.land.sub;
     delete c.land.tier;
+    delete c.land.regionFilter;
     delete c.land.sort;
     delete c.land.autoRentAt;
     if (Array.isArray(c.land.favorites) && !c.land.favorites.length) delete c.land.favorites;
     if (!c.land.autoRent) delete c.land.autoRent;
+  }
+  if (c.expedition && typeof c.expedition === 'object') {
+    if ((!Array.isArray(c.expedition.active) || !c.expedition.active.length) && !(c.expedition.completed > 0)) {
+      delete c.expedition;
+    }
   }
   if (c.news && typeof c.news === 'object') c.news.log = [];
   if (c.gear && typeof c.gear === 'object') {

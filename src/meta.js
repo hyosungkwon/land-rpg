@@ -547,6 +547,9 @@ export function equipPet(state, id) {
   if (!def) return { ok: false, reason: '알 수 없는 펫입니다.' };
   const unlocked = (state.pet && state.pet.unlocked) || [];
   if (!unlocked.includes(id)) return { ok: false, reason: '아직 해금되지 않은 펫입니다.' };
+  if (state.expedition && Array.isArray(state.expedition.active) && state.expedition.active.some((x) => x && x.petId === id)) {
+    return { ok: false, reason: '파견 중인 펫은 복귀 후 동행할 수 있습니다.' };
+  }
   const prevEq = state.pet && state.pet.equipped ? state.pet.equipped : null;
   let nextSub = state.pet && state.pet.sub ? state.pet.sub : null;
   if (nextSub === id) {
@@ -570,6 +573,9 @@ export function equipSubPet(state, id) {
   const unlocked = (state.pet && state.pet.unlocked) || [];
   if (!unlocked.includes(id)) return { ok: false, reason: '아직 해금되지 않은 펫입니다.' };
   if (state.pet && state.pet.equipped === id) return { ok: false, reason: '이미 주 동행 중인 펫입니다.' };
+  if (state.expedition && Array.isArray(state.expedition.active) && state.expedition.active.some((x) => x && x.petId === id)) {
+    return { ok: false, reason: '파견 중인 펫은 복귀 후 보조 배치할 수 있습니다.' };
+  }
   state.pet = { ...(state.pet || {}), sub: id, unlocked: unlocked.slice() };
   return { ok: true, pet: def, cleared: false };
 }

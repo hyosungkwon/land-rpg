@@ -19,8 +19,11 @@ import {
   LAND_SYNERGY, landSynergy, landBuffTotals, landBuffTotalsText, nextLandmarkStep,
 } from './synergy.js';
 import {
-  activeNews, newsCovers, newsForCity, regionSetStatus, regionSetBuffs, buffText, citySetId, NEWS_INTERVAL_MS,
+  activeNews, newsCovers, newsForCity, regionSetStatus, regionSetBuffs, buffText, citySetId, NEWS_INTERVAL_MS, SETS_BY_ID,
 } from './region.js';
+import {
+  EXPEDITION_DURATIONS, EXPEDITION_MAX_SLOTS, isPetDispatched, expeditionStatus, expeditionPreview, regionMapData,
+} from './expedition.js';
 import {
   PETS, DUNGEON, PET_MAX_LV, petDef, petProgress, petLevel, petAtkPct, petDmgPct,
   petUpgradeCost, jobOf, jobProgress, dungeonState, JOB_COUNT, isUpperJob,
@@ -62,6 +65,7 @@ export class UI {
     this.growthFilter = 'all'; // v5.5 전직·환생 탭 영역 필터('all' | 'challenge' | 'growth')
     this.gearSub = 'enhance'; // v5.5 장비 탭 서브 탭('enhance' | 'bag' | 'gacha')
     this.landHoldAll = false; // v4.3 부동산 탭 보유 매물 펼치기(기본은 6곳까지)
+    this.expPick = { petId: '', setId: '', durKey: 'short' }; // v5.9 펫 파견 선택 상태
     this.el = {
       hud: document.getElementById('hud'),
       gold: document.getElementById('goldVal'),
@@ -203,6 +207,15 @@ export class UI {
       case 'land-sort': actions.landSort(v); break;
       case 'land-tier': actions.landTier(v); break;
       case 'land-fav': actions.landFav(v); break;
+      case 'land-map-region': actions.landMapRegion(v); break;
+      case 'land-region-clear': actions.landRegionClear(); break;
+      case 'exp-pick-pet': this.expPick.petId = v; this.render(); break;
+      case 'exp-pick-region': this.expPick.setId = v; this.render(); break;
+      case 'exp-pick-dur': this.expPick.durKey = v; this.render(); break;
+      case 'exp-start': actions.expStart(this.expPick.petId, this.expPick.setId, this.expPick.durKey); break;
+      case 'exp-claim': actions.expClaim(v); break;
+      case 'exp-claim-all': actions.expClaimAll(); break;
+      case 'exp-cancel': actions.expCancel(v); break;
       case 'toggle-auto-rent': actions.toggleAutoRent(); break;
       case 'claim-rent': actions.claimRent(); break;
       case 'rent-info': actions.rentInfo(); break;
@@ -670,6 +683,19 @@ export class UI {
       } else if (k === 'auc-prog') {
         if (!aucNow) return;
         el.style.width = `${Math.round(aucNow.progress * 100)}%`;
+      } else if (k.startsWith('exp-left-')) {
+        const id = k.slice(9);
+        const slot = (s.expedition && Array.isArray(s.expedition.active)) ? s.expedition.active.find((x) => x && x.id === id) : null;
+        if (!slot) return;
+        const left = Math.max(0, slot.endsAt - now);
+        el.textContent = left <= 0 ? '탐험 완료!' : hhmmss(left);
+      } else if (k.startsWith('exp-prog-')) {
+        const id = k.slice(9);
+        const slot = (s.expedition && Array.isArray(s.expedition.active)) ? s.expedition.active.find((x) => x && x.id === id) : null;
+        if (!slot) return;
+        const span = Math.max(1, slot.endsAt - slot.startedAt);
+        const ratio = Math.min(100, Math.max(0, ((now - slot.startedAt) / span) * 100));
+        el.style.width = `${ratio}%`;
       }
     });
     // 임대수령 버튼은 적립액에 따라 실시간으로 활성/문구가 바뀐다
@@ -1081,6 +1107,7 @@ function petCard(ui) {
     const unlocked = unlockedIds.includes(def.id);
     const on = ps.equipped === def.id;
     const isSub = !!(subDef && subDef.id === def.id);
+    const onExp = unlocked && isPetDispatched(s, def.id);
     const pr = petProgress(s, def.id);
     const lv = petLevel(s, def.id);
     const cost = petUpgradeCost(lv);
@@ -1096,7 +1123,7 @@ function petCard(ui) {
       : evo.max
         ? '<button class="mini evo max" type="button" disabled>신수</button>'
         : `<button class="mini evo ${evo.can ? 'ready' : ''}" type="button" data-action="pet-evolve" data-value="${def.id}" ${evo.can ? '' : 'disabled'}>${evo.next.badge}진화</button>`;
-    const subBtn = !unlocked || on || !subUnlocked
+    const subBtn = !unlocked || on || !subUnlocked || onExp
       ? ''
       : isSub
         ? '<button class="mini sub on" type="button" data-action="pet-sub" data-value="none">보조해제</button>'
@@ -1110,7 +1137,7 @@ function petCard(ui) {
       <div class="pet-row ${on ? 'on' : isSub ? 'sub-on' : ''} ${unlocked ? '' : 'lock'}">
         <img class="pet-thumb s${stage}" src="assets/sprites/pet/${info.sprite || def.sprite}.png" alt="" loading="lazy">
         <div class="pet-mid">
-          <div class="pet-name">${def.emoji} ${esc(info.name || def.name)}${badge ? `<span class="evo-badge s${stage}">${badge}</span>` : ''}<span class="lv">Lv.${lv}</span>${on ? '<span class="pet-on">동행 중</span>' : isSub ? '<span class="pet-sub-tag">보조 50%</span>' : ''}</div>
+          <div class="pet-name">${def.emoji} ${esc(info.name || def.name)}${badge ? `<span class="evo-badge s${stage}">${badge}</span>` : ''}<span class="lv">Lv.${lv}</span>${on ? '<span class="pet-on">동행 중</span>' : isSub ? '<span class="pet-sub-tag">보조 50%</span>' : onExp ? '<span class="pet-exp-tag">🧭 파견 중</span>' : ''}</div>
           <div class="pet-desc">${esc(def.desc)}</div>
           <div class="pet-stats">공격 ${Math.round(petDmgPct(s, def.id) * 100)}% · 공격력 +${petAtkPct(s, def.id)}%${petGoldPct(s, def.id) ? ` · 골드 +${petGoldPct(s, def.id)}%` : ''}</div>
           ${skill ? `<div class="pet-skill">${skill.icon} <b>${esc(skill.name)}</b> — ${esc(petSkillText(def, stage))}</div>` : ''}
@@ -1120,9 +1147,11 @@ function petCard(ui) {
         <div class="s-actions pet-acts">
           ${on
             ? '<button class="mini on" type="button" disabled>동행</button>'
-            : unlocked
-              ? `<button class="mini equip" type="button" data-action="pet-equip" data-value="${def.id}">교체</button>`
-              : '<button class="mini" type="button" disabled>잠김</button>'}
+            : onExp
+              ? '<button class="mini" type="button" disabled>파견중</button>'
+              : unlocked
+                ? `<button class="mini equip" type="button" data-action="pet-equip" data-value="${def.id}">교체</button>`
+                : '<button class="mini" type="button" disabled>잠김</button>'}
           ${subBtn}
           ${unlocked
             ? maxed
@@ -1459,13 +1488,20 @@ function petLine(ui) {
   const evoCount = PETS.filter((d) => petEvo(s, d.id) > 0).length;
   const badge = stage >= 2 ? '★★' : stage >= 1 ? '★' : '';
   const subTxt = subDef ? ` · 보조 ${subDef.emoji} ${esc(petStageInfo(s, subDef.id).name)}` : '';
+  const ex = expeditionStatus(s);
+  const expLine = ex.readyCount > 0
+    ? `<div class="tiny" style="margin-top:3px;color:var(--gold)">🧭 <b>영지 파견 ${ex.readyCount}팀 탐험 완료!</b> · 관리에서 보상 수령</div>`
+    : ex.activeCount > 0
+      ? `<div class="tiny dim" style="margin-top:2px">🧭 영지 파견 ${ex.activeCount}/${ex.maxSlots}팀 탐험 중</div>`
+      : '';
   return `
   <div class="card pet-line" id="petCard">
     <div class="row">
       <div class="grow ellip">
         <div class="card-title"><span class="t-ico">🐾</span>동료 펫<small>${unlockedIds.length}/${PETS.length} 해금 · ★진화 ${evoCount}</small></div>
-        <div class="tiny dim ellip" style="margin-top:3px">${equipped ? `동행 ${equipped.emoji} ${badge ? `<b style="color:var(--gold)">${badge}</b> ` : ''}${esc(info.name)}${subTxt}` : '동행 중인 펫이 없습니다 — 부동산이 자라면 자동 해금'} · 교체·보조·강화는 부동산 → 건물주 버프</div>
+        <div class="tiny dim ellip" style="margin-top:3px">${equipped ? `동행 ${equipped.emoji} ${badge ? `<b style="color:var(--gold)">${badge}</b> ` : ''}${esc(info.name)}${subTxt}` : '동행 중인 펫이 없습니다 — 부동산이 자라면 자동 해금'} · 교체·보조·파견은 부동산 → 버프·세트·펫</div>
         ${skill ? `<div class="tiny ellip" style="margin-top:2px;color:${stage >= 1 ? 'var(--blue)' : 'var(--dim)'}">${skill.icon} <b>${esc(skill.name)}</b> — ${esc(petSkillText(equipped, stage))}</div>` : ''}
+        ${expLine}
       </div>
       <button class="btn small ghost" type="button" data-action="open-pets" style="min-height:32px">관리 ▸</button>
     </div>
@@ -1871,6 +1907,123 @@ function newsSlim(ui) {
   </div>`;
 }
 
+/* ══════════════════ 🗺️ 전국 권역 지도 · 🧭 펫 영지 파견 (v5.9.0) ══════════════════ */
+const REGION_MAP_SHAPES = {
+  gyeonggi:    { pts: '68,28 148,22 152,92 104,102 64,84', cx: 112, cy: 48, lx: 112, ly: 43 },
+  seoul:       { pts: '96,52 126,50 128,74 96,76',          cx: 112, cy: 64, lx: 112, ly: 66 },
+  gangwon:     { pts: '150,18 228,16 254,88 232,102 154,92', cx: 196, cy: 56, lx: 198, ly: 55 },
+  chungcheong: { pts: '66,94 152,94 198,100 184,142 98,144 64,126', cx: 128, cy: 118, lx: 128, ly: 117 },
+  jeolla:      { pts: '64,132 142,146 140,204 82,210 56,178', cx: 100, cy: 174, lx: 100, ly: 173 },
+  gyeongsang:  { pts: '186,102 252,94 266,162 238,202 146,202 146,144', cx: 204, cy: 152, lx: 204, ly: 150 },
+  jeju:        { pts: '88,220 144,218 150,236 90,238',     cx: 118, cy: 229, lx: 118, ly: 230 },
+};
+
+function regionMapCard(ui) {
+  const now = Date.now();
+  const data = regionMapData(ui.s, now);
+  const totalHeld = data.reduce((a, r) => a + r.held, 0);
+  const totalAll = data.reduce((a, r) => a + r.total, 0);
+  const polys = data.map((r) => {
+    const sh = REGION_MAP_SHAPES[r.id];
+    if (!sh) return '';
+    const op = r.held > 0 ? (0.24 + Math.min(0.62, r.pct * 0.72)).toFixed(2) : '0.07';
+    const stroke = r.hasNews ? '#ffcf5c' : r.complete ? r.color : r.held > 0 ? r.color : 'rgba(255,255,255,0.22)';
+    const sw = r.hasNews ? '2.2' : r.complete ? '1.8' : '1.1';
+    const petTxt = r.pets.length ? r.pets.map((p) => p.emoji).join('') : '';
+    const tag = r.hasNews ? '📈' : r.landmarks > 0 ? '🏛️' : '';
+    return `
+      <g class="rmap-poly${r.hasNews ? ' news' : ''}" data-action="land-map-region" data-value="${r.id}" role="button" aria-label="${esc(r.name)} 매물 보기">
+        <polygon points="${sh.pts}" fill="${r.color}" fill-opacity="${op}" stroke="${stroke}" stroke-width="${sw}" stroke-linejoin="round"/>
+        <text class="rmap-lbl" x="${sh.lx}" y="${sh.ly}" text-anchor="middle">${esc(r.name.replace('권', ''))}${tag}${petTxt}</text>
+        ${r.id !== 'seoul' && r.id !== 'jeju' ? `<text class="rmap-cnt" x="${sh.lx}" y="${sh.ly + 11}" text-anchor="middle">${r.held}/${r.total}</text>` : ''}
+      </g>`;
+  }).join('');
+
+  const btns = data.map((r) => `
+    <button class="rmap-btn${r.held > 0 ? ' on' : ''}${r.hasNews ? ' news' : ''}" style="--sc:${r.color}" type="button" data-action="land-map-region" data-value="${r.id}">
+      <span>${r.icon} ${esc(r.name)}${r.hasNews ? ' 📈' : ''}${r.pets.length ? ` ${r.pets.map((p) => p.emoji).join('')}` : ''}</span>
+      <small>${r.held}/${r.total}${r.complete ? ' ★' : ''}</small>
+    </button>`).join('');
+
+  return `
+  <div class="card map-card" id="regionMapCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🗺️</span>전국 영지 지도<small>7권역 · ${totalHeld}/${totalAll}곳 보유</small></div>
+      <span class="tiny dim">권역 탭 → 바로 투자</span>
+    </div>
+    <div class="rmap-wrap">
+      <svg class="rmap-svg" viewBox="0 0 320 246" aria-label="대한민국 7권역 영지 지도">${polys}</svg>
+    </div>
+    <div class="rmap-grid">${btns}</div>
+  </div>`;
+}
+
+function expeditionCard(ui) {
+  const s = ui.s;
+  const now = Date.now();
+  const st = expeditionStatus(s, now);
+  const pick = ui.expPick || { petId: '', setId: '', durKey: 'short' };
+  const availPets = st.availablePets;
+  const ownedRegs = st.ownedRegions;
+  const selPet = availPets.find((p) => p.id === pick.petId) || availPets[0] || null;
+  const selReg = ownedRegs.find((r) => r.id === pick.setId) || ownedRegs[0] || null;
+  const selDur = EXPEDITION_DURATIONS.find((d) => d.key === pick.durKey) || EXPEDITION_DURATIONS[0];
+  if (ui.expPick) {
+    ui.expPick.petId = selPet ? selPet.id : '';
+    ui.expPick.setId = selReg ? selReg.id : '';
+    ui.expPick.durKey = selDur.key;
+  }
+
+  const slotRows = st.slots.length
+    ? st.slots.map((sl) => `
+      <div class="exp-slot${sl.ready ? ' ready' : ''}">
+        <div class="exp-ico">${sl.pet ? sl.pet.emoji : '🐾'}</div>
+        <div class="exp-mid">
+          <div class="exp-head">
+            <span>${esc(sl.petInfo.name)} → ${sl.region ? `${sl.region.icon} ${esc(sl.region.name)}` : ''} <span class="dim">(${sl.dur.label})</span></span>
+            <small data-live="exp-left-${sl.id}">${sl.ready ? '탐험 완료!' : hhmmss(sl.leftMs)}</small>
+          </div>
+          <div class="prog tiny-prog${sl.ready ? ' gold' : ''}" style="margin-top:4px"><i data-live="exp-prog-${sl.id}" style="width:${Math.round(sl.pct * 100)}%"></i></div>
+          <div class="exp-sub">예상 💰${formatGold(sl.preview.gold)} · 💎${sl.preview.shards}${sl.preview.points ? ` · ✨${sl.preview.points}P` : ''} · 🌟대성공 ${Math.round(sl.preview.greatChance * 100)}%</div>
+        </div>
+        <div class="exp-acts">
+          ${sl.ready
+            ? `<button class="btn small primary" type="button" data-action="exp-claim" data-value="${sl.id}">🎁 수령</button>`
+            : `<button class="mini ghost" type="button" data-action="exp-cancel" data-value="${sl.id}">철수</button>`}
+        </div>
+      </div>`).join('')
+    : '<div class="tiny dim" style="margin-top:5px">현재 파견 중인 팀이 없습니다. 전투에 나가지 않은 대기 펫을 보유 권역에 보내 보상을 챙기세요!</div>';
+
+  const canSend = st.activeCount < st.maxSlots && selPet && selReg;
+  const prev = selPet && selReg ? expeditionPreview(s, selPet.id, selReg.id, selDur.key) : null;
+  const form = st.activeCount >= st.maxSlots
+    ? '<div class="tiny dim" style="margin-top:7px">최대 파견 팀(3/3)이 모두 탐험 중입니다.</div>'
+    : !availPets.length
+      ? '<div class="tiny dim" style="margin-top:7px">파견 가능한 대기 펫이 없습니다 (주·보조 동행 외 해금 펫 필요).</div>'
+      : !ownedRegs.length
+        ? '<div class="tiny dim" style="margin-top:7px">매물을 1곳 이상 매수해야 해당 권역에 파견할 수 있습니다.</div>'
+        : `<div class="exp-form">
+            <div class="exp-lbl">1) 대기 펫 선택</div>
+            <div class="chips">${availPets.map((p) => `<button class="chip${selPet && selPet.id === p.id ? ' on' : ''}" type="button" data-action="exp-pick-pet" data-value="${p.id}">${p.emoji} ${esc(petStageInfo(s, p.id).name)}</button>`).join('')}</div>
+            <div class="exp-lbl">2) 파견 권역 선택</div>
+            <div class="chips">${ownedRegs.map((r) => `<button class="chip${selReg && selReg.id === r.id ? ' on' : ''}" type="button" data-action="exp-pick-region" data-value="${r.id}">${r.icon} ${esc(r.name)} (${r.held})</button>`).join('')}</div>
+            <div class="exp-lbl">3) 파견 기간</div>
+            <div class="chips">${EXPEDITION_DURATIONS.map((d) => `<button class="chip${selDur.key === d.key ? ' on' : ''}" type="button" data-action="exp-pick-dur" data-value="${d.key}">${d.label} · ${d.title}</button>`).join('')}</div>
+            ${prev ? `<div class="exp-prev">예상 보상: <b>💰${formatGold(prev.gold)}</b> · <b>💎${prev.shards}</b>${prev.points ? ` · <b>✨${prev.points}P</b>` : ''} · 🎒장비 ${Math.round(prev.gearChance * 100)}%<br><span class="dim">권역 특화 ${prev.bonusLabel} · 펫/랜드마크 전력 ×${prev.powerMul.toFixed(2)} · 🌟대성공 ${Math.round(prev.greatChance * 100)}% (×1.6)</span></div>` : ''}
+            <button class="btn small green block" type="button" data-action="exp-start" ${canSend ? '' : 'disabled'}>🧭 ${selPet.emoji} ${esc(petStageInfo(s, selPet.id).name)} → ${esc(selReg.name)} (${selDur.label}) 출발</button>
+          </div>`;
+
+  return `
+  <div class="card exp-card${st.readyCount ? ' ready' : ''}" id="expeditionCard">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🧭</span>영지 파견 (탐험대)<small>${st.activeCount}/${st.maxSlots}팀 · 완료 ${st.totals.completed}회</small></div>
+      ${st.readyCount > 1 ? '<button class="mini up" type="button" data-action="exp-claim-all">🎁 일괄 수령</button>' : `<span class="tiny dim">대성공 ${st.totals.greatCount}회</span>`}
+    </div>
+    <div class="exp-slots">${slotRows}</div>
+    ${form}
+  </div>`;
+}
+
 /** 내 부동산 홈 — 권역 세트 요약 */
 function regionSetMini(ui) {
   const sets = regionSetStatus(ui.s.land.owned);
@@ -2001,7 +2154,8 @@ function landBadges(ui) {
   } catch (e) { /* ignore */ }
   const unlocked = s.pet && Array.isArray(s.pet.unlocked) ? s.pet.unlocked : [];
   const petReady = PETS.filter((d) => unlocked.includes(d.id) && petEvolveInfo(s, d.id).can).length;
-  return { home: rentReady, market: 0, buff: petReady };
+  const expReady = expeditionStatus(s).readyCount;
+  return { home: rentReady, market: 0, buff: petReady + expReady };
 }
 
 /** 서브 탭 바 — 스크롤해도 위에 붙고, 받을 것이 있으면 배지가 켜진다 */
@@ -2216,6 +2370,8 @@ function tplLandHome(ui) {
   return `
   ${auctionCard(ui)}
 
+  ${regionMapCard(ui)}
+
   ${regionSetMini(ui)}
 
   <div class="card hold-card">
@@ -2267,6 +2423,7 @@ function buildMarketList(ui) {
   const now = Date.now();
   const q = String(s.land.q || '').trim();
   const tier = s.land.tier || 'all';
+  const rf = s.land.regionFilter && SETS_BY_ID[s.land.regionFilter] ? s.land.regionFilter : 'all';
   const sort = s.land.sort || 'roi';
   const page = Math.max(1, Math.floor(Number(s.land.page) || 1));
 
@@ -2275,6 +2432,7 @@ function buildMarketList(ui) {
   const setB = regionSetBuffs(owned);
   for (const c of CITIES) {
     const held = Math.floor(Number(owned[c.key]) || 0);
+    if (rf !== 'all' && citySetId(c.key) !== rf) continue;
     if (tier === 'owned') {
       if (held <= 0) continue;
     } else if (tier === 'fav') {
@@ -2375,6 +2533,9 @@ function tplLandMarket(ui) {
     </div>
     <div class="chips" style="margin-top:8px">${chips}</div>
     <div class="chips" style="margin-top:5px">${sorts}</div>
+    ${s.land.regionFilter && SETS_BY_ID[s.land.regionFilter]
+      ? `<div class="mkt-reg-pill"><span>🗺️ 권역 필터: ${SETS_BY_ID[s.land.regionFilter].icon} <b>${esc(SETS_BY_ID[s.land.regionFilter].name)}</b></span><button class="mini ghost" type="button" data-action="land-region-clear">✕ 전체 보기</button></div>`
+      : ''}
     <div class="tiny dim" style="margin-top:8px" id="landCount">${list.total}개 지역 · ${list.shown}개 표시 · 가격은 실시간 변동(±30% 일일 밴드) + 호재 보정</div>
   </div>
 
@@ -2427,6 +2588,8 @@ function tplLandBuff(ui) {
   </div>
 
   ${petCard(ui)}
+
+  ${expeditionCard(ui)}
 
   ${regionSetCard(ui)}
 

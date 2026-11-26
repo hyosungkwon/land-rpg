@@ -95,8 +95,9 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui.js", "src/sound.js"]
+EXPECTED_VER = "5.9.0"
+FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -187,8 +188,9 @@ def main():
     ok("startCloudResume" in app_src and "if (!this.cloudEnabled() && !this.cloud.hasPendingRedirect()) return;" in app_src, "세션 복원도 클라우드를 켓을 때만")
     ok("setInterval(() => this.cloudTick(), 15000)" in app_src, "주기 저장은 조건 검사형 타이머")
     ok("land_rpg_unified_v3" in read("src/data.js"), "저장 키 v3 분리")
-    ok("land-rpg-v5.8.0" in read("sw.js"), "SW 캐시 버전 v5.8.0")
-    ok("APP_VERSION = '5.8.0'" in read("src/data.js"), "앱 버전 v5.8.0")
+    ok(f"land-rpg-v{EXPECTED_VER}" in read("sw.js"), f"SW 캐시 버전 v{EXPECTED_VER}")
+    ok(f"APP_VERSION = '{EXPECTED_VER}'" in read("src/data.js"), f"앱 버전 v{EXPECTED_VER}")
+    ok("'./src/expedition.js'" in read("sw.js"), "sw.js 프리캐시에 expedition.js 포함")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
     ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
@@ -2937,7 +2939,7 @@ def main():
     ok(all(x in asrc42 for x in ["enterTower", "openTowerFloors", "evolvePet", "showTowerResult", "showTowerFloors"]), "app.js — 탑 입장/층 선택/결과·펫 진화 액션", "")
     ok('assets/sprites/pet/${info.sprite}.png' in asrc42, "진화 결과 모달 — 진화 스프라이트 경로(.png)", "")
     ok(all(x in css42 for x in [".tower-card", ".tower-tiles", ".tower-floor", ".pet-evo", ".mini.evo"]), "style.css — v4.2 스타일", "")
-    ok("'./src/tower.js'" in read("sw.js") and "land-rpg-v5.8.0" in read("sw.js") and "APP_VERSION = '5.8.0'" in read("src/data.js"), "버전·서비스워커(5.8.0 · cloud 프리캐시)", "")
+    ok("'./src/tower.js'" in read("sw.js") and f"land-rpg-v{EXPECTED_VER}" in read("sw.js") and f"APP_VERSION = '{EXPECTED_VER}'" in read("src/data.js"), f"버전·서비스워커({EXPECTED_VER} · cloud 프리캐시)", "")
     pkg_ok = (not os.path.exists(os.path.join(ROOT, "package.json"))) or ('"version": "' in read("package.json"))
     ok(pkg_ok, "package.json 버전 확인(없으면 클론 환경으로 통과)", "")
     evo_files = [f"assets/sprites/pet/pet_{n}_{s}.png" for n in ("wolf", "fox", "owl", "dragon") for s in ("awaken", "divine")]
@@ -3088,7 +3090,7 @@ def main():
 
     css43 = read("style.css")
     ok(all(x in css43 for x in [".land-sum", ".ls-v", ".ls-claim", ".news-slim", ".ns-title", ".land-subbar", ".land-rec", ".buff-now"]), "style.css — v4.3 부동산 요약 바·압축 뉴스·서브 탭", "")
-    ok("land-rpg-v5.8.0" in read("sw.js") and "'5.8.0'" in read("src/data.js"), "버전·캐시 v5.8.0", "")
+    ok(f"land-rpg-v{EXPECTED_VER}" in read("sw.js") and f"'{EXPECTED_VER}'" in read("src/data.js"), f"버전·캐시 v{EXPECTED_VER}", "")
 
     section("[20] ⚔️ v4.4 S31+ 무한 구간 리밸런싱 · 강화석 대량 교환 · 상위 전직")
 
@@ -3965,7 +3967,7 @@ def main():
     section("[23] ♻️ v4.7 장비 자동분해 · 🐉 상위 전직 궁극기 · 방치 편의")
 
     # ── 1) 버전·정적 배선 ──
-    ok("APP_VERSION = '5.8.0'" in read("src/data.js") and "land-rpg-v5.8.0" in read("sw.js"), "v5.8.0 버전·서비스워커 캐시 갱신", "")
+    ok(f"APP_VERSION = '{EXPECTED_VER}'" in read("src/data.js") and f"land-rpg-v{EXPECTED_VER}" in read("sw.js"), f"v{EXPECTED_VER} 버전·서비스워커 캐시 갱신", "")
     idx47 = read("index.html")
     ok(all(f'data-skill="{k}"' in idx47 for k in ["strike", "whirl", "berserk", "heal"]), "기존 4개 퀵슬롯 레이아웃 유지", "")
     ok('data-skill="ultimate"' in idx47 and 'class="q ult hidden"' in idx47, "다섯 번째 퀵슬롯(궁극기) — 해금 전 숨김", "")
@@ -4207,7 +4209,7 @@ def main():
     ok(cl_a["clean"][0] == "효성 왕" and cl_a["clean"][3] == 12 and not cl_a["html"], "닉네임 정리 — 공백 접기·12자 제한·HTML 문자 제거", json.dumps(cl_a["clean"], ensure_ascii=False))
     ok(cl_a["clean"][1] == "용사" and cl_a["clean"][2] == "용사", "1자·빈 닉네임은 기본 이름으로 대체", json.dumps(cl_a["clean"][:3], ensure_ascii=False))
     ok(cl_a["sum"] == [42, 21, 2, 5000, True], "세이브 요약 — 역대 최고 스테이지·보유 지역·총자산", json.dumps(cl_a["sum"]))
-    ok(cl_a["doc"][:6] == ["land_rpg_save", "5.8.0", "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
+    ok(cl_a["doc"][:6] == ["land_rpg_save", EXPECTED_VER, "uid-abc", "효성왕", 42, 21] and cl_a["doc"][7] == 1 and cl_a["doc"][8] == 123456, "클라우드 문서 — 형식·버전·uid·닉네임·요약 + 원본 세이브는 그대로", json.dumps(cl_a["doc"], ensure_ascii=False))
     ok(0 < cl_a["size"] < 200000, "클라우드 문서 크기 RTDB 한도 안(200KB 미만)", str(cl_a["size"]))
 
     # ── 2) 문서 해석(신형·v2 옛 페이로드·손상) ──
@@ -4311,7 +4313,7 @@ def main():
     ok(cl_e["errs"][0].startswith("이 주소가") and "응답이 없습니다" in cl_e["errs"][1] and cl_e["errs"][3].startswith("권한") and "시간 초과" in cl_e["errs"][4] and "라이브러리" in cl_e["errs"][5], "오류 문구 — 승인 도메인/시간 초과/권한/라이브러리", json.dumps(cl_e["errs"], ensure_ascii=False))
     ok(cl_e["strip"] == '{"a":1,"d":1,"e":{"x":2},"f":[1,3]}', "RTDB 전송 전 undefined·NaN 제거", cl_e["strip"])
     ok(cl_e["metrics"] == ["최고 스테이지", "총자산"], "랭킹 지표 이름", json.dumps(cl_e["metrics"], ensure_ascii=False))
-    ok(cl_e["entry"] == ["용사", 9, 12, 777, "5.8.0", "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
+    ok(cl_e["entry"] == ["용사", 9, 12, 777, EXPECTED_VER, "u1"], "랭킹 등록 항목 — 역대 최고·레벨·시각·버전", json.dumps(cl_e["entry"], ensure_ascii=False))
 
     # ── 6) 세이브 호환 · 마이그레이션 ──
     mig48 = js(ctx, """
@@ -5192,6 +5194,89 @@ def main():
         ok(all(Image.open(os.path.join(ROOT, f)).size == (256, 256) and Image.open(os.path.join(ROOT, f)).getextrema()[3][0] == 0 for f in new_pet_files), "신규 펫 6종 256px 투명 RGBA PNG 검증")
     except Exception as e:
         ok(False, "신규 펫 스프라이트 검사", str(e))
+
+    # ── 23) v5.9.0 🧭 펫 영지 파견 · 🗺️ 전국 권역 지도 ──
+    section("v5.9.0 펫 영지 파견 · 전국 권역 지도")
+    ex59 = js(ctx, """
+      const now = 1_700_000_000_000;
+      const s = defaultState(now);
+      s.stage = 20; s.maxStage = 20; s.peakStage = 20;
+      // 3개 권역에 매물 + 랜드마크 배치, 펫 4종 해금 (wolf 주 · fox 보조 → owl, dragon 대기)
+      const seoulC = CITIES.find((c) => citySetId(c.key) === 'seoul');
+      const jejuC = CITIES.find((c) => citySetId(c.key) === 'jeju');
+      const gangwonC = CITIES.find((c) => citySetId(c.key) === 'gangwon');
+      s.land.owned[seoulC.key] = 20;
+      s.land.owned[jejuC.key] = 10;
+      s.land.owned[gangwonC.key] = 10;
+      s.land.landmarks[seoulC.key] = 2;
+      s.pet.unlocked = ['wolf', 'fox', 'owl', 'dragon'];
+      s.pet.equipped = 'wolf';
+      s.pet.sub = 'fox';
+      s.pet.evo.owl = 1;
+      s.pet.evo.dragon = 2;
+      s.rebirth.count = 1;
+      const avail = availableDispatchPets(s).map((p) => p.id);
+      // 장착 중인 펫 파견 거부 · 미보유 권역 거부
+      const denyEq = startExpedition(s, 'wolf', 'seoul', 'short', now);
+      const denyReg = startExpedition(s, 'owl', 'jeolla', 'short', now);
+      // 정상 파견 2팀 출발
+      const st1 = startExpedition(s, 'owl', 'seoul', 'short', now);
+      const st2 = startExpedition(s, 'dragon', 'jeju', 'mid', now);
+      // 파견 중인 펫 장착 거부
+      const denyEquipBusy = equipPet(s, 'owl');
+      const denySubBusy = equipSubPet(s, 'dragon');
+      // 조기 수령 거부
+      const denyEarly = claimExpedition(s, st1.slot.id, now + 1000);
+      // 시간 경과 후 수령 (대성공 강제 rng=0.01)
+      const gold0 = s.gold, shards0 = s.shards, pts0 = s.rebirth.points;
+      const cl1 = claimExpedition(s, st1.slot.id, st1.slot.endsAt + 100, () => 0.01);
+      const clAll = claimAllExpeditions(s, st2.slot.endsAt + 100, () => 0.01);
+      // 중도 철수 검증
+      const st3 = startExpedition(s, 'owl', 'gangwon', 'long', now);
+      const can3 = cancelExpedition(s, st3.slot.id);
+      // 권역 지도 데이터 7권역 합 229
+      const mapD = regionMapData(s, now);
+      const mapSum = mapD.reduce((a, r) => a + r.total, 0);
+      // 정규화(손상·중복·장착 펫 제거)
+      const norm = normalizeState({
+        pet: { unlocked: ['wolf', 'owl'], equipped: 'wolf', sub: null },
+        expedition: { active: [
+          { id: 'bad1', petId: 'wolf', setId: 'seoul', durKey: 'short', startedAt: now, endsAt: now + 60000 },
+          { id: 'ok1', petId: 'owl', setId: 'seoul', durKey: 'short', startedAt: now, endsAt: now + 60000 },
+          { id: 'dup', petId: 'owl', setId: 'jeju', durKey: 'short', startedAt: now, endsAt: now + 60000 },
+        ] },
+      }, now);
+      return {
+        avail,
+        denyOk: !denyEq.ok && !denyReg.ok && !denyEquipBusy.ok && !denySubBusy.ok && !denyEarly.ok,
+        startOk: st1.ok && st2.ok,
+        claimOk: cl1.ok && cl1.great && clAll.ok && clAll.count === 1 && s.gold > gold0 && s.shards > shards0 && s.rebirth.points > pts0,
+        cancelOk: st3.ok && can3.ok && s.expedition.active.length === 0,
+        mapOk: mapD.length === 7 && mapSum === 229,
+        normLen: norm.expedition.active.length,
+        normId: norm.expedition.active[0] ? norm.expedition.active[0].petId : '',
+      };
+    """)
+    ui59 = js(ctx2, """
+      const now = 1_700_000_000_000;
+      const s = defaultState(now);
+      const jejuC = CITIES.find((c) => citySetId(c.key) === 'jeju');
+      s.land.owned[jejuC.key] = 10;
+      s.pet.unlocked = ['wolf', 'owl']; s.pet.equipped = 'wolf';
+      const buffs = computeBuffs(s, now);
+      const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(1), boss: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'land', expPick: { petId: '', setId: '', durKey: 'short' }, el: {}, install: { hidden: true } };
+      const hHome = __landSub(ui, 'home');
+      const hBuff = __landSub(ui, 'buff');
+      s.land.regionFilter = 'jeju';
+      const hMkt = __landSub(ui, 'market');
+      return {
+        uiOk: hHome.includes('regionMapCard') && hHome.includes('<svg') && hBuff.includes('expeditionCard') && hMkt.includes('mkt-reg-pill') && hMkt.includes('제주권'),
+        bad: /undefined|NaN|\\[object Object\\]/.test(hHome + hBuff + hMkt),
+      };
+    """)
+    ok(ex59["avail"] == ["owl", "dragon"] and ex59["denyOk"] and ex59["startOk"], "미장착 대기 펫 파견 출발 · 장착/미보유/조기수령/파견중장착 차단", json.dumps(ex59))
+    ok(ex59["claimOk"] and ex59["cancelOk"] and ex59["normLen"] == 1 and ex59["normId"] == "owl", "파견 완료·일괄 수령(대성공·초월석/장비)·중도 철수·세이브 정규화", json.dumps(ex59))
+    ok(ex59["mapOk"] and ui59["uiOk"] and not ui59["bad"], "전국 7권역 SVG 지도(229개 시군구)·영지 파견 UI·권역 마켓 필터 렌더", json.dumps(ui59))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

@@ -27,7 +27,10 @@ import {
   CITY_BY_KEY, formatGold, LAND, LANDMARK, landmarkQuote, buildLandmark as buildLandmarkState,
   LAND_MANAGER, toggleFavoriteCity, landManagerUnlocked,
 } from './src/land.js';
-import { activeNews, newsCovers } from './src/region.js';
+import { activeNews, newsCovers, SETS_BY_ID } from './src/region.js';
+import {
+  startExpedition, claimExpedition, claimAllExpeditions, cancelExpedition,
+} from './src/expedition.js';
 import { AUCTION, auctionStatus, bidQuote, applyAuctionBid } from './src/auction.js';
 import { Renderer } from './src/render.js';
 import { UI } from './src/ui.js';
@@ -1386,6 +1389,90 @@ class App {
         this.save();
         this.sound.ui();
         this.ui.toast(r.fav ? `⭐ ${r.city.name} 관심 매물 등록 (${r.count}곳)` : `${r.city.name} 관심 매물 해제`);
+        this.ui.render();
+      },
+      landMapRegion: (setId) => {
+        if (!SETS_BY_ID[setId]) return;
+        this.s.land.regionFilter = setId;
+        this.s.land.tier = 'all';
+        this.s.land.q = '';
+        this.s.land.page = 1;
+        this.s.land.sub = 'market';
+        this.save();
+        this.sound.ui();
+        this.ui.toast(`🗺️ ${SETS_BY_ID[setId].name} 매물로 이동`, 'gold');
+        this.ui.render();
+      },
+      landRegionClear: () => {
+        this.s.land.regionFilter = 'all';
+        this.s.land.page = 1;
+        this.save();
+        this.ui.render();
+      },
+      /* ── v5.9.0 🧭 펫 영지 파견 ── */
+      expStart: (petId, setId, durKey) => {
+        this.sound.unlock();
+        const r = startExpedition(this.s, petId, setId, durKey, Date.now());
+        if (!r.ok) {
+          this.ui.toast(r.reason || '파견을 출발할 수 없습니다', 'red');
+          return;
+        }
+        this.ui.expPick.petId = '';
+        this.save(true);
+        this.sound.ui();
+        this.ui.toast(`🧭 ${r.pet.emoji} ${r.pet.name} → ${r.region.name} ${r.dur.label} 파견 출발!`, 'green');
+        this.ui.addLog(`🧭 <b>${esc(r.pet.name)}</b> ${esc(r.region.name)} ${r.dur.label} 파견 출발`);
+        this.ui.render();
+      },
+      expClaim: (slotId) => {
+        this.sound.unlock();
+        const r = claimExpedition(this.s, slotId, Date.now());
+        if (!r.ok) {
+          this.ui.toast(r.reason || '보상을 수령할 수 없습니다', 'red');
+          return;
+        }
+        if (r.acq && r.acq.equipped) this.battle.refreshStats();
+        this.save(true);
+        this.sound.fanfare();
+        const gains = [
+          `💰${formatGold(r.gold)}`,
+          `💎${r.shards}`,
+          r.points ? `✨${r.points}P` : '',
+          r.item ? `🎒${r.item.name}` : '',
+        ].filter(Boolean).join(' ');
+        this.ui.toast(`${r.great ? '🌟 대성공! ' : '🧭 파견 완료 · '}${r.petName} (${gains})`, 'gold');
+        this.ui.addLog(`🧭 <b>${esc(r.petName)}</b> ${esc(r.region.name)} 파견 ${r.great ? '🌟대성공' : '완료'} · ${gains}`);
+        this.ui.render();
+      },
+      expClaimAll: () => {
+        this.sound.unlock();
+        const r = claimAllExpeditions(this.s, Date.now());
+        if (!r.ok) {
+          this.ui.toast(r.reason || '완료된 파견이 없습니다', 'red');
+          return;
+        }
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.fanfare();
+        const gains = [
+          `💰${formatGold(r.gold)}`,
+          `💎${r.shards}`,
+          r.points ? `✨${r.points}P` : '',
+          r.items.length ? `🎒장비 ${r.items.length}개` : '',
+        ].filter(Boolean).join(' ');
+        this.ui.toast(`🧭 파견 ${r.count}건 일괄 수령${r.greats ? ` (🌟대성공 ${r.greats})` : ''} · ${gains}`, 'gold');
+        this.ui.addLog(`🧭 <b>파견 ${r.count}건 일괄 수령</b> · ${gains}`);
+        this.ui.render();
+      },
+      expCancel: (slotId) => {
+        const r = cancelExpedition(this.s, slotId);
+        if (!r.ok) {
+          this.ui.toast(r.reason || '철수할 수 없습니다', 'red');
+          return;
+        }
+        this.save(true);
+        this.sound.ui();
+        this.ui.toast(`🧭 ${r.pet ? r.pet.name : '펫'} 파견 철수 완료`);
         this.ui.render();
       },
       toggleAutoRent: () => {

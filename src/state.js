@@ -30,6 +30,8 @@ import {
   defaultAttendance, normalizeAttendance,
   defaultWeeklyBoss, normalizeWeeklyBoss,
 } from './daily.js';
+import { SETS_BY_ID } from './region.js';
+import { defaultExpeditions, normalizeExpeditions } from './expedition.js';
 
 const nowMs = () => Date.now();
 
@@ -75,6 +77,8 @@ export function defaultState(now = nowMs()) {
     jobTier: 0,
     jobAt: 0,
     pet: { equipped: null, sub: null, unlocked: [], chosen: false, levels: {}, evo: {} },
+    // v5.9.0 🧭 미장착 펫 영지 파견(탐험대)
+    expedition: defaultExpeditions(),
     battleSpeed: 1, // v5.3.0 전투 배속(1 / 1.5 / 2, 환생 1회 해금)
     dungeonCooldown: 0,
     dungeon: { best: 0, runs: 0, last: null },
@@ -157,6 +161,7 @@ export function normalizeState(raw, now = nowMs()) {
   s.land.page = Math.max(1, Math.floor(num(s.land.page, 1)));
   if (!['home', 'market', 'buff'].includes(s.land.sub)) s.land.sub = 'home';
   if (!['all', '0', '1', '2', 'owned', 'fav'].includes(String(s.land.tier))) s.land.tier = 'all';
+  if (s.land.regionFilter !== 'all' && !SETS_BY_ID[s.land.regionFilter]) s.land.regionFilter = 'all';
   if (!['roi', 'price', 'trend', 'name'].includes(s.land.sort)) s.land.sort = 'roi';
   s.land.q = typeof s.land.q === 'string' ? s.land.q.slice(0, 30) : '';
   // v5.1.0: 관심 매물(최대 20곳) · 영지 관리인 임대 자동 수령
@@ -201,6 +206,7 @@ export function normalizeState(raw, now = nowMs()) {
     levels: petLevels,
     evo: petEvoMap,
   };
+  s.expedition = normalizeExpeditions(raw.expedition, s, now);
   s.battleSpeed = normalizeBattleSpeed(raw.battleSpeed);
   s.jobTier = clamp(Math.floor(num(raw.jobTier, 0)), 0, JOB_MAX);
   s.jobAt = Math.max(0, num(raw.jobAt, 0));

@@ -2606,3 +2606,60 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 
 
 
+
+/* ══════════════ v5.9.0 🧭 펫 영지 파견 · 🗺️ 전국 권역 지도 ══════════════ */
+.map-card { background: linear-gradient(160deg, rgba(105, 192, 255, 0.1), rgba(18, 26, 42, 0.96) 62%); border-color: rgba(105, 192, 255, 0.24); }
+.rmap-wrap {
+  position: relative; width: 100%; border-radius: 12px; overflow: hidden;
+  background: radial-gradient(circle at 50% 45%, rgba(45, 78, 128, 0.24), rgba(7, 11, 22, 0.9));
+  border: 1px solid var(--line-2); padding: 6px;
+}
+.rmap-svg { display: block; width: 100%; height: auto; max-height: 220px; }
+.rmap-poly { cursor: pointer; transition: filter 0.18s ease, stroke-width 0.18s ease; }
+.rmap-poly:hover { filter: brightness(1.18); }
+.rmap-poly.news { animation: rmapPulse 1.8s ease-in-out infinite; }
+@keyframes rmapPulse {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(255, 207, 92, 0.35)); }
+  50% { filter: drop-shadow(0 0 8px rgba(255, 207, 92, 0.9)); }
+}
+.rmap-lbl { font-size: 10px; font-weight: 900; fill: #f2f6ff; pointer-events: none; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85); }
+.rmap-cnt { font-size: 8.5px; font-weight: 800; fill: #cfe2ff; pointer-events: none; }
+.rmap-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; margin-top: 7px; }
+.rmap-btn {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  padding: 5px 8px; border-radius: 8px; border: 1px solid var(--line-2);
+  background: rgba(255, 255, 255, 0.03); color: var(--txt); cursor: pointer;
+  font-size: 10.5px; font-weight: 800; text-align: left;
+}
+.rmap-btn.on { border-color: color-mix(in srgb, var(--sc, #69c0ff) 48%, transparent); background: color-mix(in srgb, var(--sc, #69c0ff) 9%, transparent); }
+.rmap-btn.news { border-color: rgba(255, 207, 92, 0.65); }
+.rmap-btn small { font-size: 9.5px; color: var(--sub); font-variant-numeric: tabular-nums; }
+
+.exp-card { background: linear-gradient(160deg, rgba(94, 225, 163, 0.1), rgba(18, 26, 42, 0.96) 62%); border-color: rgba(94, 225, 163, 0.26); }
+.exp-card.ready { border-color: rgba(255, 207, 92, 0.65); box-shadow: 0 0 0 1px rgba(255, 207, 92, 0.25); }
+.exp-slots { display: flex; flex-direction: column; gap: 6px; margin-top: 7px; }
+.exp-slot {
+  display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035); border: 1px solid var(--line-2);
+}
+.exp-slot.ready { border-color: rgba(255, 207, 92, 0.62); background: rgba(255, 207, 92, 0.1); }
+.exp-ico { flex: 0 0 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font-size: 18px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line-2); }
+.exp-mid { flex: 1 1 auto; min-width: 0; }
+.exp-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 11px; font-weight: 800; }
+.exp-head small { font-size: 9.5px; color: var(--gold); font-variant-numeric: tabular-nums; }
+.exp-sub { font-size: 9.5px; color: var(--sub); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.exp-acts { flex: 0 0 auto; display: flex; gap: 4px; }
+.exp-form { margin-top: 9px; padding-top: 8px; border-top: 1px dashed var(--line-2); display: flex; flex-direction: column; gap: 6px; }
+.exp-lbl { font-size: 10px; font-weight: 800; color: var(--sub); }
+.exp-prev { padding: 6px 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line-2); font-size: 10.5px; color: var(--sub); line-height: 1.5; }
+.exp-prev b { color: var(--gold); }
+.pet-exp-tag {
+  display: inline-block; margin-left: 5px; padding: 1px 5px; border-radius: 5px;
+  font-size: 9px; font-weight: 800; color: #7ef2b8; background: rgba(94, 225, 163, 0.16);
+}
+.mkt-reg-pill {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-top: 7px; padding: 5px 8px; border-radius: 8px;
+  background: rgba(105, 192, 255, 0.12); border: 1px solid rgba(105, 192, 255, 0.36);
+  font-size: 11px; font-weight: 800; color: var(--txt);
+}
