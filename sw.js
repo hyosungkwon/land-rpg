@@ -1,7 +1,7 @@
 // land-rpg / sw.js — 오프라인 캐시 (게스트 전용: 네트워크가 없어도 처음부터 끝까지 플레이)
 const VERSION = 'land-rpg-v5.8.0';
 // 같은 릴리스 안에서 자산을 고친 경우 BUILD 를 올린다 → 열린 탭이 새 캐시로 넘어온다.
-const BUILD = 'r1';
+const BUILD = 'r2';
 const CACHE = `${VERSION}-${BUILD}`;
 const CORE = [
   './',
@@ -141,7 +141,7 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+      await Promise.all(keys.filter((k) => k.startsWith('land-rpg-') && k !== CACHE).map((k) => caches.delete(k)));
       await self.clients.claim();
       // 구버전 앱이 열려 있으면 새 버전으로 한 번 넘긴다(구버전 자동 새로고침 코드가 없는 경우 대비).
       try {
@@ -165,8 +165,9 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   let url;
   try { url = new URL(req.url); } catch (e) { return; }
-  // 외부(CDN 등) 요청은 그대로 네트워크로 보낸다.
+  // 외부(CDN 등) 요청 및 독립 앱(/yua-draw/) 경로는 그대로 통과시킨다.
   if (url.origin !== self.location.origin) return;
+  if (url.pathname.includes('/yua-draw/')) return;
 
   // 페이지 이동: 네트워크 우선, 실패 시 캐시된 index.html (오프라인 실행)
   if (req.mode === 'navigate') {
