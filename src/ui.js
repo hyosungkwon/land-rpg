@@ -47,13 +47,16 @@ import {
   achievementStatus, claimedAchievementCount, dailyQuestStatus,
 } from './quests.js';
 import {
-  GEAR_ITEMS, GEAR_FILTERS, GEAR_SET_FILTERS, GEAR_OPTS, GEAR_DROP,
+  GEAR_ITEMS, GEAR_SETS, GEAR_FILTERS, GEAR_SET_FILTERS, GEAR_OPTS, GEAR_DROP,
   gearIcon, gearItem, gearList, gearOwned, gearOptionList, gearOptionSummary,
   equippedItem, equippedRarity, gearCollection, gearSlotCounts, dismantleValue,
   dismantleTargets, AUTO_DISMANTLE_MODES, autoDismantleIdx, autoDismantleLabel, normalizeAutoMode,
   GEAR_PRESET_NAMES, GEAR_AWAKEN_MAX, GEAR_AWAKEN_BONUS_LV, GEAR_AWAKEN_OPT_PCT,
   awakenLevel, awakenCost, gearPresetSummary,
 } from './gear.js';
+import {
+  GEMS, GEM_BY_ID, GEM_MAX_LV, GEM_MERGE_NEED, GEM_CUT_COST, THEME_CRAFT_COST, gemEffects,
+} from './gems.js';
 import {
   REBIRTH, REBIRTH_TRAITS, rebirthStatus, rebirthBonus, traitLevel, traitCost, traitSummary,
 } from './rebirth.js';
@@ -71,6 +74,7 @@ export class UI {
     this.gearSub = 'enhance'; // v5.5 장비 탭 서브 탭('enhance' | 'bag' | 'gacha')
     this.landHoldAll = false; // v4.3 부동산 탭 보유 매물 펼치기(기본은 6곳까지)
     this.expPick = { petId: '', setId: '', durKey: 'short' }; // v5.9 펫 파견 선택 상태
+    this.gemSlot = 'weapon'; // v6.2 보석 장착 대상 부위
     this.el = {
       hud: document.getElementById('hud'),
       gold: document.getElementById('goldVal'),
@@ -199,7 +203,13 @@ export class UI {
       case 'gear-preset-apply': actions.applyGearPreset(Number(v)); break;
       case 'gear-preset-save': actions.saveGearPreset(Number(v)); break;
       case 'gear-recommend': actions.applyRecommendedGear(v); break;
-      case 'gear-awaken': actions.awakenGear(slot || v); break;
+      case 'gear-awaken': actions.awakenGear(btn.dataset.slot || v); break;
+      case 'gem-slot': this.gemSlot = EQUIP_SLOTS.includes(v) ? v : 'weapon'; this.render(); break;
+      case 'gem-cut': actions.cutGem(v); break;
+      case 'gem-merge': actions.mergeGem(btn.dataset.gem, Number(v) || 1); break;
+      case 'gem-socket': actions.socketGem(this.gemSlot || 'weapon', btn.dataset.gem, Number(v) || 1); break;
+      case 'gem-unsocket': actions.unsocketGem(v); break;
+      case 'theme-craft': actions.craftThemeGear(btn.dataset.set, v); break;
       case 'cast-ult': actions.castUltimate(); break;
       case 'toggle-auto-skill': actions.toggleAutoSkill(); break;
       case 'toggle-auto-ult': actions.toggleAutoUlt(); break;
@@ -1892,11 +1902,87 @@ function tplGear(ui) {
     <button class="btn green block" style="margin-top:10px" data-action="tab" data-value="land">🏢 부동산 보러 가기</button>
   </div>`;
 
+  const gemCard = (() => {
+    const gs = s.gems || { bag: {}, sockets: {} };
+    const socks = gs.sockets || {};
+    const bag = gs.bag || {};
+    const curSlot = EQUIP_SLOTS.includes(ui.gemSlot) ? ui.gemSlot : 'weapon';
+    const ge = gemEffects(s);
+    const sockCells = EQUIP_SLOTS.map((sl) => {
+      const g = socks[sl];
+      const def = g && GEM_BY_ID[g.type];
+      const active = curSlot === sl;
+      return `<button class="gs-cell${def ? ' on' : ''}" style="--gc:${def ? def.color : '#69c0ff'};${active ? 'outline:1.5px solid var(--gold)' : ''}" type="button" data-action="gem-slot" data-value="${sl}">
+        <span class="gi">${def ? def.icon : EQUIP[sl].icon}</span>
+        <span>${EQUIP[sl].name}${def ? ` Lv.${g.lv}` : ''}</span>
+      </button>`;
+    }).join('');
+    const curG = socks[curSlot];
+    const gemRows = GEMS.map((g) => {
+      const counts = Array.isArray(bag[g.id]) ? bag[g.id] : [0, 0, 0, 0, 0];
+      const pills = counts.map((cnt, i) => {
+        const lv = i + 1;
+        if (!cnt) return '';
+        const mergeBtn = lv < GEM_MAX_LV && cnt >= GEM_MERGE_NEED
+          ? `<button class="mini up" type="button" data-action="gem-merge" data-gem="${g.id}" data-value="${lv}">합성→Lv.${lv + 1}</button>`
+          : '';
+        return `<button class="mini equip" type="button" data-action="gem-socket" data-gem="${g.id}" data-value="${lv}">Lv.${lv}(${cnt}) 장착</button>${mergeBtn}`;
+      }).filter(Boolean).join('');
+      const canCut = s.shards >= GEM_CUT_COST.shards && s.gold >= GEM_CUT_COST.gold;
+      return `<div class="gem-row">
+        <div class="grow">
+          <div class="tiny"><b>${g.icon} ${g.name}</b> <span class="dim">${g.desc(1)}</span></div>
+          <div class="gem-lvs" style="margin-top:3px">${pills || '<span class="tiny dim">보유 없음</span>'}</div>
+        </div>
+        <button class="mini ${canCut ? 'up' : ''}" type="button" data-action="gem-cut" data-value="${g.id}" ${canCut ? '' : 'disabled'}>세공</button>
+      </div>`;
+    }).join('');
+    return `
+    <div class="card gem-card" id="gemSocketCard">
+      <div class="card-head">
+        <div class="card-title"><span class="t-ico">💠</span>보석 소켓<small>${ge.socketCount}/5 장착 · 세공 💎${GEM_CUT_COST.shards} 💰${formatGold(GEM_CUT_COST.gold)}</small></div>
+        ${curG ? `<button class="mini ghost" type="button" data-action="gem-unsocket" data-value="${curSlot}">${EQUIP[curSlot].name} 해제</button>` : `<span class="tiny dim">대상: ${EQUIP[curSlot].name}</span>`}
+      </div>
+      <div class="gem-socks">${sockCells}</div>
+      <div class="gem-bag">${gemRows}</div>
+      <div class="tiny dim" style="margin-top:6px">같은 보석 <b>3개 합성 → 상위 Lv(최대 Lv.5)</b> · 세공 시 20% 확률로 Lv.2 등장 · 환생 유지</div>
+    </div>`;
+  })();
+
+  const themeCraftCard = (() => {
+    const ownedIds = new Set(((s.gear && s.gear.items) || []).map((x) => x.id));
+    const canH = s.shards >= THEME_CRAFT_COST.hero.shards && s.gold >= THEME_CRAFT_COST.hero.gold;
+    const canL = s.shards >= THEME_CRAFT_COST.legend.shards && s.gold >= THEME_CRAFT_COST.legend.gold;
+    const rows = GEAR_SETS.map((st) => {
+      const legPool = GEAR_ITEMS.filter((it) => it.set === st.id && it.rarity === 'legend');
+      const haveLeg = legPool.filter((it) => ownedIds.has(it.id)).length;
+      return `<div class="craft-row">
+        <div>
+          <div class="tiny"><b style="color:${st.color}">${st.icon} ${esc(st.name)}</b> <span class="dim">전설 ${haveLeg}/${legPool.length}</span></div>
+          <div class="tiny dim">${esc(st.desc || '')}</div>
+        </div>
+        <div class="row gap6">
+          <button class="mini ${canH ? 'equip' : ''}" type="button" data-action="theme-craft" data-set="${st.id}" data-value="hero" ${canH ? '' : 'disabled'}>영웅</button>
+          <button class="mini ${canL ? 'up' : ''}" type="button" data-action="theme-craft" data-set="${st.id}" data-value="legend" ${canL ? '' : 'disabled'}>전설</button>
+        </div>
+      </div>`;
+    }).join('');
+    return `
+    <div class="card craft-card" id="themeCraftCard">
+      <div class="card-head">
+        <div class="card-title"><span class="t-ico">🔨</span>테마 장비 제작 공방<small>미보유 우선 확정</small></div>
+        <span class="tiny dim">영웅 💎${THEME_CRAFT_COST.hero.shards} · 전설 💎${THEME_CRAFT_COST.legend.shards}</span>
+      </div>
+      <div class="tiny muted">원하는 테마의 영웅(💰${formatGold(THEME_CRAFT_COST.hero.gold)})·전설(💰${formatGold(THEME_CRAFT_COST.legend.gold)}) 장비를 확정 제작합니다.</div>
+      <div class="craft-grid">${rows}</div>
+    </div>`;
+  })();
+
   const bar = gearSubBar(ui);
-  if (sub === 'enhance') return `${bar}${gearSlotCards(s)}${enhanceCard}${shardCard}`;
+  if (sub === 'enhance') return `${bar}${gearSlotCards(s)}${enhanceCard}${gemCard}${shardCard}`;
   if (sub === 'bag') return `${bar}${gearInventory(s)}${infoCard}`;
-  if (sub === 'gacha') return `${bar}${gachaCard(ui)}${gearSlotCards(s)}${landTipCard}`;
-  return `${bar}${gachaCard(ui)}${gearSlotCards(s)}${gearInventory(s)}${enhanceCard}${infoCard}${shardCard}${landTipCard}`;
+  if (sub === 'gacha') return `${bar}${gachaCard(ui)}${themeCraftCard}${gearSlotCards(s)}${landTipCard}`;
+  return `${bar}${gachaCard(ui)}${themeCraftCard}${gearSlotCards(s)}${gearInventory(s)}${enhanceCard}${gemCard}${infoCard}${shardCard}${landTipCard}`;
 }
 
 /* ══════════════════════════ 부동산 ══════════════════════════ */

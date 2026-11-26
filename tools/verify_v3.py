@@ -95,9 +95,9 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "6.1.0"
-FILES = ["src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui.js", "src/sound.js"]
+EXPECTED_VER = "6.2.0"
+FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/state.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -195,6 +195,7 @@ def main():
     ok("'./src/citadel.js'" in read("sw.js"), "sw.js 프리캐시에 citadel.js 포함")
     ok("'./src/orders.js'" in read("sw.js"), "sw.js 프리캐시에 orders.js 포함")
     ok("'./src/relics.js'" in read("sw.js"), "sw.js 프리캐시에 relics.js 포함")
+    ok("'./src/gems.js'" in read("sw.js"), "sw.js 프리캐시에 gems.js 포함")
     ok("'./src/cloud.js'" in read("sw.js"), "sw.js 프리캐시에 cloud.js 포함")
     ok("'./src/synergy.js'" in read("sw.js"), "sw.js 프리캐시에 synergy.js 포함")
     ok("'./src/auction.js'" in read("sw.js"), "sw.js 프리캐시에 auction.js 포함")
@@ -5619,6 +5620,51 @@ def main():
     """)
     ok(rl61["count"] == 12 and rl61["summonOk"] and rl61["deny4"] and rl61["normOk"], "고대 유물 12종 · 방어 훈장/초월석 감정·강화 · 3슬롯 상한·정규화", json.dumps(rl61))
     ok(rl61["cdTrimmed"] and rl61["phoenixSaved"] and rl61["rentAndRbOk"] and ui61["ok"] and not ui61["bad"], "유물 특수 효과(모래시계 쿨감·불사조 부활·원장 임대·프리즘 환생) 및 UI 렌더", json.dumps({ **rl61, **ui61 }))
+
+    # ── 29) v6.2.0 💠 보석 소켓 · 🔨 테마 장비 제작 공방 ──
+    section("v6.2.0 보석 소켓 · 테마 장비 제작 공방")
+    gm62 = js(ctx, """
+      const now = 1_700_000_000_000;
+      const s = defaultState(now);
+      s.gold = 2_000_000; s.shards = 3000;
+      const baseSt = calcStats(s, {});
+      // 루비 3개 세공 → Lv.2 합성 → 무기 장착
+      const c1 = cutGem(s, 'ruby', () => 0.9);
+      const c2 = cutGem(s, 'ruby', () => 0.9);
+      const c3 = cutGem(s, 'ruby', () => 0.9);
+      const m1 = mergeGem(s, 'ruby', 1);
+      const sk1 = socketGem(s, 'weapon', 'ruby', 2);
+      // 사파이어 Lv.2 세공(lucky rng=0.05) → 반지 장착
+      const cSap = cutGem(s, 'sapphire', () => 0.05);
+      const sk2 = socketGem(s, 'ring', 'sapphire', 2);
+      const nextSt = calcStats(s, computeBuffs(s, now));
+      // 해제 후 가방 반환 확인
+      const un1 = unsocketGem(s, 'weapon');
+      // 테마 전설 확정 제작 (드래곤 테마)
+      const cr1 = craftThemeGear(s, 'dragon', 'legend', now, () => 0.0);
+      const cr2 = craftThemeGear(s, 'dragon', 'legend', now, () => 0.0);
+      const norm = normalizeState({ gems: { sockets: { weapon: { type: 'ruby', lv: 99 }, armor: { type: 'bad', lv: 1 } } } }, now);
+      return {
+        cutMergeOk: c1.ok && c2.ok && c3.ok && m1.ok && m1.toLv === 2 && cSap.ok && cSap.lucky,
+        socketStatOk: sk1.ok && sk2.ok && nextSt.atk > baseSt.atk && nextSt.critDmg > baseSt.critDmg && nextSt.skillCdr > 0,
+        unsocketOk: un1.ok && s.gems.sockets.weapon === null && s.gems.bag.ruby[1] === 1,
+        craftOk: cr1.ok && cr2.ok && cr1.item.set === 'dragon' && cr1.item.rarity === 'legend' && cr1.item.id !== cr2.item.id,
+        normOk: norm.gems.sockets.weapon.lv === 5 && norm.gems.sockets.armor === null,
+      };
+    """)
+    ui62 = js(ctx2, """
+      const s = defaultState(Date.now()); s.gold = 500000; s.shards = 1000;
+      const b = new Battle(s, () => ({}));
+      const ui = { s, battle: b, app: { buffs: {} }, logs: [], tab: 'gear', gearSub: 'enhance', gemSlot: 'weapon', el: {}, install: { hidden: true } };
+      const hEnh = __gearSub(ui, 'enhance');
+      const hGac = __gearSub(ui, 'gacha');
+      return {
+        ok: hEnh.includes('gemSocketCard') && hGac.includes('themeCraftCard') && hGac.includes('data-action="theme-craft"'),
+        bad: /undefined|NaN|\\[object Object\\]/.test(hEnh + hGac),
+      };
+    """)
+    ok(gm62["cutMergeOk"] and gm62["socketStatOk"] and gm62["unsocketOk"], "보석 세공(대성공)·3합성(Lv.1→5)·5부위 소켓 장착/해제·스탯 실반영", json.dumps(gm62))
+    ok(gm62["craftOk"] and gm62["normOk"] and ui62["ok"] and not ui62["bad"], "테마 장비 확정 제작(미보유 우선)·정규화·보석/공방 UI 렌더", json.dumps({ **gm62, **ui62 }))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

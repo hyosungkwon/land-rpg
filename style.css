@@ -2774,3 +2774,26 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .r-head { display: flex; align-items: center; justify-content: space-between; gap: 4px; font-size: 10.5px; font-weight: 900; }
 .r-fx { font-size: 9px; color: var(--sub); line-height: 1.35; }
 .r-acts { display: flex; gap: 4px; margin-top: 2px; }
+
+/* ══════════════ v6.2.0 💠 보석 소켓 · 🔨 테마 장비 제작 공방 ══════════════ */
+.gem-card { background: linear-gradient(160deg, rgba(105, 192, 255, 0.10), rgba(18, 26, 42, 0.96) 62%); border-color: rgba(105, 192, 255, 0.28); }
+.gem-socks { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 7px; }
+.gs-cell {
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px;
+  padding: 5px 2px; border-radius: 8px; border: 1px dashed var(--line-2);
+  background: rgba(255, 255, 255, 0.025); color: var(--dim); font-size: 9px; cursor: pointer;
+}
+.gs-cell.on { border-style: solid; border-color: color-mix(in srgb, var(--gc, #69c0ff) 55%, transparent); background: color-mix(in srgb, var(--gc, #69c0ff) 12%, transparent); color: var(--txt); }
+.gs-cell .gi { font-size: 15px; line-height: 1.1; }
+.gem-bag { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+.gem-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  padding: 5px 7px; border-radius: 8px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line-2);
+}
+.gem-lvs { display: flex; flex-wrap: wrap; gap: 3px; }
+.craft-card { background: linear-gradient(160deg, rgba(255, 138, 80, 0.11), rgba(18, 26, 42, 0.96) 62%); border-color: rgba(255, 138, 80, 0.28); }
+.craft-grid { display: flex; flex-direction: column; gap: 5px; margin-top: 7px; }
+.craft-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  padding: 6px 8px; border-radius: 9px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line-2);
+}

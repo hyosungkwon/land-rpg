@@ -158,6 +158,11 @@ export function compactSave(state) {
   if (c.relics && typeof c.relics === 'object') {
     if ((!c.relics.owned || !Object.keys(c.relics.owned).length) && !(c.relics.summons > 0)) delete c.relics;
   }
+  if (c.gems && typeof c.gems === 'object') {
+    const anyBag = c.gems.bag && Object.values(c.gems.bag).some((arr) => Array.isArray(arr) && arr.some((n) => n > 0));
+    const anySock = c.gems.sockets && Object.values(c.gems.sockets).some(Boolean);
+    if (!anyBag && !anySock && !(c.gems.crafted > 0)) delete c.gems;
+  }
   if (c.skills && typeof c.skills === 'object') {
     for (const sk of Object.values(c.skills)) {
       if (sk && typeof sk === 'object' && !sk.rune) delete sk.rune;

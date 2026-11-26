@@ -2,7 +2,7 @@
 // 밸런스·몬스터·장비·스킬 정의. DOM 의존 없음(헤드리스 테스트 가능).
 // v3: 게스트 전용 통합 경제 — 골드 하나로 사냥과 부동산을 함께 굴린다.
 
-export const APP_VERSION = '6.1.0';
+export const APP_VERSION = '6.2.0';
 export const SAVE_KEY = 'land_rpg_unified_v3';
 export const SAVE_VERSION = 3;
 

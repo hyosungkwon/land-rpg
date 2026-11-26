@@ -39,6 +39,10 @@ import { upgradeCitadel as upgradeCitadelState } from './src/citadel.js';
 import {
   summonRelic as summonRelicState, toggleEquipRelic as toggleEquipRelicState, upgradeRelic as upgradeRelicState,
 } from './src/relics.js';
+import {
+  cutGem as cutGemState, mergeGem as mergeGemState, socketGem as socketGemState,
+  unsocketGem as unsocketGemState, craftThemeGear as craftThemeGearState,
+} from './src/gems.js';
 import { AUCTION, auctionStatus, bidQuote, applyAuctionBid } from './src/auction.js';
 import { Renderer } from './src/render.js';
 import { UI } from './src/ui.js';
@@ -1412,6 +1416,56 @@ class App {
         const def = EQUIP[slot];
         this.ui.toast(`🔥 ${def.icon} ${def.name} 각성 ★${r.lv}! (💎${r.spent.shards.toLocaleString()} · 💰${formatGold(r.spent.gold)})`, 'gold');
         this.ui.addLog(`🔥 <b>${def.name} 각성 ★${r.lv}</b> — 부위 강화 +5강 · 고유 옵션 +8%`);
+        this.ui.render();
+      },
+      /* ── v6.2.0: 💠 보석 소켓 · 🔨 테마 장비 제작 공방 ── */
+      cutGem: (type) => {
+        this.sound.unlock();
+        const r = cutGemState(this.s, type);
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        this.save(true);
+        this.sound.ui();
+        this.ui.toast(`💠 ${r.gem.icon} ${r.gem.name} Lv.${r.lv} 세공 완료!${r.lucky ? ' ✨대성공!' : ''}`, r.lucky ? 'gold' : 'green');
+        this.ui.render();
+      },
+      mergeGem: (type, lv) => {
+        this.sound.unlock();
+        const r = mergeGemState(this.s, type, lv);
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        this.save(true);
+        this.sound.levelUp();
+        this.ui.toast(`💠 ${r.gem.icon} ${r.gem.name} Lv.${r.fromLv} → Lv.${r.toLv} 합성 성공!`, 'gold');
+        this.ui.render();
+      },
+      socketGem: (slot, type, lv) => {
+        const r = socketGemState(this.s, slot, type, lv);
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        this.buffs = computeBuffs(this.s);
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.ui();
+        this.ui.toast(`💠 ${EQUIP[slot].name} 소켓에 ${r.gem.icon} ${r.gem.name} Lv.${r.lv} 장착!`, 'green');
+        this.ui.render();
+      },
+      unsocketGem: (slot) => {
+        const r = unsocketGemState(this.s, slot);
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        this.buffs = computeBuffs(this.s);
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.ui();
+        this.ui.toast(`💠 ${EQUIP[slot].name} 보석 해제 (가방 보관)`);
+        this.ui.render();
+      },
+      craftThemeGear: (setId, rarity) => {
+        this.sound.unlock();
+        const r = craftThemeGearState(this.s, setId, rarity, Date.now());
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        if (r.acq && r.acq.equipped) this.battle.refreshStats();
+        this.save(true);
+        this.sound.gacha(rarity);
+        this.ui.toast(`🔨 ${r.set.icon} ${r.item.name} (${rarity === 'legend' ? '전설' : '영웅'}) 제작 완료!`, 'gold');
+        this.ui.addLog(`🔨 <b>${esc(r.item.name)}</b> 테마 공방 제작 완료`);
         this.ui.render();
       },
 
