@@ -100,6 +100,8 @@ export class Renderer {
     this.bgPhoto = null; // 테마 사진을 합성한 오프스크린 캔버스
     this.bgPhotoKey = '';
     this.bgFade = 1; // 사진 레이어 페이드인 (0→1)
+    this.scrollX = 0; // v7.2.0 패럴랙스 지면/안개 스크롤 오프셋
+    this.marchUntil = 0; // v7.2.0 스테이지 돌파 행군 연출 종료 시각
     this.resize();
     this.initAmbient();
   }
@@ -515,6 +517,10 @@ export class Renderer {
             color: Math.random() < 0.5 ? '#ffd76a' : '#ffe9b0',
           });
         }
+      } else if (ev.t === 'stageClear') {
+        // v7.2.0 스테이지 돌파 행군 전환(1.1초 가속 스크롤 + 바람결)
+        this.marchUntil = now + 1100;
+        this.flash = Math.max(this.flash, 0.22);
       } else if (ev.t === 'dailyEnd') {
         this.flash = Math.max(this.flash, 0.28);
         this.shake = Math.max(this.shake, 6);
@@ -1234,6 +1240,9 @@ export class Renderer {
     else this.paintBackground(ctx, W, H);
     // v4.1 테마 배경 일러스트 — 그라데이션 폴백 위로 부드럽게 올린다
     this.drawThemeBg(ctx, dt, W, H);
+    // v7.2.0 특수 모드 전용 분위기 + 패럴랙스 지면/안개/행군 연출
+    this.drawModeBackdrop(ctx, W, H, t);
+    this.drawAtmosphere(ctx, dt, W, H, t);
     this.drawAmbient(ctx, dt, W, H);
 
     if (this.battle) {
@@ -1479,6 +1488,140 @@ export class Renderer {
     ctx.fill();
   }
 
+  /* ─────────── v7.2.0 패럴랙스 지면 스크롤 · 스테이지 행군 · 특수 모드 분위기 ─────────── */
+  drawModeBackdrop(ctx, W, H, now) {
+    const b = this.battle;
+    if (!b) return;
+    const gy = this.groundY();
+    const pulse = 0.5 + 0.5 * Math.sin(now / 360);
+    ctx.save();
+    if (b.rift) {
+      // 🌀 무한 균열: 보라색 시공간 균열 포털 + 회전 룬 링 + 보라 비네트
+      const px = W * 0.84;
+      const py = gy * 0.54;
+      const r = Math.min(W, H) * 0.24;
+      const vg = ctx.createRadialGradient(px, py, 6, px, py, W * 0.85);
+      vg.addColorStop(0, `rgba(175,110,255,${0.26 + 0.1 * pulse})`);
+      vg.addColorStop(0.45, 'rgba(90,40,180,0.12)');
+      vg.addColorStop(1, 'rgba(20,8,45,0.34)');
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, W, H);
+      ctx.translate(px, py);
+      ctx.rotate(now / 900);
+      ctx.strokeStyle = `rgba(210,165,255,${0.55 + 0.25 * pulse})`;
+      ctx.lineWidth = 2.2;
+      ctx.setLineDash([10, 6]);
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.rotate(-now / 450);
+      ctx.strokeStyle = 'rgba(255,120,210,0.45)';
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.64, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (b.invasion) {
+      // 🚨 영지 침공 방어전: 붉은 경보 비네트 + 좌측 성채 성벽 실루엣
+      const vg = ctx.createLinearGradient(0, 0, 0, H);
+      vg.addColorStop(0, `rgba(220,30,50,${0.22 + 0.12 * pulse})`);
+      vg.addColorStop(0.5, 'rgba(120,10,20,0.06)');
+      vg.addColorStop(1, 'rgba(20,5,10,0.28)');
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = 'rgba(18, 22, 34, 0.72)';
+      const wallW = Math.min(82, W * 0.22);
+      ctx.fillRect(0, gy - 58, wallW, 58);
+      for (let i = 0; i < 4; i++) ctx.fillRect(i * (wallW / 4) + 3, gy - 68, wallW / 6, 12);
+    } else if (b.dungeon) {
+      // 💰 황금 던전: 금빛 광휘 + 황금 안개
+      const g = ctx.createRadialGradient(W * 0.7, gy * 0.45, 8, W * 0.7, gy * 0.45, W * 0.75);
+      g.addColorStop(0, `rgba(255,210,90,${0.22 + 0.08 * pulse})`);
+      g.addColorStop(0.6, 'rgba(255,155,40,0.07)');
+      g.addColorStop(1, 'rgba(30,18,5,0.22)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, W, H);
+    } else if (b.tower) {
+      // 🗼 도전의 탑: 좌우 석조 기둥 실루엣 + 신비한 푸른 안개
+      ctx.fillStyle = 'rgba(10, 14, 24, 0.56)';
+      const pw = Math.min(26, W * 0.07);
+      ctx.fillRect(0, 0, pw, gy);
+      ctx.fillRect(W - pw, 0, pw, gy);
+      const haze = ctx.createLinearGradient(0, gy - 60, 0, gy + 10);
+      haze.addColorStop(0, 'rgba(105,192,255,0)');
+      haze.addColorStop(1, `rgba(105,192,255,${0.12 + 0.05 * pulse})`);
+      ctx.fillStyle = haze;
+      ctx.fillRect(0, gy - 60, W, 70);
+    } else if (b.daily) {
+      // 🌟 일일 보스: 스포트라이트 광선
+      const sp = ctx.createLinearGradient(W * 0.65, 0, W * 0.65, gy);
+      sp.addColorStop(0, `rgba(255,220,120,${0.2 + 0.07 * pulse})`);
+      sp.addColorStop(1, 'rgba(255,140,60,0)');
+      ctx.fillStyle = sp;
+      ctx.beginPath();
+      ctx.moveTo(W * 0.52, 0);
+      ctx.lineTo(W * 0.84, 0);
+      ctx.lineTo(W * 0.96, gy);
+      ctx.lineTo(W * 0.40, gy);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  drawAtmosphere(ctx, dt, W, H, now) {
+    const gy = this.groundY();
+    const marching = this.marchUntil > now;
+    const spd = marching ? 260 : 18;
+    this.scrollX = ((this.scrollX || 0) + (spd * (dt || 16)) / 1000) % 240;
+
+    ctx.save();
+    // 1) 지평선 빛줄기(God Ray) 2겹 + 흐르는 지면 안개
+    const drift = (now / 45) % (W + 160);
+    const ray = ctx.createLinearGradient(0, 0, 0, gy);
+    ray.addColorStop(0, 'rgba(255,245,215,0.06)');
+    ray.addColorStop(1, 'rgba(255,245,215,0)');
+    ctx.fillStyle = ray;
+    for (let i = 0; i < 2; i++) {
+      const rx = ((drift * (0.4 + i * 0.25) + i * 190) % (W + 160)) - 80;
+      ctx.beginPath();
+      ctx.moveTo(rx, 0);
+      ctx.lineTo(rx + 46, 0);
+      ctx.lineTo(rx - 20, gy);
+      ctx.lineTo(rx - 66, gy);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // 2) 패럴랙스 지면 자갈·속도선 스크롤
+    const seg = 48;
+    const off = this.scrollX % seg;
+    ctx.fillStyle = marching ? 'rgba(255,245,215,0.22)' : 'rgba(255,255,255,0.08)';
+    for (let row = 0; row < 3; row++) {
+      const y = gy + 7 + row * ((H - gy - 12) / 3);
+      const speedMul = 1 + row * 0.45;
+      const rOff = (this.scrollX * speedMul) % seg;
+      for (let x = W + seg - rOff; x > -seg; x -= seg) {
+        const len = marching ? 16 + row * 6 : 6 + row * 3;
+        ctx.fillRect(x, y, len, 1.5);
+      }
+    }
+
+    // 3) 스테이지 돌파 행군 중 상단 바람결 속도선
+    if (marching && this.effects) {
+      ctx.strokeStyle = 'rgba(255,245,210,0.26)';
+      ctx.lineWidth = 1.4;
+      for (let i = 0; i < 6; i++) {
+        const lx = ((W - ((now * 0.75 + i * 97) % (W + 120))) + 60);
+        const ly = 26 + ((i * 37) % Math.max(40, gy - 36));
+        ctx.beginPath();
+        ctx.moveTo(lx, ly);
+        ctx.lineTo(lx - 42, ly);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
   drawAmbient(ctx, dt, W, H) {
     const cfg = this.ambientCfg || { color: 'rgba(255,255,255,0.4)' };
     for (const p of this.ambient) {
@@ -1639,7 +1782,9 @@ export class Renderer {
     // 공격 시 앞으로 파고드는 스텝(월드 x 는 그대로, 화면만)
     const step = attacking ? Math.sin(Math.PI * Math.min(1, atkK * 1.15)) * 24 * sc : 0;
     const px = baseX + step;
-    const bob = attacking || skilling ? 0 : Math.sin(now / 320) * 2.2 * sc;
+    const marching = this.marchUntil > now;
+    const marchBob = marching ? -Math.abs(Math.sin(now / 75)) * 7 * sc : 0;
+    const bob = (attacking || skilling ? 0 : Math.sin(now / 320) * 2.2 * sc) + marchBob;
     const dead = p.dead;
     const hurt = now - p.hurtAt < 150;
 
