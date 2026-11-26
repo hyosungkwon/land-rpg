@@ -1135,10 +1135,11 @@ body{font-family:'Jua',sans-serif;background:#0f0c29;min-height:100vh;overflow-x
 .exv-actions{display:flex;gap:8px;}
 .exv-actions .gbtn{flex:1;padding:10px 6px;font-size:.82rem;}
 .exv-del{background:linear-gradient(135deg,#ef5350,#c62828);color:#fff;}
-.exv-confirm{display:none;gap:6px;align-items:center;justify-content:center;margin-top:2px;flex-wrap:wrap;}
+.exv-confirm{display:none;flex-direction:column;gap:7px;margin-top:2px;}
 .exv-confirm.show{display:flex;}
-.exv-confirm span{font-family:'Jua',sans-serif;font-size:.74rem;color:#FFCDD2;}
-.exv-confirm .gbtn{padding:7px 10px;font-size:.76rem;}
+.exv-confirm>span{font-family:'Jua',sans-serif;font-size:.76rem;color:#FFCDD2;text-align:center;}
+.exv-confirm-row{display:flex;gap:7px;}
+.exv-confirm-row .gbtn{flex:1;padding:9px 0;font-size:.8rem;}
 .exv-yes{background:linear-gradient(135deg,#ef5350,#b71c1c);color:#fff;}
 
 /* ── 👨‍👩‍👧 부모님 메뉴 ── */

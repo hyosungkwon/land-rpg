@@ -11,7 +11,7 @@ window.__errs = [];
 addEventListener('error', function (e) { try { window.__errs.push(String(e.message || 'error')); } catch (_) {} });
 addEventListener('unhandledrejection', function (e) { try { window.__errs.push('promise: ' + String((e.reason && e.reason.message) || e.reason)); } catch (_) {} });
 </script>
-<link rel="stylesheet" href="style.css?v=f46b8fc6">
+<link rel="stylesheet" href="style.css?v=46db03e9">
 </head>
 <body>
 
@@ -808,8 +808,10 @@ addEventListener('unhandledrejection', function (e) { try { window.__errs.push('
     </div>
     <div class="exv-confirm" id="exv-confirm">
       <span>이 작품을 지울까요?</span>
-      <button class="gbtn exv-yes" onclick="Exhibit.doDelete()">응, 지우기</button>
-      <button class="gbtn gb" onclick="Exhibit.cancelDelete()">아니야</button>
+      <div class="exv-confirm-row">
+        <button class="gbtn exv-yes" onclick="Exhibit.doDelete()">응, 지우기</button>
+        <button class="gbtn gb" onclick="Exhibit.cancelDelete()">아니야</button>
+      </div>
     </div>
   </div>
 </div>
