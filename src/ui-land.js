@@ -153,12 +153,6 @@ export function regionMapCard(ui) {
       <text class="rmap-cnt" x="${SEOUL_CALLOUT.cx}" y="${SEOUL_CALLOUT.y + 31}" text-anchor="middle">${seCnt}</text>
     </g>`;
 
-  const btns = data.map((r) => `
-    <button class="rmap-btn${r.held > 0 ? ' on' : ''}${r.hasNews ? ' news' : ''}" style="--sc:${r.color}" type="button" data-action="land-map-region" data-value="${r.id}">
-      <span>${r.icon} ${esc(r.name)}${r.hasNews ? ' 📈' : ''}${r.complete ? ' ★' : ''}</span>
-      <small>${r.held}/${r.total}</small>
-    </button>`).join('');
-
   return `
   <div class="card map-card" id="regionMapCard">
     <div class="card-head">
@@ -174,7 +168,6 @@ export function regionMapCard(ui) {
         ? `<div class="inv-booms" style="margin:6px 0 2px">${built.map((p) => `<span class="tag lm">${p.icon} ${esc(p.name)} Lv.${ui.s.mega[p.id]}</span>`).join('')}</div>`
         : '';
     })()}
-    <div class="rmap-grid">${btns}</div>
   </div>`;
 }
 
