@@ -6335,6 +6335,7 @@ def main():
     ok("away >= 10 * 60 * 1000" in app82 and "할 일 ${todoN}건 대기" in app82, "10분 이상 복귀는 같은 모달 · 짧은 복귀는 허브 건수 토스트", "")
     ok(all(x in css82 for x in [".land-dash {", ".dash-buffs", ".dash-next", ".dash-invest-btns", ".ret-hub", ".inv-busy"]), "style.css — 대시보드·복귀 허브·침공 사유 스타일", "")
     ok("landSynergyDashCard" in read("src/ui.js") and "landSynergyDashCard" in read("src/ui-land.js") and "landBuffTotals" in read("src/ui-land.js"), "ui.js·ui-land.js — 대시보드 배선 + 같은 landBuffTotals 숫자", "")
+    ok("호재로 시세" in app82 and "this.buffs = computeBuffs(this.s, now);" in app82[app82.find("checkNews(now = Date.now())"):app82.find("ownedInNews(news)")], "checkNews — 호재로 시세가 바뀌면 전투 버프 재계산(카드마다 1%p 어깋나던 원인)", "")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

@@ -684,6 +684,14 @@ class App {
     try {
       if (recordNews(this.s, n, now)) this.save();
     } catch (e) { /* ignore */ }
+    // v8.2.0 — 호재로 시세(→자산→건물주 골드 버프)가 바뀌면 전투 버프도 다시 계산한다.
+    //  (예전에는 3분마다 카드끼리 버프 수치가 1%p씩 어긋나 보였다)
+    if (had) {
+      try {
+        this.buffs = computeBuffs(this.s, now);
+        this.battle.refreshStats(now);
+      } catch (e) { /* ignore */ }
+    }
     const hit = this.ownedInNews(n);
     if (had && hit > 0) {
       this.ui.toast(`📈 내 지역 호재! ${n.icon} ${n.title} · 임대 ▲${n.rentPct}%`, 'gold');
