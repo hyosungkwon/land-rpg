@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "8.14.0"
+EXPECTED_VER = "8.15.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui-settings.js", "src/ui.js", "src/sound.js"]
 
@@ -6607,6 +6607,14 @@ def main():
     ok(
         all(x in rnd814 for x in ["SET_FX_THEMES", "gearSetStatus", "dragon:", "abyss:", "guardian:", "storm:", "fortune:", "this._rar.setFx"]),
         "render.js — 5대 장비 테마 세트별 리본 검기·타격 파티클·치명타 특수 효과 연동",
+    )
+
+    # ── 62) v8.15.0 🏰 전투 배경 연동 '내 영지 스카이라인' 시각화 ──
+    section("v8.15.0 전투 배경 연동 내 영지 스카이라인 시각화")
+    rnd815 = read("src/render.js")
+    ok(
+        all(x in rnd815 for x in ["drawEstateSkyline(", "mega.skytower", "mega.datacenter", "mega.tradeport", "mega.ktx", "trainX"]),
+        "render.js — 보유 도시·성채·스카이타워·AI데이터센터·무역항·KTX 열차 원경 스카이라인 구현",
     )
 
     print(f"\n통과 {passed} / 실패 {failed}")

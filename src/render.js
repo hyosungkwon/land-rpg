@@ -1198,6 +1198,142 @@ export class Renderer {
     return this._rar;
   }
 
+  /* ─────────── v8.15.0 🏰 전투 배경 연동 '내 영지 스카이라인' 시각화 ───────────
+   * 보유 영지 수 · 성채 레벨 · 메가 프로젝트(KTX·스카이타워·AI데이터센터·무역항)에 따라
+   * 원경 지평선 위에 내 영지 실루엣과 불빛·달리는 KTX 열차가 실제로 세워진다.
+   */
+  drawEstateSkyline(ctx, W, H, now) {
+    if (!this.battle || !this.battle.s) return;
+    const s = this.battle.s;
+    const owned = (s.land && s.land.owned) || {};
+    let cities = 0;
+    for (const q of Object.values(owned)) if (q > 0) cities += 1;
+    const citLv = Object.values((s.citadel && s.citadel.levels) || {}).reduce((a, v) => a + (Number(v) || 0), 0);
+    const mega = s.mega || {};
+    const hasMega = (mega.ktx || 0) > 0 || (mega.skytower || 0) > 0 || (mega.datacenter || 0) > 0 || (mega.tradeport || 0) > 0;
+    if (cities <= 0 && citLv <= 0 && !hasMega) return;
+
+    const gy = this.groundY();
+    const sc = this.scale();
+    const hy = gy - 4 * sc;
+    ctx.save();
+    ctx.globalAlpha = 0.42;
+
+    // 1) 보유 영지 도시 스카이라인 (보유 지역 수에 비례해 최대 10동 점진적 성장)
+    if (cities > 0) {
+      const cnt = Math.min(10, Math.max(1, Math.ceil(cities / 4)));
+      for (let i = 0; i < cnt; i++) {
+        const bx = W * (0.14 + i * 0.072);
+        const bw = (11 + (i % 3) * 5) * sc;
+        const bh = (16 + ((i * 13) % 24) + Math.min(18, cities * 0.25)) * sc;
+        ctx.fillStyle = 'rgba(12, 18, 34, 0.72)';
+        ctx.fillRect(bx, hy - bh, bw, bh);
+        const winA = 0.45 + 0.25 * Math.sin(now / 900 + i * 1.7);
+        ctx.fillStyle = `rgba(255, 224, 130, ${winA.toFixed(2)})`;
+        for (let wy = hy - bh + 4 * sc; wy < hy - 4 * sc; wy += 6 * sc) {
+          ctx.fillRect(bx + 2.5 * sc, wy, 2 * sc, 2.2 * sc);
+          if (bw > 12 * sc) ctx.fillRect(bx + bw - 4.5 * sc, wy, 2 * sc, 2.2 * sc);
+        }
+      }
+    }
+
+    // 2) 🏰 영지 성채 (좌측 원경 성곽 + 쌍첨탑)
+    if (citLv > 0) {
+      const cx = W * 0.09;
+      const ch = (26 + Math.min(24, citLv * 0.7)) * sc;
+      const cw = 30 * sc;
+      ctx.fillStyle = 'rgba(18, 24, 44, 0.82)';
+      ctx.fillRect(cx - cw * 0.5, hy - ch * 0.65, cw, ch * 0.65);
+      ctx.fillRect(cx - cw * 0.52, hy - ch * 0.9, 8 * sc, ch * 0.9);
+      ctx.fillRect(cx + cw * 0.52 - 8 * sc, hy - ch * 0.9, 8 * sc, ch * 0.9);
+      ctx.beginPath();
+      ctx.moveTo(cx - 7 * sc, hy - ch * 0.65);
+      ctx.lineTo(cx, hy - ch * 1.12);
+      ctx.lineTo(cx + 7 * sc, hy - ch * 0.65);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255, 207, 92, 0.78)';
+      ctx.fillRect(cx - 1.5 * sc, hy - ch * 0.5, 3 * sc, 5 * sc);
+    }
+
+    // 3) 🗼 대한민국 스카이타워 (초고층 첨탑 + 정상 비콘)
+    if ((mega.skytower || 0) > 0) {
+      const tx = W * 0.66;
+      const th = (54 + (mega.skytower || 1) * 14) * sc;
+      ctx.fillStyle = 'rgba(16, 26, 48, 0.85)';
+      ctx.beginPath();
+      ctx.moveTo(tx - 10 * sc, hy);
+      ctx.lineTo(tx - 2.5 * sc, hy - th);
+      ctx.lineTo(tx + 2.5 * sc, hy - th);
+      ctx.lineTo(tx + 10 * sc, hy);
+      ctx.closePath();
+      ctx.fill();
+      const pulse = 0.5 + 0.5 * Math.sin(now / 320);
+      ctx.fillStyle = `rgba(255, 215, 106, ${(0.55 + 0.45 * pulse).toFixed(2)})`;
+      ctx.beginPath();
+      ctx.arc(tx, hy - th - 2 * sc, (2.2 + 1.4 * pulse) * sc, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 4) 🌐 AI 데이터센터 (네온 돔 + 빛기둥)
+    if ((mega.datacenter || 0) > 0) {
+      const dx = W * 0.53;
+      const r = (14 + (mega.datacenter || 1) * 3) * sc;
+      ctx.fillStyle = 'rgba(20, 18, 46, 0.82)';
+      ctx.beginPath();
+      ctx.arc(dx, hy, r, Math.PI, 0);
+      ctx.fill();
+      const p = 0.5 + 0.5 * Math.sin(now / 420);
+      ctx.strokeStyle = `rgba(168, 130, 255, ${(0.5 + 0.4 * p).toFixed(2)})`;
+      ctx.lineWidth = 1.6 * sc;
+      ctx.beginPath();
+      ctx.arc(dx, hy, r * 0.72, Math.PI * 1.15, Math.PI * 1.85);
+      ctx.stroke();
+    }
+
+    // 5) 🚢 국제 무역항 (우측 원경 크레인)
+    if ((mega.tradeport || 0) > 0) {
+      const px = W * 0.86;
+      const ph = (24 + (mega.tradeport || 1) * 5) * sc;
+      ctx.strokeStyle = 'rgba(22, 34, 52, 0.82)';
+      ctx.lineWidth = 2.2 * sc;
+      ctx.beginPath();
+      ctx.moveTo(px, hy);
+      ctx.lineTo(px, hy - ph);
+      ctx.lineTo(px - 18 * sc, hy - ph + 4 * sc);
+      ctx.moveTo(px, hy - ph);
+      ctx.lineTo(px + 12 * sc, hy - ph + 3 * sc);
+      ctx.stroke();
+    }
+
+    // 6) 🚄 KTX 고속철도 (고가교 + 달리는 KTX 고속열차 광선)
+    if ((mega.ktx || 0) > 0) {
+      const railY = hy - 12 * sc;
+      ctx.strokeStyle = 'rgba(110, 195, 255, 0.32)';
+      ctx.lineWidth = 1.4 * sc;
+      ctx.beginPath();
+      ctx.moveTo(0, railY);
+      ctx.lineTo(W, railY);
+      ctx.stroke();
+      const period = 4200;
+      const phase = (now % period) / period;
+      const trainX = lerp(-60 * sc, W + 60 * sc, phase);
+      const tLen = (36 + (mega.ktx || 1) * 10) * sc;
+      const grd = ctx.createLinearGradient(trainX - tLen, railY, trainX, railY);
+      grd.addColorStop(0, 'rgba(127, 246, 255, 0)');
+      grd.addColorStop(0.7, 'rgba(127, 246, 255, 0.78)');
+      grd.addColorStop(1, 'rgba(255, 255, 255, 0.96)');
+      ctx.strokeStyle = grd;
+      ctx.lineWidth = 2.8 * sc;
+      ctx.beginPath();
+      ctx.moveTo(trainX - tLen, railY - 1 * sc);
+      ctx.lineTo(trainX, railY - 1 * sc);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
   drawAura(ctx, px, gy, h, sc, now) {
     const idx = this._rar.hasLegend ? RARITIES.length - 1 : this._rar.avg;
     const info = RARITIES[idx] || RARITIES[0];
@@ -1425,6 +1561,8 @@ export class Renderer {
     else this.paintBackground(ctx, W, H);
     // v4.1 테마 배경 일러스트 — 그라데이션 폴백 위로 부드럽게 올린다
     this.drawThemeBg(ctx, dt, W, H);
+    // v8.15.0 전투 배경 연동 '내 영지 스카이라인'(보유 도시·성채·메가 프로젝트 실시간 시각화)
+    this.drawEstateSkyline(ctx, W, H, t);
     // v7.2.0 특수 모드 전용 분위기 + 패럴랙스 지면/안개/행군 연출
     this.drawModeBackdrop(ctx, W, H, t);
     this.drawAtmosphere(ctx, dt, W, H, t);
