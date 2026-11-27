@@ -2369,13 +2369,14 @@ function landTabBar(ui) {
 }
 
 /** 부동산 탭 최상단 요약 바 — 보유 평수 · 시간당 임대 · 미수령 수익 · 일괄 수령 */
-function landSummaryBar(ui) {
+function landSummaryBar(ui, opts = {}) {
   const p = portfolioOf(ui.s);
   const claimable = p.accruedRent >= 1;
   const buffs = (ui.app && ui.app.buffs) || computeBuffs(ui.s);
   const tot = landBuffTotals(buffs);
   const hasBuff = buffs.active || tot.atkPct || tot.goldPct || tot.critDmgPct || tot.cdrPct || tot.bossDmgPct || tot.expPct;
-  const totLine = hasBuff
+  // v8.2.0 — 영지 탭은 바로 아래 시너지 대시보드가 버프를 칩으로 보여 주므로 요약 바에서는 빼고 높이를 아낀다
+  const totLine = opts.noTot ? '' : hasBuff
     ? `<div class="ls-tot"><span class="ls-tot-k">🏘️ 전투 버프</span><span class="ls-tot-v" title="${esc(landBuffTotalsText(buffs))}">${landBuffTotalsShort(buffs)}</span></div>`
     : '<div class="ls-tot"><span class="ls-tot-k">🏘️ 전투 버프</span><span class="ls-tot-v dim">매물을 사면 사냥에 영구 버프가 붙습니다</span></div>';
   return `
@@ -2514,7 +2515,7 @@ function tplLand(ui) {
   const body = sub === 'market' ? tplLandMarketTab(ui) : sub === 'event' ? tplLandEvent(ui) : tplLandHome(ui);
   // v8.0.0: 어느 서브 탭이든 한 줄 압축 뉴스(카드형 118px 고정 크롬 제거)
   const news = newsSlim(ui);
-  return `${landSummaryBar(ui)}${landTabBar(ui)}${news}${body}`;
+  return `${landSummaryBar(ui, { noTot: sub === 'home' })}${landTabBar(ui)}${news}${body}`;
 }
 
 /* ───────────── 🏠 영지 (v8.0.0) ─────────────

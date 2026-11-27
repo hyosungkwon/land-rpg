@@ -6285,6 +6285,7 @@ def main():
       const ui = { s, battle: { stats: calcStats(s, buffs), boss: null }, app: { buffs } };
       const home = __landSub(ui, 'home');
       const dash = landSynergyDashCard(ui);
+      s.land.sub = 'market'; const mktTab = __landSub(ui, 'market');
       // 다음 세트: 남은 곳이 가장 적은 미완성 권역
       const sets = regionSetStatus(s.land.owned).filter((st) => !st.complete)
         .map((st) => ({ id: st.id, left: st.maxNeed - st.held }))
@@ -6315,6 +6316,7 @@ def main():
         dungeonWhy: invDungeon.includes('⏳ 황금 던전 진행 중 · 출격 대기'),
         dailyWhy: invDaily.includes('⏳ 일일 보스 진행 중 · 출격 대기'),
         mktHead: mkt.includes('⚡ 원탭 분산투자') && mkt.includes('data-action="land-auto-invest"'),
+        summaryDedup: !home.includes('ls-tot') && mktTab.includes('ls-tot'),
         bad: /undefined|NaN|\\[object Object\\]/.test(dash + empty + invFree + invBoss + invTower + invDungeon + invDaily + mkt),
         rentHr: Math.round(p.incomePerHour),
       };
@@ -6323,6 +6325,7 @@ def main():
     ok(dash82["rent"] and dash82["buffs"], "대시보드 — 시간당 임대수익 + 전투 버프(공격·골드·치명 …) 한 카드", json.dumps({k: dash82[k] for k in ["rent", "buffs"]}))
     ok(dash82["nextInDash"], "대시보드 — 다음 권역 세트(남은 곳)와 그 권역 매물 바로가기", json.dumps(dash82.get("nextId")))
     ok(dash82["invest"] and dash82["mktHead"], "원탭 분산투자(권역 채우기·ROI TOP5·저점 매수) — 영지 대시보드 + 매물 전면", "")
+    ok(dash82["summaryDedup"], "영지 탭은 요약 바 버프 줄을 빼고 대시보드 칩으로만(중복 1곳) — 매물·이벤트 탭은 유지", "")
     ok(dash82["emptyOk"], "매물 0곳 상태에서도 대시보드가 원탭 분산투자로 안내", "")
     ok(dash82["freeReady"] and dash82["bossWhy"] and dash82["towerWhy"] and dash82["dungeonWhy"] and dash82["dailyWhy"], "침공 출격 비활성 사유 — 보스전·탑·던전·일일 보스 문구 표시", json.dumps({k: dash82[k] for k in ["freeReady", "bossWhy", "towerWhy", "dungeonWhy", "dailyWhy"]}))
     ok(dash82["bad"] is False, "v8.2.0 카드에 undefined/NaN 누출 없음", "")
