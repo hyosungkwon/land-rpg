@@ -243,7 +243,7 @@ class App {
       this.sound.unlock();
       const wx = this.renderer.screenToWorldX(e.clientX);
       const res = this.battle.tapStrike(wx, Date.now());
-      if (res && res.ok) this.sound.hit(false);
+      if (res && res.ok) this.sound.hit(!!res.counter);
     });
   }
 

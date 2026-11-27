@@ -166,6 +166,8 @@ export class Battle {
     this.fever = 0;
     this.feverUntil = 0;
     this.lastTapAt = 0;
+    // v8.10.0 ⚡ 보스 강공격 타이밍 반격 카운터 가드
+    this.counterGuardUntil = 0;
     this.syncStage();
     this.spawnInitial(startAt);
   }
@@ -533,6 +535,8 @@ export class Battle {
           m.windupAt = now;
           m.windupDur = wuTotal;
           m.windupHeavy = heavy;
+          m.heavy = heavy;
+          m.countered = false;
           this.emit({
             t: 'monsterWindup', id: m.id, ko: m.ko, x: m.x, isBoss: m.isBoss,
             kind: m.atkKind, move: m.moveKind, proj: m.projKind, color: m.atkColor,
@@ -550,6 +554,8 @@ export class Battle {
           m.windupAt = 0;
           m.attackSeq = (m.attackSeq || 0) + 1;
           const heavyNow = !!m.windupHeavy;
+          m.windupHeavy = false;
+          m.heavy = false;
           this.emit({
             t: 'monsterAttack', id: m.id, ko: m.ko, x: m.x, isBoss: m.isBoss,
             kind: m.atkKind, move: m.moveKind, proj: m.projKind, color: m.atkColor, heavy: heavyNow,
@@ -582,8 +588,9 @@ export class Battle {
     const riftRed = rm ? rm.dmgRedPct / 100 : 0;
     const reduce = Math.max(0, Math.min(0.95, (this.stats.dmgReduce || 0) + ironAdd + aegisAdd + riftRed));
     const grace = this.player.graceUntil && now < this.player.graceUntil ? ECON.reviveGraceReduce : 1;
+    const counterMul = this.counterGuardUntil > now ? 0.5 : 1;
     const shockMul = from && from.shockUntil > now ? (from.shockMul || 0.8) : 1;
-    let dmg = Math.max(1, Math.round(raw * shockMul * (1 - reduce) * grace));
+    let dmg = Math.max(1, Math.round(raw * shockMul * (1 - reduce) * grace * counterMul));
     // v5.10 성광 보호막 우선 흡수
     if (this.player.shield > 0 && this.player.shieldUntil > now) {
       const absorbed = Math.min(this.player.shield, dmg);
@@ -664,10 +671,24 @@ export class Battle {
       }
     }
     this.lastTapAt = now;
+    // v8.10.0 ⚡ 보스 강공격 전조 중 캔버스 탭 → 퍼펙트 반격 카운터!
+    const heavyBoss = list.find((m) => m.isBoss && (m.windupHeavy || m.heavy) && m.windupAt > 0 && !m.countered);
+    if (heavyBoss) {
+      heavyBoss.countered = true;
+      heavyBoss.windupHeavy = false;
+      heavyBoss.heavy = false;
+      heavyBoss.windupAt = 0;
+      heavyBoss.lastAttack = now; // 강공격 저지(1사이클 지연)
+      this.counterGuardUntil = now + 2200;
+      this.hit([heavyBoss], 2.2, 'tap', now, { critAdd: 0.99 });
+      this.addFever(18, now);
+      this.emit({ t: 'tapCounter', id: heavyBoss.id, ko: heavyBoss.ko, x: heavyBoss.x, dmg: this.lastHitDealt });
+      return { ok: true, counter: true, id: heavyBoss.id, x: heavyBoss.x, dmg: this.lastHitDealt, fever: this.fever, feverActive: this.isFever(now) };
+    }
     this.hit([target], FEVER.tapDmgMul, 'tap', now);
     this.addFever(FEVER.tapGain, now);
     this.emit({ t: 'tapStrike', x: target.x, dmg: this.lastHitDealt });
-    return { ok: true, id: target.id, x: target.x, dmg: this.lastHitDealt, fever: this.fever, feverActive: this.isFever(now) };
+    return { ok: true, counter: false, id: target.id, x: target.x, dmg: this.lastHitDealt, fever: this.fever, feverActive: this.isFever(now) };
   }
 
   /* ───────────── 공격 ───────────── */
@@ -737,6 +758,12 @@ export class Battle {
       m.hp -= dmg;
       m.hitAt = now;
       m.knock = Math.min(30, (m.knock || 0) + (crit ? 18 : 10));
+      // v8.10.0 보스 HP 50% 이하 → 광폭화 페이즈 돌입 연출
+      if (m.isBoss && !m.enraged && m.hp > 0 && m.hp <= m.maxHp * 0.5) {
+        m.enraged = true;
+        m.enragedAt = now;
+        this.emit({ t: 'bossEnrage', id: m.id, ko: m.ko, x: m.x, color: m.atkColor || '#ff4d4d' });
+      }
       if (this.dungeon) this.dungeon.dmg += dmg;
       if (this.tower) this.tower.dmg += dmg;
       if (this.daily) { this.daily.dmg += dmg; this.daily.hits = (this.daily.hits || 0) + 1; }

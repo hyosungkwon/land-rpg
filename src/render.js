@@ -341,6 +341,24 @@ export class Renderer {
         this.spawnTapBolt(ev.x, now);
         this.rings.push({ x: ev.x, life: 1, r: 10, color: '#7ff6ff', wide: 1.4 });
         this.shake = Math.max(this.shake, 2.4);
+      } else if (ev.t === 'tapCounter') {
+        // v8.10.0 ⚡ 보스 강공격 퍼펙트 반격 카운터 연출
+        this.spawnTapBolt(ev.x, now);
+        this.spawnTapBolt(ev.x - 18, now);
+        this.spawnLightning(ECON.playerX + 40, ev.x, '#ffe066', now);
+        this.rings.push({ x: ev.x, life: 1, r: 22, color: '#ffd76a', wide: 2.2 });
+        this.rings.push({ x: ECON.playerX, life: 1, r: 18, color: '#7ff6ff', wide: 1.6 });
+        this.addFloater(ev.x, '⚡ COUNTER!', true, 'skill', '#ffe066', 1.25, now);
+        this.flash = Math.max(this.flash, 0.24);
+        this.shake = Math.max(this.shake, 7.2);
+        this.hitstopUntil = Math.max(this.hitstopUntil || 0, now + 48);
+      } else if (ev.t === 'bossEnrage') {
+        // v8.10.0 🔥 보스 HP 50% 광폭화 페이즈 돌입 연출
+        this.rings.push({ x: ev.x, life: 1, r: 32, color: '#ff3b2f', wide: 2.4 });
+        this.rings.push({ x: ev.x, life: 1, r: 18, color: '#ffb347', wide: 1.6 });
+        this.addFloater(ev.x, '🔥 광폭화!', true, 'skill', '#ff6b57', 1.32, now);
+        this.flash = Math.max(this.flash, 0.22);
+        this.shake = Math.max(this.shake, 6.8);
       } else if (ev.t === 'feverStart') {
         this.flash = Math.max(this.flash, 0.26);
         this.shake = Math.max(this.shake, 4.4);
@@ -2611,11 +2629,24 @@ export class Renderer {
       const mx = x + dx;
       const auraY = footY - h * 0.5;
       if (m.isBoss) {
-        const grd = ctx.createRadialGradient(mx, auraY, 6, mx, auraY, h * 0.8);
-        grd.addColorStop(0, 'rgba(255,70,50,0.22)');
+        const enraged = !!m.enraged;
+        const pulseE = enraged ? 0.65 + 0.35 * Math.sin(now / 90) : 1;
+        const grd = ctx.createRadialGradient(mx, auraY, 6, mx, auraY, h * (enraged ? 0.98 : 0.8));
+        grd.addColorStop(0, enraged ? `rgba(255,40,30,${(0.42 * pulseE).toFixed(3)})` : 'rgba(255,70,50,0.22)');
+        grd.addColorStop(0.55, enraged ? `rgba(255,140,40,${(0.22 * pulseE).toFixed(3)})` : 'rgba(255,70,50,0.06)');
         grd.addColorStop(1, 'rgba(255,70,50,0)');
         ctx.fillStyle = grd;
-        ctx.fillRect(mx - h, auraY - h, h * 2, h * 2);
+        ctx.fillRect(mx - h * 1.1, auraY - h * 1.1, h * 2.2, h * 2.2);
+        if (enraged && this.effects && this.embers.length < 150 && Math.random() < 0.42) {
+          this.embers.push({
+            x: m.x + (Math.random() - 0.5) * 60,
+            y: gy - Math.random() * 48 * sc,
+            vy: -48 - Math.random() * 64,
+            life: 1,
+            s: 1.8 + Math.random() * 2.2,
+            color: Math.random() < 0.5 ? '#ff4d3d' : '#ffb347',
+          });
+        }
       } else if (m.elite) {
         const eg = ctx.createRadialGradient(mx, auraY, 5, mx, auraY, h * 0.78);
         eg.addColorStop(0, hexA(m.elite.color || '#ffd76a', 0.34));
@@ -4273,12 +4304,27 @@ export class Renderer {
     if (!b || !Array.isArray(b.monsters)) return;
     const gy = this.groundY();
     const sc = this.scale();
+    const px = this.heroVisX != null ? this.heroVisX : this.worldX(b.player.x);
     for (const m of b.monsters) {
-      if (!m || m.dead || m.dying || !m.isBoss || !m.heavy || !m.windupAt || now < m.windupAt) continue;
+      if (!m || m.dead || m.dying || !m.isBoss || !(m.windupHeavy || m.heavy) || !m.windupAt || now < m.windupAt) continue;
       const x = this.worldX(m.x);
-      const y = gy - 78 * sc;
-      const pulse = 0.5 + 0.5 * Math.sin(now / 70);
+      const y = gy - 84 * sc;
+      const pulse = 0.5 + 0.5 * Math.sin(now / 65);
+      const prog = clamp((now - m.windupAt) / Math.max(1, m.windupDur || 450), 0, 1);
       ctx.save();
+      // v8.10.0 보스 강공격 위험 바닥 장판 (보스 → 영웅 방향 충격 구역)
+      const zoneX = lerp(x, px, 0.55);
+      const zoneW = Math.max(54 * sc, Math.abs(x - px) * 0.55);
+      ctx.fillStyle = `rgba(255, 45, 45, ${(0.12 + 0.16 * prog).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.ellipse(zoneX, gy + 3, zoneW, 18 * sc, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(255, 85, 70, ${(0.55 + 0.4 * pulse).toFixed(3)})`;
+      ctx.lineWidth = (2.2 + 1.4 * prog) * sc;
+      ctx.beginPath();
+      ctx.ellipse(zoneX, gy + 3, zoneW * (0.4 + 0.6 * prog), 18 * sc * (0.4 + 0.6 * prog), 0, 0, Math.PI * 2);
+      ctx.stroke();
+      // 보스 발밑 경고 링 + 타이밍 반격 탭 프롬프트
       ctx.strokeStyle = `rgba(255, 70, 70, ${0.65 + 0.3 * pulse})`;
       ctx.lineWidth = 2.6 * sc;
       ctx.beginPath();
@@ -4286,10 +4332,10 @@ export class Renderer {
       ctx.stroke();
       ctx.font = `900 ${Math.round(12 * sc)}px ${FONT}`;
       ctx.textAlign = 'center';
-      ctx.fillStyle = '#ff9696';
-      ctx.shadowColor = 'rgba(255,40,40,0.85)';
-      ctx.shadowBlur = 8;
-      ctx.fillText('⚠️ 강공격!', x, y);
+      ctx.fillStyle = pulse > 0.5 ? '#ffe066' : '#ff9696';
+      ctx.shadowColor = 'rgba(255,40,40,0.9)';
+      ctx.shadowBlur = 10;
+      ctx.fillText('⚠️ 강공격! ⚡지금 탭→반격!', x, y);
       ctx.restore();
     }
   }
@@ -4353,8 +4399,8 @@ export class Renderer {
     ctx.fill();
     ctx.font = `800 12px ${FONT}`;
     ctx.textAlign = 'left';
-    ctx.fillStyle = '#ffb4a2';
-    ctx.fillText(`👑 ${m.ko}`, bx + 2, by + 6);
+    ctx.fillStyle = m.enraged ? '#ff6b57' : '#ffb4a2';
+    ctx.fillText(`👑 ${m.ko}${m.enraged ? ' 🔥광폭' : ''}`, bx + 2, by + 6);
     ctx.textAlign = 'right';
     ctx.fillStyle = 'rgba(255,255,255,0.65)';
     ctx.fillText(`${(remain / 1000).toFixed(0)}s`, bx + bw - 2, by + 6);

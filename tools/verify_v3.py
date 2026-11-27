@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "8.9.0"
+EXPECTED_VER = "8.10.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui-settings.js", "src/ui.js", "src/sound.js"]
 
@@ -6536,6 +6536,38 @@ def main():
     ok(eco89["fundOk"], "영지 은행 장기 펀드 만기 시 이자 25% + 💎120 + ✨2P 정상 지급", json.dumps(eco89))
     ok(eco89["tycoonScale"] and eco89["applied"], "후반 대지주 자산 보너스(50만~1억+) 로그 스케일 및 전투 스탯 실반영", json.dumps(eco89))
     ok("estateInfraCard" in read("src/ui-land.js") and "estateInfraCard" in read("src/ui.js") and "대지주 자산 보너스" in read("src/ui-land.js"), "ui-land.js · ui.js — 영지 인프라 통합 요약 및 대지주 보너스 대시보드 배선")
+
+    # ── 57) v8.10.0 🔥 보스 HP 50% 광폭화 · ⚠️ 위험 장판 & ⚡ 타이밍 탭 반격 카운터 ──
+    section("v8.10.0 보스 광폭화 페이즈 & 타이밍 탭 반격 카운터")
+    boss810 = js(ctx, """
+      const now = 400000;
+      const s = defaultState(now);
+      s.stage = 3; s.bossReady = true;
+      const b = new Battle(s, () => ({}), () => 0.3, now);
+      b.startBoss(now);
+      const boss = b.boss;
+      boss.hp = Math.round(boss.maxHp * 0.55);
+      // 1) HP 50% 이하 진입 → 광폭화 이벤트 발생
+      b.hit([boss], 10, 'normal', now + 100);
+      const ev1 = b.drainEvents();
+      const enraged = !!boss.enraged && ev1.some((e) => e.t === 'bossEnrage');
+      // 2) 강공격 전조 중 캔버스 탭 → 퍼펙트 반격 카운터 + 가드 50% 경감
+      boss.hp = boss.maxHp;
+      boss.windupAt = now + 200;
+      boss.windupDur = 500;
+      boss.windupHeavy = true;
+      boss.heavy = true;
+      boss.countered = false;
+      const res = b.tapStrike(boss.x, now + 350);
+      const ev2 = b.drainEvents();
+      return {
+        enraged,
+        counterOk: res.ok && res.counter === true && !boss.windupHeavy && b.counterGuardUntil > now + 350 && ev2.some((e) => e.t === 'tapCounter'),
+      };
+    """)
+    ok(boss810["enraged"], "보스 HP 50% 이하 진입 시 광폭화(bossEnrage) 발동", json.dumps(boss810))
+    ok(boss810["counterOk"], "보스 강공격 전조 중 캔버스 탭 → 퍼펙트 반격(tapCounter)·강공격 저지·카운터 가드 발동", json.dumps(boss810))
+    ok("ev.t === 'tapCounter'" in read("src/render.js") and "ev.t === 'bossEnrage'" in read("src/render.js") and "지금 탭→반격" in read("src/render.js"), "render.js — 보스 광폭 오라·위험 장판·퍼펙트 반격 카운터 캔버스 연출")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:
