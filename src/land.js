@@ -566,6 +566,7 @@ export function computeBuffs(state, now = Date.now()) {
       for (const g of Object.values(socks)) if (g && g.type === 'sapphire') sum += Math.max(1, Math.min(5, Math.floor(Number(g.lv) || 1))) * 1.2;
       return Math.round(sum * 10) / 10;
     })(),
+    gldCdrPct: Math.round(Math.max(0, Math.min(10, Math.floor(Number(state && state.guild && state.guild.knights && state.guild.knights.mage) || 0))) * 0.8 * 10) / 10,
     synBossDmgPct: syn.bossDmgPct,
     synExpPct: syn.expPct,
     synText: syn.text,

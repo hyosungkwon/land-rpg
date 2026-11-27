@@ -628,7 +628,7 @@ export class UI {
       }
       const wantLbl = `${ar ? ar.name : def.name} 시전`;
       if (q.getAttribute('aria-label') !== wantLbl) q.setAttribute('aria-label', wantLbl);
-      const cd = skillCdOf(key, this.app.buffs) || def.cd;
+      const cd = skillCdOf(key, this.app.buffs, this.s) || def.cd;
       const sk = (s.skills && s.skills[key]) || { last: 0 };
       const left = Math.max(0, (sk.last + cd) - now);
       const ratio = left / cd;
@@ -776,7 +776,7 @@ export class UI {
           const uleft = ultLeftMs(s, this.app.buffs, now);
           el.style.width = ucd ? `${Math.min(100, (uleft / ucd) * 100)}%` : '0%';
         } else {
-          const cd = skillCdOf(key, this.app.buffs) || SKILLS[key].cd;
+          const cd = skillCdOf(key, this.app.buffs, this.s) || SKILLS[key].cd;
           const left = Math.max(0, s.skills[key].last + cd - now);
           el.style.width = `${(left / cd) * 100}%`;
         }
@@ -787,7 +787,7 @@ export class UI {
           el.textContent = uleft > 0 ? `${(uleft / 1000).toFixed(1)}초` : '시전';
           el.disabled = uleft > 0;
         } else {
-          const cd = skillCdOf(key, this.app.buffs) || SKILLS[key].cd;
+          const cd = skillCdOf(key, this.app.buffs, this.s) || SKILLS[key].cd;
           const left = Math.max(0, s.skills[key].last + cd - now);
           el.textContent = left > 0 ? `${(left / 1000).toFixed(1)}초` : '시전';
           el.disabled = left > 0;
@@ -1659,7 +1659,7 @@ function battleInfoCard(ui) {
       ${stat('hp', '최대 체력', fmt(st.hpMax))}
       ${stat('def', '피해 감소', Math.round((st.dmgReduce || 0) * 100), '%')}
       ${stat('regen', '자연 회복', ((st.hpRegen || 0) * 100).toFixed(2), '%/s')}
-      ${stat('crit', '치명타', (st.crit * 100).toFixed(1), '%')}
+      ${stat('crit', '치명타', (st.crit * 100).toFixed(1), st.overCritPct > 0 ? `% (+${Math.round(st.overCritPct * 2)}%치피)` : '%')}
       ${stat('gold', '골드 획득', `+${Math.round((st.goldMult - 1) * 100)}`, '%')}
       ${stat('', '강화석 드롭', `+${Math.round((st.dropMult - 1) * 100)}`, '%')}
       ${stat('', '공격 속도', (1000 / st.attackMs).toFixed(2), '회/초')}

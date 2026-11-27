@@ -475,8 +475,11 @@ export function calcStats(s, buffs = NO_BUFF) {
   const hpMax =
     (150 + 30 * L + EQUIP.armor.per * eLv('armor') + EQUIP.helmet.per * eLv('helmet'))
     * (1 + (b.hpPct + extraHp + gm.hpPct + rel.hpPct + gem.hpPct + tit.hpPct + meg.hpPct + gld.hpPct) / 100) * jobHpMul * rbHpMul;
-  const crit = Math.min(0.5, 0.05 + (EQUIP.ring.per / 100) * eLv('ring') + (b.critPct + extraCrit + gm.critPct + (petPas.critPct || 0) + subCritPct + rel.critPct + tit.critPct + gld.critPct) / 100);
-  const critDmg = 2.0 + rb.critDmgAdd + (gm.critDmg + petCritDmgPct + gem.critDmgPct + gld.critDmgPct) / 100 + synCritDmg;
+  const rawCrit = 0.05 + (EQUIP.ring.per / 100) * eLv('ring') + (b.critPct + extraCrit + gm.critPct + (petPas.critPct || 0) + subCritPct + rel.critPct + tit.critPct + gld.critPct) / 100;
+  const crit = Math.min(0.5, rawCrit);
+  // v8.8.0 초과 치명타(50% 초과분) 자동 치명타 피해 전환 (초과 1%p → 치명피해 +2%p, 중후반 스탯 낭비 제거)
+  const overCrit = Math.max(0, rawCrit - 0.5);
+  const critDmg = 2.0 + rb.critDmgAdd + (gm.critDmg + petCritDmgPct + gem.critDmgPct + gld.critDmgPct) / 100 + synCritDmg + overCrit * 2;
   // v3.8 방어·회복 — 다굴에서 버티는 힘. 갑옷/투구 강화(등급 환산 포함) + 환생 '수호' 특성 + v4 장비 옵션 + v5.8 펫 + v6.2 보석 + v6.9 기사단
   const defFromGear = EQUIP.armor.defPer * eLv('armor') + EQUIP.helmet.defPer * eLv('helmet');
   const dmgReduce = Math.min(DEF.cap, (defFromGear + (rb.guardPct || 0) + gm.dmgRed + petDmgRedPct + gem.dmgRedPct + gld.dmgRedPct) / 100);
@@ -485,8 +488,9 @@ export function calcStats(s, buffs = NO_BUFF) {
     1 + (EQUIP.amulet.per / 100) * eLv('amulet') + (b.goldPct + extraGold + rb.goldPct + gm.goldPct + rel.goldPct + gem.goldPct + tit.goldPct + meg.goldPct + gld.goldPct) / 100 + petGold / 100
     + (col.goldPct || 0) / 100;
   const dropMult = 1 + (b.dropPct + extraDrop + rb.shardPct + gm.dropPct + petDropPct + rel.dropPct + gem.dropPct + tit.dropPct + meg.dropPct + gld.dropPct) / 100;
-  // v4.0: 공격 속도 옵션 — 기본 공격 간격을 줄인다(하한 300ms · 최대 40% 단축)
-  const attackMs = Math.max(300, (ECON.playerAttackMs - L * 2) * (1 - Math.min(0.4, (gm.atkSpd + petAtkSpdPct + gem.atkSpdPct) / 100)));
+  // v4.0/v8.8.0: 공격 속도 — 기본 레벨 보정 하한 300ms + 장비·펫·보석 공속 옵션 적용(최종 하한 200ms, Lv.160+ 공속 무효화 해결)
+  const baseAttackMs = Math.max(300, ECON.playerAttackMs - L * 2);
+  const attackMs = Math.max(200, baseAttackMs * (1 - Math.min(0.4, (gm.atkSpd + petAtkSpdPct + gem.atkSpdPct) / 100)));
   const lifesteal = Math.min(0.25, (gm.lifesteal + rel.lifestealPct + gem.lifestealPct) / 100); // 흡혈 상한 25%
   const petBossDmgPct = ((petPas.bossDmgPct || 0) + subBossPct) / 100; // v4.2 용의 숨결 + v5.3 보조 펫 50%
   const bossDmgPct = gm.bossDmg / 100 + petBossDmgPct + synBoss + rel.bossDmgPct / 100;
@@ -496,6 +500,7 @@ export function calcStats(s, buffs = NO_BUFF) {
     atk: Math.round(atk),
     hpMax: Math.round(hpMax),
     crit,
+    overCritPct: Math.round(overCrit * 1000) / 10,
     critDmg,
     dmgReduce,
     hpRegen,
@@ -834,13 +839,14 @@ export function tryUpgradeSkill(s, key) {
   return { ok: true, lv: sk.lv, spent: cost };
 }
 
-/** 스킬 쿨타임 실효값 — 부동산 시너지 + 영지 성채 마법탑 + 보석(사파이어) 쿨감을 반영한다(상한 40%) */
+/** 스킬 쿨타임 실효값 — 부동산 시너지 + 영지 성채 마법탑 + 보석(사파이어) + 기사단(멀린) 쿨감을 반영한다(상한 40%) */
 export function skillCdOf(key, buffs, state = null) {
   const def = SKILLS[key];
   if (!def) return 0;
   const citCdr = Math.max(Number((buffs || {}).citCdrPct) || 0, state ? (citadelEffects(state).skillCdrPct || 0) : 0);
   const gemCdr = Math.max(Number((buffs || {}).gemCdrPct) || 0, state ? (gemEffects(state).cdrPct || 0) : 0);
-  const cdr = Math.min(0.4, Math.max(0, (Number((buffs || {}).synCdrPct) || 0) + citCdr + gemCdr) / 100);
+  const gldCdr = Math.max(Number((buffs || {}).gldCdrPct) || 0, state ? (guildEffects(state).cdrPct || 0) : 0);
+  const cdr = Math.min(0.4, Math.max(0, (Number((buffs || {}).synCdrPct) || 0) + citCdr + gemCdr + gldCdr) / 100);
   return def.cd * (1 - cdr);
 }
 

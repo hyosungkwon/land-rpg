@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "8.7.0"
+EXPECTED_VER = "8.8.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui-settings.js", "src/ui.js", "src/sound.js"]
 
@@ -3976,7 +3976,7 @@ def main():
     ok(all(x in asrc46 for x in ["openAuctionBid", "doAuctionBid", "openAuctionInfo", "auctionBid:", "auctionInfo:", "applyAuctionBid"]), "app.js — 낙찰 확인·실행·내역 액션", "")
     ok(all(x in css46 for x in [".auc-card", ".auc-prog", ".auc-price", ".auc-bid", ".syn-card", ".syn-row", ".syn-chip", ".syn-total", ".ls-tot", ".tag.lease", ".btn.gold"]), "style.css — 경매·시너지 스타일", "")
     ok(all(x in stsrc46 for x in ["normalizeAuctionState", "sanitizeLease", "s.land.auction", "skillCdOf", "synCritDmgPct", "synExpPct"]), "state.js — 경매/임대 정규화·시너지 스탯 반영", "")
-    ok(all(x in csrc46 for x in ["skillCdOf", "skillCdOf(key, this.buffs())"]), "combat.js — 스킬 쿨감을 실제 쿨타임에 적용", "")
+    ok(all(x in csrc46 for x in ["skillCdOf", "skillCdOf(key, this.buffs()"]), "combat.js — 스킬 쿨감을 실제 쿨타임에 적용", "")
     ok(all(x in lsrc46 for x in ["landSynergy", "leasePctOf", "synText", "auction: {", "lease: {}"]), "land.js — 시너지·특별 임대를 버프·기본값에 포함", "")
     ok(all(x in ausrc46 for x in ["AUCTION", "auctionLot", "auctionStatus", "bidQuote", "applyAuctionBid", "normalizeAuctionState", "defaultAuctionState"]), "auction.js — 경매 엔진", "")
     ok(all(x in sysrc46 for x in ["LAND_SYNERGY", "landmarkSynergy", "regionCompleteSynergy", "landSynergy", "landBuffTotals", "nextLandmarkStep"]), "synergy.js — 시너지 계산", "")
@@ -6467,6 +6467,48 @@ def main():
         all(x in rnd87 for x in ["heroVisX", "heroVisY", "hero_attack2", "hero_jump", "hero_dash", "slashStyle = 'thrust'", "slashStyle = 'up'", "slashStyle = 'plunge'", "skKey === 'execute'", "dyWeave", "atkReach"]),
         "render.js — 영웅 4단 콤보·스킬별 자유 이동(처형 백스탭/회오리/공중시전) & 몬스터 아키타입별 위빙·스웁·도약 모션",
     )
+
+    # ── 55) v8.8.0 ⚖️ 밸런스 리마스터 · 멀린/모래시계 시너지 수정 · 신규 6종 스킬 룬 12종 ──
+    section("v8.8.0 밸런스 리마스터 · 시너지 누락 수정 · 신규 6종 스킬 룬 12종")
+    bal88 = js(ctx, """
+      const now = 200000;
+      const s = defaultState(now);
+      s.level = 180;
+      s.equip = { weapon: 50, armor: 50, helmet: 50, ring: 100, amulet: 50 };
+      s.guild.knights.archer = 10; // 치명 +8% (총 63% → 13%p 초과 치명타 전환)
+      s.guild.knights.mage = 10; // 쿨감 8%
+      s.gems.sockets.weapon = { type: 'sapphire', lv: 5 }; // 쿨감 6%, 공속 10%
+      const bf = computeBuffs(s, now);
+      const st = calcStats(s, bf);
+      const cdBase = skillCdOf('meteor', {}, null);
+      const cdWith = skillCdOf('meteor', bf, s);
+      // 신규 6종 스킬 룬 12종 모두 존재 & 장착/발동 확인
+      const newKeys = ['thunder', 'meteor', 'frostnova', 'aegis', 'vampstrike', 'execute'];
+      const runeCount = newKeys.reduce((a, k) => a + (SKILL_RUNES[k] ? SKILL_RUNES[k].length : 0), 0);
+      for (const k of newKeys) { s.skills[k].lv = 5; s.skills[k].rune = SKILL_RUNES[k][0].id; }
+      s.skillDeck = ['meteor', 'execute', 'aegis', 'vampstrike'];
+      const b = new Battle(s, () => bf, () => 0.2, now);
+      if (b.targets().length < 3) { b.spawnNormal(now); b.spawnNormal(now); b.spawnNormal(now); }
+      // aegis 반사 방벽 룬 공격 버프 & execute 약점 간파 쿨타임 반환
+      const castAegis = b.castSkill('aegis', now + 50000);
+      const thornsUp = b.thornsUntil > now + 50000 && b.thornsAtk >= 0.25;
+      // 시간의 모래시계 유물이 장착 덱(meteor 등 신규 스킬) 쿨타임 단축
+      s.relics.owned.hourglass = 5; s.relics.equipped = ['hourglass'];
+      s.skills.meteor.last = now + 50000;
+      b.hit([b.targets()[0]], 1, 'normal', now + 50100, { critAdd: 0.99 });
+      const trimmed = s.skills.meteor.last < now + 50000;
+      return {
+        gldCdrOk: bf.gldCdrPct === 8 && cdWith < cdBase * 0.90,
+        overCritOk: st.crit === 0.5 && st.overCritPct > 0 && st.critDmg > 2.0,
+        atkSpdOk: st.attackMs < 300 && st.attackMs >= 200,
+        runeCount,
+        thornsUp: castAegis && thornsUp,
+        trimmed,
+      };
+    """)
+    ok(bal88["gldCdrOk"] and bal88["trimmed"], "대마도사 멀린 쿨감 실반영 · 시간의 모래시계 장착 덱 신규 스킬 쿨단축", json.dumps(bal88))
+    ok(bal88["overCritOk"] and bal88["atkSpdOk"], "초과 치명타→치명피해 자동 전환 · Lv.160+ 공속 옵션 정상 반영(최소 200ms)", json.dumps(bal88))
+    ok(bal88["runeCount"] == 12 and bal88["thornsUp"], "신규 스킬 6종 Lv.3 룬 12종 정의 및 전투 효과 실발동", json.dumps(bal88))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

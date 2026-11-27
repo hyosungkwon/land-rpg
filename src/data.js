@@ -2,7 +2,7 @@
 // 밸런스·몬스터·장비·스킬 정의. DOM 의존 없음(헤드리스 테스트 가능).
 // v3: 게스트 전용 통합 경제 — 골드 하나로 사냥과 부동산을 함께 굴린다.
 
-export const APP_VERSION = '8.7.0';
+export const APP_VERSION = '8.8.0';
 export const SAVE_KEY = 'land_rpg_unified_v3';
 export const SAVE_VERSION = 3;
 
@@ -624,7 +624,32 @@ export const SKILL_RUNES = {
   ],
   heal: [
     { id: 'shield', name: '성광 보호막', icon: '✨', color: '#ffe38a', short: '초과 회복 + 체력 12% 보호막(8초)', shieldMs: 8000, shieldBase: 0.12 },
-    { id: 'bless',  name: '축복의 빛',   icon: '🌟', color: '#b98bff', short: '6초 공격 +22% · 쿨타임 1.2초 단축', blessMs: 6000, blessAtk: 0.22, cdTrimMs: 1200 },
+    { id: 'bless',  name: '축복의 빛',   icon: '🌟', color: '#b98bff', short: '6초 공격 +22% · 장착 덱 쿨타임 1.2초 단축', blessMs: 6000, blessAtk: 0.22, cdTrimMs: 1200 },
+  ],
+  // v8.8.0 신규 스킬 6종 Lv.3 룬 각성 12종
+  thunder: [
+    { id: 'chain',    name: '연쇄 과부하', icon: '⚡', color: '#7ff6ff', short: '최대 6마리 연쇄 · 감전 적 공격 -30%', targets: 6, shockMul: 0.70 },
+    { id: 'overload', name: '천둥 폭풍',   icon: '🌩️', color: '#ffd76a', short: '치명 +25%p · 보스 추가 피해 +35%', critAdd: 0.25, bossAdd: 0.35 },
+  ],
+  meteor: [
+    { id: 'cataclysm', name: '대재앙 운석', icon: '🌋', color: '#ff5226', short: '화상 피해 +60% · 화상 지속 6초', burnMs: 6000, burnMul: 0.67 },
+    { id: 'starfall',  name: '유성우',      icon: '🌠', color: '#ffb347', short: '2연속 운석 낙하(총 124%) · 치명 +15%p', hits: 2, hitMul: 0.62, critAdd: 0.15 },
+  ],
+  frostnova: [
+    { id: 'shatter', name: '빙결 분쇄',   icon: '💎', color: '#6fd3ff', short: '위력 +35% · 치명 +20%p', mulBonus: 1.35, critAdd: 0.20 },
+    { id: 'glacier', name: '만년설 장막', icon: '🧊', color: '#b8f2ff', short: '둔화 6초 연장 · 최대 체력 12% 보호막', slowMs: 6000, shieldBase: 0.12, shieldMs: 6000 },
+  ],
+  aegis: [
+    { id: 'thorns',    name: '반사 방벽',   icon: '⚔️', color: '#ffd76a', short: '8초간 공격력 +25% · 피해감소 25%', atkBonus: 0.25, reduceAdd: 0.25 },
+    { id: 'sanctuary', name: '성역의 빛',   icon: '✨', color: '#8ff0a4', short: '즉시 체력 15% 회복 · 방벽 지속 10초', healRatio: 0.15, dur: 10000 },
+  ],
+  vampstrike: [
+    { id: 'crimson', name: '선혈 폭풍', icon: '🩸', color: '#ff3b5c', short: '전방 5마리 타격 · 피해 45% 즉시 흡혈', targets: 5, lifesteal: 0.45 },
+    { id: 'reaper',  name: '영혼 수확', icon: '💀', color: '#c084fc', short: '보스 피해 +40% · 치명 +20%p', bossAdd: 0.40, critAdd: 0.20 },
+  ],
+  execute: [
+    { id: 'phantom',     name: '환영 이연격', icon: '👻', color: '#d8b4fe', short: '2연속 암살(총 122%) · 치명 +35%p', hits: 2, hitMul: 0.61, critAdd: 0.35 },
+    { id: 'bloodthirst', name: '약점 간파',   icon: '🗡️', color: '#ff6b9a', short: '빈사 판정 65% 확대 · 처치 시 쿨 40% 반환', lowHpPct: 0.65, killCdRefund: 0.40 },
   ],
 };
 
@@ -669,12 +694,18 @@ export function ultimateOf(state) {
   return pick;
 }
 
-/** 궁극기 실효 쿨타임 — 부동산 시너지 + 영지 성채 마법탑 쿨감(상한 40%)을 반영한다 */
+/** 궁극기 실효 쿨타임 — 부동산 시너지 + 마법탑 + 사파이어 보석 + 기사단 멀린 쿨감(상한 40%)을 반영한다 */
 export function ultCdOf(state, buffs) {
   const u = ultimateOf(state);
   if (!u) return 0;
   const towLv = Math.max(0, Math.min(10, Math.floor(Number(state && state.citadel && state.citadel.levels && state.citadel.levels.tower) || 0)));
-  const cdr = Math.min(0.4, Math.max(0, (Number((buffs || {}).synCdrPct) || 0) + towLv * 1.2) / 100);
+  const mageLv = Math.max(0, Math.min(10, Math.floor(Number(state && state.guild && state.guild.knights && state.guild.knights.mage) || 0)));
+  let gemCdr = Number((buffs || {}).gemCdrPct) || 0;
+  if (!gemCdr && state && state.gems && state.gems.sockets) {
+    for (const g of Object.values(state.gems.sockets)) if (g && g.type === 'sapphire') gemCdr += Math.max(1, Math.min(5, Math.floor(Number(g.lv) || 1))) * 1.2;
+  }
+  const gldCdr = Math.max(Number((buffs || {}).gldCdrPct) || 0, mageLv * 0.8);
+  const cdr = Math.min(0.4, Math.max(0, (Number((buffs || {}).synCdrPct) || 0) + towLv * 1.2 + gemCdr + gldCdr) / 100);
   return u.cd * (1 - cdr);
 }
 

@@ -128,6 +128,8 @@ export class Battle {
     this.blessAtk = 0;
     this.aegisUntil = 0;     // v8.4.0 불굴의 방벽 피해 감소 지속 시각
     this.aegisReduce = 0;
+    this.thornsUntil = 0;    // v8.8.0 반사 방벽 룬 공격력 보너스 지속 시각
+    this.thornsAtk = 0;
     // v4.7 상위 전직 궁극기 — 발동 뒤 한동안 공격력 버프 · 직전 타격 총 피해(이벤트 표시용)
     this.ultUntil = 0;
     this.ultBonus = 0;
@@ -693,6 +695,7 @@ export class Battle {
     let dmg = this.stats.atk * rawMul * (0.9 + this.rng() * 0.2);
     if (this.berserkUntil > now) dmg *= 1 + skillEffect('berserk', this.s.skills.berserk.lv);
     if (this.blessUntil > now && this.blessAtk > 0) dmg *= 1 + this.blessAtk;
+    if (this.thornsUntil > now && this.thornsAtk > 0) dmg *= 1 + this.thornsAtk;
     // v4.7 궁극기 발동 직후의 공격력 버프
     if (this.ultUntil > now) dmg *= 1 + (this.ultBonus || 0);
     let crit = false;
@@ -754,11 +757,11 @@ export class Battle {
           if (o.hp <= 0) this.killMonster(o, now);
         }
       }
-      // v6.1 ⏳ 시간의 모래시계 유물 — 치명타 적중 시 기본 스킬 쿨타임 단축
+      // v6.1/v8.8.0 ⏳ 시간의 모래시계 유물 — 치명타 적중 시 현재 장착 덱(4슬롯 전체) 쿨타임 단축
       if (crit) {
         const trim = relicEffects(this.s).critCdTrimMs || 0;
         if (trim > 0 && this.s && this.s.skills) {
-          for (const k of ['strike', 'whirl', 'berserk', 'heal']) {
+          for (const k of this.activeDeck()) {
             if (this.s.skills[k] && this.s.skills[k].last > 0) this.s.skills[k].last = Math.max(0, this.s.skills[k].last - trim);
           }
         }
@@ -876,6 +879,7 @@ export class Battle {
       if (this.berserkRune === 'fury') dps *= 1.25;
     }
     if (this.blessUntil > now && this.blessAtk > 0) dps *= 1 + this.blessAtk;
+    if (this.thornsUntil > now && this.thornsAtk > 0) dps *= 1 + this.thornsAtk;
     if (this.ultUntil > now && this.ultBonus > 0) {
       dps *= 1 + this.ultBonus;
     }
@@ -1192,8 +1196,8 @@ export class Battle {
   autoSkills(now) {
     const sk = this.s.skills;
     const alive = this.targets();
-    // v4.6 부동산 시너지 + v5.12 영지 성채 마법탑 쿨감
-    const cd = (key) => skillCdOf(key, this.buffs());
+    // v4.6/v8.8.0 부동산 시너지 + 마법탑 + 사파이어 + 기사단 멀린 쿨감
+    const cd = (key) => skillCdOf(key, this.buffs(), this.s);
     // v4.8.2: 스테이지 보스뿐 아니라 일일 보스·도전의 탑 보스 층도 보스전으로 판정
     const hasBoss = !!(this.boss || this.daily || alive.some((m) => m.isBoss));
     const inRange = alive.some((m) => m.x - this.player.x <= ECON.playerRange);
@@ -1261,7 +1265,7 @@ export class Battle {
     const def = SKILLS[key];
     const sk = this.s.skills[key];
     if (!def || !sk) return false;
-    if (now - sk.last < skillCdOf(key, this.buffs())) return false;
+    if (now - sk.last < skillCdOf(key, this.buffs(), this.s)) return false;
     if (this.player.dead) return false;
     const rune = skillRuneOf(this.s, key);
     const col = rune ? rune.color : def.color;
@@ -1284,7 +1288,8 @@ export class Battle {
         this.blessUntil = now + (rune.blessMs || 6000);
         this.blessAtk = rune.blessAtk || 0.22;
         const trim = rune.cdTrimMs || 1200;
-        for (const k of ['strike', 'whirl', 'berserk']) {
+        for (const k of this.activeDeck()) {
+          if (k === 'heal') continue;
           if (this.s.skills[k] && this.s.skills[k].last > 0) this.s.skills[k].last = Math.max(0, this.s.skills[k].last - trim);
         }
       }
@@ -1305,11 +1310,19 @@ export class Battle {
       this.player.skillAt = now;
       this.player.skillKey = key;
       const sh = Math.round(this.stats.hpMax * skillEffect('aegis', sk.lv, this.s));
+      const dur = (rune && rune.dur) || def.dur || 8000;
       this.player.shield = Math.min(this.stats.hpMax * 1.2, (this.player.shieldUntil > now ? this.player.shield : 0) + sh);
-      this.player.shieldUntil = now + (def.dur || 8000);
-      this.aegisUntil = now + (def.dur || 8000);
-      this.aegisReduce = def.reduceAdd || 0.20;
-      this.emit({ t: 'skill', key, ko, shield: sh, color: col, dur: def.dur || 8000 });
+      this.player.shieldUntil = now + dur;
+      this.aegisUntil = now + dur;
+      this.aegisReduce = (rune && rune.reduceAdd) || def.reduceAdd || 0.20;
+      if (rune && rune.id === 'thorns') {
+        this.thornsUntil = now + dur;
+        this.thornsAtk = rune.atkBonus || 0.25;
+      } else if (rune && rune.id === 'sanctuary') {
+        const healAmt = Math.round(this.stats.hpMax * (rune.healRatio || 0.15));
+        this.player.hp = Math.min(this.stats.hpMax, this.player.hp + healAmt);
+      }
+      this.emit({ t: 'skill', key, ko, shield: sh, rune: rune ? rune.id : null, color: col, dur });
       return true;
     }
     if (!alive.length) return false;
@@ -1366,23 +1379,27 @@ export class Battle {
       this.emit({ t: 'skill', key, ko, rune: rune ? rune.id : null, color: col, x: target.x });
       return true;
     }
-    // ── v8.4.0 신규 공격 스킬 5종 (aegis 는 방어 버프로 상단에서 처리) ──
+    // ── v8.4.0 신규 공격 스킬 5종 + v8.8.0 룬 각성 10종 (aegis 는 방어 버프로 상단에서 처리) ──
     if (key === 'thunder') {
       sk.last = now;
       this.player.skillAt = now;
       this.player.skillKey = key;
       this.player.attackAt = now;
       this.player.attackKind = 'strike';
-      const list = alive.slice(0, def.targets || 4);
+      const maxT = (rune && rune.targets) || def.targets || 4;
+      const list = alive.slice(0, maxT);
       this.player.targetX = list[0].x;
       this.player.targetLane = list[0].lane || 0;
-      this.hit(list, skillEffect('thunder', sk.lv, this.s), 'thunder', now);
+      const extra = rune && rune.id === 'overload'
+        ? { critAdd: rune.critAdd || 0.25, bossAdd: rune.bossAdd || 0.35 }
+        : null;
+      this.hit(list, skillEffect('thunder', sk.lv, this.s), 'thunder', now, extra);
       for (const m of list) {
         if (m.dead || m.dying) continue;
         m.shockUntil = now + (def.shockMs || 3000);
-        m.shockMul = def.shockMul || 0.8;
+        m.shockMul = (rune && rune.shockMul) || def.shockMul || 0.8;
       }
-      this.emit({ t: 'skill', key, ko, color: col, x: list[0].x, xs: list.map((m) => m.x) });
+      this.emit({ t: 'skill', key, ko, rune: rune ? rune.id : null, color: col, x: list[0].x, xs: list.map((m) => m.x) });
       return true;
     }
     if (key === 'meteor') {
@@ -1394,14 +1411,23 @@ export class Battle {
       const list = alive.slice();
       this.player.targetX = list[0].x;
       this.player.targetLane = list[0].lane || 0;
-      this.hit(list, skillEffect('meteor', sk.lv, this.s), 'meteor', now);
+      const power = skillEffect('meteor', sk.lv, this.s);
+      if (rune && rune.id === 'starfall') {
+        for (let i = 0; i < (rune.hits || 2); i++) {
+          this.hit(list, power * (rune.hitMul || 0.62), 'meteor', now, { critAdd: rune.critAdd || 0.15 });
+        }
+      } else {
+        this.hit(list, power, 'meteor', now);
+      }
+      const bMs = (rune && rune.burnMs) || def.burnMs || 4000;
+      const bMul = (rune && rune.burnMul) || def.burnMul || 0.42;
       for (const m of list) {
         if (m.dead || m.dying) continue;
-        m.burnUntil = now + (def.burnMs || 4000);
-        m.burnDps = Math.max(1, Math.round(this.stats.atk * (def.burnMul || 0.42)));
+        m.burnUntil = now + bMs;
+        m.burnDps = Math.max(1, Math.round(this.stats.atk * bMul));
         m.burnTick = now;
       }
-      this.emit({ t: 'skill', key, ko, color: col, x: list[0].x, xs: list.map((m) => m.x) });
+      this.emit({ t: 'skill', key, ko, rune: rune ? rune.id : null, color: col, x: list[0].x, xs: list.map((m) => m.x) });
       return true;
     }
     if (key === 'frostnova') {
@@ -1413,14 +1439,22 @@ export class Battle {
       const list = alive.slice();
       this.player.targetX = list[0].x;
       this.player.targetLane = list[0].lane || 0;
-      this.hit(list, skillEffect('frostnova', sk.lv, this.s), 'frostnova', now);
+      const mul = skillEffect('frostnova', sk.lv, this.s) * ((rune && rune.mulBonus) || 1);
+      const extra = rune && rune.critAdd ? { critAdd: rune.critAdd } : null;
+      this.hit(list, mul, 'frostnova', now, extra);
+      const sMs = (rune && rune.slowMs) || def.slowMs || 4500;
       for (const m of list) {
         if (m.dead || m.dying) continue;
-        m.slowUntil = now + (def.slowMs || 4500);
+        m.slowUntil = now + sMs;
         m.slowAtkMul = def.slowAtkMul || 1.55;
         m.slowMoveMul = def.slowMoveMul || 0.45;
       }
-      this.emit({ t: 'skill', key, ko, color: col, x: list[0].x });
+      if (rune && rune.id === 'glacier') {
+        const sh = Math.round(this.stats.hpMax * (rune.shieldBase || 0.12));
+        this.player.shield = Math.min(this.stats.hpMax * 1.2, (this.player.shieldUntil > now ? this.player.shield : 0) + sh);
+        this.player.shieldUntil = now + (rune.shieldMs || 6000);
+      }
+      this.emit({ t: 'skill', key, ko, rune: rune ? rune.id : null, color: col, x: list[0].x });
       return true;
     }
     if (key === 'vampstrike') {
@@ -1429,15 +1463,22 @@ export class Battle {
       this.player.skillKey = key;
       this.player.attackAt = now;
       this.player.attackKind = 'strike';
-      const list = alive.slice(0, def.targets || 3);
+      const maxT = (rune && rune.targets) || def.targets || 3;
+      const list = alive.slice(0, maxT);
       this.player.targetX = list[0].x;
       this.player.targetLane = list[0].lane || 0;
-      this.hit(list, skillEffect('vampstrike', sk.lv, this.s), 'vampstrike', now, { lifesteal: def.lifesteal || 0.35 });
-      this.emit({ t: 'skill', key, ko, color: col, x: list[0].x });
+      const extra = {
+        lifesteal: (rune && rune.lifesteal) || def.lifesteal || 0.35,
+        bossAdd: (rune && rune.bossAdd) || 0,
+        critAdd: (rune && rune.critAdd) || 0,
+      };
+      this.hit(list, skillEffect('vampstrike', sk.lv, this.s), 'vampstrike', now, extra);
+      this.emit({ t: 'skill', key, ko, rune: rune ? rune.id : null, color: col, x: list[0].x });
       return true;
     }
     if (key === 'execute') {
-      const target = alive.find((m) => m.isBoss) || alive.find((m) => m.hp <= m.maxHp * 0.5) || alive[0];
+      const lowPct = (rune && rune.lowHpPct) || 0.5;
+      const target = alive.find((m) => m.isBoss) || alive.find((m) => m.hp <= m.maxHp * lowPct) || alive[0];
       sk.last = now;
       this.player.skillAt = now;
       this.player.skillKey = key;
@@ -1445,12 +1486,25 @@ export class Battle {
       this.player.attackKind = 'strike';
       this.player.targetX = target.x;
       this.player.targetLane = target.lane || 0;
-      const lowBonus = target.hp <= target.maxHp * 0.5 ? (def.lowHpMul || 1.5) : 1;
-      this.hit([target], skillEffect('execute', sk.lv, this.s) * lowBonus, 'execute', now, {
-        critAdd: def.critAdd || 0.30,
+      const lowBonus = target.hp <= target.maxHp * lowPct ? (def.lowHpMul || 1.5) : 1;
+      const power = skillEffect('execute', sk.lv, this.s) * lowBonus;
+      const extra = {
+        critAdd: (rune && rune.critAdd) || def.critAdd || 0.30,
         bossAdd: def.bossAdd || 0.45,
-      });
-      this.emit({ t: 'skill', key, ko, color: col, x: target.x });
+      };
+      if (rune && rune.id === 'phantom') {
+        for (let i = 0; i < (rune.hits || 2); i++) {
+          if (target.dead || target.dying) break;
+          this.hit([target], power * (rune.hitMul || 0.61), 'execute', now, extra);
+        }
+      } else {
+        this.hit([target], power, 'execute', now, extra);
+      }
+      if (rune && rune.id === 'bloodthirst' && (target.dead || target.dying || target.hp <= 0)) {
+        const cdNow = skillCdOf('execute', this.buffs(), this.s);
+        sk.last = Math.max(0, now - Math.round(cdNow * (rune.killCdRefund || 0.40)));
+      }
+      this.emit({ t: 'skill', key, ko, rune: rune ? rune.id : null, color: col, x: target.x });
       return true;
     }
     return false;
