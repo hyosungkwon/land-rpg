@@ -94,7 +94,7 @@ export function rankCard(ui) {
     body = loaded
       ? `<div class="tiny muted" style="padding:6px 0">아직 참가자가 없습니다 — 첫 기록의 주인공이 되어 보세요(☁️ 저장을 하면 자동 등록).</div>
       <button class="btn small ghost block" style="margin-top:7px" type="button" data-action="cloud-rank-refresh">🔄 새로고침</button>`
-      : `<div class="tiny muted" style="padding:6px 0">${rankMetricLabel(key)} TOP ${CLOUD.topN}과 내 순위를 불러옵니다. 로그인 없이도 볼 수 있습니다.</div>
+      : `<div class="tiny muted" style="padding:6px 0">로그인 없이 ${rankMetricLabel(key)} TOP ${CLOUD.topN}과 내 순위를 봅니다.</div>
       <button class="btn small ghost block" style="margin-top:7px" type="button" data-action="cloud-rank-refresh">🏆 랭킹 불러오기</button>`;
   } else {
     body = `<div class="rank-list">${rows}</div>
@@ -122,6 +122,6 @@ export function rankCard(ui) {
     ${signed && enabled ? `<div class="cloud-nick">
       <input id="cloudNick" class="cloud-nick-in" type="text" maxlength="${CLOUD.nickMax}" value="${esc(nickNow)}" placeholder="랭킹 닉네임 (2~${CLOUD.nickMax}자)" aria-label="랭킹 닉네임" autocomplete="off" spellcheck="false">
       <button class="btn small ghost" type="button" data-action="cloud-nick">저장</button>
-    </div>` : '<div class="tiny dim" style="margin-top:7px">랭킹 닉네임은 클라우드를 켠 뒤 정할 수 있습니다 (실명이 그대로 노출되지 않도록 기본값은 무작위 이름입니다).</div>'}
+    </div>` : '<div class="tiny dim" style="margin-top:6px">닉네임은 클라우드를 켠 뒤 정합니다(기본값은 무작위 이름).</div>'}
   </div>`;
 }

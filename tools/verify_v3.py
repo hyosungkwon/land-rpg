@@ -6248,6 +6248,7 @@ def main():
     ok(ui81["infoHead"] and ui81["infoFold"], "설정 정보 카드 — 기본 3줄 + ▸ 펼치기(내 기록+앱 정보 1장)", json.dumps({"head": ui81["infoHead"], "fold": ui81["infoFold"]}))
     ok(ui81["installLine"] == 1 and ui81["installCard"] is False and ui81["dmgChips"], "설치 카드 → 설정 하단 1줄 링크 · 피해 숫자 밀도 칩(간단/자세히)", json.dumps({k: ui81[k] for k in ["installLine", "installCard", "dmgChips"]}))
     ok(ui81["mktSheet"] >= 5 and ui81["mktTrade"] == 0 and ui81["holdSheet"], "매물·보유 목록 행 탭 액션시트(land-sheet) — 행마다 매수/매도/예약 3버튼 제거", json.dumps({k: ui81[k] for k in ["mktSheet", "mktTrade", "holdSheet"]}))
+    ok("case 'land-sheet': actions.landSheet(v); break;" in read("src/ui.js"), "ui.js — land-sheet 클릭 배선(행 탭 → 액션시트)", "")
     app81 = read("app.js"); idx81 = read("index.html"); css81 = read("style.css"); r81 = read("src/render.js")
     ok("openLandSheet(key)" in app81 and "landSheet: (key) => this.openLandSheet(key)" in app81 and "지정가 예약" in app81 and 'data-action="land-trade"' in app81, "app.js — 매물 액션시트(매수·매도·지정가 예약) 모달", "")
     ok(idx81.index('class="stage-bottom"') < idx81.index('id="battleBuffBar"') and idx81.count('id="battleBuffBar"') == 1, "전투 상단 버프 pill → 캔버스 하단 1줄(킬도트와 같은 줄)", "")

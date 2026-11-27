@@ -275,6 +275,7 @@ export class UI {
       case 'land-hold-all': this.landHoldAll = !this.landHoldAll; this.render(); break;
       case 'landmark': actions.openLandmark(v); break;
       case 'land-trade': actions.landTrade(v, btn.dataset.side); break;
+      case 'land-sheet': actions.landSheet(v); break;
       case 'land-more': actions.landMore(); break;
       case 'land-sort': actions.landSort(v); break;
       case 'land-tier': actions.landTier(v); break;
@@ -1470,7 +1471,7 @@ function questCard(ui) {
 const DEFAULT_COLLAPSED = [
   'battle-detail', 'presets', 'gems', 'shards', 'craft', 'gacha', 'inventory', 'gear-info', 'titles',
   'invest-dash', 'region-set', 'landmark', 'synergy', 'buff-detail', 'expedition', 'trade-rec',
-  'pass', 'codex', 'info',
+  'pass', 'codex', 'info', 'dq',
   'orders', 'citadel', 'mega',
 ];
 const isCardOpen = (ui, id) => !(ui && ui.collapsed && typeof ui.collapsed.has === 'function' && ui.collapsed.has(id));
@@ -1845,7 +1846,7 @@ function dailyQuestCard(ui) {
     </div>`).join('');
   const b = dq.bonus;
   return `
-  <div class="card dq-card${dq.readyCount ? ' ready' : ''}">
+  <div class="card dq-card${dq.readyCount ? ' ready' : ''}" data-fold="dq">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">📅</span>일일 퀘스트<small>${dq.claimedCount}/${dq.total} · ${h}시간 ${m}분 후 리셋</small></div>
     </div>
@@ -2764,49 +2765,45 @@ function tplSettings(ui) {
     ${prevSave
       ? `<button class="btn small ghost block save-undo" type="button" data-action="save-undo">↩️ 직전 세이브로 복구 <small>Lv.${prevSave.level} · S${prevSave.stage} · ${prevSave.cities}곳</small></button>`
       : ''}
-    <div class="tiny dim" style="margin-top:7px">복원은 <b>레벨·최고 스테이지·보유 지역·환생</b>을 미리 보여 주고 확인 뒤에만 실행합니다. 잘못된 코드는 거부되고 기존 세이브는 그대로 남습니다.</div>
+    <div class="tiny dim" style="margin-top:6px">복원은 <b>미리보기 → 확인</b> 순서로 실행되고, 잘못된 코드는 기존 세이브를 건드리지 않습니다.</div>
   </div>
 
   <div class="card">
-    <div class="card-head"><div class="card-title"><span class="t-ico">⚙️</span>게임 설정</div><span class="tiny dim">v${APP_VERSION}</span></div>
-    <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
+    <div class="card-head"><div class="card-title"><span class="t-ico">⚙️</span>게임 설정</div><span class="tiny dim">v${APP_VERSION} · 이 기기에 자동 저장</span></div>
+    <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)">
       <span class="tiny">자동 보스 전환</span>
       <button class="switch ${s.autoBoss ? 'on' : ''}" data-action="toggle-auto"></button>
     </div>
-    <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
+    <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)">
       <span class="tiny">스킬 자동 시전 <span class="dim">4종 · 터치 시전은 항상</span></span>
       <button class="switch ${s.autoSkill !== false ? 'on' : ''}" data-action="toggle-auto-skill" aria-label="스킬 자동 시전 전환"></button>
     </div>
-    <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
+    <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)">
       <span class="tiny">궁극기 자동 발동 <span class="dim">🐉 상위 전직</span></span>
       <button class="switch ${s.autoUlt !== false ? 'on' : ''}" data-action="toggle-auto-ult" aria-label="궁극기 자동 발동 전환"></button>
     </div>
-    <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
+    <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)">
       <span class="tiny">화면 이펙트</span>
       <button class="switch ${s.effects ? 'on' : ''}" data-action="toggle-effects"></button>
     </div>
-    <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
+    <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)">
       <span class="tiny">화면 흔들림 <span class="dim">타격감</span></span>
       <button class="switch ${s.screenShake !== false ? 'on' : ''}" data-action="toggle-shake" aria-label="화면 흔들림 전환"></button>
     </div>
-    <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
+    <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)">
       <span class="tiny">데미지 숫자 표시 <span class="dim">K/M/B 축약</span></span>
       <button class="switch ${s.dmgNumbers !== false ? 'on' : ''}" data-action="toggle-dmg-numbers" aria-label="데미지 숫자 표시 전환"></button>
     </div>
-    <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
+    <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)">
       <span class="tiny">피해 숫자 밀도 <span class="dim">기본 '간단'</span></span>
       <div class="chips dmg-chips">
         <button class="chip ${s.dmgStyle !== 'full' ? 'on' : ''}" type="button" data-action="dmg-style" data-value="simple">간단</button>
         <button class="chip ${s.dmgStyle === 'full' ? 'on' : ''}" type="button" data-action="dmg-style" data-value="full">자세히</button>
       </div>
     </div>
-    <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
+    <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)">
       <span class="tiny">효과음 <span class="dim">타격·코인·보스·뽑기</span></span>
       <button class="switch ${s.soundOn !== false ? 'on' : ''}" data-action="toggle-sound" aria-label="효과음 전환"></button>
-    </div>
-    <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
-      <span class="tiny">저장 방식</span>
-      <span class="tiny" style="color:var(--gold)">이 기기에 자동 저장 (로그인 없음)</span>
     </div>
     <button class="btn small block" style="margin-top:8px;color:#ffb3b3;border-color:rgba(255,107,107,0.3)" data-action="reset">게임 초기화</button>
   </div>

@@ -500,9 +500,8 @@ export function buildMarketList(ui) {
             <div class="m-ico">${c.emoji}</div>
             <div class="m-mid">
               <div class="m-name"><button class="fav-btn${fav ? ' on' : ''}" type="button" data-action="land-fav" data-value="${c.key}" aria-label="관심 매물">${fav ? '★' : '☆'}</button>${esc(c.name)}<span class="m-region">${esc(c.region)}</span>${traitBadge(c.trait)}${seasonal}${newsTag}${lmTag}${leaseTag}</div>
-              <div class="m-line"><b>💰${fmt(info.price)}</b><span class="dim">/평</span> ${trendHtml(info.trend)} <span class="band-pill ${info.bandLabel === '저점' ? 'lo' : info.bandLabel === '고점' ? 'hi' : ''}">${esc(info.bandLabel || '보통')}</span><span class="band-bar"><i style="left:${bandPct}%"></i></span></div>
-              <div class="m-line dim">평당 시간 +💰${fmt(onePyeongIncome)} · 회수 ${paybackText(c.base / hourlyPerPyeong)}${held > 0 ? ` · <b class="own">보유 ${fmt(held)}평</b>` : ''}${mulTag}</div>
-              <div class="m-line dim">잔여 ${fmt(remain)}평${!affordable ? ' · <span style="color:var(--dim)">골드 부족</span>' : ''}</div>
+              <div class="m-line"><b>💰${fmt(info.price)}</b><span class="dim">/평</span> ${trendHtml(info.trend)} <span class="band-pill ${info.bandLabel === '저점' ? 'lo' : info.bandLabel === '고점' ? 'hi' : ''}">${esc(info.bandLabel || '보통')}</span><span class="band-bar"><i style="left:${bandPct}%"></i></span>${held > 0 ? ` <b class="own">보유 ${fmt(held)}평</b>` : ''}</div>
+              <div class="m-line dim">평당 +💰${fmt(onePyeongIncome)}/h · 회수 ${paybackText(c.base / hourlyPerPyeong)} · 잔여 ${fmt(remain)}평${!affordable ? ' · <span style="color:var(--dim)">골드 부족</span>' : ''}${mulTag}</div>
             </div>
             <i class="m-go" aria-hidden="true">⋯</i>
           </div>`;

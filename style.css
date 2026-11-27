@@ -984,7 +984,7 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .tag { font-size: 9px; font-weight: 800; padding: 1px 5px; border-radius: 6px; color: var(--sub); background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); white-space: nowrap; }
 
 /* 매물 카드 */
-.mkt { display: flex; align-items: center; gap: 9px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.mkt { display: flex; align-items: center; gap: 9px; padding: 7px 0; border-bottom: 1px solid var(--line); }
 .mkt:last-child { border-bottom: 0; }
 .m-ico { flex: 0 0 32px; height: 32px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 17px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); }
 .m-mid { flex: 1 1 auto; min-width: 0; }
@@ -2385,7 +2385,7 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 /* 요약 바 아래 전투 버프 합계 한 줄 — 부동산 탭 어디서든 같은 숫자 */
 .ls-tot { display: flex; gap: 5px; margin-top: 5px; padding-top: 5px; border-top: 1px dashed rgba(255, 255, 255, 0.08); font-size: 9.5px; line-height: 1.45; }
 .ls-tot-k { flex: 0 0 auto; color: var(--dim); font-weight: 800; }
-.ls-tot-v { flex: 1 1 auto; min-width: 0; color: var(--green); font-weight: 700; }
+.ls-tot-v { flex: 1 1 auto; min-width: 0; color: var(--green); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* 🔨 급매 경매 카드 */
 .auc-card { background: linear-gradient(160deg, rgba(255, 138, 80, 0.14), rgba(18, 26, 42, 0.96) 60%); border-color: rgba(255, 138, 80, 0.28); }
@@ -2716,7 +2716,7 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   background: radial-gradient(circle at 50% 45%, rgba(45, 78, 128, 0.24), rgba(7, 11, 22, 0.9));
   border: 1px solid var(--line-2); padding: 6px;
 }
-.rmap-svg { display: block; width: 100%; height: auto; }
+.rmap-svg { display: block; width: 100%; height: auto; max-height: 292px; margin: 0 auto; }
 .rmap-poly { cursor: pointer; transition: filter 0.18s ease, stroke-width 0.18s ease; }
 .rmap-poly:hover { filter: brightness(1.18); }
 .rmap-poly.news { animation: rmapPulse 1.8s ease-in-out infinite; }
