@@ -208,7 +208,7 @@ export function expeditionCard(ui) {
         </div>
         <div class="exp-acts">
           ${sl.ready
-            ? `<button class="btn small primary" type="button" data-action="exp-claim" data-value="${sl.id}">🎁 수령</button>`
+            ? `<button class="mini ghost js-todo" type="button" data-action="goto-todo" aria-label="오늘의 할 일로 이동">📋 수령</button>`
             : `<button class="mini ghost" type="button" data-action="exp-cancel" data-value="${sl.id}">철수</button>`}
         </div>
       </div>`).join('')
@@ -237,7 +237,9 @@ export function expeditionCard(ui) {
   <div class="card exp-card${st.readyCount ? ' ready' : ''}" id="expeditionCard" data-fold="expedition">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🧭</span>영지 파견 (탐험대)<small>${st.activeCount}/${st.maxSlots}팀 · 완료 ${st.totals.completed}회</small></div>
-      ${st.readyCount > 1 ? '<button class="mini up" type="button" data-action="exp-claim-all">🎁 일괄 수령</button>' : `<span class="tiny dim">대성공 ${st.totals.greatCount}회</span>`}
+      ${st.readyCount > 0
+        ? `<button class="mini up" type="button" data-action="goto-todo">📋 ${st.readyCount}팀 수령</button>`
+        : `<span class="tiny dim">대성공 ${st.totals.greatCount}회</span>`}
     </div>
     <div class="exp-slots">${slotRows}</div>
     ${form}
@@ -375,11 +377,11 @@ export function bankCard(ui) {
       <div class="bank-row${sl.ready ? ' ready' : ''}">
         <div class="ord-mid">
           <div class="ord-t">🏦 ${esc(sl.plan.title)} (${sl.plan.label} · <b>+${sl.ratePct}%</b>) · 💰${formatGold(sl.principal)}</div>
-          <div class="ord-s">${sl.ready ? `만기 도달! 수령액 💰${formatGold(sl.payout)} (+💰${formatGold(sl.interest)})` : `남은 ${hhmmss(sl.leftMs)} · 예상 이자 +💰${formatGold(sl.interest)}`}</div>
+          <div class="ord-s">${sl.ready ? `만기 도달! 수령액 💰${formatGold(sl.payout)} (+💰${formatGold(sl.interest)}) — 📋 오늘의 할 일에서 수령` : `남은 ${hhmmss(sl.leftMs)} · 예상 이자 +💰${formatGold(sl.interest)}`}</div>
           <div class="prog tiny-prog${sl.ready ? ' gold' : ''}" style="margin-top:3px"><i style="width:${Math.round(sl.pct * 100)}%"></i></div>
         </div>
         ${sl.ready
-          ? `<button class="btn small primary" type="button" data-action="bank-claim" data-value="${sl.id}">💰 수령</button>`
+          ? `<button class="mini ghost js-todo" type="button" data-action="goto-todo" aria-label="오늘의 할 일로 이동">📋 할 일</button>`
           : `<button class="mini ghost" type="button" data-action="bank-cancel" data-value="${sl.id}">해지</button>`}
       </div>`).join('')
     : '<div class="tiny dim" style="margin-top:4px">여유 골드를 정기 예금에 예치해 복리 이자를 받으세요. 중도 해지 시 원금은 100% 반환됩니다.</div>';
@@ -494,7 +496,7 @@ export function buildMarketList(ui) {
           const mulTag = rentMul > 1.001 ? ` · <b class="up">임대 ×${rentMul.toFixed(2)}</b>` : '';
           const fav = favSet.has(c.key);
           const bandPct = Math.round((info.bandPos != null ? info.bandPos : 0.5) * 100);
-          return `<div class="mkt${info.news ? ' hot' : ''}">
+          return `<div class="mkt${info.news ? ' hot' : ''}" data-action="land-sheet" data-value="${c.key}" role="button" tabindex="0" aria-label="${esc(c.name)} 매수·매도·예약 열기">
             <div class="m-ico">${c.emoji}</div>
             <div class="m-mid">
               <div class="m-name"><button class="fav-btn${fav ? ' on' : ''}" type="button" data-action="land-fav" data-value="${c.key}" aria-label="관심 매물">${fav ? '★' : '☆'}</button>${esc(c.name)}<span class="m-region">${esc(c.region)}</span>${traitBadge(c.trait)}${seasonal}${newsTag}${lmTag}${leaseTag}</div>
@@ -502,11 +504,7 @@ export function buildMarketList(ui) {
               <div class="m-line dim">평당 시간 +💰${fmt(onePyeongIncome)} · 회수 ${paybackText(c.base / hourlyPerPyeong)}${held > 0 ? ` · <b class="own">보유 ${fmt(held)}평</b>` : ''}${mulTag}</div>
               <div class="m-line dim">잔여 ${fmt(remain)}평${!affordable ? ' · <span style="color:var(--dim)">골드 부족</span>' : ''}</div>
             </div>
-            <div class="m-btns">
-              <button class="mini buy" data-action="land-trade" data-value="${c.key}" data-side="buy" ${affordable ? '' : 'disabled'}>매수</button>
-              <button class="mini sell" data-action="land-trade" data-value="${c.key}" data-side="sell" ${held > 0 ? '' : 'disabled'}>매도</button>
-              <button class="mini ord" type="button" data-action="land-order-open" data-value="${c.key}" data-side="buy" aria-label="지정가 예약">🎯</button>
-            </div>
+            <i class="m-go" aria-hidden="true">⋯</i>
           </div>`;
         })
         .join('') + (shown.length < rows.length

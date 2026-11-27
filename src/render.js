@@ -106,6 +106,7 @@ export class Renderer {
     this.shake = 0;
     this.shakeOn = true; // v4.3 설정 '화면 흔들림' — 끄면 흔들림만 멈춘다
     this.dmgNumbersOn = true; // v7.5.0 설정 '데미지 숫자 표시' — 끄면 전투 피해 숫자만 숨긴다
+    this.dmgStyle = 'simple'; // v8.1.0 기본 '간단' — K/M 축약 + 밀도 조절로 캐릭터가 가려지지 않게
     this.impacts = []; // v4.3 타격 임팩트 플래시(별 모양)·보스/치명타 강조
     this.flash = 0; // 흰색 화면 플래시
     this.redFlash = 0; // 피격 붉은 플래시
@@ -702,17 +703,24 @@ export class Renderer {
 
   addFloater(x, text, crit, kind, color, boost, at) {
     if (!this.dmgNumbersOn && kind !== 'gold' && kind !== 'heal') return;
+    const simple = this.dmgStyle !== 'full';
     const now = Number.isFinite(at) ? at : Date.now();
     // v3.8 다굴: 같은 순간에 여러 마리가 때리면 피해 숫자를 하나로 합쳐 읽기 쉽게 한다
-    if (kind === 'hurt') {
-      const last = this.floaters[this.floaters.length - 1];
-      if (last && last.kind === 'hurt' && now - (last.at || 0) < 190) {
-        last.sum = (last.sum || Number(last.raw) || 0) + (Number(text) || 0);
-        last.raw = last.sum;
-        last.text = fmtDmg(last.sum);
-        last.life = 1;
-        last.at = now;
-        return;
+    // v8.1.0 '간단' 모드: 합치는 창을 320ms 로 넓히고 표시 개수를 40→14로 줄인다
+    if (kind === 'hurt' || kind === 'pet' || kind === 'burn' || kind === 'chain') {
+      const mergeMs = simple ? 320 : 190;
+      for (let i = this.floaters.length - 1; i >= 0 && i >= this.floaters.length - 6; i--) {
+        const last = this.floaters[i];
+        if (!last) break;
+        if ((last.kind === 'hurt' || last.kind === 'pet' || last.kind === 'burn' || last.kind === 'chain') && now - (last.at || 0) < mergeMs) {
+          last.sum = (last.sum || Number(last.raw) || 0) + (Number(text) || 0);
+          last.raw = last.sum;
+          last.text = fmtDmg(last.sum);
+          last.crit = last.crit || !!crit;
+          last.life = 1;
+          last.at = now;
+          return;
+        }
       }
     }
     const rawNum = typeof text === 'number' ? text : Number(text);
@@ -720,7 +728,7 @@ export class Renderer {
       x: x + (Math.random() - 0.5) * 18,
       y: (Math.random() - 0.5) * 14,
       raw: Number.isFinite(rawNum) ? rawNum : 0,
-      sum: kind === 'hurt' && Number.isFinite(rawNum) ? rawNum : 0,
+      sum: (kind === 'hurt' || kind === 'pet' || kind === 'burn' || kind === 'chain') && Number.isFinite(rawNum) ? rawNum : 0,
       text: fmtDmg(text),
       crit,
       kind,
@@ -731,7 +739,8 @@ export class Renderer {
       vx: (Math.random() - 0.5) * 32,
       vy: crit ? -86 : -62,
     });
-    if (this.floaters.length > 40) this.floaters.shift();
+    const cap = simple ? 14 : 40;
+    if (this.floaters.length > cap) this.floaters.shift();
   }
 
   /* ─────────── v4.3 타격 임팩트 플래시 ───────────
@@ -3042,7 +3051,11 @@ export class Renderer {
       ctx.globalAlpha = Math.min(1, f.life * 1.7);
       ctx.textAlign = 'center';
       // v3.8 다굴 · v7.5.0 축약: 여러 숫자가 동시에 뜨므로 도트/펫은 더 작게, 치명타는 선명하게
-      const base = (f.crit ? 24 : f.kind === 'gold' ? 12 : f.kind === 'pet' || f.kind === 'burn' || f.kind === 'chain' ? 11 : f.kind === 'heal' ? 15 : f.kind === 'hurt' ? 14 : 13.5) * (f.boost || 1);
+      // v8.1.0 '간단' 모드: 기본 크기를 줄여 캐릭터 위를 숫자가 덮지 않게 한다
+      const small = this.dmgStyle !== 'full';
+      const base = (f.crit ? 24 : f.kind === 'gold' ? 12 : f.kind === 'pet' || f.kind === 'burn' || f.kind === 'chain' ? 11 : f.kind === 'heal' ? 15 : f.kind === 'hurt' ? 14 : 13.5)
+        * (f.boost || 1)
+        * (small && f.kind !== 'gold' && f.kind !== 'crit' ? 0.82 : 1);
       const pop = f.age < 130 ? 1 + (1 - f.age / 130) * 0.5 : 1;
       const size = base * Math.max(0.8, sc) * pop;
       if (f.crit) {

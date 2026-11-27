@@ -105,10 +105,10 @@ export function guildRaidCard(ui) {
   const medals = Math.max(0, Math.floor(Number(s.invasion && s.invasion.medals) || 0));
 
   const phaseBtns = st.phases.map((ph) => `
-    <button class="rp-chip${ph.claimed ? ' done' : ph.claimable ? ' ready' : ''}" type="button" data-action="raid-claim" data-value="${ph.idx}" ${ph.claimable ? '' : 'disabled'}>
+    <div class="rp-chip${ph.claimed ? ' done' : ph.claimable ? ' ready' : ''}">
       <div>${ph.pct}%</div>
-      <small>${ph.claimed ? '수령✓' : ph.claimable ? '🎁받기' : ph.legend ? '👑전설' : ph.medals ? '🏅훈장' : ph.points ? `✨${ph.points}P` : `💎${ph.shards}`}</small>
-    </button>`).join('');
+      <small>${ph.claimed ? '수령✓' : ph.claimable ? '🎁 대기' : ph.legend ? '👑전설' : ph.medals ? '🏅훈장' : ph.points ? `✨${ph.points}P` : `💎${ph.shards}`}</small>
+    </div>`).join('');
 
   const knCells = KNIGHTS.map((k) => {
     const lv = knightLevel(s, k.id);
@@ -144,6 +144,7 @@ export function guildRaidCard(ui) {
         ${st.defeated ? '🏆 이번 주 거대 보스 완전 토벌!' : st.leftTickets > 0 ? `⚔️ 기사단 합동 일제 공격! (남은 ${st.leftTickets}회)` : '⏱ 오늘 출격 완료 · 내일 자정 충전'}
       </button>
       <div class="raid-phases">${phaseBtns}</div>
+      ${st.readyCount > 0 ? `<div class="claim-note ready"><span>🎁 레이드 ${st.readyCount}개 상자 수령 대기</span><button class="mini ghost js-todo" type="button" data-action="goto-todo">📋 할 일</button></div>` : ''}
     </div>
     <div class="knight-grid">${knCells}</div>
   </div>`;
@@ -159,21 +160,22 @@ export function passCard(ui) {
       : t.milestone
         ? `✨${t.points}P 🏅1<br>💎${t.shards}`
         : `💰${formatGold(t.gold)}<br>💎${t.shards}`;
-    const act = t.claimable ? ` data-action="pass-claim" data-value="${t.lv}"` : ' disabled';
-    return `<button class="pass-cell ${cls}" type="button"${act}>
+    return `<div class="pass-cell ${cls}">
       <b>Lv.${t.lv}${t.claimed ? ' ✓' : ''}</b>
-      <span>${t.claimable ? '🎁 받기' : rw}</span>
-    </button>`;
+      <span>${t.claimable ? '🎁 수령 대기' : rw}</span>
+    </div>`;
   }).join('');
   return `
   <div class="card pass-card${p.readyCount ? ' ready' : ''}" id="passCard" data-fold="pass">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">🎖️</span>영지 성장 패스<small>${p.season} · 무료 Lv.${p.lv}/${p.maxLv}</small></div>
-      ${p.readyCount > 0 ? `<button class="mini up" type="button" data-action="pass-claim-all">🎁 ${p.readyCount}개 일괄</button>` : `<span class="tiny dim">${p.curXp}/${p.needXp} XP</span>`}
+      ${p.readyCount > 0
+        ? '<button class="mini up" type="button" data-action="goto-todo">📋 ' + p.readyCount + '단계 수령</button>'
+        : `<span class="tiny dim">${p.curXp}/${p.needXp} XP</span>`}
     </div>
     <div class="prog tiny-prog${p.readyCount ? ' gold' : ''}" style="margin:4px 0 4px"><i style="width:${Math.round(p.pct * 100)}%"></i></div>
     <div class="pass-strip">${cells}</div>
-    <div class="tiny dim" style="margin-top:4px">사냥·일일퀘·파견·방어전·강화로 무료 XP 획득 · Lv.15/30 전설 확정 · 5단계마다 ✨초월석·🏅훈장</div>
+    <div class="tiny dim" style="margin-top:4px">사냥·일일퀘·파견·방어전·강화로 무료 XP 획득 · Lv.15/30 전설 확정 · 5단계마다 ✨초월석·🏅훈장 · 수령은 📋 오늘의 할 일에서</div>
   </div>`;
 }
 

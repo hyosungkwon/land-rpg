@@ -139,6 +139,7 @@ class App {
     this.renderer.effects = this.s.effects !== false;
     this.renderer.shakeOn = this.s.screenShake !== false; // v4.3 화면 흔들림 설정
     this.renderer.dmgNumbersOn = this.s.dmgNumbers !== false; // v7.5.0 데미지 숫자 표시 설정
+    this.renderer.dmgStyle = this.s.dmgStyle === 'full' ? 'full' : 'simple'; // v8.1.0 피해 숫자 '간단' 기본
     this.sound = new GameSound(this.s.soundOn !== false);
     this.renderer.onLoot = (kind) => this.sound.coin(kind);
     this.ui = new UI(this);
@@ -1312,6 +1313,16 @@ class App {
         this.ui.render();
         this.ui.toast(this.s.dmgNumbers ? '🔢 데미지 숫자 켜짐' : '데미지 숫자 꺼짐');
       },
+      // v8.1.0: 피해 숫자 밀도('간단' 기본 / '자세히')
+      setDmgStyle: (style) => {
+        this.s.dmgStyle = style === 'full' ? 'full' : 'simple';
+        if (this.s.dmgStyle === 'full' && this.s.dmgNumbers === false) this.s.dmgNumbers = true;
+        this.renderer.dmgStyle = this.s.dmgStyle;
+        this.renderer.dmgNumbersOn = this.s.dmgNumbers !== false;
+        this.save();
+        this.ui.render();
+        this.ui.toast(this.s.dmgStyle === 'full' ? '🔢 피해 숫자 — 자세히 (모든 타격)' : '🔢 피해 숫자 — 간단 (K/M 축약 · 밀도 낮춤)');
+      },
       toggleSound: () => {
         this.s.soundOn = this.s.soundOn === false;
         this.sound.setEnabled(this.s.soundOn);
@@ -1589,6 +1600,7 @@ class App {
 
       /* ── 부동산 ── */
       landTrade: (key, side) => this.openLandTrade(key, side),
+      landSheet: (key) => this.openLandSheet(key),
       landMore: () => {
         this.s.land.page = Math.max(1, Math.floor(Number(this.s.land.page) || 1)) + 1;
         this.ui.render();
@@ -2378,6 +2390,40 @@ class App {
   }
 
   /* ───────────── 부동산 거래 모달 ───────────── */
+  /** v8.1.0 📋 매물 행 탭 액션시트 — 229개 목록의 행마다 붙어 있던 매수/매도/예약 3버튼을 한 번에 접는다 */
+  openLandSheet(key) {
+    const city = CITY_BY_KEY[key];
+    if (!city) return;
+    const now = Date.now();
+    const held = Math.floor(Number(this.s.land.owned[key]) || 0);
+    const info = priceInfo(city, now);
+    const remain = Math.max(0, city.supply - held);
+    const affordable = this.s.gold >= info.price;
+    const hourly = city.rentPerMin * 60;
+    const fav = Array.isArray(this.s.land.favorites) && this.s.land.favorites.includes(key);
+    const tr = info.trend >= 0 ? `▲${info.trend.toFixed(1)}%` : `▼${Math.abs(info.trend).toFixed(1)}%`;
+    const body = `
+      <div class="tsum">
+        <div><span>현재가</span><b>💰${Math.round(info.price).toLocaleString()}/평 ${tr}</b></div>
+        <div><span>보유 · 잔여</span><b>${held.toLocaleString()}평 · ${remain.toLocaleString()}평</b></div>
+        <div><span>평당 시간 임대</span><b>+💰${Math.round(hourly).toLocaleString()}/h</b></div>
+        <div><span>보유 골드</span><b>💰${formatGold(this.s.gold)}</b></div>
+        <div><span>체감 위치</span><b>${esc(info.bandLabel || '보통')} (${Math.round((info.bandPos != null ? info.bandPos : 0.5) * 100)}%)</b></div>
+      </div>
+      <div class="sheet-acts">
+        <button class="btn ${affordable && remain > 0 ? 'primary' : 'ghost'} block" type="button" data-action="land-trade" data-value="${key}" data-side="buy" ${affordable && remain > 0 ? '' : 'disabled'}>🏠 매수${affordable ? '' : ' — 골드 부족'}</button>
+        <button class="btn ${held > 0 ? 'ghost' : 'ghost'} block" type="button" data-action="land-trade" data-value="${key}" data-side="sell" ${held > 0 ? '' : 'disabled'}>💰 매도${held > 0 ? '' : ' — 보유 없음'}</button>
+        <button class="btn ghost block" type="button" data-action="land-order-open" data-value="${key}" data-side="buy">🎯 지정가 예약</button>
+      </div>
+      <button class="mini ghost block" style="margin-top:8px" type="button" data-action="land-fav" data-value="${key}">${fav ? '★ 관심 해제' : '☆ 관심 등록'}</button>`;
+    this.ui.modal({
+      title: `${city.emoji} ${esc(city.name)}`,
+      sub: `${esc(city.region)} · ${esc(city.tierLabel || '')} · 거래세 ${(LAND.feeRate * 100).toFixed(1)}%`,
+      body,
+      actions: [{ label: '닫기', style: 'ghost', onClick: () => {} }],
+    });
+  }
+
   openLandTrade(key, side) {
     const city = CITY_BY_KEY[key];
     if (!city) return;
@@ -2923,6 +2969,7 @@ class App {
       this.renderer.effects = this.s.effects !== false;
       this.renderer.shakeOn = this.s.screenShake !== false;
       this.renderer.dmgNumbersOn = this.s.dmgNumbers !== false;
+      this.renderer.dmgStyle = this.s.dmgStyle === 'full' ? 'full' : 'simple';
     }
     try { this.sound.setEnabled(this.s.soundOn !== false); } catch (e) { /* ignore */ }
     this._newsKey = undefined;

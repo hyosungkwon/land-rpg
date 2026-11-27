@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "8.0.0"
+EXPECTED_VER = "8.1.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui.js", "src/sound.js"]
 
@@ -1083,9 +1083,9 @@ def main():
       };
     """)
     ok(tpl3["bad"] is False, "v3.3 템플릿에 undefined/NaN 누출 없음")
-    ok("🎯" in tpl3["hunt"] and "claim-quest" in tpl3["hunt"] and "보상 받기" in tpl3["hunt"], "사냥 탭 — 미션 카드·진행도·보상 수령 버튼", "")
+    ok("🎯" in tpl3["hunt"] and "goto-todo" in tpl3["hunt"] and "claim-note" in tpl3["hunt"], "사냥 탭 — 미션 카드·진행도 + 허브 수령 동선(v8.1.0)", "")
     ok('data-action="open-codex"' in tpl3["hunt"] and 'data-action="open-achievements"' in tpl3["hunt"], "사냥 탭 — 도감·업적 진입 버튼", "")
-    ok("도감 · 업적" in tpl3["settings"] and "도감 열기" in tpl3["settings"], "설정 탭 — 도감·업적 카드", "")
+    ok("도감 · 업적" in tpl3["settings"] and 'data-action="open-codex"' in tpl3["settings"], "설정 탭 — 도감·업적 바로가기 링크(v8.1.0 다이어트)", "")
     ok("시즌 완료" in tpl3["huntDone"], "미션 모두 완료 시 완료 상태 표시", "")
 
     qsrc = read("src/quests.js")
@@ -1098,7 +1098,7 @@ def main():
     ok("'./src/quests.js'" in read("sw.js"), "sw.js 프리캐시에 quests.js 포함")
     ok(all(x in qsrc for x in ["QUESTS", "ACHIEVEMENTS", "codexStats", "claimQuest", "claimAchievement", "collectionBonus"]), "quests.js 모듈 구성")
     ok(all(x in appsrc2 for x in ["claimQuest", "claimAchievement", "showCodex", "showAchievements", "codexGear", "codexCity"]), "미션·업적·도감 액션 연결(app.js)")
-    ok(all(x in uisrc2 for x in ['data-action="claim-quest"', 'data-action="open-codex"', 'data-action="open-achievements"', "case 'claim-achievement'"]) and 'data-action="claim-achievement"' in appsrc2, "미션·업적·도감 버튼 연결(ui.js·app.js)")
+    ok(all(x in uisrc2 for x in ['data-action="goto-todo"', 'data-action="open-codex"', 'data-action="open-achievements"', "case 'claim-achievement'"]) and 'data-action="claim-achievement"' in appsrc2, "미션·업적·도감 버튼 연결(ui.js·app.js) — 미션 보상은 허브로")
     ok("questCard" in uisrc2 and "tplHunt" in uisrc2, "사냥 탭 미션 카드 렌더")
     ok("codexMeet" in cbsrc and "codexKill" in cbsrc, "전투 중 몬스터 도감 해금·처치 기록")
     ok("collectionBonus" in stsrc and "normalizeQuestState" in stsrc and "normalizeCodex" in stsrc, "state 저장 정규화·calcStats 수집 보너스")
@@ -2067,8 +2067,8 @@ def main():
     ok(all(x in subs["battle"] for x in ["전투 정보", "전투 스탯", "피해 감소", "자연 회복", "골드 획득", "강화석 드롭", "강격", "전투 기록", "CP", 'data-action="toggle-auto"']), "전투 탭 — 전투 정보 1장(스탯·DPS·CP) + 스킬 + 펫 1줄")
     ok("dps-hero" in subs["battle"] and "toggle-fold" in subs["battle"] and 'data-live="live-dps"' in subs["battle"], "전투 정보 1줄 요약 + 접어서 DPS/스탯 펼치기")
     ok(all(x in subs["challenge"] for x in ["영지 침공 방어전", "황금 던전", "도전의 탑", "일일 보스", "무한 균열", "기사단", 'data-action="invasion"', 'data-action="dungeon"', 'data-action="tower"', 'data-action="daily"', 'data-action="rift-start"', 'data-action="raid-attack"']), "도전 탭 — 침공·던전·탑·일일보스·균열·레이드 6종")
-    ok(all(x in subs["mission"] for x in ["오늘의 할 일", "7일 출석 체크", "영지 성장 패스", "미션", "도감·업적", 'data-action="todo-claim-all"', 'data-action="claim-quest"', 'data-action="open-codex"', 'data-action="open-achievements"']), "미션 탭 — 할 일 허브 + 출석·패스·미션·도감")
-    ok("황금 던전" not in subs["battle"] and "전투 정보" not in subs["challenge"] and "claim-quest" not in subs["battle"] and "황금 던전" not in subs["mission"] and "claim-quest" not in subs["challenge"], "각 서브 탭이 자기 카드만 싣는다(중복·스크롤 방지)")
+    ok(all(x in subs["mission"] for x in ["오늘의 할 일", "7일 출석 체크", "영지 성장 패스", "미션", "도감·업적", 'data-action="todo-claim-all"', 'data-action="goto-todo"', 'data-action="open-codex"', 'data-action="open-achievements"']), "미션 탭 — 할 일 허브 + 출석·패스·미션·도감(v8.1.0 수령 일원화)")
+    ok("황금 던전" not in subs["battle"] and "전투 정보" not in subs["challenge"] and "todo-claim-all" not in subs["battle"] and "황금 던전" not in subs["mission"] and "todo-claim-all" not in subs["challenge"], "각 서브 탭이 자기 카드만 싣는다(중복·스크롤 방지)")
     ok('class="subtab active" type="button" role="tab" aria-selected="true" data-action="hunt-sub" data-value="battle"' in subs["fallback"], "잘못된 서브 값은 전투로 복구")
     ok(subs["bad"] == {}, "서브 탭 3종에 undefined/NaN 누출 없음", json.dumps(subs["bad"]))
     ok(subs["badgeAttrs"] == [1, 1, 1], "세 서브 탭 모두 알림 배지 자리 보유", json.dumps(subs["badgeAttrs"]))
@@ -3568,14 +3568,14 @@ def main():
     ok(tpl45["bad"] is False, "v4.5 템플릿에 undefined/NaN 누출 없음")
     ok("일일 보스" in tpl45["growth"] and 'data-action="daily"' in tpl45["growth"] and "30초 타임어택" in tpl45["growth"], "사냥→성장 탭에 일일 보스 카드·도전 버튼", "")
     ok("도전의 탑" in tpl45["growth"] and tpl45["tiles"] == 10 and "tower-deep" in tpl45["growth"] and "심층" in tpl45["growth"], "도전의 탑 카드 — 고정 10타일 + 심층 표시", json.dumps({"tiles": tpl45["tiles"]}))
-    ok('data-action="tower-sweep"' in tpl45["growth"] and "일일 소탕" in tpl45["growth"], "탑 카드에 일일 소탕 버튼", "")
+    ok('data-action="goto-todo"' in tpl45["growth"] and "소탕" in tpl45["growth"], "탑 카드 소탕 상태 → 허브 수령 동선(v8.1.0)", "")
     ok("최고 12층" in tpl45["growth"] and "13층" in tpl45["growth"] and "최고" in tpl45["growth"], "심층 진행·다음 층 표시", "")
     ok("진행 중" in tpl45["growing"] and ("12345" in tpl45["growing"] or "12,345" in tpl45["growing"]) and "일일 보스" in tpl45["growing"], "일일 보스 진행 중 카드(누적 피해)", "")
     ok("일일 보스" in tpl45["settings"] and ("51234" in tpl45["settings"] or "51,234" in tpl45["settings"]) and "최고 12/200층" in tpl45["settings"], "설정 기록에 일일 보스·심층 최고 층", "")
 
     usrc45 = read("src/ui.js"); asrc45 = read("app.js"); rsrc45 = read("src/render.js"); css45 = read("style.css")
     ok(os.path.exists(os.path.join(ROOT, "src/daily.js")) and "'./src/daily.js'" in read("sw.js"), "src/daily.js 존재 · 서비스워커 프리캐시", "")
-    ok(all(x in usrc45 for x in ['data-action="daily"', 'data-action="tower-sweep"', "dailyBossCard", "tower-deep"]), "ui.js — 일일 보스 카드·소탕 버튼", "")
+    ok(all(x in usrc45 for x in ['data-action="daily"', 'data-action="goto-todo"', "dailyBossCard", "tower-deep"]), "ui.js — 일일 보스 카드·소탕 허브 동선", "")
     ok(all(x in asrc45 for x in ["enterDaily", "claimTowerSweep", "showDailyResult", "dailyEnd", "dailyStart", "towerSweepClaim"]), "app.js — 일일 보스 입장·결과·소탕 액션", "")
     ok(all(x in rsrc45 for x in ["drawDailyHud", "dailyStart", "dailyEnd", "dailyGradeAt"]), "render.js — 일일 보스 HUD·연출", "")
     ok(all(x in css45 for x in [".daily-card", ".daily-result-grade", ".tower-deep", ".mini.sweep", ".tower-sec"]), "style.css — 일일 보스·심층 스타일", "")
@@ -4721,7 +4721,7 @@ def main():
       const h = __huntSub(ui, 'mission');
       const badges = __badges(ui);
       return {
-        hasDq: h.includes('일일 퀘스트') && h.includes('data-action="claim-daily-quest"') && h.includes('data-action="claim-daily-quest-bonus"'),
+        hasDq: h.includes('일일 퀘스트') && h.includes('claim-note') && h.includes('올클리어'),
         hasCodexV2: h.includes('장비 도감') && h.includes('펫 진화'),
         badgeQuest: badges.mission,
         bad: /undefined|NaN|\\[object Object\\]/.test(h),
@@ -5058,8 +5058,8 @@ def main():
       const qHtml = __huntSub(ui, 'mission');
       const gHtml = __huntSub(ui, 'challenge');
       return {
-        hasAtt: qHtml.includes('7일 출석 체크') && qHtml.includes('data-action="claim-attendance"') && qHtml.includes('7일차'),
-        hasWb: gHtml.includes('주간 보스 챌린지') && gHtml.includes('data-action="claim-weekly-milestone"'),
+        hasAtt: qHtml.includes('7일 출석 체크') && qHtml.includes('claim-note') && qHtml.includes('일차'),
+        hasWb: gHtml.includes('주간 보스 챌린지') && gHtml.includes('claim-note') && gHtml.includes('수령 대기'),
         bad: /undefined|NaN|\\[object Object\\]/.test(qHtml + gHtml),
       };
     """)
@@ -5571,7 +5571,7 @@ def main():
       const mkt = __landSub(ui, 'market');
       const event = __landSub(ui, 'event');
       return {
-        ok: home.includes('investDashboardCard') && home.includes('chart-svg') && event.includes('limitOrdersCard') && mkt.includes('data-action="land-order-open"'),
+        ok: home.includes('investDashboardCard') && home.includes('chart-svg') && event.includes('limitOrdersCard') && mkt.includes('data-action="land-sheet"'),
         bad: /undefined|NaN|\\[object Object\\]/.test(home + mkt),
       };
     """)
@@ -5755,7 +5755,7 @@ def main():
       const ui = { s, battle: b, app: { buffs: {} }, logs: [], tab: 'hunt', huntSub: 'mission', el: {}, install: { hidden: true } };
       const html = __huntSub(ui, 'mission') + __gearSub(ui, 'collect');
       return {
-        ok: html.includes('passCard') && html.includes('titleCard') && html.includes('data-action="pass-claim-all"') && html.includes('data-action="title-equip"'),
+        ok: html.includes('passCard') && html.includes('titleCard') && html.includes('data-action="goto-todo"') && html.includes('data-action="title-equip"'),
         bad: /undefined|NaN|\\[object Object\\]/.test(html),
       };
     """)
@@ -6195,6 +6195,66 @@ def main():
     ok("case 'toggle-fold': this.toggleFold(v); break;" in hud80 and "applyFolds()" in hud80 and "DEFAULT_COLLAPSED" in hud80, "카드 ▸ 접기 — 기본 접힘 목록·DOM 토글(재렌더 없이)")
     idx80 = read("index.html")
     ok("<b>사냥</b>" in idx80 and "<b>성장</b>" in idx80 and "<b>부동산</b>" in idx80 and "<b>설정</b>" in idx80, "하단 탭 라벨 — 사냥/성장/부동산/설정")
+
+    # ── 48) v8.1.0 💸 보상 수령 일원화 · 설정 다이어트 · 매물 액션시트 · 전투 HUD 1줄 ──
+    section("v8.1.0 보상 수령 일원화 · 설정 정보 카드 · 매물 액션시트 · 전투 HUD 1줄")
+    st81 = js(ctx, """
+      const d = defaultState(0);
+      const keep = normalizeState({ dmgStyle: 'full' }, 0);
+      const bad = normalizeState({ dmgStyle: 'x' }, 0);
+      const legacy = normalizeState({ dmgNumbers: false }, 0);
+      return { def: d.dmgStyle, keep: keep.dmgStyle, bad: bad.dmgStyle, legacy: legacy.dmgStyle, legacyOff: legacy.dmgNumbers };
+    """)
+    ok(st81["def"] == "simple" and st81["keep"] == "full" and st81["bad"] == "simple" and st81["legacy"] == "simple", "피해 숫자 밀도 dmgStyle 기본 '간단' · 저장 유지 · 손상/구버전 마이그레이션", json.dumps(st81))
+
+    ui81 = js(ctx2, """
+      const now = Date.now();
+      const s = defaultState(now);
+      s.gold = 500000; s.stage = 7; s.level = 12; s.maxStage = 7; s.peakStage = 7;
+      for (const c of CITIES.slice(0, 6)) s.land.owned[c.key] = 30;
+      trackDailyQuest(s, 'kills', 200);
+      recordWeeklyBoss(s, 99999, 2.0, now);
+      addPassXp(s, 400, now);
+      const buffs = computeBuffs(s, now);
+      const ui = { s, battle: { stats: calcStats(s, buffs), def: stageDef(7), boss: null, player: { hp: 100 } }, app: { buffs }, logs: [], tab: 'hunt', huntSub: 'mission', el: {}, install: { canPrompt: true, hidden: false } };
+      const mission = __huntSub(ui, 'mission');
+      const challenge = __huntSub(ui, 'challenge');
+      s.land.sub = 'event'; const event = __tpls.land(ui);
+      s.land.sub = 'market'; const mkt = __tpls.land(ui);
+      const list = __tpls.market(ui).html;
+      const settings = __tpls.settings(ui);
+      const gone = ['claim-attendance', 'claim-daily-quest', 'claim-quest', 'pass-claim', 'claim-weekly-milestone'];
+      const landGone = ['bank-claim', 'exp-claim', 'exp-claim-all'];
+      return {
+        missionClaims: gone.filter((a) => mission.includes('data-action="' + a + '"')),
+        landClaims: landGone.filter((a) => event.includes('data-action="' + a + '"')),
+        towerSweep: challenge.includes('data-action="tower-sweep"'),
+        raidClaim: challenge.includes('data-action="raid-claim"'),
+        hub: mission.includes('todoHubCard') && mission.includes('data-action="todo-claim-all"'),
+        jump: (mission + challenge + event + settings).includes('data-action="goto-todo"'),
+        infoHead: settings.indexOf('총자산') < settings.indexOf('id="fold-info"') && settings.indexOf('id="fold-info"') < settings.indexOf('총 처치'),
+        infoFold: settings.includes('data-action="toggle-fold" data-value="info"'),
+        installLine: (settings.match(/data-action="install"/g) || []).length,
+        installCard: settings.includes('install-card'),
+        dmgChips: settings.includes('data-action="dmg-style" data-value="simple"') && settings.includes('data-action="dmg-style" data-value="full"'),
+        mktSheet: (list.match(/data-action="land-sheet"/g) || []).length,
+        mktTrade: (list.match(/data-action="land-trade"/g) || []).length,
+        holdSheet: mkt.includes('data-action="land-sheet"'),
+        bad: /undefined|NaN|\\[object Object\\]/.test(mission + challenge + event + mkt + list + settings),
+      };
+    """)
+    ok(ui81["missionClaims"] == [] and ui81["landClaims"] == [] and ui81["towerSweep"] is False and ui81["raidClaim"] is False, "개별 '받기' 버튼 제거 — 출석·패스·일일퀘·미션·주간보스·레이드·탑소탕·은행·파견", json.dumps({k: ui81[k] for k in ["missionClaims", "landClaims", "towerSweep", "raidClaim"]}))
+    ok(ui81["hub"] and ui81["jump"] and ui81["bad"] is False, "오늘의 할 일 허브 원탭 일괄 수령 + 각 카드의 허브 바로가기(goto-todo)", json.dumps({"hub": ui81["hub"], "jump": ui81["jump"], "bad": ui81["bad"]}))
+    ok(ui81["infoHead"] and ui81["infoFold"], "설정 정보 카드 — 기본 3줄 + ▸ 펼치기(내 기록+앱 정보 1장)", json.dumps({"head": ui81["infoHead"], "fold": ui81["infoFold"]}))
+    ok(ui81["installLine"] == 1 and ui81["installCard"] is False and ui81["dmgChips"], "설치 카드 → 설정 하단 1줄 링크 · 피해 숫자 밀도 칩(간단/자세히)", json.dumps({k: ui81[k] for k in ["installLine", "installCard", "dmgChips"]}))
+    ok(ui81["mktSheet"] >= 5 and ui81["mktTrade"] == 0 and ui81["holdSheet"], "매물·보유 목록 행 탭 액션시트(land-sheet) — 행마다 매수/매도/예약 3버튼 제거", json.dumps({k: ui81[k] for k in ["mktSheet", "mktTrade", "holdSheet"]}))
+    app81 = read("app.js"); idx81 = read("index.html"); css81 = read("style.css"); r81 = read("src/render.js")
+    ok("openLandSheet(key)" in app81 and "landSheet: (key) => this.openLandSheet(key)" in app81 and "지정가 예약" in app81 and 'data-action="land-trade"' in app81, "app.js — 매물 액션시트(매수·매도·지정가 예약) 모달", "")
+    ok(idx81.index('class="stage-bottom"') < idx81.index('id="battleBuffBar"') and idx81.count('id="battleBuffBar"') == 1, "전투 상단 버프 pill → 캔버스 하단 1줄(킬도트와 같은 줄)", "")
+    ok(".sb-line {" in css81 and ".killbar { flex: 0 0 64px" in css81, "style.css — 버프 pill + 킬도트 1줄(sb-line) 배치", "")
+    ok("this.dmgStyle = 'simple'" in r81 and "cap = simple ? 14 : 40" in r81 and "mergeMs = simple ? 320 : 190" in r81, "render.js — 피해 숫자 '간단' 기본(합치기 320ms · 최대 14개 · 작은 크기)", "")
+    ok("case 'dmg-style': actions.setDmgStyle(v); break;" in read("src/ui.js") and "setDmgStyle: (style)" in app81, "ui.js · app.js — 피해 숫자 밀도 설정 배선", "")
+
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

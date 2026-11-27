@@ -223,6 +223,7 @@ export class UI {
       case 'toggle-effects': actions.toggleEffects(); break;
       case 'toggle-shake': actions.toggleShake(); break;
       case 'toggle-dmg-numbers': actions.toggleDmgNumbers(); break;
+      case 'dmg-style': actions.setDmgStyle(v); break;
       case 'reset-dps-meter': actions.resetDpsMeter(); break;
       case 'guide-jump': {
         const [tTab, tSub] = String(v || '').split(':');
@@ -331,6 +332,7 @@ export class UI {
       case 'raid-attack': actions.attackRaid(); break;
       case 'raid-claim': actions.claimRaidPhase(Number(v)); break;
       case 'open-todo': actions.openTodoHub(); break;
+      case 'goto-todo': this.gotoTodoHub(); break;
       case 'todo-claim-all': actions.claimAllTodo(); break;
       case 'claim-attendance': actions.claimAttendance(); break;
       case 'claim-weekly-milestone': actions.claimWeeklyMilestone(Number(v)); break;
@@ -474,6 +476,22 @@ export class UI {
     this.s.land.page = 1;
     this.el.panel.scrollTop = 0;
     this.render();
+  }
+
+  /** v8.1.0 📋 카드에서 '오늘의 할 일' 허브로 바로 이동 — 모든 수령은 허브 한 곳에서 */
+  gotoTodoHub() {
+    this.huntSub = 'mission';
+    if (this.tab !== 'hunt') {
+      this.tab = 'hunt';
+      [...this.el.tabbar.querySelectorAll('.tab')].forEach((b) => b.classList.toggle('active', b.dataset.tab === 'hunt'));
+    }
+    this.el.panel.scrollTop = 0;
+    this.render();
+    const card = document.getElementById('todoHubCard');
+    if (card) {
+      card.classList.add('todo-flash');
+      setTimeout(() => card.classList.remove('todo-flash'), 1600);
+    }
   }
 
   /** v8.0.0 카드 접힘/펼침 — 세션 상태만 바꾸고 DOM 만 토글(스크롤·입력 유지) */
@@ -1214,7 +1232,7 @@ function towerCard(ui) {
       <span>♾️ 심층</span>
       <b>${deep ? `최고 ${tp.best}층` : '11층부터 무한'}</b>
       <span class="dim">${tp.next ? `다음 ${tp.next}층` : '모든 층 클리어'}</span>
-      <button class="mini sweep" type="button" data-action="tower-sweep" data-live="sweep-btn" ${sw.available ? '' : 'disabled'}>🧹 ${sw.available ? '일일 소탕' : '소탕 완료'}</button>
+      <button class="mini sweep" type="button" data-action="goto-todo" data-live="sweep-btn" ${sw.available ? '' : 'disabled'}>🧹 ${sw.available ? '소탕 수령' : '소탕 완료'}</button>
     </div>
     ${def ? `
     <div class="tower-next">
@@ -1281,11 +1299,10 @@ function weeklyBossBox(s, now) {
       ? `👑전설 · 💎${m.shards} · ✨${m.points}P`
       : `💰${formatGold(m.gold)} · 💎${m.shards} · ✨${m.points}P`;
     const cls = m.claimed ? 'done' : m.claimable ? 'ready' : '';
-    const act = m.claimable ? ` data-action="claim-weekly-milestone" data-value="${m.idx}"` : ' disabled';
-    return `<button class="wb-ms ${cls}" type="button"${act}>
+    return `<div class="wb-ms ${cls}">
       <span class="wb-t"><b>${m.label}</b><small>${Math.round(m.goal * 100)}점</small></span>
-      <span class="wb-r">${m.claimed ? '수령 완료 ✓' : m.claimable ? `🎁 받기 (${rw})` : rw}</span>
-    </button>`;
+      <span class="wb-r">${m.claimed ? '수령 완료 ✓' : m.claimable ? `🎁 수령 대기` : rw}</span>
+    </div>`;
   }).join('');
   return `
   <div class="wb-box${wb.readyCount ? ' ready' : ''}">
@@ -1295,6 +1312,7 @@ function weeklyBossBox(s, now) {
     </div>
     <div class="prog tiny-prog${wb.readyCount ? ' gold' : ''}" style="margin:5px 0 6px"><i style="width:${wb.pct * 100}%"></i></div>
     <div class="wb-grid">${pills}</div>
+    ${wb.readyCount > 0 ? claimNote(true, `🎁 주간 보스 ${wb.readyCount}단계 수령 대기`, '주간 보스') : ''}
   </div>`;
 }
 
@@ -1438,9 +1456,9 @@ function questCard(ui) {
       <div class="q-num">${Math.min(pr.cur, pr.goal).toLocaleString()}<span>/${pr.goal.toLocaleString()}</span></div>
     </div>
     <div class="prog${pr.done ? ' gold' : ''}" style="margin-top:6px"><i style="width:${pr.pct * 100}%"></i></div>
-    <button class="btn block q-claim ${pr.done ? 'ready' : 'ghost'}" type="button" data-action="claim-quest" data-value="${q.id}" ${pr.done ? '' : 'disabled'}>
-      ${pr.done ? `🎁 보상 받기 · ${reward}` : `진행 중 · 보상 ${reward}`}
-    </button>
+    ${pr.done
+      ? claimNote(true, `🎁 미션 보상 수령 가능 · ${reward}`, '미션 받기')
+      : claimNote(false, `진행 중 · 보상 ${reward}`)}
     ${footer}
   </div>`;
 }
@@ -1456,6 +1474,11 @@ const DEFAULT_COLLAPSED = [
   'orders', 'citadel', 'mega',
 ];
 const isCardOpen = (ui, id) => !(ui && ui.collapsed && typeof ui.collapsed.has === 'function' && ui.collapsed.has(id));
+
+/** v8.1.0 — 카드에서 보상 '받기'를 없애고 허브로 모은다. 카드에는 상태 + 이 점프 버튼만 남긴다. */
+const todoJump = (label = '오늘의 할 일') => `<button class="mini ghost js-todo" type="button" data-action="goto-todo">📋 ${label}</button>`;
+/** 수령 가능 상태 한 줄 — 왼쪽 상태 문구, 오른쪽 허브 점프 */
+const claimNote = (ready, text, label) => `<div class="claim-note${ready ? ' ready' : ''}"><span>${text}</span>${ready ? todoJump(label) : ''}</div>`;
 
 /** 접히는 본문 — 접힌 상태에서도 DOM 에는 남긴다(실시간 data-live 갱신 유지) */
 function foldBody(ui, id, html) {
@@ -1774,7 +1797,7 @@ function petLine(ui) {
   const subTxt = subDef ? ` · 보조 ${subDef.emoji} ${esc(petStageInfo(s, subDef.id).name)}` : '';
   const ex = expeditionStatus(s);
   const expLine = ex.readyCount > 0
-    ? `<div class="tiny" style="margin-top:3px;color:var(--gold)">🧭 <b>영지 파견 ${ex.readyCount}팀 탐험 완료!</b> · 관리에서 보상 수령</div>`
+    ? `<div class="tiny" style="margin-top:3px;color:var(--gold)">🧭 <b>영지 파견 ${ex.readyCount}팀 탐험 완료!</b> · 📋 오늘의 할 일에서 수령</div>`
     : ex.activeCount > 0
       ? `<div class="tiny dim" style="margin-top:2px">🧭 영지 파견 ${ex.activeCount}/${ex.maxSlots}팀 탐험 중</div>`
       : '';
@@ -1816,23 +1839,22 @@ function dailyQuestCard(ui) {
         it.claimed
           ? '<span class="tiny" style="color:var(--green)">완료 ✓</span>'
           : it.claimable
-            ? `<button class="btn small primary" type="button" data-action="claim-daily-quest" data-value="${it.id}">수령</button>`
+            ? '<span class="tiny" style="color:var(--gold)">🎁 대기</span>'
             : '<span class="tiny dim">진행</span>'
       }</div>
     </div>`).join('');
   const b = dq.bonus;
-  const bonusLabel = dq.bonusClaimed
-    ? '🎁 오늘 올클리어 보너스 수령 완료 ✓'
-    : dq.bonusReady
-      ? `🎁 올클리어 보너스 받기 · 💰${formatGold(b.gold)} 💎${b.shards} ✨${b.points}P`
-      : `🎁 올클리어 (${dq.claimedCount}/${dq.total}) · 💰${formatGold(b.gold)} 💎${b.shards} ✨${b.points}P`;
   return `
   <div class="card dq-card${dq.readyCount ? ' ready' : ''}">
     <div class="card-head">
       <div class="card-title"><span class="t-ico">📅</span>일일 퀘스트<small>${dq.claimedCount}/${dq.total} · ${h}시간 ${m}분 후 리셋</small></div>
     </div>
     <div class="dq-list">${rows}</div>
-    <button class="btn block dq-bonus ${dq.bonusReady ? 'ready' : 'ghost'}" type="button" data-action="claim-daily-quest-bonus" ${dq.bonusReady ? '' : 'disabled'}>${bonusLabel}</button>
+    ${dq.bonusReady
+      ? claimNote(true, `🎁 올클리어 보너스 · 💰${formatGold(b.gold)} 💎${b.shards} ✨${b.points}P`, '일괄 수령')
+      : dq.bonusClaimed
+        ? claimNote(false, '🎁 오늘 올클리어 보너스 수령 완료 ✓')
+        : claimNote(false, `🎁 올클리어 (${dq.claimedCount}/${dq.total}) · 💰${formatGold(b.gold)} 💎${b.shards} ✨${b.points}P`)}
   </div>`;
 }
 
@@ -1890,9 +1912,9 @@ function attendanceCard(ui) {
       <span class="tiny dim">${att.claimedToday ? `${h}시간 ${m}분 후 다음 출석` : `${att.nextDay}일차 수령 가능`}</span>
     </div>
     <div class="att-grid">${cells}</div>
-    <button class="btn block ${att.canClaim ? 'primary' : 'ghost'}" style="margin-top:8px" type="button" data-action="claim-attendance" ${att.canClaim ? '' : 'disabled'}>${
-      att.canClaim ? `🗓️ ${att.nextDay}일차 출석 보상 받기` : '✅ 오늘 출석 완료 · 내일 00:00(KST)에 다시'
-    }</button>
+    ${att.canClaim
+      ? claimNote(true, `🎁 ${att.nextDay}일차 출석 보상 수령 가능`, '출석 받기')
+      : claimNote(false, '✅ 오늘 출석 완료 · 내일 00:00(KST)에 다시')}
   </div>`;
 }
 
@@ -2544,18 +2566,14 @@ function holdingsCard(ui) {
             ? `<span class="pnl ${h.profitPct >= 0 ? 'up' : 'dn'}">${h.profitPct >= 0 ? '+' : ''}${h.profitPct.toFixed(1)}%</span>`
             : '';
           const bandPct = Math.round((h.bandPos != null ? h.bandPos : 0.5) * 100);
-          return `<div class="hold${h.news ? ' hot' : ''}">
+          return `<div class="hold${h.news ? ' hot' : ''}" data-action="land-sheet" data-value="${h.city.key}" role="button" tabindex="0" aria-label="${esc(h.city.name)} 매수·매도·예약 열기">
             <div class="h-ico">${h.city.emoji}</div>
             <div class="h-mid">
               <div class="h-name"><button class="fav-btn${fav ? ' on' : ''}" type="button" data-action="land-fav" data-value="${h.city.key}" aria-label="관심 매물">${fav ? '★' : '☆'}</button>${esc(h.city.name)}<span class="h-region">${esc(h.city.region)}</span>${traitBadge(h.city.trait)}${newsTag}${boomTag}${lmBtn}${leaseTag}</div>
               <div class="h-line"><b>${fmt(h.qty)}평</b><span class="dim"> · 평가 💰${formatGold(h.value)}</span>${pnlTag ? ` ${pnlTag}` : ''}${mulTag ? ` · ${mulTag}` : ''}</div>
               <div class="h-line dim">시간 +💰${formatGold(h.incomePerHour)} · 회수 ${paybackText(payback)} · ${trendHtml(h.trend)} <span class="band-pill ${h.bandLabel === '저점' ? 'lo' : h.bandLabel === '고점' ? 'hi' : ''}">${esc(h.bandLabel || '보통')} ${bandPct}%</span></div>
             </div>
-            <div class="m-btns">
-              <button class="mini buy" data-action="land-trade" data-value="${h.city.key}" data-side="buy">매수</button>
-              <button class="mini sell" data-action="land-trade" data-value="${h.city.key}" data-side="sell">매도</button>
-              <button class="mini ord" type="button" data-action="land-order-open" data-value="${h.city.key}" data-side="sell" aria-label="지정가 예약">🎯</button>
-            </div>
+            <i class="m-go" aria-hidden="true">⋯</i>
           </div>`;
         })
         .join('')
@@ -2658,15 +2676,9 @@ function landBuffDetailCard(ui) {
 function installCard(ui) {
   const st = ui.install;
   if (!st || st.hidden) return '';
+  // v8.1.0: 상시 170px 카드 → 설정 하단 한 줄 링크로 축소
   return `
-  <div class="card install-card">
-    <div class="card-head">
-      <div class="card-title"><span class="t-ico">📲</span>홈 화면에 앱으로 설치<small>${st.canPrompt ? '원클릭 설치' : '방법 안내'}</small></div>
-    </div>
-    <div class="tiny muted">주소창 없이 전체 화면으로 실행되고, 홈 화면 아이콘으로 바로 시작합니다. 오프라인에서도 동작합니다.</div>
-    <button class="btn primary block" style="margin-top:9px" data-action="install">📲 ${st.canPrompt ? '한 번에 앱으로 설치' : '앱으로 설치하는 방법'}</button>
-    <div class="tiny dim" style="margin-top:7px">설치 창이 뜨지 않으면 삼성 인터넷·Chrome 메뉴에서 <b>현재 페이지 추가 → 홈 화면</b>을 선택하세요.</div>
-  </div>`;
+  <button class="btn small ghost block install-link" type="button" data-action="install">📲 홈 화면에 앱으로 설치 <small>${st.canPrompt ? '원클릭' : '방법 안내'}</small></button>`;
 }
 
 /* ══════════════════════════ ☁️ 클라우드 · 🏆 랭킹 (v5.0 모듈화: ui-cloud.js) ══════════════════════════ */
@@ -2686,16 +2698,18 @@ function tplSettings(ui) {
   const petEvoCount = PETS.filter((d) => petEvo(s, d.id) > 0).length;
   const rb = rebirthStatus(s);
 
-  // 정보 카드: '내 기록' + '앱 정보'를 1장으로 통합(기본 3줄, 나머지는 접힘)
+  // 정보 카드: '내 기록' + '앱 정보'를 1장으로 통합 — 기본 3줄만 보이고 나머지는 ▸로 펼친다
+  const infoOpen = isCardOpen(ui, 'info');
   const infoCard = `
-  <div class="card info-card" data-fold="info">
+  <div class="card info-card">
     <div class="card-head">
-      <div class="card-title"><span class="t-ico">📊</span>내 기록 · 앱 정보<small>v${APP_VERSION}</small></div>
+      <div class="card-title"><span class="t-ico">📊</span>정보<small>v${APP_VERSION}</small></div>
       <span class="tiny dim">Lv.${s.level} · S${Math.max(s.peakStage || 1, s.maxStage || 1)} · ♾️${rb.count}회</span>
     </div>
     <div class="kv"><span class="k">최고 스테이지</span><span class="v">S${s.peakStage || s.maxStage} · 이번 회차 S${s.maxStage}</span></div>
     <div class="kv"><span class="k">플레이 시간</span><span class="v">${mins < 60 ? `${mins}분` : `${Math.floor(mins / 60)}시간 ${mins % 60}분`}</span></div>
     <div class="kv"><span class="k">총자산</span><span class="v">💰${formatGold(p.totalAsset)}</span></div>
+    <div class="card-body${infoOpen ? '' : ' hidden'}" id="fold-info">
     <div class="kv"><span class="k">총 처치 · 보스</span><span class="v">${fmt(s.totalKills)} · ${fmt(s.bossKills)}</span></div>
     <div class="kv"><span class="k">누적 사냥 골드</span><span class="v">${formatGold(s.records.totalGold || 0)}</span></div>
     <div class="kv"><span class="k">뽑기 횟수</span><span class="v">${fmt((s.gacha && s.gacha.total) || 0)}회 · 최고 ${rarityName((s.gacha && s.gacha.best) || 'common')}</span></div>
@@ -2714,12 +2728,15 @@ function tplSettings(ui) {
     <div class="kv"><span class="k">랜드마크</span><span class="v">🏛️ ${lms.count}개 · 임대 보너스</span></div>
     <div class="kv"><span class="k">호재 뉴스</span><span class="v">3분마다 갱신 · 기록 ${(s.news && s.news.seen ? s.news.seen.length : 0)}종</span></div>
     <div class="kv"><span class="k">저장 위치</span><span class="v">localStorage</span></div>
-    <div class="row gap6" style="margin-top:9px">
-      <button class="btn small ghost wide" type="button" data-action="open-codex" data-value="monster">📖 도감 열기</button>
-      <button class="btn small ghost wide" type="button" data-action="open-achievements">🏆 업적 ${achClaimed}/${ACHIEVEMENTS.length}${achReady ? ' ⚡' : ''}</button>
-    </div>
     <div class="note" style="margin-top:9px">
       방치 보상은 최대 <b>${ECON.offlineCapHours}시간</b>까지 정산됩니다. 화면을 닫아도 자동으로 저장됩니다.
+    </div>
+    </div>
+    <button class="mini ghost block info-toggle" type="button" data-action="toggle-fold" data-value="info" aria-expanded="${infoOpen ? 'true' : 'false'}"><i class="cv">${infoOpen ? '▾' : '▸'}</i> 전체 기록 · 앱 정보</button>
+    <div class="row gap6" style="margin-top:7px">
+      <button class="mini ghost wide" type="button" data-action="guide-jump" data-value="gear:job">✨ 전직·환생</button>
+      <button class="mini ghost wide" type="button" data-action="open-codex" data-value="monster">📖 도감</button>
+      <button class="mini ghost wide" type="button" data-action="open-achievements">🏆 업적 ${achReady ? '⚡' : ''}</button>
     </div>
   </div>`;
 
@@ -2777,16 +2794,19 @@ function tplSettings(ui) {
       <button class="switch ${s.dmgNumbers !== false ? 'on' : ''}" data-action="toggle-dmg-numbers" aria-label="데미지 숫자 표시 전환"></button>
     </div>
     <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
+      <span class="tiny">피해 숫자 밀도 <span class="dim">기본 '간단'</span></span>
+      <div class="chips dmg-chips">
+        <button class="chip ${s.dmgStyle !== 'full' ? 'on' : ''}" type="button" data-action="dmg-style" data-value="simple">간단</button>
+        <button class="chip ${s.dmgStyle === 'full' ? 'on' : ''}" type="button" data-action="dmg-style" data-value="full">자세히</button>
+      </div>
+    </div>
+    <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
       <span class="tiny">효과음 <span class="dim">타격·코인·보스·뽑기</span></span>
       <button class="switch ${s.soundOn !== false ? 'on' : ''}" data-action="toggle-sound" aria-label="효과음 전환"></button>
     </div>
     <div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
       <span class="tiny">저장 방식</span>
       <span class="tiny" style="color:var(--gold)">이 기기에 자동 저장 (로그인 없음)</span>
-    </div>
-    <div class="row gap6" style="margin-top:9px">
-      <button class="btn small ghost wide" type="button" data-action="guide-jump" data-value="gear:job">✨ 전직·환생</button>
-      <button class="btn small ghost wide" type="button" data-action="open-achievements">🏆 업적</button>
     </div>
     <button class="btn small block" style="margin-top:8px;color:#ffb3b3;border-color:rgba(255,107,107,0.3)" data-action="reset">게임 초기화</button>
   </div>
