@@ -2431,11 +2431,55 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .syn-total b { flex: 1 1 100%; font-size: 10px; color: var(--green); font-weight: 700; line-height: 1.5; }
 
 /* 경매 특별 임대 계약 배지 */
-.tag.lease { color: #ffe0c2; background: rgba(255, 190, 120, 0.14); border-color: rgba(255, 190, 120, 0.36); }
-.btn.gold { background: linear-gradient(135deg, #ffd76a, #dfa11e); color: #241a02; border-color: rgba(255, 224, 150, 0.45); font-weight: 900; }
+.tag.lease { color: #ffe0c2; background: rgba(255, 190, 120, 0.14); border-color: rgba(255, 190, 120, 0.36); }.btn.gold { background: linear-gradient(135deg, #ffd76a, #dfa11e); color: #241a02; border-color: rgba(255, 224, 150, 0.45); font-weight: 900; }
 .ls-tot-k { white-space: nowrap; }
 .syn-card .card-title { flex-wrap: wrap; }
 .syn-card .syn-n { max-width: 58%; overflow: hidden; text-overflow: ellipsis; }
+
+/* ───────────── v8.2.0 🏘️ 부동산 → 사냥 시너지 대시보드 · 복귀 허브 안내 · 첨공 대기 사유 ───────────── */
+.land-dash {
+  padding: 8px 10px 9px;
+  background: linear-gradient(165deg, rgba(185, 139, 255, 0.13), rgba(94, 225, 163, 0.06) 46%, rgba(16, 23, 38, 0.96) 80%);
+  border-color: rgba(185, 139, 255, 0.3);
+}
+.land-dash .card-title small { color: var(--sub); }
+.dash-rent { display: flex; align-items: baseline; gap: 6px; margin-top: 3px; min-width: 0; }
+.dash-rent-k { font-size: 10px; color: var(--dim); font-weight: 800; white-space: nowrap; }
+.dash-rent-v { font-size: 15px; font-weight: 900; color: var(--gold); letter-spacing: -0.3px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dash-rent-acc { margin-left: auto; font-size: 10px; color: var(--dim); white-space: nowrap; }
+.dash-rent-acc b { color: var(--green); font-weight: 800; font-variant-numeric: tabular-nums; }
+.dash-buffs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.dash-buffs.empty { display: block; font-size: 10px; color: var(--dim); line-height: 1.55; }
+.dash-buff { font-size: 9.5px; font-weight: 800; padding: 3px 6px; border-radius: 7px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line-2); color: var(--sub); white-space: nowrap; }
+.dash-buff b { color: var(--green); font-variant-numeric: tabular-nums; }
+.dash-next { margin-top: 7px; padding-top: 6px; border-top: 1px dashed rgba(255, 255, 255, 0.08); }
+.dash-next-top { display: flex; align-items: baseline; gap: 5px; min-width: 0; }
+.dash-next-k { font-size: 9.5px; font-weight: 800; color: var(--dim); white-space: nowrap; flex: 0 0 auto; }
+.dash-next-name { font-size: 11px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dash-next-cnt { margin-left: auto; flex: 0 0 auto; font-size: 9.5px; color: var(--sub); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dash-next-cnt b { color: var(--txt); }
+.dash-next-sub { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 10px; color: var(--sub); min-width: 0; }
+.dash-next-sub span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-next-sub .gold { color: var(--gold); font-weight: 900; }
+.dash-next-sub .mini { flex: 0 0 auto; margin-left: auto; height: 22px; }
+.dash-next-step { margin-top: 2px; }
+.dash-next.done { margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255, 255, 255, 0.08); font-size: 10px; color: var(--green); font-weight: 800; }
+.dash-invest { margin-top: 7px; padding-top: 6px; border-top: 1px dashed rgba(255, 255, 255, 0.08); }
+.dash-invest-h { font-size: 10px; font-weight: 900; color: var(--gold); }
+.dash-invest-h small { font-weight: 700; margin-left: 4px; }
+.dash-invest-btns { display: flex; gap: 5px; margin-top: 5px; }
+.dash-invest-btns .btn { flex: 1 1 0; min-width: 0; padding: 0 4px; font-size: 10px; letter-spacing: -0.4px; min-height: 30px; height: 30px; }
+.dash-invest-btns .btn > :not(svg) { min-width: 0; }
+/* 침공 출격이 막힌 이유 — 진행 중인 전투 이름을 그대로 */
+.inv-busy { margin-top: 4px; color: var(--gold); font-weight: 800; line-height: 1.45; }
+/* 복귀 모달 — 오늘의 할 일 허브 안내 */
+.ret-hub { margin-top: 8px; padding: 8px 9px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line-2); }
+.ret-hub.ready { border-color: rgba(94, 225, 163, 0.42); background: rgba(94, 225, 163, 0.07); }
+.ret-hub-h { font-size: 11px; font-weight: 900; }
+.ret-hub-h b { color: var(--gold); }
+.ret-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 10px; padding: 3px 0; border-bottom: 1px dashed rgba(255, 255, 255, 0.06); }
+.ret-row:last-of-type { border-bottom: 0; }
+.ret-row small { color: var(--dim); flex: 0 0 auto; }
 
 /* ───────────── v4.8 ☁️ 클라우드 세이브 · 🏆 랭킹 ───────────── */
 .cloud-card { border-color: rgba(120, 200, 255, 0.16); }

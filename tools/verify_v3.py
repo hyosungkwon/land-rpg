@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "8.1.0"
+EXPECTED_VER = "8.2.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui.js", "src/sound.js"]
 
@@ -6267,6 +6267,71 @@ def main():
     """)
     ok(hub81["listed"] and any('탑' in c for c in hub81["claimed"]) and hub81["sweepGone"] is False and hub81["gold"], "허브가 탑 일일 소탕을 목록에 올리고 일괄 수령한다(towerSweepInfo.available 필드 불일치 수정)", json.dumps(hub81, ensure_ascii=False))
 
+
+    # ── 49) v8.2.0 🏘️ 부동산↔사냥 시너지 대시보드 · 원탭 분산투자 · 복귀 허브 동선 · 침공 대기 사유 ──
+    section("v8.2.0 시너지 대시보드 · 방치 복귀 허브 동선 · 침공 비활성 사유")
+    dash82 = js(ctx2, """
+      const now = Date.now();
+      function mkState(n, gold) {
+        const s = defaultState(now);
+        s.gold = gold; s.level = 14; s.stage = 9; s.maxStage = 9;
+        for (const c of CITIES.slice(0, n)) s.land.owned[c.key] = 20;
+        s.land.accruedRent = 456.7;
+        return s;
+      }
+      const s = mkState(6, 250000);
+      const buffs = computeBuffs(s, now);
+      const p = portfolioOf(s, now);
+      const ui = { s, battle: { stats: calcStats(s, buffs), boss: null }, app: { buffs } };
+      const home = __landSub(ui, 'home');
+      const dash = landSynergyDashCard(ui);
+      // 다음 세트: 남은 곳이 가장 적은 미완성 권역
+      const sets = regionSetStatus(s.land.owned).filter((st) => !st.complete)
+        .map((st) => ({ id: st.id, left: st.maxNeed - st.held }))
+        .sort((a, b) => a.left - b.left);
+      const nextId = sets[0] ? sets[0].id : null;
+      // 빈 상태: 버프 0 · 원탭 버튼은 그대로
+      const s0 = defaultState(now);
+      const ui0 = { s: s0, battle: { stats: calcStats(s0, {}), boss: null }, app: { buffs: computeBuffs(s0, now) } };
+      const empty = landSynergyDashCard(ui0);
+      // 침공 카드 — 다른 전투가 돌고 있을 때 사유
+      const inv = (b) => invasionCard({ s, battle: b, app: { buffs } });
+      const invFree = inv({ invasion: null, boss: null, tower: null, dungeon: null, daily: null });
+      const invBoss = inv({ invasion: null, boss: { ko: '슬라임 킹' } });
+      const invTower = inv({ invasion: null, boss: null, tower: { floor: 4 } });
+      const invDungeon = inv({ invasion: null, boss: null, tower: null, dungeon: { id: 'gold' } });
+      const invDaily = inv({ invasion: null, boss: null, tower: null, dungeon: null, daily: { boss: 'x' } });
+      const mkt = tplLandMarket(ui);
+      return {
+        homeFirst: home.trim().indexOf('landSynergyDash') > 0 && home.trim().indexOf('landSynergyDash') < home.indexOf('regionMapCard'),
+        rent: dash.includes('시간당 임대') && dash.includes('data-live="income"'),
+        buffs: ['공격', '골드', '치명'].every((k) => dash.includes(k)) && dash.includes('dash-buff'),
+        nextId, nextInDash: !!nextId && dash.includes('data-value="' + nextId + '"') && dash.includes('더 사면 완성'),
+        invest: ['region', 'roi', 'dip'].every((m) => dash.includes('data-action="land-auto-invest" data-value="' + m + '"')),
+        emptyOk: empty.includes('원탭 분산투자') && empty.includes('아직 전투 버프가 없습니다'),
+        freeReady: invFree.includes('방어 출격!') && !invFree.includes('출격 대기'),
+        bossWhy: invBoss.includes('⏳ 보스전 진행 중 · 출격 대기') && invBoss.includes('inv-busy'),
+        towerWhy: invTower.includes('⏳ 도전의 탑 진행 중 · 출격 대기'),
+        dungeonWhy: invDungeon.includes('⏳ 황금 던전 진행 중 · 출격 대기'),
+        dailyWhy: invDaily.includes('⏳ 일일 보스 진행 중 · 출격 대기'),
+        mktHead: mkt.includes('⚡ 원탭 분산투자') && mkt.includes('data-action="land-auto-invest"'),
+        bad: /undefined|NaN|\\[object Object\\]/.test(dash + empty + invFree + invBoss + invTower + invDungeon + invDaily + mkt),
+        rentHr: Math.round(p.incomePerHour),
+      };
+    """)
+    ok(dash82["homeFirst"], "영지 화면 맨 위에 시너지 대시보드(지도보다 먼저)", json.dumps({k: dash82[k] for k in ["homeFirst"]}))
+    ok(dash82["rent"] and dash82["buffs"], "대시보드 — 시간당 임대수익 + 전투 버프(공격·골드·치명 …) 한 카드", json.dumps({k: dash82[k] for k in ["rent", "buffs"]}))
+    ok(dash82["nextInDash"], "대시보드 — 다음 권역 세트(남은 곳)와 그 권역 매물 바로가기", json.dumps(dash82.get("nextId")))
+    ok(dash82["invest"] and dash82["mktHead"], "원탭 분산투자(권역 채우기·ROI TOP5·저점 매수) — 영지 대시보드 + 매물 전면", "")
+    ok(dash82["emptyOk"], "매물 0곳 상태에서도 대시보드가 원탭 분산투자로 안내", "")
+    ok(dash82["freeReady"] and dash82["bossWhy"] and dash82["towerWhy"] and dash82["dungeonWhy"] and dash82["dailyWhy"], "침공 출격 비활성 사유 — 보스전·탑·던전·일일 보스 문구 표시", json.dumps({k: dash82[k] for k in ["freeReady", "bossWhy", "towerWhy", "dungeonWhy", "dailyWhy"]}))
+    ok(dash82["bad"] is False, "v8.2.0 카드에 undefined/NaN 누출 없음", "")
+    app82 = read("app.js")
+    css82 = read("style.css")
+    ok("collectTodoSummary(this.s, this.battle && this.battle.stats, Date.now())" in app82 and "ret-hub" in app82 and "this.ui.gotoTodoHub()" in app82, "app.js — 방치 복귀 모달에 '오늘의 할 일' 대기 건수 + 허브 바로가기(복귀 동선 통일)", "")
+    ok("away >= 10 * 60 * 1000" in app82 and "할 일 ${todoN}건 대기" in app82, "10분 이상 복귀는 같은 모달 · 짧은 복귀는 허브 건수 토스트", "")
+    ok(all(x in css82 for x in [".land-dash {", ".dash-buffs", ".dash-next", ".dash-invest-btns", ".ret-hub", ".inv-busy"]), "style.css — 대시보드·복귀 허브·침공 사유 스타일", "")
+    ok("landSynergyDashCard" in read("src/ui.js") and "landSynergyDashCard" in read("src/ui-land.js") and "landBuffTotals" in read("src/ui-land.js"), "ui.js·ui-land.js — 대시보드 배선 + 같은 landBuffTotals 숫자", "")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

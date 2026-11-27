@@ -1,10 +1,13 @@
 // land-rpg / src/ui-land.js
 // v6.5.0: 부동산 탭 운영·분석 카드(침공·전국 지도·펫 파견·투자 대시보드·지정가 예약·성채·229개 매물 시장) 및 모바일 390px 필터 바 분리 모듈
+// v8.2.0: 영지 화면 맨 위 부동산→사냥 시너지 대시보드(landSynergyDashCard) + 원탭 분산투자 + 침공 출격 대기 사유
 import {
   CITIES, LAND, priceInfo, LANDMARK, landmarkLevel, landmarkRentMul, leasePctOf, formatGold,
+  portfolioOf, computeBuffs,
 } from './land.js';
 import { LIMIT_ORDER_MAX, investmentReport } from './orders.js';
-import { citySetId, regionSetBuffs, SETS_BY_ID } from './region.js';
+import { citySetId, regionSetBuffs, regionSetStatus, SETS_BY_ID } from './region.js';
+import { landBuffTotals } from './synergy.js';
 import {
   EXPEDITION_DURATIONS, expeditionStatus, expeditionPreview, regionMapData,
 } from './expedition.js';
@@ -45,6 +48,87 @@ export const traitBadge = (key) => {
 
 /* v8.0.0: v6.5 의 모바일 섹션 필터 칩(3층 내비)은 제거 — 3서브 탭(영지/매물/이벤트)으로 대체 */
 
+/* ══════════════════ 🏘️ 부동산 → 사냥 시너지 대시보드 (v8.2.0) ══════════════════
+ * 영지 화면 맨 위 한 장 — "지금 내 영지가 사냥에 무엇을 주는가"를 네 줄로 끝낸다.
+ *   ① 보유 영지 N곳 · M평        ② 사냥 전투 버프(공격·골드·치명 …)
+ *   ③ 시간당 임대수익 · 회수 시간  ④ 다음 권역 세트 완성까지 남은 곳
+ * 그리고 그 자리에서 사냥 골드를 부동산으로 붙이는 **원탭 분산투자** 3종.
+ * 숫자는 요약 바·전투 스탯·시너지 상세 카드와 같은 landBuffTotals() 를 쓴다(불일치 0).
+ */
+const DASH_BUFF_ROWS = [
+  ['atkPct', '⚔️', '공격'],
+  ['goldPct', '💰', '골드'],
+  ['critPct', '💥', '치명'],
+  ['critDmgPct', '🎯', '치명피해'],
+  ['cdrPct', '⏱️', '쿨감', '-'],
+  ['bossDmgPct', '👹', '보스'],
+  ['expPct', '📈', '경험'],
+  ['hpPct', '❤️', '체력'],
+  ['dropPct', '🎒', '드롭'],
+];
+
+export function landSynergyDashCard(ui) {
+  const s = ui.s;
+  const p = portfolioOf(s);
+  const buffs = (ui.app && ui.app.buffs) || computeBuffs(s);
+  const tot = landBuffTotals(buffs);
+  const held = p.cities || 0;
+  const sets = regionSetStatus(s.land && s.land.owned);
+  const doneSets = sets.filter((st) => st.complete);
+  // 다음 세트 = 완성(maxNeed)까지 가장 적게 남은 권역
+  const next = sets
+    .filter((st) => !st.complete)
+    .map((st) => Object.assign({}, st, { left: Math.max(0, st.maxNeed - st.held) }))
+    .sort((a, b) => a.left - b.left || b.held / Math.max(1, b.maxNeed) - a.held / Math.max(1, a.maxNeed))[0] || null;
+
+  const chips = DASH_BUFF_ROWS
+    .filter(([k]) => Number(tot[k]) > 0)
+    .map(([k, ico, label, sign]) => `<span class="dash-buff">${ico} ${label} <b>${sign || '+'}${tot[k]}%</b></span>`)
+    .join('');
+  const buffBlock = chips
+    ? `<div class="dash-buffs">${chips}</div>`
+    : `<div class="dash-buffs empty">아직 전투 버프가 없습니다 — 아래 <b>원탭 분산투자</b>로 첫 매물을 사면 공격·골드 버프가 바로 붙습니다.</div>`;
+
+  const nextBlock = next
+    ? `<div class="dash-next">
+        <div class="dash-next-top">
+          <span class="dash-next-k">🗺️ 다음 세트</span>
+          <span class="dash-next-name" style="color:${next.color}">${next.icon} ${esc(next.name)}</span>
+          <span class="dash-next-cnt"><b>${next.held}</b>/${next.maxNeed}곳</span>
+        </div>
+        <div class="prog tiny-prog" style="margin-top:4px"><i style="width:${Math.round((next.held / Math.max(1, next.maxNeed)) * 100)}%;background:linear-gradient(90deg,#2c6ea8,${next.color})"></i></div>
+        <div class="dash-next-sub">
+          <span><b class="gold">${next.left}곳</b> 더 사면 완성 → ${esc(next.masterText || '전투 시너지')}</span>
+          <button class="mini ghost" type="button" data-action="land-map-region" data-value="${next.id}">매물 ▸</button>
+        </div>
+        ${next.nextNeed ? `<div class="dash-next-step tiny dim">다음 단계 ${next.nextNeed}곳 → ${esc(next.nextText.split('→ ')[1] || '')}</div>` : ''}
+      </div>`
+    : `<div class="dash-next done">🗺️ <b>모든 권역 세트 완성 ${doneSets.length}/${sets.length}</b> · 완성 시너지가 전투에 모두 적용 중입니다.</div>`;
+
+  return `
+  <div class="card land-dash" id="landSynergyDash">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🏘️</span>부동산 → 사냥 시너지<small>${held}곳 · ${fmt(p.pyeong)}평</small></div>
+      <span class="tiny dim">사냥 골드 → 매물 → 더 강한 사냥</span>
+    </div>
+    <div class="dash-rent">
+      <span class="dash-rent-k">시간당 임대</span>
+      <b class="dash-rent-v" data-live="income">+💰${formatGold(p.incomePerHour)}/h</b>
+      <span class="dash-rent-acc">회수 <b>${paybackText(p.incomePerHour > 0 ? p.landValue / p.incomePerHour : 0)}</b></span>
+    </div>
+    ${buffBlock}
+    ${nextBlock}
+    <div class="dash-invest">
+      <div class="dash-invest-h">⚡ 원탭 분산투자 <small class="dim">보유 골드 💰${formatGold(s.gold)} · 견적 확인 후 매수</small></div>
+      <div class="dash-invest-btns">
+        <button class="btn small ghost" type="button" data-action="land-auto-invest" data-value="region">🗺️ 권역 채우기</button>
+        <button class="btn small ghost" type="button" data-action="land-auto-invest" data-value="roi">💰 ROI TOP5</button>
+        <button class="btn small ghost" type="button" data-action="land-auto-invest" data-value="dip">📉 저점 매수</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 /* ══════════════════ 🚨 영지 침공 방어전 (v5.11.0) ══════════════════ */
 export function invasionCard(ui) {
   const s = ui.s;
@@ -53,6 +137,9 @@ export function invasionCard(ui) {
   const st = invasionStatus(s, now);
   const live = b && b.invasion;
   const busy = !!(b && (b.invasion || b.tower || b.dungeon || b.daily || b.boss));
+  // v8.2.0 — 다른 전투가 돌고 있어 출격이 막힌 이유를 버튼과 바로 아래에 그대로 적는다
+  const busyWhy = !b ? '' : b.invasion ? '침공 방어전' : b.boss ? '보스전' : b.tower ? '도전의 탑' : b.dungeon ? '황금 던전' : b.daily ? '일일 보스' : '';
+  const blocked = !!(st.available && busy && !live && busyWhy);
   const boomsHtml = st.activeBooms.length
     ? `<div class="inv-booms">${st.activeBooms.slice(0, 3).map((bm) => `<span class="tag boom">🎉 ${esc(bm.city.name)} 임대 +${bm.pct}% (${mmss(bm.leftMs)})</span>`).join('')}</div>`
     : '';
@@ -87,8 +174,9 @@ export function invasionCard(ui) {
     }</div>
     ${boomsHtml}
     <button class="btn small ${st.available && !busy ? 'primary' : 'ghost'} block" style="margin-top:7px" type="button" data-action="invasion" ${!st.available || busy ? 'disabled' : ''}>
-      ${live ? '🚨 방어전 진행 중' : st.available ? `⚔️ ${esc(st.city.name)} 방어 출격!` : '✅ 방어 완료 · 다음 경보 대기'}
+      ${live ? '🚨 방어전 진행 중' : blocked ? `⏳ ${busyWhy} 진행 중 · 출격 대기` : st.available ? `⚔️ ${esc(st.city.name)} 방어 출격!` : '✅ 방어 완료 · 다음 경보 대기'}
     </button>
+    ${blocked ? `<div class="tiny inv-busy" data-live="inv-busy">⏳ ${busyWhy}이(가) 끝나면 바로 출격할 수 있습니다 (경보는 그동안 유지됩니다)</div>` : ''}
     <div class="tiny dim" style="margin-top:4px">무시하거나 패배해도 보유 매물에는 피해가 없습니다 · 승리 시 30분 호황</div>
   </div>`;
 }
@@ -546,7 +634,8 @@ export function tplLandMarket(ui) {
     </div>
     <div class="chips" style="margin-top:8px">${chips}</div>
     <div class="chips" style="margin-top:5px">${sorts}</div>
-    <div class="row gap6" style="margin-top:7px">
+    <div class="dash-invest-h" style="margin-top:8px">⚡ 원탭 분산투자 <small class="dim">보유 골드로 바로 · 견적 확인 후 매수</small></div>
+    <div class="row gap6" style="margin-top:5px">
       <button class="btn small ghost wide" type="button" data-action="land-auto-invest" data-value="region">🗺️ 권역 채우기</button>
       <button class="btn small ghost wide" type="button" data-action="land-auto-invest" data-value="roi">💰 ROI TOP5</button>
       <button class="btn small ghost wide" type="button" data-action="land-auto-invest" data-value="dip">📉 저점 매수</button>

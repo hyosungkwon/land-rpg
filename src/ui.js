@@ -67,7 +67,7 @@ import { rarityBadge, rarityName, gearSlotCards, gearInventory, gachaCard } from
 import {
   paybackText, trendHtml, traitBadge,
   invasionCard, regionMapCard, expeditionCard, investDashboardCard, limitOrdersCard, citadelCard,
-  bankCard, megaProjectCard, buildMarketList, tplLandMarket,
+  bankCard, megaProjectCard, buildMarketList, tplLandMarket, landSynergyDashCard,
 } from './ui-land.js';
 import { bankStatus } from './bank.js';
 import { invasionStatus } from './invasion.js';
@@ -2522,7 +2522,8 @@ function tplLand(ui) {
  * 지도 + 접힘 카드 5장으로 정리했다. 보유 매물 목록은 '매물' 탭으로 옮겨 영지 첫 화면을 2~3화면으로 줄인다.
  */
 function tplLandHome(ui) {
-  return `${regionMapCard(ui)}
+  return `${landSynergyDashCard(ui)}
+  ${regionMapCard(ui)}
   ${investDashboardCard(ui)}
   ${regionSetCard(ui)}
   ${landmarkCard(ui)}

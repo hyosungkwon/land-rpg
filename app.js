@@ -728,10 +728,18 @@ class App {
           const summary = offlineSummary({ ...this.s, lastActiveAt: this.hiddenAt }, Date.now(), this.buffs);
           if (summary.gold > 0) {
             const ups = applyOffline(this.s, summary);
-            this.ui.toast(`🌙 방치 보상 +💰${summary.gold.toLocaleString()}`, 'gold');
             this.ui.render();
             this.save(true);
             if (ups > 0) this.battle.refreshStats();
+            // v8.2.0 복귀 동선 통일 — 10분 이상 자리를 비웠으면 부트와 같은 '방치 보상 + 오늘의 할 일' 모달,
+            // 짧은 복귀는 토스트 한 줄에 허브 대기 건수까지 붙인다.
+            if (away >= 10 * 60 * 1000) {
+              this.showOfflinePopup(summary, ups);
+            } else {
+              let todoN = 0;
+              try { todoN = collectTodoSummary(this.s, this.battle && this.battle.stats).totalClaimable; } catch (e) { todoN = 0; }
+              this.ui.toast(`🌙 방치 보상 +💰${summary.gold.toLocaleString()}${todoN > 0 ? ` · 📋 할 일 ${todoN}건 대기` : ''}`, 'gold');
+            }
           }
         }
         this.hiddenAt = 0;
@@ -3870,6 +3878,26 @@ class App {
     const capLine = summary.capped
       ? `최대 <b>${ECON.offlineCapHours}시간</b>까지만 정산됩니다 — 더 긴 방치는 이만큼씩만 쌓입니다.`
       : `계속 자리를 비우면 <b>${Math.floor(capLeft / 3600)}시간 ${Math.floor((capLeft % 3600) / 60)}분</b> 더 쌓입니다 (최대 ${ECON.offlineCapHours}시간).`;
+    // v8.2.0 — 복귀 안내에서 바로 '오늘의 할 일 허브'로: 방치 보상 + 허브 + 개별 카드 3중 동선을 한 번에 끝낸다
+    let todo = { totalClaimable: 0, items: [] };
+    try {
+      todo = collectTodoSummary(this.s, this.battle && this.battle.stats, Date.now());
+    } catch (e) { todo = { totalClaimable: 0, items: [] }; }
+    const n = todo.totalClaimable;
+    const todoRows = todo.items.slice(0, 3)
+      .map((it) => `<div class="ret-row"><span>${it.icon} ${esc(it.label)}</span><small>${esc(it.detail)}</small></div>`)
+      .join('');
+    const hubBlock = `<div class="ret-hub${n > 0 ? ' ready' : ''}">
+        <div class="ret-hub-h">📋 오늘의 할 일 ${n > 0 ? `<b>${n}건</b> 수령 대기` : '<span class="dim">— 모두 수령 완료</span>'}</div>
+        ${todoRows || '<div class="tiny dim" style="margin-top:3px">지금 챙길 보상은 없습니다. 사냥을 계속하면 채워집니다.</div>'}
+        <div class="tiny dim" style="margin-top:4px">출석·패스·일일퀘·미션·탑 소탕·은행·파견·레이드를 <b>허브에서 한 번에</b> 받습니다.</div>
+      </div>`;
+    const actions = n > 0
+      ? [
+        { label: `📋 오늘의 할 일 ${n}건 챙기기`, style: 'primary', onClick: () => this.ui.gotoTodoHub() },
+        { label: '닫기', style: 'ghost', onClick: () => {} },
+      ]
+      : [{ label: '확인', style: 'primary', onClick: () => {} }];
     this.ui.modal({
       title: '🌙 방치 보상',
       sub: `${away} 동안 사냥을 계속했습니다 · 시간당 💰${perHour.toLocaleString()}${summary.capped ? ` (최대 ${ECON.offlineCapHours}시간 정산)` : ''}`,
@@ -3882,8 +3910,9 @@ class App {
                <div class="rw"><div class="e">💎</div><div class="v">${summary.shards.toLocaleString()}</div><div class="k">강화석</div></div>
              </div>
              ${levelUps > 0 ? `<div class="note" style="color:var(--green)">⬆️ 레벨 업 +${levelUps} · 스탯이 상승했습니다.</div>` : ''}
-             <div class="note">보상은 이미 반영되었습니다. ${capLine}</div>`,
-      actions: [{ label: '확인', style: 'primary', onClick: () => {} }],
+             <div class="note">보상은 이미 반영되었습니다. ${capLine}</div>
+             ${hubBlock}`,
+      actions,
     });
   }
 }
