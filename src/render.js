@@ -136,6 +136,13 @@ export class Renderer {
     this.killShards = []; // v7.4.0 몬스터 처치 파편 분산 연출
     this.heroVisX = null; // v8.7.0 영웅 자유 이동 시각 X (스프링 보간)
     this.heroVisY = 0; // v8.7.0 영웅 레인 추적/회피 시각 Y 오프셋
+    this.heroVx = 0; // v8.12.0 영웅 실제 이동 속도 X (관성 기울기·추격 달리기 연동)
+    this.heroVy = 0; // v8.12.0 영웅 실제 이동 속도 Y
+    this._heroFrame = 'hero_idle'; // v8.12.0 포즈 크로스페이드(75ms 모션 블러 전환)
+    this._prevHeroFrame = null;
+    this._heroFrameAt = 0;
+    this._runDustAt = 0;
+    this.swordTrail = []; // v8.12.0 연속 리본 검기 궤적 포인트
     this._heroMotionSeq = -1; // v8.7.0 콤보 착지 먼지·돌진 잔상 1회 트리거 추적
     this.resize();
     this.initAmbient();
@@ -1397,6 +1404,7 @@ export class Renderer {
       this.drawPet(ctx, t, dt);
       this.drawPlayer(ctx, t, dt);
       if (this.effects) {
+        this.drawSwordTrail(ctx, t);
         this.drawAfterimages(ctx, t);
         this.drawKnightSupport(ctx, dt, t);
         this.drawLightnings(ctx, t);
@@ -1973,7 +1981,7 @@ export class Renderer {
     ctx.restore();
   }
 
-  /* ─────────── 플레이어 (v8.7.0 4단 콤보 액션 · 스킬별 자유 모션) ─────────── */
+  /* ─────────── 플레이어 (v8.12.0 연속 교전 콤보 · 물리 관성 · 크로스페이드 · 리본 검기) ─────────── */
   drawPlayer(ctx, now, dt) {
     const b = this.battle;
     const p = b.player;
@@ -1985,23 +1993,32 @@ export class Renderer {
 
     const atkAge = now - (p.attackAt || 0);
     const skAge = now - (p.skillAt || 0);
-    const ATK_DUR = 300;
+    const ATK_DUR = 320;
+    const COMBO_HOLD = 760; // 타격 사이 공백에도 잔심 유지 → 원점 요요 없이 연속 콤보 연결
     const SK_DUR = 520;
     const attacking = atkAge >= 0 && atkAge < ATK_DUR;
+    const inComboHold = atkAge >= ATK_DUR && atkAge < COMBO_HOLD;
     const skilling = skAge >= 0 && skAge < SK_DUR;
     const atkK = clamp(atkAge / ATK_DUR, 0, 1);
+    const holdK = inComboHold ? clamp((atkAge - ATK_DUR) / (COMBO_HOLD - ATK_DUR), 0, 1) : 0;
     const skK = clamp(skAge / SK_DUR, 0, 1);
     const dead = p.dead;
     const hurtAge = now - (p.hurtAt || 0);
     const hurt = hurtAge >= 0 && hurtAge < 150;
     const recoilK = hurtAge >= 0 && hurtAge < 220 ? Math.sin(Math.PI * clamp(hurtAge / 220, 0, 1)) : 0;
 
-    // 가장 가까운 생존 적(또는 기록된 타겟) 위치로 자유롭게 접근·추적
+    // 살아있는 가장 가까운 적 기준 교전 위치(engageX) 유지 — 매 타격마다 원점으로 돌아가지 않음!
     let near = null;
     for (const m of b.monsters) if (!m.dead && !m.dying && (!near || m.x < near.x)) near = m;
-    const targetWorldX = Number.isFinite(p.targetX) ? p.targetX : near ? near.x : p.x + 260;
-    const targetScreenX = this.worldX(near ? near.x : targetWorldX);
+    const hasEnemy = !!near && !dead;
+    const targetWorldX = near ? near.x : Number.isFinite(p.targetX) ? p.targetX : p.x + 260;
+    const targetScreenX = this.worldX(targetWorldX);
     const targetLane = near ? (near.lane || 0) : (p.targetLane || 0);
+    const standDist = near && near.isBoss ? 86 * sc : 60 * sc;
+    const engageX = hasEnemy
+      ? clamp(targetScreenX - standDist, baseX + 10 * sc, this.W - 68 * sc)
+      : baseX;
+    const engageY = hasEnemy ? targetLane * 17 * sc : 0;
     const gap = clamp(targetScreenX - baseX - 52 * sc, 28 * sc, Math.min(this.W * 0.44, 235 * sc));
 
     const marching = this.marchUntil > now;
@@ -2009,9 +2026,9 @@ export class Renderer {
     const combo = (p.attackSeq || 0) % 4;
     const skKey = p.skillKey || '';
 
-    // 자유 전투 풋워크(대기 중 제자리 고정이 아니라 살아있는 풋워크·호흡)
-    let goalX = baseX + (dead ? 0 : Math.sin(now / 520) * 9 * sc + Math.cos(now / 890) * 4.5 * sc);
-    let goalY = dead ? 0 : Math.sin(now / 670) * 3.5 * sc;
+    // 기본 목표: 적이 있으면 교전선 앞을 유기적으로 선회 유지, 없으면 원점 복귀
+    let goalX = engageX + (dead ? 0 : Math.sin(now / 480) * 6 * sc);
+    let goalY = engageY + (dead ? 0 : Math.sin(now / 620) * 3 * sc);
     let lift = 0;
     let rot = 0;
     let sx = 1;
@@ -2020,93 +2037,106 @@ export class Renderer {
     let frame = 'hero_idle';
     let slashStyle = 'down';
     let instantSnap = false;
+    let trackSword = false;
+    let swordAngle = 0;
 
     if (!dead && skilling) {
       const sArc = Math.sin(Math.PI * skK);
+      trackSword = skK > 0.1 && skK < 0.78;
       if (skKey === 'execute') {
-        // 그림자 처형: 적 등 뒤로 순간이동 후 역방향 베기 → 복귀
-        if (skK < 0.68) {
+        // 그림자 처형: 적 등 뒤로 순간이동 후 역방향 베기 → 교전선 복귀
+        if (skK < 0.72) {
           goalX = clamp(targetScreenX + 46 * sc, baseX + 64 * sc, this.W - 34 * sc);
           goalY = targetLane * 18 * sc;
           flipX = -1;
           frame = skK < 0.42 ? 'hero_dash' : 'hero_attack2';
-          lift = Math.sin(Math.PI * (skK / 0.68)) * 18 * sc;
+          lift = Math.sin(Math.PI * (skK / 0.72)) * 18 * sc;
           rot = -0.14 * sArc;
           sx = 1 + 0.12 * sArc;
           sy = 1 - 0.08 * sArc;
+          swordAngle = lerp(-1.4, 1.1, skK / 0.72);
           if (skK < 0.14) instantSnap = true;
         } else {
-          frame = 'hero_dash';
-          lift = Math.sin(Math.PI * ((skK - 0.68) / 0.32)) * 22 * sc;
+          frame = 'hero_run';
+          lift = Math.sin(Math.PI * ((skK - 0.72) / 0.28)) * 18 * sc;
         }
         slashStyle = 'thrust';
       } else if (skKey === 'whirl' || skKey === 'vampstrike') {
-        // 회오리/흡혈 검무: 전방 적진 한가운데로 회전 돌진
-        goalX = baseX + Math.sin(Math.PI * Math.pow(skK, 0.85)) * Math.min(gap * 0.96, 158 * sc);
-        goalY = Math.sin(skK * Math.PI * 2) * 14 * sc;
+        // 회오리/흡혈 검무: 적진 한가운데를 가로지르며 회전 베기
+        goalX = lerp(engageX, clamp(targetScreenX + 26 * sc, engageX + 24 * sc, this.W - 44 * sc), sArc);
+        goalY = engageY + Math.sin(skK * Math.PI * 2) * 16 * sc;
         lift = sArc * 16 * sc;
-        rot = Math.sin(skK * Math.PI * 4) * 0.36;
+        rot = Math.sin(skK * Math.PI * 4) * 0.34;
         flipX = Math.cos(skK * Math.PI * 4) >= 0 ? 1 : -1;
         sx = 1 + 0.1 * sArc;
         sy = 1 - 0.06 * sArc;
         frame = skK < 0.5 ? 'hero_dash' : 'hero_skill';
+        swordAngle = skK * Math.PI * 4;
         slashStyle = 'whirl';
       } else if (skKey === 'meteor' || skKey === 'frostnova' || skKey === 'thunder' || skKey === 'ultimate') {
         // 마법/궁극기: 공중 도약 부유 시전 + 마력 해방
-        goalX = baseX + sArc * Math.min(gap * 0.35, 42 * sc);
+        goalX = engageX - sArc * 18 * sc;
         lift = Math.sin(Math.PI * Math.pow(skK, 0.8)) * (skKey === 'ultimate' ? 54 : 40) * sc;
         rot = -0.1 * Math.sin(skK * Math.PI * 2);
         sx = 1 - 0.05 * sArc;
         sy = 1 + 0.08 * sArc;
         frame = skK < 0.32 ? 'hero_jump' : 'hero_skill';
+        swordAngle = -1.2 + skK * 2.1;
         slashStyle = 'up';
       } else if (skKey === 'strike') {
         // 강격: 공중 고도약 → 적 정면 강타
-        goalX = baseX + Math.sin(Math.PI * Math.min(1, skK * 1.08)) * Math.min(gap * 0.94, 152 * sc);
-        goalY = targetLane * 18 * sc * sArc;
-        lift = Math.sin(Math.PI * Math.min(1, skK * 1.15)) * 54 * sc;
-        rot = lerp(-0.22, 0.24, skK);
-        if (skK > 0.72) { sx = 1.15; sy = 0.85; }
+        goalX = engageX + sArc * 30 * sc;
+        goalY = engageY;
+        lift = Math.sin(Math.PI * Math.min(1, skK * 1.15)) * 56 * sc;
+        rot = lerp(-0.24, 0.24, skK);
+        if (skK > 0.72) { sx = 1.16; sy = 0.84; }
         frame = skK < 0.55 ? 'hero_jump' : 'hero_attack';
+        swordAngle = lerp(-1.8, 0.9, skK);
         slashStyle = 'plunge';
       } else {
-        // aegis / heal / berserk: 호쾌한 기합 부양 자세
         lift = sArc * 18 * sc;
         sx = 1 + 0.07 * sArc;
         sy = 1 + 0.07 * sArc;
         frame = 'hero_skill';
+        trackSword = false;
       }
     } else if (!dead && attacking) {
+      // 3단계 페이즈: 0~16% 예비동작(Anticipation) → 16~64% 타격 스냅 → 64~100% 잔심
+      const ant = atkK < 0.16 ? atkK / 0.16 : 0;
+      const snap = atkK >= 0.16 ? clamp((atkK - 0.16) / 0.52, 0, 1) : 0;
       const aArc = Math.sin(Math.PI * atkK);
+      trackSword = atkK >= 0.12 && atkK <= 0.78;
       if (combo === 0) {
-        // 1타: 전방 대시 내려베기 (hero_attack)
-        goalX = baseX + Math.sin(Math.PI * Math.min(1, atkK * 1.12)) * Math.min(gap * 0.72, 98 * sc);
-        goalY = targetLane * 14 * sc * aArc;
-        lift = aArc * 7 * sc;
-        rot = 0.09 * aArc;
-        sx = 1 + 0.07 * aArc;
-        sy = 1 - 0.05 * aArc;
+        // 1타: 교전선 밀착 내려베기 (hero_attack)
+        goalX = engageX + (ant > 0 ? -10 * sc * ant : easeOut(snap) * 18 * sc);
+        goalY = engageY;
+        lift = aArc * 8 * sc;
+        rot = ant > 0 ? -0.1 * ant : lerp(-0.08, 0.14, snap);
+        sx = ant > 0 ? 0.93 : 1 + 0.08 * aArc;
+        sy = ant > 0 ? 1.07 : 1 - 0.06 * aArc;
         frame = 'hero_attack';
         slashStyle = 'down';
+        swordAngle = lerp(-1.45, 0.75, easeOut(snap));
       } else if (combo === 1) {
-        // 2타: 도약 상단 베기 어퍼컷 (hero_attack2)
-        goalX = baseX + aArc * Math.min(gap * 0.64, 84 * sc);
-        goalY = targetLane * 12 * sc * aArc;
+        // 2타: 1타 잔심에서 이어지는 도약 상단 올려베기 (hero_attack2)
+        goalX = engageX + 12 * sc + (ant > 0 ? -8 * sc * ant : easeOut(snap) * 14 * sc);
+        goalY = engageY - 4 * sc * aArc;
         lift = Math.sin(Math.PI * Math.pow(atkK, 0.78)) * 30 * sc;
-        rot = -0.14 * aArc;
+        rot = ant > 0 ? 0.12 * ant : -0.15 * aArc;
         sx = 1 - 0.05 * aArc;
         sy = 1 + 0.09 * aArc;
         frame = 'hero_attack2';
         slashStyle = 'up';
+        swordAngle = lerp(0.85, -1.35, easeOut(snap));
       } else if (combo === 2) {
-        // 3타: 포물선 점프 강타 (hero_jump)
-        goalX = baseX + Math.sin(Math.PI * Math.min(1, atkK * 1.05)) * Math.min(gap * 0.92, 138 * sc);
-        goalY = targetLane * 16 * sc * aArc;
-        lift = Math.sin(Math.PI * Math.min(1, atkK * 1.15)) * 50 * sc;
-        rot = lerp(-0.2, 0.22, atkK);
+        // 3타: 공중 회전 점프 강타 (hero_jump)
+        goalX = engageX + 8 * sc + easeOut(snap) * 26 * sc;
+        goalY = engageY;
+        lift = Math.sin(Math.PI * Math.min(1, atkK * 1.15)) * 52 * sc;
+        rot = lerp(-0.22, 0.24, atkK);
         if (atkK > 0.74) {
-          sx = 1.14;
-          sy = 0.86;
+          sx = 1.16;
+          sy = 0.84;
           if (this._heroMotionSeq !== p.attackSeq) {
             this._heroMotionSeq = p.attackSeq;
             this.stepDust(this.heroVisX || goalX, gy + goalY, sc, 5, 'rgba(235,240,255,0.52)');
@@ -2114,30 +2144,34 @@ export class Renderer {
         }
         frame = 'hero_jump';
         slashStyle = 'plunge';
+        swordAngle = lerp(-1.85, 0.85, easeOut(snap));
       } else {
-        // 4타: 고속 돌진 찌르기 + 잔상 (hero_dash)
-        goalX = baseX + Math.sin(Math.PI * Math.pow(atkK, 0.7)) * Math.min(gap * 1.02, 162 * sc);
-        goalY = targetLane * 16 * sc * aArc;
-        lift = aArc * 8 * sc;
-        rot = 0.06 * aArc;
+        // 4타: 적을 관통해 등 뒤로 돌파 후 역방향 턴! (hero_dash)
+        const crossX = clamp(targetScreenX + 34 * sc, engageX + 36 * sc, this.W - 36 * sc);
+        goalX = ant > 0 ? engageX - 10 * sc * ant : lerp(engageX, crossX, easeOut(snap));
+        goalY = engageY + Math.sin(Math.PI * atkK) * 8 * sc;
+        lift = aArc * 9 * sc;
+        rot = 0.07 * aArc;
         sx = 1 + 0.14 * aArc;
         sy = 1 - 0.09 * aArc;
+        flipX = atkK > 0.76 ? -1 : 1; // 돌파 끝에서 적 쪽으로 돌아봄
         frame = 'hero_dash';
         slashStyle = 'thrust';
+        swordAngle = 0;
         if (this.effects && atkK > 0.18 && this._heroMotionSeq !== p.attackSeq) {
           this._heroMotionSeq = p.attackSeq;
-          this.stepDust(baseX + 8 * sc, gy, sc, 4, 'rgba(180,235,255,0.48)');
+          this.stepDust(this.heroVisX || engageX, gy + engageY, sc, 4, 'rgba(180,235,255,0.48)');
           this.afterimages.push({
-            x: lerp(baseX, goalX, 0.45),
-            y: goalY * 0.5,
+            x: lerp(engageX, crossX, 0.35),
+            y: engageY,
             t0: now,
             dur: 210,
             color: '#7ff6ff',
             frame: 'hero_dash',
           });
           this.afterimages.push({
-            x: lerp(baseX, goalX, 0.78),
-            y: goalY * 0.8,
+            x: lerp(engageX, crossX, 0.72),
+            y: engageY,
             t0: now + 24,
             dur: 210,
             color: '#ffd76a',
@@ -2145,33 +2179,94 @@ export class Renderer {
           });
         }
       }
+    } else if (!dead && inComboHold && hasEnemy) {
+      // 잔심(Follow-through): 다음 타격 전까지 원점으로 돌아가지 않고 직전 공격 끝자세에서 호흡 유지!
+      const easeBack = easeOut(holdK);
+      if (combo === 3) {
+        // 4타 관통 뒤 적 뒤에서 돌아보며 교전선으로 매끄럽게 복귀
+        const crossX = clamp(targetScreenX + 30 * sc, engageX + 32 * sc, this.W - 36 * sc);
+        goalX = lerp(crossX, engageX, easeBack);
+        flipX = holdK < 0.45 ? -1 : 1;
+        frame = holdK < 0.38 ? 'hero_dash' : 'hero_run';
+      } else {
+        goalX = engageX + (1 - easeBack) * 12 * sc;
+        frame = combo === 1 ? 'hero_attack2' : combo === 2 ? 'hero_attack' : 'hero_attack';
+        rot = (1 - easeBack) * (combo === 1 ? -0.06 : 0.06);
+      }
+      const breath = Math.sin(now / 220);
+      sy = 1 + 0.025 * breath;
+      sx = 1 - 0.018 * breath;
     } else if (!dead) {
-      // 대기 호흡 신축 + 부드러운 스웨이
+      // 비전투/추격 대기: 행군 중이면 달리기 포즈
       const breath = Math.sin(now / 280);
       sy = 1 + 0.026 * breath;
       sx = 1 - 0.018 * breath;
       rot = Math.sin(now / 520) * 0.028;
+      if (marching) frame = 'hero_run';
     }
 
-    // 피격 시 반동 백스텝(고정 벽처럼 맞지 않고 살짝 뒤로 물러남)
+    // 피격 시 반동 백스텝
     if (!dead && recoilK > 0 && !skilling) {
       goalX -= recoilK * 16 * sc;
       lift += recoilK * 7 * sc;
-      rot -= 0.15 * recoilK;
+      rot -= 0.14 * recoilK;
     }
 
-    // 스프링 보간으로 자유로운 이동 궤적 구현
+    // 스프링 물리 보간 + 실제 이동 속도(heroVx, heroVy) 계산
     const safeDt = Math.max(1, Math.min(80, dt || 16));
-    const lerpRate = instantSnap ? 1 : 1 - Math.exp(-safeDt / 40);
+    const dtSec = safeDt / 1000;
+    const lerpRate = instantSnap ? 1 : 1 - Math.exp(-safeDt / 46);
     if (this.heroVisX == null || !Number.isFinite(this.heroVisX)) this.heroVisX = baseX;
+    const prevX = this.heroVisX;
+    const prevY = this.heroVisY;
     this.heroVisX += (goalX - this.heroVisX) * lerpRate;
     this.heroVisY += (goalY - this.heroVisY) * lerpRate;
+    this.heroVx = (this.heroVisX - prevX) / dtSec;
+    this.heroVy = (this.heroVisY - prevY) / dtSec;
+
+    // 빠른 추격/이동 중에는 자동으로 hero_run 추격 달리기 포즈 + 발걸음 먼지!
+    const speedX = Math.abs(this.heroVx);
+    if (!dead && !attacking && !skilling && speedX > 65 * sc) {
+      frame = 'hero_run';
+      flipX = this.heroVx < -25 * sc ? -1 : 1;
+      lift += Math.abs(Math.sin(now / 65)) * 6 * sc;
+      if (this.effects && now - (this._runDustAt || 0) > 110) {
+        this._runDustAt = now;
+        this.stepDust(this.heroVisX - flipX * 12 * sc, gy + this.heroVisY, sc, 2, 'rgba(220,230,245,0.42)');
+      }
+    }
+    // 실제 속도 기반 관성 기울기 자동 가산
+    rot += clamp(this.heroVx / 1400, -0.14, 0.14) * flipX;
+
+    // 포즈 전환 75ms 크로스페이드(모션 블러 잔상) 기록
+    if (frame !== this._heroFrame) {
+      this._prevHeroFrame = this._heroFrame;
+      this._heroFrameAt = now;
+      this._heroFrame = frame;
+    }
 
     const px = clamp(this.heroVisX, w * 0.35, this.W - w * 0.35);
     const pyOff = this.heroVisY;
     const groundAtHero = gy + pyOff;
-    const bob = (attacking || skilling ? 0 : Math.sin(now / 320) * 2.2 * sc) + marchBob;
+    const bob = (attacking || skilling || frame === 'hero_run' ? 0 : Math.sin(now / 320) * 2.2 * sc) + marchBob;
     const shadowK = 1 - clamp(lift / (h * 1.45), 0, 1) * 0.48;
+
+    // 연속 리본 검기 궤적 포인트 기록 (실제 칼끝 위치 추적)
+    if (this.effects && trackSword && !dead) {
+      const pal = this._rar.pal || (RARITIES[this._rar.weapon] || RARITIES[0]).slash;
+      const rTip = h * 0.62;
+      const tipX = px + Math.cos(swordAngle) * rTip * flipX + 10 * sc * flipX;
+      const tipY = groundAtHero - lift - h * 0.48 + Math.sin(swordAngle) * rTip * 0.72;
+      this.swordTrail.push({
+        x: tipX,
+        y: tipY,
+        t: now,
+        color: (pal && pal.mid) || '#ffd76a',
+        glow: (pal && pal.glow) || '#ffb347',
+        core: (pal && pal.core) || '#fff7dc',
+      });
+      if (this.swordTrail.length > 18) this.swordTrail.shift();
+    }
 
     // 그림자 (점프 높이에 맞춰 축소·연해짐)
     ctx.save();
@@ -2223,6 +2318,21 @@ export class Renderer {
       ctx.restore();
     }
 
+    // 이전 포즈 75ms 크로스페이드 블러 (컷 전환 제거)
+    const blendAge = now - (this._heroFrameAt || 0);
+    if (this.effects && !dead && this._prevHeroFrame && blendAge >= 0 && blendAge < 75) {
+      const prevImg = this.image(this._prevHeroFrame);
+      if (prevImg) {
+        ctx.save();
+        ctx.globalAlpha = 0.42 * (1 - blendAge / 75);
+        ctx.translate(px - clamp(this.heroVx * 0.02, -16 * sc, 16 * sc), groundAtHero - lift + bob);
+        ctx.rotate(rot * 0.6);
+        ctx.scale(flipX * sx, sy);
+        ctx.drawImage(prevImg, -w / 2, -h, w, h);
+        ctx.restore();
+      }
+    }
+
     const img = this.image(frame) || this.image(skilling ? 'hero_skill' : attacking ? 'hero_attack' : 'hero_idle');
 
     ctx.save();
@@ -2259,6 +2369,43 @@ export class Renderer {
       const pal = this._rar.pal || (RARITIES[wIdx] || RARITIES[0]).slash;
       this.drawSlash(ctx, px, groundAtHero - lift * 0.65, h, sc, kEff, p.attackKind, Math.min(reach * 0.95, 176 * sc), pal, wIdx, slashStyle, flipX);
     }
+  }
+
+  /** v8.12.0 연속 리본 검기 궤적 — 칼끝 이동 경로를 매끄럽게 이어 모션 연결감 극대화 */
+  drawSwordTrail(ctx, now) {
+    if (!this.swordTrail || this.swordTrail.length < 2) return;
+    const LIFE = 200;
+    this.swordTrail = this.swordTrail.filter((pt) => now - pt.t < LIFE);
+    const pts = this.swordTrail;
+    if (pts.length < 2) return;
+    const sc = this.scale();
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (let i = 1; i < pts.length; i++) {
+      const p0 = pts[i - 1];
+      const p1 = pts[i];
+      if (Math.hypot(p1.x - p0.x, p1.y - p0.y) > 150 * sc) continue;
+      const k = i / (pts.length - 1);
+      const fade = clamp(1 - (now - p1.t) / LIFE, 0, 1);
+      ctx.globalAlpha = fade * k * 0.45;
+      ctx.strokeStyle = p1.glow;
+      ctx.lineWidth = (3 + 12 * k) * sc * fade;
+      ctx.beginPath();
+      ctx.moveTo(p0.x, p0.y);
+      ctx.lineTo(p1.x, p1.y);
+      ctx.stroke();
+
+      ctx.globalAlpha = fade * k * 0.9;
+      ctx.strokeStyle = p1.core;
+      ctx.lineWidth = (1.2 + 3.6 * k) * sc * fade;
+      ctx.beginPath();
+      ctx.moveTo(p0.x, p0.y);
+      ctx.lineTo(p1.x, p1.y);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   /* ─────────── 🛡 v4.3 부활 가호 — 보호막 · 빛 고리 · 마법진 ─────────── */
@@ -2669,24 +2816,37 @@ export class Renderer {
         sy *= 1 - 0.24 * k;
       }
 
-      const groundM = gy + depth + dyWeave;
+      const rawMx = x + dx;
+      const rawGroundM = gy + depth + dyWeave;
+      // v8.12.0 몬스터 물리 스프링 보간 (순간 꺾임 제거 + 이동 속도 기반 자연 기울기)
+      const mDt = Math.max(1, Math.min(80, dt || 16));
+      const mRate = m.dying ? 1 : 1 - Math.exp(-mDt / 54);
+      if (m.__visX == null || !Number.isFinite(m.__visX)) m.__visX = rawMx;
+      if (m.__visY == null || !Number.isFinite(m.__visY)) m.__visY = rawGroundM;
+      const prevMx = m.__visX;
+      m.__visX += (rawMx - m.__visX) * mRate;
+      m.__visY += (rawGroundM - m.__visY) * mRate;
+      m.__vx = (m.__visX - prevMx) / (mDt / 1000);
+      rot += clamp(m.__vx / 1300, -0.15, 0.15);
+
+      const mx = m.__visX;
+      const groundM = m.__visY;
       const footY = groundM - lift;
       const kx = sx * pop * depthScale;
       const ky = sy * pop * depthScale;
       const shadowScale = shadowK * (1 - clamp(lift / (h * 1.4), 0, 1) * 0.48);
 
-      // 1) 지면 그림자 (v7.1.0 depth + v8.7.0 자유 이동 X/Y 연동)
+      // 1) 지면 그림자 (v7.1.0 depth + v8.12.0 물리 보간 X/Y 연동)
       ctx.save();
       ctx.globalAlpha = Math.max(0, alpha) * shadowA;
       ctx.fillStyle = '#000';
       ctx.beginPath();
-      ctx.ellipse(x + dx, gy + 2 + depth + dyWeave, w * 0.28 * shadowScale, w * 0.085 * shadowScale, 0, 0, Math.PI * 2);
+      ctx.ellipse(mx, gy + 2 + depth + (groundM - (gy + depth)), w * 0.28 * shadowScale, w * 0.085 * shadowScale, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
 
       ctx.save();
       ctx.globalAlpha = Math.max(0, alpha) * laneAlpha;
-      const mx = x + dx;
       const auraY = footY - h * 0.5;
       if (m.isBoss) {
         const enraged = !!m.enraged;
@@ -2751,12 +2911,12 @@ export class Renderer {
       }
 
       // 2) 전조 텔레그래프(기 모으기 오라 / 바닥 경고)
-      if (this.effects && winding) this.drawWindup(ctx, m, x + dx, footY, h, sc, wk, color);
+      if (this.effects && winding) this.drawWindup(ctx, m, mx, footY, h, sc, wk, color);
 
       // 3) 본체 — 발끝 기준 변형(스쿼시·기울기·회전)
       const img = this.image(m.name);
       ctx.save();
-      ctx.translate(x + dx, footY);
+      ctx.translate(mx, footY);
       ctx.rotate(rot);
       ctx.scale(kx, ky);
       if (img) {
@@ -2780,10 +2940,10 @@ export class Renderer {
       // v7.4.0 상태이상 비주얼 오버레이 (화상 불꽃 · 빙결 얼음 결정)
       if (!m.dying && this.effects) {
         if (m.burnUntil && now < m.burnUntil) {
-          this.drawBurnFx(ctx, x + dx, footY, h, sc, now);
+          this.drawBurnFx(ctx, mx, footY, h, sc, now);
         }
         if (m.slowUntil && now < m.slowUntil) {
-          this.drawFrostFx(ctx, x + dx, footY, h, sc, now);
+          this.drawFrostFx(ctx, mx, footY, h, sc, now);
         }
       }
 
@@ -2792,7 +2952,7 @@ export class Renderer {
       if (!m.dying && showBar) {
         const bw = (m.isBoss ? 96 : (m.elite || m.treasure ? 58 : 44 * Math.max(0.8, crowdK))) * sc;
         const bh = m.isBoss ? 6 : 4;
-        const bx = x + dx - bw / 2;
+        const bx = mx - bw / 2;
         const by = footY - h * ky - 9 - lane * 2;
         ctx.fillStyle = 'rgba(0,0,0,0.62)';
         roundRect(ctx, bx - 1, by - 1, bw + 2, bh + 2, 2);
@@ -2811,7 +2971,7 @@ export class Renderer {
           const tag = m.treasure
             ? `💰 보물 ${Math.max(1, Math.ceil(((m.fleeAt || now) - now) / 1000))}s`
             : `${m.elite.icon} ${m.elite.name}`;
-          ctx.fillText(tag, x + dx, by - 4);
+          ctx.fillText(tag, mx, by - 4);
           ctx.restore();
         }
       }

@@ -181,7 +181,7 @@ class App {
     // v4.1: 지금 테마 배경은 바로, 나머지 7종은 한가할 때 미리 받아 둔다
     this.renderer.preloadBackgrounds();
     this.renderer
-      .preload(['hero_idle', 'hero_attack', 'hero_attack2', 'hero_jump', 'hero_dash', 'hero_skill', 'fx_claw', 'fx_burst', ...PET_SPRITES, ...PET_EVO_SPRITES, ...this.stageMonsterNames(this.s.stage)])
+      .preload(['hero_idle', 'hero_run', 'hero_attack', 'hero_attack2', 'hero_jump', 'hero_dash', 'hero_skill', 'fx_claw', 'fx_burst', ...PET_SPRITES, ...PET_EVO_SPRITES, ...this.stageMonsterNames(this.s.stage)])
       .then(() => this.renderer.resize())
       .catch(() => {});
 

@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "8.11.0"
+EXPECTED_VER = "8.12.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui-settings.js", "src/ui.js", "src/sound.js"]
 
@@ -6575,6 +6575,20 @@ def main():
     ok(
         all(x in rnd811 for x in ["pet.id === 'dragon'", "pet.id === 'golem'", "dashDist", "hasPal", "hasMer", "kind: 'shield'", "kind: 'coin'"]),
         "render.js — 펫 비행 스웁/맹수 도약/골렘 슬램 자유 모션 & 기사단 4인(아서·실비아·멀린·마르코) 전원 캔버스 출격",
+    )
+
+    # ── 59) v8.12.0 🎬 연속 교전 콤보 · 물리 관성 · 리본 검기 · hero_run.png ──
+    section("v8.12.0 연속 교전 콤보 · 물리 관성 · 리본 검기 · 추격 달리기")
+    rnd812 = read("src/render.js")
+    ok(
+        os.path.exists(os.path.join(ROOT, "assets/sprites/hero_run.png"))
+        and "'./assets/sprites/hero_run.png'" in read("sw.js")
+        and "'hero_run'" in read("app.js"),
+        "hero_run.png 존재 · sw.js 프리캐시 · app.js 프리로드 동기화",
+    )
+    ok(
+        all(x in rnd812 for x in ["engageX", "inComboHold", "drawSwordTrail", "_prevHeroFrame", "heroVx", "m.__visX", "hero_run"]),
+        "render.js — 적 앞 교전 유지·잔심 콤보 연결·크로스페이드·리본 검기·몬스터 물리 보간 구현",
     )
 
     print(f"\n통과 {passed} / 실패 {failed}")
