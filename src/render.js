@@ -1790,8 +1790,8 @@ export class Renderer {
     ctx.globalAlpha = 1;
   }
 
-  /* ─────────── 🐾 동행 펫 ─────────── */
-  /** 주인공 뒤(왼쪽)에서 따라다니며, 공격할 때는 앞으로 튀어나간다. (v5.3: 보조 펫 함께 표시) */
+  /* ─────────── 🐾 동행 펫 (v8.11.0 아키타입별 자유 모션: 비행 스웁 · 맹수 도약 · 골렘 슬램) ─────────── */
+  /** 주인공 뒤(왼쪽)에서 따라다니며, 공격할 때는 펫 유형별 자유 궤적으로 돌격한다. (v5.3: 보조 펫 함께 표시) */
   drawPet(ctx, now, dt) {
     const b = this.battle;
     if (!b) return;
@@ -1805,7 +1805,7 @@ export class Renderer {
     }
     const gy = this.groundY();
     const sc = this.scale();
-    const heroX = this.worldX(b.player.x);
+    const heroX = this.heroVisX != null ? this.heroVisX : this.worldX(b.player.x);
     // v4.2: 진화 단계 — 이름·스프라이트·크기·색이 단계마다 달라진다
     const info = petStageInfo(b.s, pet.id);
     const stage = info.stage || 0;
@@ -1814,26 +1814,75 @@ export class Renderer {
     const w = h;
     // 화면 왼쪽 밖으로 잘리지 않도록 위치를 보정한다(좁은 390px 화면 대응)
     const home = Math.max(w * 0.5 + 4, heroX - Math.min(76 * sc, w * 0.9));
-    const sway = Math.sin(now / 640) * 7 * sc;
+    const tsec = now / 1000;
+    const flyer = pet.id === 'owl' || pet.id === 'dragon' || pet.id === 'hawk';
+    const slammer = pet.id === 'golem';
+    const sway = flyer ? Math.sin(tsec * 2.1) * 14 * sc : Math.sin(tsec * 1.6) * 8 * sc;
     if (this.petX == null || !isFinite(this.petX)) this.petX = home;
     this.petX += (home - this.petX) * Math.min(1, dt / 150);
     const lungeAge = now - (b.petAnimAt || 0);
-    const lunge = lungeAge >= 0 && lungeAge < 260 ? Math.sin(Math.PI * (1 - lungeAge / 260)) : 0;
-    const x = Math.max(w * 0.5 + 2, this.petX + sway + lunge * 56 * sc);
-    const bob = Math.sin(now / 300 + 1.7) * 2.2 * sc - lunge * 5 * sc;
+    const LUNGE_DUR = 340;
+    const lk = lungeAge >= 0 && lungeAge < LUNGE_DUR ? clamp(lungeAge / LUNGE_DUR, 0, 1) : 0;
+    const lunge = lk > 0 && lk < 1 ? Math.sin(Math.PI * lk) : 0;
+
+    let near = null;
+    for (const m of b.monsters) if (!m.dead && !m.dying && (!near || m.x < near.x)) near = m;
+    const targetX = near ? this.worldX(near.x) - 38 * sc : this.petX + 110 * sc;
+    const dashDist = clamp(targetX - this.petX, 52 * sc, 160 * sc);
+
+    let lift = flyer ? 20 * sc + Math.sin(tsec * 3.8) * 7 * sc : Math.abs(Math.sin(tsec * 2.6)) * 3 * sc;
+    let dx = sway;
+    let rot = flyer ? Math.cos(tsec * 2.1) * 0.1 : Math.sin(tsec * 1.6) * 0.03;
+    let sx = 1;
+    let sy = 1;
+
+    if (lunge > 0) {
+      if (flyer) {
+        // 비행 펫(올빼미·드래곤·매): 고도 상승 → 적을 향한 대각선 급강하 스웁
+        const swoop = Math.sin(Math.PI * Math.pow(lk, 0.8));
+        dx += dashDist * swoop;
+        lift = Math.max(6 * sc, lift + (lk < 0.35 ? 18 * sc * (lk / 0.35) : -22 * sc * swoop));
+        rot += 0.24 * swoop;
+        sx = 1 + 0.12 * swoop;
+        sy = 1 - 0.08 * swoop;
+      } else if (slammer) {
+        // 골렘 펫: 포물선 점프 슬램 + 착지 스쿼시
+        dx += dashDist * Math.sin(Math.PI * Math.pow(lk, 0.82));
+        lift += Math.sin(Math.PI * lk) * 30 * sc;
+        if (lk > 0.72) {
+          sx = 1.18;
+          sy = 0.84;
+          if (this.effects && this._petDustAt !== b.petAnimAt) {
+            this._petDustAt = b.petAnimAt;
+            this.stepDust(this.petX + dx, gy, sc, 4, hexA(petColor, 0.45));
+          }
+        }
+      } else {
+        // 맹수 펫(늑대·여우): 민첩한 포물선 도약 덮치기
+        dx += dashDist * Math.sin(Math.PI * Math.pow(lk, 0.78));
+        lift += Math.sin(Math.PI * lk) * 34 * sc;
+        rot += 0.2 * Math.sin(Math.PI * lk);
+        sx = 1 + 0.1 * lunge;
+        sy = 1 - 0.06 * lunge;
+      }
+    }
+
+    const x = clamp(this.petX + dx, w * 0.5 + 2, this.W - w * 0.5 - 2);
+    const footY = gy - lift;
+    const shadowK = 1 - clamp(lift / (h * 1.5), 0, 1) * 0.45;
 
     // 발밑·몸 주변 글로우(펫 색) — 진화할수록 진하고 넓다
     const auraK = 0.2 + stage * 0.12;
-    const gl = ctx.createRadialGradient(x, gy - h * 0.36, 2, x, gy - h * 0.36, h * (0.72 + stage * 0.12));
+    const gl = ctx.createRadialGradient(x, footY - h * 0.36, 2, x, footY - h * 0.36, h * (0.72 + stage * 0.12));
     gl.addColorStop(0, hexA(petColor, auraK + lunge * 0.22));
     gl.addColorStop(1, hexA(petColor, 0));
     ctx.fillStyle = gl;
-    ctx.fillRect(x - h * 1.05, gy - h * 1.3, h * 2.1, h * 1.4);
+    ctx.fillRect(x - h * 1.05, footY - h * 1.3, h * 2.1, h * 1.4);
 
-    // 그림자
-    ctx.fillStyle = 'rgba(0,0,0,0.38)';
+    // 그림자 (비행/도약 높이에 맞춰 축소)
+    ctx.fillStyle = `rgba(0,0,0,${(0.38 * shadowK).toFixed(3)})`;
     ctx.beginPath();
-    ctx.ellipse(x, gy + 2, w * 0.24, w * 0.07, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, gy + 2, w * 0.24 * shadowK, w * 0.07 * shadowK, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // ★ 각성 이상: 회전하는 오라 링(신수는 2중 + 반짝임)
@@ -1846,21 +1895,26 @@ export class Renderer {
         ctx.strokeStyle = hexA(petColor, 0.9);
         ctx.lineWidth = (2.2 - i * 0.5) * sc;
         ctx.beginPath();
-        ctx.ellipse(x, gy - h * 0.28 - i * 4 * sc, rr, rr * 0.3, Math.sin(now / 900 + i) * 0.12, 0, Math.PI * 2);
+        ctx.ellipse(x, footY - h * 0.28 - i * 4 * sc, rr, rr * 0.3, Math.sin(now / 900 + i) * 0.12, 0, Math.PI * 2);
         ctx.stroke();
       }
       ctx.restore();
     }
 
     const img = this.image(info.sprite || pet.sprite) || this.image(pet.sprite);
+    ctx.save();
+    ctx.translate(x, footY);
+    ctx.rotate(rot);
+    ctx.scale(sx, sy);
     if (img) {
-      ctx.drawImage(img, x - w / 2, gy - h + bob, w, h);
+      ctx.drawImage(img, -w / 2, -h, w, h);
     } else {
       ctx.fillStyle = petColor || '#9fc6ff';
       ctx.beginPath();
-      ctx.arc(x, gy - h * 0.4 + bob, w * 0.28, 0, Math.PI * 2);
+      ctx.arc(0, -h * 0.4, w * 0.28, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.restore();
 
     // 동행 이름표(+진화 단계 배지)
     if (this.effects) {
@@ -1872,42 +1926,48 @@ export class Renderer {
       const badge = stage >= 2 ? '★★ ' : stage >= 1 ? '★ ' : '';
       const label = `${pet.emoji || ''} ${badge}${info.name || pet.name}`.trim();
       const tw = ctx.measureText(label).width || 0;
-      ctx.fillText(label, Math.max(tw / 2 + 3, x), gy - h - 3);
+      ctx.fillText(label, Math.max(tw / 2 + 3, x), footY - h - 3);
       ctx.restore();
     }
   }
 
-  /** v5.3 보조 펫 렌더 — 주 펫 뒤쪽 위에서 작게 동행 */
+  /** v5.3/v8.11.0 보조 펫 렌더 — 주 펫 뒤쪽 위에서 아키타입별 자유 동행 */
   drawSubPet(ctx, now, dt, pet) {
     const b = this.battle;
     const gy = this.groundY() - 10 * this.scale();
     const sc = this.scale();
-    const heroX = this.worldX(b.player.x);
+    const heroX = this.heroVisX != null ? this.heroVisX : this.worldX(b.player.x);
     const info = petStageInfo(b.s, pet.id);
     const petColor = info.color || pet.color;
     const h = Math.min(this.H * 0.24, 60 * sc) * (info.scale || 1) * 0.82;
     const w = h;
     const home = Math.max(w * 0.5 + 2, heroX - Math.min(118 * sc, w * 1.65));
-    const sway = Math.sin(now / 710 + 1.1) * 5 * sc;
+    const tsec = now / 1000;
+    const flyer = pet.id === 'owl' || pet.id === 'dragon' || pet.id === 'hawk';
+    const sway = Math.sin(tsec * 1.8 + 1.1) * (flyer ? 10 : 6) * sc;
     if (this.subPetX == null || !isFinite(this.subPetX)) this.subPetX = home;
     this.subPetX += (home - this.subPetX) * Math.min(1, dt / 170);
     const lungeAge = now - (b.subPetAnimAt || 0);
-    const lunge = lungeAge >= 0 && lungeAge < 240 ? Math.sin(Math.PI * (1 - lungeAge / 240)) : 0;
-    const x = Math.max(w * 0.5 + 2, this.subPetX + sway + lunge * 42 * sc);
-    const bob = Math.sin(now / 330 + 2.9) * 2 * sc - lunge * 4 * sc;
+    const lk = lungeAge >= 0 && lungeAge < 290 ? clamp(lungeAge / 290, 0, 1) : 0;
+    const lunge = lk > 0 && lk < 1 ? Math.sin(Math.PI * lk) : 0;
+    const x = clamp(this.subPetX + sway + lunge * 76 * sc, w * 0.5 + 2, this.W - w * 0.5 - 2);
+    const lift = (flyer ? 16 * sc + Math.sin(tsec * 3.4 + 2.1) * 6 * sc : Math.abs(Math.sin(tsec * 2.5 + 1)) * 3 * sc) + lunge * 22 * sc;
+    const shadowK = 1 - clamp(lift / (h * 1.5), 0, 1) * 0.4;
 
     ctx.save();
     ctx.globalAlpha = 0.88;
-    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.fillStyle = `rgba(0,0,0,${(0.28 * shadowK).toFixed(3)})`;
     ctx.beginPath();
-    ctx.ellipse(x, gy + 2, w * 0.22, w * 0.06, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, gy + 2, w * 0.22 * shadowK, w * 0.06 * shadowK, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.translate(x, gy - lift);
+    ctx.rotate(lunge * 0.18 + (flyer ? Math.cos(tsec * 1.8) * 0.08 : 0));
     const img = this.image(info.sprite || pet.sprite) || this.image(pet.sprite);
-    if (img) ctx.drawImage(img, x - w / 2, gy - h + bob, w, h);
+    if (img) ctx.drawImage(img, -w / 2, -h, w, h);
     else {
       ctx.fillStyle = petColor || '#9fc6ff';
       ctx.beginPath();
-      ctx.arc(x, gy - h * 0.4 + bob, w * 0.26, 0, Math.PI * 2);
+      ctx.arc(0, -h * 0.4, w * 0.26, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
@@ -3977,25 +4037,39 @@ export class Renderer {
     this.afterimages = keep;
   }
 
+  /** v7.3.0 / v8.11.0 영지 기사단 4인 전원 캔버스 지원 출격 (실비아·멀린·아서·마르코) */
   drawKnightSupport(ctx, dt, now) {
     const b = this.battle;
     const kn = b && b.s && b.s.guild && b.s.guild.knights;
     if (!kn) return;
+    const hasPal = (kn.paladin || 0) > 0;
     const hasArc = (kn.archer || 0) > 0;
     const hasMag = (kn.mage || 0) > 0;
-    if ((hasArc || hasMag) && now - (this.lastKnightShot || 0) >= 1800) {
+    const hasMer = (kn.merchant || 0) > 0;
+    if ((hasPal || hasArc || hasMag || hasMer) && now - (this.lastKnightShot || 0) >= 1800) {
       const target = b.monsters.find((m) => !m.dead && !m.dying);
       if (target) {
         this.lastKnightShot = now;
+        this._knightSeq = (this._knightSeq || 0) + 1;
         const gy = this.groundY();
         const sc = this.scale();
-        const sx = Math.max(12, this.worldX(b.player.x) - 48 * sc);
+        const heroX = this.heroVisX != null ? this.heroVisX : this.worldX(b.player.x);
+        const sx = Math.max(12, heroX - 48 * sc);
         const tx = this.worldX(target.x);
         if (hasArc) {
-          this.knightShots.push({ kind: 'arrow', sx, sy: gy - 44 * sc, tx, ty: gy - 38 * sc, t0: now, dur: 260, color: '#5ee1a3' });
+          this.knightShots.push({ kind: 'arrow', sx, sy: gy - 44 * sc, tx, ty: gy - 38 * sc, t0: now, dur: 250, color: '#5ee1a3' });
+          this.knightShots.push({ kind: 'arrow', sx: sx + 6 * sc, sy: gy - 50 * sc, tx, ty: gy - 44 * sc, t0: now + 70, dur: 250, color: '#8ff0a4' });
         }
         if (hasMag) {
           this.knightShots.push({ kind: 'orb', sx: sx - 8 * sc, sy: gy - 62 * sc, tx, ty: gy - 42 * sc, t0: now + 90, dur: 320, color: '#b98bff' });
+        }
+        if (hasPal && this._knightSeq % 2 === 1) {
+          // 🛡️ 성기사 아서: 영웅 앞 황금-푸른 성광 방패 파동 돌격
+          this.knightShots.push({ kind: 'shield', sx: heroX + 6 * sc, sy: gy - 36 * sc, tx: Math.min(tx, heroX + 115 * sc), ty: gy - 36 * sc, t0: now + 40, dur: 420, color: '#69c0ff' });
+        }
+        if (hasMer && this._knightSeq % 2 === 0) {
+          // 💰 대상인 마르코: 포물선 황금 보급 금화 투하
+          this.knightShots.push({ kind: 'coin', sx: sx - 12 * sc, sy: gy - 68 * sc, tx: heroX + 18 * sc, ty: gy - 12 * sc, t0: now + 120, dur: 460, color: '#ffd76a' });
         }
       }
     }
@@ -4011,7 +4085,8 @@ export class Renderer {
       if (age < 0) continue;
       const k = clamp(age / s.dur, 0, 1);
       const x = lerp(s.sx, s.tx, k);
-      const y = lerp(s.sy, s.ty, k) - Math.sin(Math.PI * k) * 18 * sc;
+      const arcH = s.kind === 'coin' ? 38 : s.kind === 'shield' ? 6 : 18;
+      const y = lerp(s.sy, s.ty, k) - Math.sin(Math.PI * k) * arcH * sc;
       ctx.strokeStyle = s.color;
       ctx.fillStyle = s.color;
       if (s.kind === 'arrow') {
@@ -4020,10 +4095,39 @@ export class Renderer {
         ctx.moveTo(x - 16 * sc, y + 2 * sc);
         ctx.lineTo(x + 6 * sc, y);
         ctx.stroke();
+      } else if (s.kind === 'shield') {
+        const fade = 1 - k * 0.7;
+        ctx.globalAlpha = fade;
+        ctx.lineWidth = 4 * sc;
+        ctx.beginPath();
+        ctx.arc(x, y, 20 * sc, -1.05, 1.05);
+        ctx.stroke();
+        ctx.strokeStyle = '#ffe9a8';
+        ctx.lineWidth = 1.8 * sc;
+        ctx.beginPath();
+        ctx.arc(x + 3 * sc, y, 16 * sc, -0.9, 0.9);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      } else if (s.kind === 'coin') {
+        const fade = 1 - k * 0.4;
+        ctx.globalAlpha = fade;
+        ctx.beginPath();
+        ctx.arc(x, y, 5.2 * sc, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#fff9d6';
+        ctx.beginPath();
+        ctx.arc(x - 1.5 * sc, y - 1.5 * sc, 2 * sc, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
       } else {
         ctx.beginPath();
-        ctx.arc(x, y, 5.5 * sc, 0, Math.PI * 2);
+        ctx.arc(x, y, 5.8 * sc, 0, Math.PI * 2);
         ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+        ctx.lineWidth = 1.4 * sc;
+        ctx.beginPath();
+        ctx.arc(x, y, (8 + k * 5) * sc, 0, Math.PI * 2);
+        ctx.stroke();
       }
     }
     ctx.restore();

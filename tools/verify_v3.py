@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "8.10.0"
+EXPECTED_VER = "8.11.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui-settings.js", "src/ui.js", "src/sound.js"]
 
@@ -6568,6 +6568,14 @@ def main():
     ok(boss810["enraged"], "보스 HP 50% 이하 진입 시 광폭화(bossEnrage) 발동", json.dumps(boss810))
     ok(boss810["counterOk"], "보스 강공격 전조 중 캔버스 탭 → 퍼펙트 반격(tapCounter)·강공격 저지·카운터 가드 발동", json.dumps(boss810))
     ok("ev.t === 'tapCounter'" in read("src/render.js") and "ev.t === 'bossEnrage'" in read("src/render.js") and "지금 탭→반격" in read("src/render.js"), "render.js — 보스 광폭 오라·위험 장판·퍼펙트 반격 카운터 캔버스 연출")
+
+    # ── 58) v8.11.0 🐾 펫 아키타입별 자유 모션 & 🛡️ 영지 기사단 4인 전원 캔버스 출격 ──
+    section("v8.11.0 펫 아키타입별 자유 모션 & 영지 기사단 4인 전원 출격")
+    rnd811 = read("src/render.js")
+    ok(
+        all(x in rnd811 for x in ["pet.id === 'dragon'", "pet.id === 'golem'", "dashDist", "hasPal", "hasMer", "kind: 'shield'", "kind: 'coin'"]),
+        "render.js — 펫 비행 스웁/맹수 도약/골렘 슬램 자유 모션 & 기사단 4인(아서·실비아·멀린·마르코) 전원 캔버스 출격",
+    )
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:
