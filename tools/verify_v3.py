@@ -6256,6 +6256,17 @@ def main():
     ok("this.dmgStyle = 'simple'" in r81 and "cap = simple ? 14 : 40" in r81 and "mergeMs = simple ? 320 : 190" in r81, "render.js — 피해 숫자 '간단' 기본(합치기 320ms · 최대 14개 · 작은 크기)", "")
     ok("case 'dmg-style': actions.setDmgStyle(v); break;" in read("src/ui.js") and "setDmgStyle: (style)" in app81, "ui.js · app.js — 피해 숫자 밀도 설정 배선", "")
 
+    hub81 = js(ctx, """
+      const now = Date.now();
+      const s = defaultState(now);
+      s.tower = { ...s.tower, best: 5, cleared: [1, 2, 3, 4, 5] };
+      const sum = collectTodoSummary(s, null, now);
+      const listed = sum.items.some((i) => i.id === 'towerSweep');
+      const r = claimAllReady(s, null, now);
+      return { listed, claimed: r.claimed, sweepGone: towerSweepInfo(s, now).available, gold: s.gold > 0 };
+    """)
+    ok(hub81["listed"] and any('탑' in c for c in hub81["claimed"]) and hub81["sweepGone"] is False and hub81["gold"], "허브가 탑 일일 소탕을 목록에 올리고 일괄 수령한다(towerSweepInfo.available 필드 불일치 수정)", json.dumps(hub81, ensure_ascii=False))
+
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

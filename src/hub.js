@@ -54,7 +54,7 @@ export function collectTodoSummary(state, battleStats = null, now = Date.now()) 
   }
   // 7) 도전의 탑 일일 소탕
   const sw = towerSweepInfo(state, now);
-  if (sw.can) {
+  if (sw.available) {
     items.push({ id: 'towerSweep', icon: '🗼', label: '도전의 탑 일일 소탕', detail: `${sw.floor}층 기준 보상`, count: 1 });
   }
   // 8) 주간 보스 마일스톤
@@ -144,7 +144,7 @@ export function claimAllReady(state, battleStats = null, now = Date.now(), rng =
     if (r.ok && r.count > 0) { claimed.push(`🎖️ 성장 패스 ${r.count}단계`); count += r.count; }
   }
   // 7) 도전의 탑 일일 소탕
-  if (towerSweepInfo(state, now).can) {
+  if (towerSweepInfo(state, now).available) {
     const r = towerSweepClaim(state, now);
     if (r.ok) { claimed.push('🗼 탑 일일 소탕'); count += 1; }
   }
