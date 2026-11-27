@@ -504,6 +504,21 @@ export function portfolioOf(state, now = Date.now()) {
   };
 }
 
+/** v8.9.0 후반 대지주 자산 스케일 보너스 (부동산 평가액 50만+ 부터 단계적 해금, 초중반 밸런스 불변) */
+export function tycoonBonus(landValue) {
+  const v = Math.max(0, Number(landValue) || 0);
+  if (v < 500000) return { tier: 0, atkPct: 0, goldPct: 0, bossPct: 0, nextVal: 500000 };
+  const tier = Math.min(6, Math.max(1, Math.floor(Math.log10(v / 500000) * 2.5) + 1));
+  const nextVal = tier >= 6 ? 0 : Math.round(500000 * Math.pow(10, tier / 2.5));
+  return {
+    tier,
+    atkPct: tier * 4,
+    goldPct: tier * 6,
+    bossPct: tier * 3,
+    nextVal,
+  };
+}
+
 /** 보유 매물에서 나오는 영구 버프 */
 export function computeBuffs(state, now = Date.now()) {
   const p = portfolioOf(state, now);
@@ -515,6 +530,7 @@ export function computeBuffs(state, now = Date.now()) {
   const goldPct = Math.min(B.goldCap, Math.floor(p.landValue / B.goldPerAsset) * B.goldPer);
   const critPct = Math.min(B.critCap, Math.floor(buildings / B.critPerCities) * B.critPer);
   const dropPct = Math.min(B.dropCap, Math.floor(p.pyeong / B.dropPerPyeong) * B.dropPer);
+  const tycoon = tycoonBonus(p.landValue);
 
   // v3.4.0: 권역 세트 · 랜드마크 보너스는 '건물주 버프'와 별도 항목으로 가산된다.
   const sets = p.setBuffs || regionSetBuffs(p.land && p.land.owned);
@@ -569,6 +585,10 @@ export function computeBuffs(state, now = Date.now()) {
     gldCdrPct: Math.round(Math.max(0, Math.min(10, Math.floor(Number(state && state.guild && state.guild.knights && state.guild.knights.mage) || 0))) * 0.8 * 10) / 10,
     synBossDmgPct: syn.bossDmgPct,
     synExpPct: syn.expPct,
+    tycoon,
+    tycoonAtkPct: tycoon.atkPct,
+    tycoonGoldPct: tycoon.goldPct,
+    tycoonBossPct: tycoon.bossPct,
     synText: syn.text,
     synLandmarkLevels: syn.landmark.levels,
     synMega: syn.landmark.mega,

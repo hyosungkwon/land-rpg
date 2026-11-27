@@ -5,12 +5,12 @@ import { birthState } from './rebirth.js';
 
 const num = (v, d = 0) => (typeof v === 'number' && isFinite(v) ? v : typeof v === 'string' && v !== '' && isFinite(Number(v)) ? Number(v) : d);
 
-/* ────────────────────────────── 🏦 영지 은행 ────────────────────────────── */
+/* ────────────────────────────── 🏦 영지 은행 (v8.9.0 금리 현실화 + 강화석/초월석 만기 펀드) ────────────────────────────── */
 export const BANK_MAX_SLOTS = 3;
 export const BANK_PLANS = [
-  { key: 'short', label: '1시간', title: '단기 예금', ms: 1 * 3600 * 1000,  ratePct: 8,  minGold: 10000 },
-  { key: 'mid',   label: '4시간', title: '중기 예금', ms: 4 * 3600 * 1000,  ratePct: 22, minGold: 50000 },
-  { key: 'long',  label: '12시간', title: '장기 예금', ms: 12 * 3600 * 1000, ratePct: 50, minGold: 150000 },
+  { key: 'short', label: '1시간',  title: '단기 예금', ms: 1 * 3600 * 1000,  ratePct: 4,  minGold: 10000,  bonusShards: 15,  bonusPoints: 0 },
+  { key: 'mid',   label: '4시간',  title: '중기 예금', ms: 4 * 3600 * 1000,  ratePct: 12, minGold: 50000,  bonusShards: 45,  bonusPoints: 0 },
+  { key: 'long',  label: '12시간', title: '장기 펀드', ms: 12 * 3600 * 1000, ratePct: 25, minGold: 150000, bonusShards: 120, bonusPoints: 2 },
 ];
 export const BANK_PLAN_BY_KEY = BANK_PLANS.reduce((m, p) => { m[p.key] = p; return m; }, {});
 
@@ -65,7 +65,9 @@ export function bankStatus(state, now = Date.now()) {
     if (ready) readyCount += 1;
     totalPrincipal += dep.principal;
     const interest = Math.round(dep.principal * (dep.ratePct / 100));
-    return { ...dep, plan, leftMs, pct, ready, interest, payout: dep.principal + interest };
+    const bonusShards = plan.bonusShards || 0;
+    const bonusPoints = plan.bonusPoints || 0;
+    return { ...dep, plan, leftMs, pct, ready, interest, payout: dep.principal + interest, bonusShards, bonusPoints };
   });
   return {
     slots,
@@ -109,20 +111,29 @@ export function openDeposit(state, planKey, amountOrRatio = 0.5, now = Date.now(
   return { ok: true, slot, plan, interest: Math.round(principal * (plan.ratePct / 100)) };
 }
 
-/** 만기 예금 원금+이자 수령 */
+/** 만기 예금 원금+이자+강화석/초월석 보너스 수령 */
 export function claimDeposit(state, id, now = Date.now()) {
   if (!state || !state.bank || !Array.isArray(state.bank.deposits)) return { ok: false, reason: '예금 정보가 없습니다.' };
   const idx = state.bank.deposits.findIndex((d) => d.id === id);
   if (idx < 0) return { ok: false, reason: '예금 계좌를 찾을 수 없습니다.' };
   const dep = state.bank.deposits[idx];
   if (now < dep.maturesAt) return { ok: false, reason: '아직 만기가 되지 않았습니다.' };
+  const plan = BANK_PLAN_BY_KEY[dep.planKey] || BANK_PLANS[0];
   const interest = Math.round(dep.principal * (dep.ratePct / 100));
   const payout = dep.principal + interest;
+  const bonusShards = plan.bonusShards || 0;
+  const bonusPoints = plan.bonusPoints || 0;
   state.bank.deposits.splice(idx, 1);
   state.gold = Math.max(0, Math.floor(num(state.gold, 0))) + payout;
+  if (bonusShards > 0) state.shards = Math.max(0, Math.floor(num(state.shards, 0))) + bonusShards;
+  if (bonusPoints > 0) {
+    const rb = birthState(state);
+    rb.points = Math.max(0, Math.floor(num(rb.points, 0))) + bonusPoints;
+    rb.totalPoints = Math.max(0, Math.floor(num(rb.totalPoints, 0))) + bonusPoints;
+  }
   state.bank.totalInterest = Math.max(0, Math.floor(num(state.bank.totalInterest, 0))) + interest;
   state.bank.count = Math.max(0, Math.floor(num(state.bank.count, 0))) + 1;
-  return { ok: true, principal: dep.principal, interest, payout };
+  return { ok: true, principal: dep.principal, interest, payout, bonusShards, bonusPoints };
 }
 
 /** 중도 해지 — 원금 100% 안전 반환(이자 없음) */

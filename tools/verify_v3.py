@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "8.8.0"
+EXPECTED_VER = "8.9.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui-settings.js", "src/ui.js", "src/sound.js"]
 
@@ -5931,7 +5931,7 @@ def main():
       const keptAfterRebirth = megaEffects(s).totalLv === 3;
       const norm = normalizeState({ mega: { ktx: 99, skytower: -1 } }, now);
       return {
-        bankOk: d1.ok && !denyEarly.ok && can1.ok && restored && d2.ok && cl2.ok && cl2.interest === 44000 && s.bank.totalInterest === 44000,
+        bankOk: d1.ok && !denyEarly.ok && can1.ok && restored && d2.ok && cl2.ok && cl2.interest === 24000 && cl2.bonusShards === 45 && s.bank.totalInterest === 24000,
         megaOk: bKtx.ok && bSky.ok && bPort.ok && nextRent > baseRent && nextAtk > baseAtk && nextFee < baseFee && keptAfterRebirth,
         normOk: norm.mega.ktx === 3 && norm.mega.skytower === 0,
       };
@@ -6509,6 +6509,33 @@ def main():
     ok(bal88["gldCdrOk"] and bal88["trimmed"], "대마도사 멀린 쿨감 실반영 · 시간의 모래시계 장착 덱 신규 스킬 쿨단축", json.dumps(bal88))
     ok(bal88["overCritOk"] and bal88["atkSpdOk"], "초과 치명타→치명피해 자동 전환 · Lv.160+ 공속 옵션 정상 반영(최소 200ms)", json.dumps(bal88))
     ok(bal88["runeCount"] == 12 and bal88["thornsUp"], "신규 스킬 6종 Lv.3 룬 12종 정의 및 전투 효과 실발동", json.dumps(bal88))
+
+    # ── 56) v8.9.0 🏦 영지 은행 펀드 · 👑 대지주 스케일 보너스 · 🏛️ 영지 인프라 통합 ──
+    section("v8.9.0 영지 은행 펀드 · 대지주 자산 보너스 · 영지 인프라 통합")
+    eco89 = js(ctx, """
+      const now = 300000;
+      const s = defaultState(now);
+      s.gold = 500000;
+      const sh0 = s.shards;
+      const pt0 = s.rebirth.points;
+      const dL = openDeposit(s, 'long', 200000, now);
+      const clL = claimDeposit(s, dL.slot.id, dL.slot.maturesAt + 10);
+      const tLow = tycoonBonus(200000);
+      const tMid = tycoonBonus(5000000);
+      const tMax = tycoonBonus(200000000);
+      // 대지주 보너스 computeBuffs/calcStats 실반영
+      for (const c of CITIES.slice(0, 30)) s.land.owned[c.key] = 50;
+      const bf = computeBuffs(s, now);
+      const st = calcStats(s, bf);
+      return {
+        fundOk: clL.ok && clL.interest === 50000 && clL.bonusShards === 120 && clL.bonusPoints === 2 && s.shards === sh0 + 120 && s.rebirth.points === pt0 + 2,
+        tycoonScale: tLow.tier === 0 && tMid.tier >= 3 && tMax.tier === 6 && tMax.atkPct === 24 && tMax.bossPct === 18,
+        applied: bf.tycoon && bf.tycoon.tier >= 1 && st.bossDmgPct >= bf.tycoonBossPct / 100,
+      };
+    """)
+    ok(eco89["fundOk"], "영지 은행 장기 펀드 만기 시 이자 25% + 💎120 + ✨2P 정상 지급", json.dumps(eco89))
+    ok(eco89["tycoonScale"] and eco89["applied"], "후반 대지주 자산 보너스(50만~1억+) 로그 스케일 및 전투 스탯 실반영", json.dumps(eco89))
+    ok("estateInfraCard" in read("src/ui-land.js") and "estateInfraCard" in read("src/ui.js") and "대지주 자산 보너스" in read("src/ui-land.js"), "ui-land.js · ui.js — 영지 인프라 통합 요약 및 대지주 보너스 대시보드 배선")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

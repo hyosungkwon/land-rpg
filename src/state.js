@@ -420,9 +420,9 @@ export const NO_BUFF = { atkPct: 0, goldPct: 0, hpPct: 0, dropPct: 0, critPct: 0
 export function calcStats(s, buffs = NO_BUFF) {
   const b = { ...NO_BUFF, ...(buffs || {}) };
   const add = (v) => (typeof v === 'number' && isFinite(v) ? v : 0);
-  // v3.4.0: 권역 세트 · 랜드마크 보너스는 건물주 버프와 별도로 더해진다.
-  const extraAtk = add(b.setAtkPct) + add(b.landmarkAtkPct) + add(b.synAtkPct);
-  const extraGold = add(b.setGoldPct) + add(b.landmarkGoldPct) + add(b.synGoldPct);
+  // v3.4.0: 권역 세트 · 랜드마크 보너스 · v8.9.0 대지주 스케일 보너스
+  const extraAtk = add(b.setAtkPct) + add(b.landmarkAtkPct) + add(b.synAtkPct) + add(b.tycoonAtkPct);
+  const extraGold = add(b.setGoldPct) + add(b.landmarkGoldPct) + add(b.synGoldPct) + add(b.tycoonGoldPct);
   const extraHp = add(b.setHpPct);
   const extraCrit = add(b.setCritPct);
   const extraDrop = add(b.setDropPct) + add(b.synDropPct);
@@ -493,7 +493,7 @@ export function calcStats(s, buffs = NO_BUFF) {
   const attackMs = Math.max(200, baseAttackMs * (1 - Math.min(0.4, (gm.atkSpd + petAtkSpdPct + gem.atkSpdPct) / 100)));
   const lifesteal = Math.min(0.25, (gm.lifesteal + rel.lifestealPct + gem.lifestealPct) / 100); // 흡혈 상한 25%
   const petBossDmgPct = ((petPas.bossDmgPct || 0) + subBossPct) / 100; // v4.2 용의 숨결 + v5.3 보조 펫 50%
-  const bossDmgPct = gm.bossDmg / 100 + petBossDmgPct + synBoss + rel.bossDmgPct / 100;
+  const bossDmgPct = gm.bossDmg / 100 + petBossDmgPct + synBoss + rel.bossDmgPct / 100 + add(b.tycoonBossPct) / 100;
   const whirlDmgPct = gm.whirlDmg / 100;
   const dps = (atk / (attackMs / 1000)) * (1 + crit * (critDmg - 1));
   return {

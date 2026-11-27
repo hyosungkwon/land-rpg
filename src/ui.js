@@ -67,7 +67,7 @@ import { rarityBadge, rarityName, gearSlotCards, gearInventory, gachaCard } from
 import {
   paybackText, trendHtml, traitBadge,
   invasionCard, regionMapCard, expeditionCard, investDashboardCard, limitOrdersCard, citadelCard,
-  bankCard, megaProjectCard, buildMarketList, tplLandMarket, landSynergyDashCard,
+  bankCard, megaProjectCard, estateInfraCard, buildMarketList, tplLandMarket, landSynergyDashCard,
 } from './ui-land.js';
 import { bankStatus } from './bank.js';
 import { invasionStatus } from './invasion.js';
@@ -2606,9 +2606,9 @@ function tplLandMarketTab(ui) {
   return `${holdingsCard(ui)}${tplLandMarket(ui)}`;
 }
 
-/* ───────────── 🎪 이벤트 — 경매·지정가·은행·성채·메가·거래 기록 ───────────── */
+/* ───────────── 🎪 이벤트 — 경매·은행·영지 인프라(성채+메가)·거래 기록·(고급)지정가 ───────────── */
 function tplLandEvent(ui) {
-  return `${auctionCard(ui)}${limitOrdersCard(ui)}${bankCard(ui)}${citadelCard(ui)}${megaProjectCard(ui)}${tradeRecordCard(ui)}`;
+  return `${auctionCard(ui)}${bankCard(ui)}${estateInfraCard(ui)}${tradeRecordCard(ui)}${limitOrdersCard(ui)}`;
 }
 
 function holdingsCard(ui) {

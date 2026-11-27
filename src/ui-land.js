@@ -114,6 +114,11 @@ export function landSynergyDashCard(ui) {
       </div>`
     : `<div class="dash-div"><span>🏡 <b>일일 영지 배당</b> · 영지 3곳+ 또는 자산 5만+ 달성 시 매일 ✨초월석·🏅훈장·💠보석 지급</span></div>`;
 
+  const ty = buffs.tycoon && buffs.tycoon.tier > 0 ? buffs.tycoon : null;
+  const tyLine = ty
+    ? `<div class="dash-div ready"><span>👑 <b>대지주 자산 보너스 T${ty.tier}</b> · 공격 +${ty.atkPct}% · 골드 +${ty.goldPct}% · 보스 +${ty.bossPct}%</span>${ty.nextVal ? `<span class="tiny dim">다음 💰${formatGold(ty.nextVal)}</span>` : '<span class="tiny dim">MAX</span>'}</div>`
+    : `<div class="dash-div"><span>👑 <b>대지주 스케일 보너스</b> · 부동산 평가액 💰50만+ 달성 시 공격·골드·보스 추가 증폭</span></div>`;
+
   return `
   <div class="card land-dash" id="landSynergyDash">
     <div class="card-head">
@@ -126,6 +131,7 @@ export function landSynergyDashCard(ui) {
       <span class="dash-rent-acc">회수 <b>${paybackText(p.incomePerHour > 0 ? p.landValue / p.incomePerHour : 0)}</b></span>
     </div>
     ${buffBlock}
+    ${tyLine}
     ${divLine}
     ${nextBlock}
     <div class="dash-invest">
@@ -467,20 +473,20 @@ export function bankCard(ui) {
     ? st.slots.map((sl) => `
       <div class="bank-row${sl.ready ? ' ready' : ''}">
         <div class="ord-mid">
-          <div class="ord-t">🏦 ${esc(sl.plan.title)} (${sl.plan.label} · <b>+${sl.ratePct}%</b>) · 💰${formatGold(sl.principal)}</div>
-          <div class="ord-s">${sl.ready ? `만기 도달! 수령액 💰${formatGold(sl.payout)} (+💰${formatGold(sl.interest)}) — 📋 오늘의 할 일에서 수령` : `남은 ${hhmmss(sl.leftMs)} · 예상 이자 +💰${formatGold(sl.interest)}`}</div>
+          <div class="ord-t">🏦 ${esc(sl.plan.title)} (${sl.plan.label} · <b>+${sl.ratePct}%</b>${sl.bonusShards ? ` +💎${sl.bonusShards}` : ''}${sl.bonusPoints ? ` +✨${sl.bonusPoints}P` : ''}) · 💰${formatGold(sl.principal)}</div>
+          <div class="ord-s">${sl.ready ? `만기 도달! 💰${formatGold(sl.payout)}${sl.bonusShards ? ` · 💎${sl.bonusShards}` : ''}${sl.bonusPoints ? ` · ✨${sl.bonusPoints}P` : ''} — 📋 오늘의 할 일에서 수령` : `남은 ${hhmmss(sl.leftMs)} · 예상 +💰${formatGold(sl.interest)}${sl.bonusShards ? ` · 💎${sl.bonusShards}` : ''}`}</div>
           <div class="prog tiny-prog${sl.ready ? ' gold' : ''}" style="margin-top:3px"><i style="width:${Math.round(sl.pct * 100)}%"></i></div>
         </div>
         ${sl.ready
           ? `<button class="mini ghost js-todo" type="button" data-action="goto-todo" aria-label="오늘의 할 일로 이동">📋 할 일</button>`
           : `<button class="mini ghost" type="button" data-action="bank-cancel" data-value="${sl.id}">해지</button>`}
       </div>`).join('')
-    : '<div class="tiny dim" style="margin-top:4px">여유 골드를 정기 예금에 예치해 복리 이자를 받으세요. 중도 해지 시 원금은 100% 반환됩니다.</div>';
+    : '<div class="tiny dim" style="margin-top:4px">여유 골드를 예치하면 만기 시 이자 + <b>💎강화석 · ✨초월석</b> 펀드 보너스를 함께 받습니다. (중도 해지 시 원금 100% 반환)</div>';
   const full = st.slots.length >= st.maxSlots;
   const planBtns = BANK_PLANS.map((p) => {
-    const can = !full && (s.gold || 0) >= p.minGold * 2;
     const canMin = !full && (s.gold || 0) >= p.minGold;
-    return `<button class="btn small ${canMin ? 'ghost' : 'ghost'} wide" type="button" data-action="bank-open" data-value="${p.key}" ${canMin ? '' : 'disabled'}>${p.label} +${p.ratePct}%<small style="display:block;font-size:9px;opacity:.75">${can ? '골드 50%' : `최소 ${formatGold(p.minGold)}`}</small></button>`;
+    const bonusTxt = p.bonusPoints ? `💎${p.bonusShards}+✨${p.bonusPoints}P` : `💎${p.bonusShards}`;
+    return `<button class="btn small ghost wide" type="button" data-action="bank-open" data-value="${p.key}" ${canMin ? '' : 'disabled'}>${p.label} +${p.ratePct}%<small style="display:block;font-size:9px;opacity:.82">${bonusTxt}</small></button>`;
   }).join('');
   return `
   <div class="card bank-card${st.readyCount ? ' ready' : ''}" id="bankCard">
@@ -529,6 +535,30 @@ export function megaProjectCard(ui) {
     <div class="tiny muted">전국 영지망을 연결하는 초대형 국가 인프라입니다. 완공된 프로젝트는 <b>전국 영지 지도</b>에 표시되며 환생 후에도 유지됩니다.</div>
     <div class="cit-list">${rows}</div>
   </div>`;
+}
+
+/** v8.9.0 영지 인프라 통합 요약 래퍼 (영지 성채 5종 + 메가 프로젝트 4종 한눈에 확인) */
+export function estateInfraCard(ui) {
+  const s = ui.s;
+  const cit = citadelEffects(s);
+  const meg = megaEffects(s);
+  const sumAtk = Math.round((cit.atkPct + meg.atkPct) * 10) / 10;
+  const sumRent = Math.round((cit.rentPct + meg.rentPct) * 10) / 10;
+  const sumFee = Math.round((cit.tradeFeeDiscount * 100 + meg.feeReducePct) * 10) / 10;
+  return `
+  <div class="card" id="estateInfraSummary">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🏛️</span>영지 인프라 통합 현황<small>성채 Lv.${cit.totalLv}/${cit.maxTotalLv} · 메가 Lv.${meg.totalLv}/${meg.maxTotalLv}</small></div>
+      <span class="tiny dim">환생 영구 유지</span>
+    </div>
+    <div class="dash-buffs" style="margin-top:4px">
+      <span class="dash-buff">⚔️ 공격 <b>+${sumAtk}%</b></span>
+      <span class="dash-buff">⏱️ 쿨감 <b>-${cit.skillCdrPct}%</b></span>
+      <span class="dash-buff">🏢 임대 <b>+${sumRent}%</b></span>
+      <span class="dash-buff">💸 거래세 <b>-${sumFee}%</b></span>
+    </div>
+  </div>
+  ${citadelCard(ui)}${megaProjectCard(ui)}`;
 }
 
 /* ───────────── 🛒 매물 투자 (전국 229개 시군구) ───────────── */
