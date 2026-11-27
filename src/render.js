@@ -3,7 +3,7 @@
 // v2: 새 스프라이트(대기/공격/스킬 3프레임) + 검기 아크·타격 스파크·스킬 이펙트.
 //     배경은 오프스크린 캔버스에 한 번만 그려 매 프레임 비용을 줄인다(모바일 발열/멈춤 방지).
 import { ECON, THEMES, spriteSrc, bgSrc, RARITIES, RARITY_INDEX, monsterMotion, monsterAttack } from './data.js';
-import { equippedItem, isMythicSlot } from './gear.js';
+import { equippedItem, isMythicSlot, gearSetStatus } from './gear.js';
 import { petStageInfo, jobOf, isUpperJob } from './meta.js';
 import { TOWER_GIMMICKS, towerGimmicks } from './tower.js';
 import { DAILY, dailyDpsCap, dailyGradeAt } from './daily.js';
@@ -16,6 +16,15 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, t) => a + (b - a) * t;
 const easeOut = (t) => 1 - (1 - clamp(t, 0, 1)) * (1 - clamp(t, 0, 1));
 const FONT = 'system-ui, -apple-system, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
+
+/** v8.14.0 장비 테마 세트 5종 전용 리본 검기 · 타격 파티클 팔레트 */
+const SET_FX_THEMES = {
+  dragon:   { glow: '#ff4d1a', mid: '#ff9a3d', core: '#fff2c2', spark: '#ff6a2a', kind: 'flame' },
+  abyss:    { glow: '#7b2cbf', mid: '#c084fc', core: '#f3e8ff', spark: '#d946ef', kind: 'void' },
+  guardian: { glow: '#38bdf8', mid: '#9be7ff', core: '#f0f9ff', spark: '#7cc4ff', kind: 'crystal' },
+  storm:    { glow: '#f59e0b', mid: '#7ff6ff', core: '#fffbe6', spark: '#ffe36a', kind: 'bolt' },
+  fortune:  { glow: '#10b981', mid: '#ffd76a', core: '#ecfdf5', spark: '#5ee1a3', kind: 'star' },
+};
 
 /** v7.5.0 전투 데미지 숫자 축약 (12500 → 12.5K, 1500000 → 1.5M, 2300000000 → 2.3B) */
 function fmtDmg(val) {
@@ -314,7 +323,25 @@ export class Renderer {
         this.combo = (this.comboAt && now - this.comboAt < 2400) ? (this.combo || 0) + 1 : 1;
         this.comboAt = now;
         this.addFloater(ev.x, ev.dmg, ev.crit, ev.kind, null, bossHit ? 1.28 : 1, now);
-        this.burst(ev.x, ev.crit ? '#ffd76a' : '#fff1cf', ev.crit ? 18 : 8, ev.isBoss);
+        const stFx = this._rar && this._rar.setFx;
+        const burstCol = stFx ? (ev.crit ? stFx.core : stFx.spark) : (ev.crit ? '#ffd76a' : '#fff1cf');
+        this.burst(ev.x, burstCol, ev.crit ? 18 : 8, ev.isBoss);
+        if (stFx && this.effects) {
+          if (stFx.kind === 'bolt' && ev.crit) this.spawnLightning(ECON.playerX + 60, ev.x, stFx.mid, now);
+          else if (stFx.kind === 'void' && ev.crit) this.rings.push({ x: ev.x, life: 1, r: 10, color: stFx.mid, wide: 1.5 });
+          else if (this.embers.length < 150) {
+            for (let k = 0; k < (ev.crit ? 4 : 2); k++) {
+              this.embers.push({
+                x: ev.x + (Math.random() - 0.5) * 26,
+                y: this.groundY() - 32 * this.scale() + (Math.random() - 0.5) * 22 * this.scale(),
+                vy: -42 - Math.random() * 52,
+                life: 1,
+                s: 1.8 + Math.random() * 2.2,
+                color: k % 2 === 0 ? stFx.spark : stFx.mid,
+              });
+            }
+          }
+        }
         if (ev.crit) {
           this.burst(ev.x, '#ff6a4d', 7, false);
           this.rings.push({ x: ev.x, life: 1, r: 12, color: '#ffd76a', wide: 1.8 });
@@ -1142,7 +1169,11 @@ export class Renderer {
     const wItem = s ? equippedItem(s, 'weapon') : null;
     const hasMythic = !!(s && ['weapon', 'armor', 'helmet', 'ring', 'amulet'].some((k) => isMythicSlot(s, k)));
     const wMythic = !!(s && isMythicSlot(s, 'weapon'));
-    const key = `${gr.weapon}|${gr.armor}|${gr.helmet}|${gr.ring}|${gr.amulet}|${wItem ? wItem.id : '-'}|${hasMythic ? 1 : 0}${wMythic ? 1 : 0}`;
+    // v8.14.0 활성 장비 테마 세트(2피스 이상 우선, 없으면 무기 테마) 감지
+    const activeSets = s ? gearSetStatus(s).filter((x) => x.count >= 2).sort((a, b) => b.count - a.count) : [];
+    const setId = activeSets.length ? activeSets[0].id : (wItem && wItem.set && SET_FX_THEMES[wItem.set] ? wItem.set : '');
+    const setFx = setId && SET_FX_THEMES[setId] ? SET_FX_THEMES[setId] : null;
+    const key = `${gr.weapon}|${gr.armor}|${gr.helmet}|${gr.ring}|${gr.amulet}|${wItem ? wItem.id : '-'}|${hasMythic ? 1 : 0}${wMythic ? 1 : 0}|${setId}`;
     if (this._rarKey === key) return this._rar;
     this._rarKey = key;
     const ids = Object.keys(gr);
@@ -1154,11 +1185,15 @@ export class Renderer {
       hasLegend: ids.some((k) => gr[k] === 'legend'),
       hasMythic,
       weaponGear: wItem,
-      // 무기 고유 검기 색(신화 초월 시 진홍-프리즘 검기 강조)
+      setId,
+      setFx,
+      // 무기·테마 세트 고유 검기 색(신화 초월 > 테마 세트 > 무기 고유 > 등급)
       pal: wMythic
-        ? { outer: '#ff4d9e', mid: '#ffcf5c', core: '#fff7fb' }
-        : wItem && wItem.fx ? wItem.fx : (RARITIES[wIdx] || RARITIES[0]).slash,
-      tint: wMythic ? '#ff5ca8' : wItem ? wItem.tint : null,
+        ? { glow: '#ff4d9e', mid: '#ffcf5c', core: '#fff7fb' }
+        : setFx
+          ? { glow: setFx.glow, mid: setFx.mid, core: setFx.core }
+          : wItem && wItem.fx ? wItem.fx : (RARITIES[wIdx] || RARITIES[0]).slash,
+      tint: wMythic ? '#ff5ca8' : setFx ? setFx.mid : wItem ? wItem.tint : null,
     };
     return this._rar;
   }
@@ -2262,8 +2297,9 @@ export class Renderer {
         y: tipY,
         t: now,
         color: (pal && pal.mid) || '#ffd76a',
-        glow: (pal && pal.glow) || '#ffb347',
+        glow: (pal && (pal.glow || pal.outer)) || '#ffb347',
         core: (pal && pal.core) || '#fff7dc',
+        kind: (this._rar && this._rar.setFx && this._rar.setFx.kind) || '',
       });
       if (this.swordTrail.length > 18) this.swordTrail.shift();
     }
@@ -2404,6 +2440,20 @@ export class Renderer {
       ctx.moveTo(p0.x, p0.y);
       ctx.lineTo(p1.x, p1.y);
       ctx.stroke();
+
+      // v8.14.0 테마 세트별 검기 끝 특수 글린트(얼음 결정·별·번개 틱)
+      if (p1.kind && i === pts.length - 1 && fade > 0.35) {
+        ctx.globalAlpha = fade * 0.85;
+        ctx.fillStyle = p1.color;
+        const gs = 4.5 * sc * fade;
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y - gs);
+        ctx.lineTo(p1.x + gs * 0.7, p1.y);
+        ctx.lineTo(p1.x, p1.y + gs);
+        ctx.lineTo(p1.x - gs * 0.7, p1.y);
+        ctx.closePath();
+        ctx.fill();
+      }
     }
     ctx.restore();
   }

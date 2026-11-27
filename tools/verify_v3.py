@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "8.13.0"
+EXPECTED_VER = "8.14.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui-settings.js", "src/ui.js", "src/sound.js"]
 
@@ -6599,6 +6599,14 @@ def main():
         all(x in ui813 for x in ["'skill-reserve'", "fold-skill-reserve", "challengeQuickBar", "gearQuickSummary", "landDetailSection"])
         and all(x in css813 for x in [".sdk-res-btn", ".ch-quick-bar", ".gear-sum-bar", ".land-sec-div"]),
         "ui.js · style.css — 미장착 6종 스킬 접힘 보관함 · 도전 빠른 현황 바 · 장비/영지 요약 위계 정리",
+    )
+
+    # ── 61) v8.14.0 ⚔️ 장비 테마 세트 5종 전용 리본 검기 & 타격 파티클 ──
+    section("v8.14.0 장비 테마 세트 5종 전용 리본 검기 & 타격 파티클")
+    rnd814 = read("src/render.js")
+    ok(
+        all(x in rnd814 for x in ["SET_FX_THEMES", "gearSetStatus", "dragon:", "abyss:", "guardian:", "storm:", "fortune:", "this._rar.setFx"]),
+        "render.js — 5대 장비 테마 세트별 리본 검기·타격 파티클·치명타 특수 효과 연동",
     )
 
     print(f"\n통과 {passed} / 실패 {failed}")
