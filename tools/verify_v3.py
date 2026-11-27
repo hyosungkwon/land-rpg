@@ -95,9 +95,9 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "8.4.0"
-FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui.js", "src/sound.js"]
+EXPECTED_VER = "8.5.0"
+FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -6386,6 +6386,34 @@ def main():
     ok(sk84["eq1"] and sk84["eqSwap"] and sk84["pr"], "4슬롯 스킬 덱 슬롯 장착·위치 교환·프리셋 원탭 전환", json.dumps(sk84))
     ok(sk84["allCast"] and sk84["shieldUp"], "신규 6종 스킬(뇌전·메테오·절대영도·불굴방벽·흡혈검무·그림자처형) 전투 실발동", json.dumps(sk84))
     ok('id="skillDeckBar"' in read("src/ui.js") and "skill-deck-equip" in read("src/ui.js") and "skill-deck-preset" in read("src/ui.js") and "f.key === 'meteor'" in read("src/render.js"), "ui.js · render.js — 스킬 덱 편성 UI·퀵슬롯 연동·신규 6종 캔버스 이펙트")
+
+    # ── 52) v8.5.0 📈 S70+ 일일 영지 배당 · 🏆 월간 시즌 도전 & 영구 명예 트로피 ──
+    section("v8.5.0 S70+ 일일 영지 배당 & 월간 시즌 도전·트로피")
+    sn85 = js(ctx, """
+      const now = 1700000000000;
+      const s = defaultState(now);
+      s.peakStage = 75; s.maxStage = 75; s.tower.best = 20; s.rift.bestWave = 8;
+      s.guild.raid.clears = 1; s.rebirth.count = 3;
+      for (const c of CITIES.slice(0, 30)) s.land.owned[c.key] = 30;
+      const dv0 = estateDividendInfo(s, now);
+      const sc0 = seasonChallengeStatus(s, now);
+      const sum = collectTodoSummary(s, calcStats(s, {}), now);
+      const all = claimAllReady(s, calcStats(s, {}), now, () => 0.2);
+      const dv1 = estateDividendInfo(s, now);
+      const sc1 = seasonChallengeStatus(s, now);
+      // 다음 달 리셋 시 트로피는 영구 유지
+      const nextMonth = normalizeSeason(s.season, now + 40 * 86400 * 1000);
+      return {
+        divCan: dv0.canClaim && dv0.cur && dv0.cur.tier >= 3,
+        scReady: sc0.readyCount >= 6,
+        hubHas: sum.items.some((x) => x.id === 'dividend') && sum.items.some((x) => x.id === 'season'),
+        claimedOk: all.ok && !dv1.canClaim && sc1.readyCount === 0 && sc1.trophies.length >= 1,
+        trophyKept: nextMonth.trophies.length === sc1.trophies.length && nextMonth.claimed.length === 0,
+      };
+    """)
+    ok(sn85["divCan"] and sn85["scReady"] and sn85["hubHas"], "영지 배당 등급·월간 시즌 도전 달성·오늘의 할 일 허브 집계", json.dumps(sn85))
+    ok(sn85["claimedOk"] and sn85["trophyKept"], "허브 원탭 수령(배당+시즌 도전)·트로피 영구 보관·월간 리셋 정상", json.dumps(sn85))
+    ok("'./src/season.js'" in read("sw.js") and "seasonCard" in read("src/ui.js") and "estateDividendInfo" in read("src/ui-land.js"), "sw.js · ui.js · ui-land.js — season.js 프리캐시·대시보드 배당·시즌 카드 배선")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

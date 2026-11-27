@@ -6,6 +6,7 @@ import { passInfo, titleStatus } from './pass.js';
 import { riftStatus, RIFT_CARD_BY_ID } from './rift.js';
 import { KNIGHTS, knightLevel, knightCost, guildEffects, raidStatus } from './guild.js';
 import { computeCpBreakdown, recommendGrowth } from './guide.js';
+import { seasonChallengeStatus } from './season.js';
 import { esc, fmt, mmss } from './ui-fmt.js';
 
 /* ───────────── 🏺 고대 유물(아티팩트 12종 · v6.1.0) ───────────── */
@@ -241,5 +242,33 @@ export function cpGuideCard(ui) {
       <span class="tiny" style="color:var(--gold)">추천 Top ${recs.length}</span>
     </div>
     ${cpGuideInner(ui)}
+  </div>`;
+}
+
+/* ───────────── 🏆 월간 시즌 도전(8종) · 명예 트로피 진열장 (v8.5.0) ───────────── */
+export function seasonCard(ui) {
+  const st = seasonChallengeStatus(ui.s, Date.now());
+  const rows = st.items.map((it) => `
+    <div class="sn-row${it.claimed ? ' done' : it.claimable ? ' ready' : ''}">
+      <span class="sn-ico">${it.icon}</span>
+      <span class="sn-mid">
+        <b>${esc(it.name)} <small>${Math.min(it.cur, it.goal)}/${it.goal}</small></b>
+        <span>${esc(it.desc)} · ✨${it.points}P 💎${it.shards}${it.medals ? ` 🏅${it.medals}` : ''}</span>
+      </span>
+      <span class="sn-st">${it.claimed ? '완료✓' : it.claimable ? '🎁대기' : `${Math.round(it.pct * 100)}%`}</span>
+    </div>`).join('');
+  const trophyHtml = st.trophies.length
+    ? `<div class="sn-trophies">${st.trophies.map((t) => `<span class="tag">${t.icon} ${esc(t.month)} ${esc(t.name)}</span>`).join('')}</div>`
+    : '<div class="tiny dim" style="margin-top:6px">🏅 4개 달성 시 실버 트로피 · 8개 올클리어 시 그랜드 마스터 트로피 영구 진열</div>';
+  return `
+  <div class="card season-card${st.readyCount ? ' ready' : ''}" id="seasonCard" data-fold="season">
+    <div class="card-head">
+      <div class="card-title"><span class="t-ico">🏆</span>월간 시즌 도전<small>${st.month} · ${st.doneCount}/${st.total} · 트로피 ${st.trophies.length}</small></div>
+      ${st.readyCount > 0
+        ? `<button class="mini up" type="button" data-action="goto-todo">📋 ${st.readyCount}건 수령</button>`
+        : `<span class="tiny dim">매월 1일 KST 갱신</span>`}
+    </div>
+    <div class="sn-list">${rows}</div>
+    ${trophyHtml}
   </div>`;
 }

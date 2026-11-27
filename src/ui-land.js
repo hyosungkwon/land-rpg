@@ -15,6 +15,7 @@ import { invasionStatus } from './invasion.js';
 import { CITADEL_FACILITIES, CITADEL_MAX_LV, citadelEffects, citadelUpgradeQuote } from './citadel.js';
 import { BANK_PLANS, bankStatus, MEGA_PROJECTS, MEGA_MAX_LV, megaEffects, megaQuote } from './bank.js';
 import { petStageInfo } from './meta.js';
+import { estateDividendInfo } from './season.js';
 import { esc, fmt, hhmmss, mmss } from './ui-fmt.js';
 
 export const paybackText = (hours) => {
@@ -105,6 +106,14 @@ export function landSynergyDashCard(ui) {
       </div>`
     : `<div class="dash-next done">🗺️ <b>모든 권역 세트 완성 ${doneSets.length}/${sets.length}</b> · 완성 시너지가 전투에 모두 적용 중입니다.</div>`;
 
+  const dv = estateDividendInfo(s);
+  const divLine = dv.cur
+    ? `<div class="dash-div${dv.canClaim ? ' ready' : ''}">
+        <span>${dv.cur.icon} <b>영지 배당 T${dv.cur.tier} (${dv.cur.name})</b> · ✨${dv.cur.points}P 💎${dv.cur.shards}${dv.cur.medals ? ` 🏅${dv.cur.medals}` : ''}${dv.cur.gemLv ? ` 💠Lv.${dv.cur.gemLv}` : ''}</span>
+        ${dv.canClaim ? '<button class="mini up" type="button" data-action="goto-todo">📋 수령</button>' : '<span class="tiny dim">오늘 수령✓</span>'}
+      </div>`
+    : `<div class="dash-div"><span>🏡 <b>일일 영지 배당</b> · 영지 3곳+ 또는 자산 5만+ 달성 시 매일 ✨초월석·🏅훈장·💠보석 지급</span></div>`;
+
   return `
   <div class="card land-dash" id="landSynergyDash">
     <div class="card-head">
@@ -117,6 +126,7 @@ export function landSynergyDashCard(ui) {
       <span class="dash-rent-acc">회수 <b>${paybackText(p.incomePerHour > 0 ? p.landValue / p.incomePerHour : 0)}</b></span>
     </div>
     ${buffBlock}
+    ${divLine}
     ${nextBlock}
     <div class="dash-invest">
       <div class="dash-invest-h">⚡ 원탭 분산투자 <small class="dim">보유 골드 💰${formatGold(s.gold)} · 견적 확인 후 매수</small></div>

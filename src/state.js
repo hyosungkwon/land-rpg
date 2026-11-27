@@ -39,6 +39,7 @@ import { defaultCitadel, normalizeCitadel, citadelEffects } from './citadel.js';
 import { defaultRelics, normalizeRelics, relicEffects } from './relics.js';
 import { defaultGems, normalizeGems, gemEffects } from './gems.js';
 import { defaultPass, normalizePass, defaultTitles, normalizeTitles, titleBonus } from './pass.js';
+import { defaultSeason, normalizeSeason } from './season.js';
 import { defaultRift, normalizeRift } from './rift.js';
 import { defaultBank, normalizeBank, defaultMega, normalizeMega, megaEffects } from './bank.js';
 import { defaultGuild, normalizeGuild, guildEffects } from './guild.js';
@@ -100,8 +101,9 @@ export function defaultState(now = nowMs()) {
     relics: defaultRelics(),
     // v6.2.0 💠 장비 5부위 보석 소켓 · 테마 제작 공방
     gems: defaultGems(),
-    // v6.4.0 🎖️ 영지 성장 패스(무료 30단계) · 🏷️ 칭호(20종)
+    // v6.4.0 🎖️ 영지 성장 패스(무료 30단계) · 🏷️ 칭호(20종) · v8.5.0 🏆 월간 시즌/영지 배당
     pass: defaultPass(now),
+    season: defaultSeason(now),
     titles: defaultTitles(),
     rift: defaultRift(),
     bank: defaultBank(),
@@ -253,6 +255,7 @@ export function normalizeState(raw, now = nowMs()) {
   s.relics = normalizeRelics(raw.relics);
   s.gems = normalizeGems(raw.gems);
   s.pass = normalizePass(raw.pass, now);
+  s.season = normalizeSeason(raw.season, now);
   s.titles = normalizeTitles(raw.titles);
   s.battleSpeed = normalizeBattleSpeed(raw.battleSpeed);
   s.jobTier = clamp(Math.floor(num(raw.jobTier, 0)), 0, JOB_MAX);

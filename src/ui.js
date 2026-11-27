@@ -73,7 +73,7 @@ import { bankStatus } from './bank.js';
 import { invasionStatus } from './invasion.js';
 import { computeCpBreakdown, recommendGrowth } from './guide.js';
 import {
-  relicCard, riftCard, guildRaidCard, passCard, titleCard, cpGuideInner,
+  relicCard, riftCard, guildRaidCard, passCard, titleCard, cpGuideInner, seasonCard,
 } from './ui-hunt.js';
 
 /** v6.5.0 전투 캔버스 상단 실시간 버프 HUD 바 항목 생성 */
@@ -1980,7 +1980,7 @@ function attendanceCard(ui) {
 /* ───────────── 🎖️ 패스 · 🏷️ 칭호 (v7.0.0: ui-hunt.js 분리) ───────────── */
 
 function tplHuntMission(ui) {
-  return `${todoHubCard(ui)}${attendanceCard(ui)}${passCard(ui)}${questCard(ui)}${dailyQuestCard(ui)}${codexCard(ui)}`;
+  return `${todoHubCard(ui)}${attendanceCard(ui)}${passCard(ui)}${seasonCard(ui)}${questCard(ui)}${dailyQuestCard(ui)}${codexCard(ui)}`;
 }
 
 /* ══════════════════════════ 사냥/스킬 (본문) ══════════════════════════ */

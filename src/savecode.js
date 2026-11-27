@@ -166,6 +166,9 @@ export function compactSave(state) {
   if (c.pass && typeof c.pass === 'object' && !(c.pass.xp > 0) && (!Array.isArray(c.pass.claimed) || !c.pass.claimed.length)) {
     delete c.pass;
   }
+  if (c.season && typeof c.season === 'object' && !(c.season.divCount > 0) && (!Array.isArray(c.season.claimed) || !c.season.claimed.length) && (!Array.isArray(c.season.trophies) || !c.season.trophies.length)) {
+    delete c.season;
+  }
   if (c.titles && typeof c.titles === 'object' && !c.titles.equipped) {
     delete c.titles;
   }

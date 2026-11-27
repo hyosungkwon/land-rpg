@@ -16,6 +16,9 @@ import { passInfo, claimAllPassTiers } from './pass.js';
 import { towerSweepInfo, towerSweepClaim } from './tower.js';
 import { raidStatus, claimRaidPhase } from './guild.js';
 import { riftStatus } from './rift.js';
+import {
+  estateDividendInfo, claimEstateDividend, seasonChallengeStatus, claimSeasonChallenges,
+} from './season.js';
 
 /** 지금 수령 가능한 보상 + 바로 진행할 수 있는 주요 이벤트 집계 */
 export function collectTodoSummary(state, battleStats = null, now = Date.now()) {
@@ -71,6 +74,22 @@ export function collectTodoSummary(state, battleStats = null, now = Date.now()) 
   const q = currentQuest(state);
   if (q && questProgress(state, q.id).done) {
     items.push({ id: 'quest', icon: '🎯', label: `미션 완료 · ${q.title}`, detail: '즉시 수령 가능', count: 1 });
+  }
+  // 11) v8.5.0 일일 영지 배당 (S70+ 부동산 초월석·훈장·보석 배당)
+  const dv = estateDividendInfo(state, now);
+  if (dv.canClaim && dv.cur) {
+    items.push({
+      id: 'dividend',
+      icon: dv.cur.icon,
+      label: `일일 영지 배당 · ${dv.cur.name}`,
+      detail: `✨${dv.cur.points}P 💎${dv.cur.shards}${dv.cur.medals ? ` 🏅${dv.cur.medals}` : ''}${dv.cur.gemLv ? ` 💠Lv.${dv.cur.gemLv}` : ''}`,
+      count: 1,
+    });
+  }
+  // 12) v8.5.0 월간 시즌 도전 완료
+  const sc = seasonChallengeStatus(state, now);
+  if (sc.readyCount > 0) {
+    items.push({ id: 'season', icon: '🏆', label: `월간 시즌 도전 (${sc.month})`, detail: `${sc.readyCount}개 달성`, count: sc.readyCount });
   }
 
   // 바로 출격할 수 있는 주요 콘텐츠 알림
@@ -178,6 +197,16 @@ export function claimAllReady(state, battleStats = null, now = Date.now(), rng =
     qCnt += 1; count += 1;
   }
   if (qCnt > 0) claimed.push(`🎯 미션 ${qCnt}건`);
+  // 11) v8.5.0 일일 영지 배당
+  if (estateDividendInfo(state, now).canClaim) {
+    const r = claimEstateDividend(state, now, rng);
+    if (r.ok) { claimed.push(`${r.tier.icon} 영지 배당`); count += 1; }
+  }
+  // 12) v8.5.0 월간 시즌 도전
+  if (seasonChallengeStatus(state, now).readyCount > 0) {
+    const r = claimSeasonChallenges(state, now);
+    if (r.ok && r.count > 0) { claimed.push(`🏆 시즌 도전 ${r.count}건`); count += r.count; }
+  }
 
   if (count === 0) return { ok: false, count: 0, claimed: [], reason: '지금 수령할 수 있는 보상이 없습니다.' };
   return {
