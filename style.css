@@ -1722,6 +1722,7 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   height: 33px;
   padding: 0 3px;
   font-size: 11px;
+  overflow: visible; /* v8.0.0: 알림 배지가 잘리지 않게 */
 }
 .subtab .nb {
   position: absolute;
@@ -1812,7 +1813,7 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   display: flex;
   align-items: center;
   gap: 6px;
-  flex: 1 1 auto;
+  flex: 1 1 0; /* v8.0.0: 기본 폭 0 → 룬/강화 버튼이 첫 줄에 남는다 */
   min-width: 0;
   text-align: left;
   padding: 0;
