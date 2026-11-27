@@ -150,6 +150,15 @@ export function landBuffTotalsText(buffs) {
   return buffText(landBuffTotals(buffs));
 }
 
+/** v8.1.0 — 요약 바 1줄용 축약: 앞 max개만 보여 주고 나머지는 '외 N'으로 접는다 */
+export function landBuffTotalsShort(buffs, max = 2) {
+  const full = landBuffTotalsText(buffs);
+  if (!full) return '';
+  const parts = full.split(' · ');
+  if (parts.length <= max) return full;
+  return `${parts.slice(0, max).join(' · ')} 외 ${parts.length - max}`;
+}
+
 /** 다음 랜드마크 한 칸이 주는 상승치(UI 진행 안내용) */
 export function nextLandmarkStep(state) {
   const lm = landmarkSynergy(state);

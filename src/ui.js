@@ -18,7 +18,7 @@ import {
 } from './auction.js';
 import { planBulkLandmarks } from './portfolio-ops.js';
 import {
-  LAND_SYNERGY, landSynergy, landBuffTotals, landBuffTotalsText, nextLandmarkStep,
+  LAND_SYNERGY, landSynergy, landBuffTotals, landBuffTotalsText, landBuffTotalsShort, nextLandmarkStep,
 } from './synergy.js';
 import {
   activeNews, newsCovers, regionSetStatus, regionSetBuffs, buffText,
@@ -2376,7 +2376,7 @@ function landSummaryBar(ui) {
   const tot = landBuffTotals(buffs);
   const hasBuff = buffs.active || tot.atkPct || tot.goldPct || tot.critDmgPct || tot.cdrPct || tot.bossDmgPct || tot.expPct;
   const totLine = hasBuff
-    ? `<div class="ls-tot"><span class="ls-tot-k">🏘️ 전투 버프</span><span class="ls-tot-v">${landBuffTotalsText(buffs)}</span></div>`
+    ? `<div class="ls-tot"><span class="ls-tot-k">🏘️ 전투 버프</span><span class="ls-tot-v" title="${esc(landBuffTotalsText(buffs))}">${landBuffTotalsShort(buffs)}</span></div>`
     : '<div class="ls-tot"><span class="ls-tot-k">🏘️ 전투 버프</span><span class="ls-tot-v dim">매물을 사면 사냥에 영구 버프가 붙습니다</span></div>';
   return `
   <div class="card land-sum${claimable ? ' ready' : ''}">
