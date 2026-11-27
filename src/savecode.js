@@ -184,9 +184,15 @@ export function compactSave(state) {
     if (!anyK && !anyR) delete c.guild;
   }
   if (c.skills && typeof c.skills === 'object') {
-    for (const sk of Object.values(c.skills)) {
-      if (sk && typeof sk === 'object' && !sk.rune) delete sk.rune;
+    for (const [k, sk] of Object.entries(c.skills)) {
+      if (!sk || typeof sk !== 'object') { delete c.skills[k]; continue; }
+      delete sk.last;
+      if (!sk.rune) delete sk.rune;
+      if (!(sk.lv > 0) && !sk.rune) delete c.skills[k];
     }
+  }
+  if (Array.isArray(c.skillDeck) && c.skillDeck.join(',') === 'strike,whirl,berserk,heal') {
+    delete c.skillDeck;
   }
   if (c.news && typeof c.news === 'object') c.news.log = [];
   if (c.gear && typeof c.gear === 'object') {

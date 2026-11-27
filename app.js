@@ -4,6 +4,7 @@
 import { APP_VERSION, ECON, EQUIP, EQUIP_MAX_LV, SKILLS, SAVE_KEY, stageDef, RARITIES, RARITY_INDEX, spriteSrc, enhanceCost } from './src/data.js';
 import {
   loadState, saveState, offlineSummary, applyOffline, tryEnhance, tryUpgradeSkill, setSkillRune as setSkillRuneState,
+  setSkillDeckSlot, applySkillDeckPreset as applySkillDeckPresetState,
   exchangeShards, pullGear, recordNews, enhanceMaxCount, normalizeState, compareGear, skillCdOf,
 } from './src/state.js';
 import {
@@ -1513,6 +1514,28 @@ class App {
           r.cleared ? '' : 'gold',
         );
         this.ui.render();
+      },
+      // v8.4.0 나만의 4슬롯 스킬 덱 편성 & 원탭 프리셋
+      equipSkillDeck: (slotIdx, skillKey) => {
+        const r = setSkillDeckSlot(this.s, slotIdx, skillKey);
+        if (!r.ok) {
+          this.ui.toast(r.reason || '장착할 수 없습니다', 'red');
+          return;
+        }
+        this.save(true);
+        this.sound.ui();
+        if (r.changed) this.ui.toast(`✨ 슬롯 #${r.slot + 1} → ${r.skill.icon} ${r.skill.name} 장착!`, 'gold');
+        this.ui.render();
+        this.ui.refreshLive(Date.now());
+      },
+      applySkillDeckPreset: (presetId) => {
+        const r = applySkillDeckPresetState(this.s, presetId);
+        if (!r.ok) return;
+        this.save(true);
+        this.sound.ui();
+        this.ui.toast(`⚡ 스킬 덱 프리셋 [${r.preset.icon} ${r.preset.name}] 적용!`, 'gold');
+        this.ui.render();
+        this.ui.refreshLive(Date.now());
       },
 
       buyShards: (n) => {

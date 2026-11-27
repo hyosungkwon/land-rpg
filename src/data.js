@@ -2,7 +2,7 @@
 // 밸런스·몬스터·장비·스킬 정의. DOM 의존 없음(헤드리스 테스트 가능).
 // v3: 게스트 전용 통합 경제 — 골드 하나로 사냥과 부동산을 함께 굴린다.
 
-export const APP_VERSION = '8.3.0';
+export const APP_VERSION = '8.4.0';
 export const SAVE_KEY = 'land_rpg_unified_v3';
 export const SAVE_VERSION = 3;
 
@@ -582,13 +582,28 @@ export function enhanceCost(lv) {
   return Math.ceil(ENHANCE_COST_BASE * Math.pow(ENHANCE_COST_GROWTH, lv));
 }
 
-/* ────────────────────────────── 스킬 4종 ────────────────────────────── */
+/* ────────────────────────────── 스킬 10종 · 4슬롯 스킬 덱 (v8.4.0) ────────────────────────────── */
 export const SKILLS = {
-  strike: { name: '강격', icon: '💥', key: '1', cd: 5000, mul: 2.6, color: '#ffce54', desc: '단일 대상에게 260% 피해' },
-  whirl: { name: '범위 베기', icon: '🌀', key: '2', cd: 9000, mul: 1.35, color: '#7fd3ff', desc: '화면 전체 적에게 135% 피해' },
-  berserk: { name: '광폭', icon: '🔥', key: '3', cd: 22000, dur: 7000, bonus: 0.6, color: '#ff7a59', desc: '7초간 공격력 +60%' },
-  heal: { name: '회복', icon: '💚', key: '4', cd: 16000, ratio: 0.28, color: '#7fe08a', desc: '최대 체력의 28% 회복' },
+  strike:     { name: '강격',      icon: '💥', role: 'burst',   key: '1', cd: 5000,  mul: 2.6,  color: '#ffce54', desc: '단일 대상에게 260% 피해' },
+  whirl:      { name: '범위 베기', icon: '🌀', role: 'aoe',     key: '2', cd: 9000,  mul: 1.35, color: '#7fd3ff', desc: '화면 전체 적에게 135% 피해' },
+  berserk:    { name: '광폭',      icon: '🔥', role: 'buff',    key: '3', cd: 22000, dur: 7000, bonus: 0.6, color: '#ff7a59', desc: '7초간 공격력 +60%' },
+  heal:       { name: '회복',      icon: '💚', role: 'survive', key: '4', cd: 16000, ratio: 0.28, color: '#7fe08a', desc: '최대 체력의 28% 회복' },
+  // v8.4.0 신규 액티브 스킬 6종 — 4슬롯 스킬 덱으로 자유 편성
+  thunder:    { name: '뇌전 낙뢰', icon: '⚡', role: 'aoe',     cd: 7000,  mul: 1.65, targets: 4, shockMs: 3000, shockMul: 0.8, color: '#7ff6ff', desc: '최대 4마리 연쇄 번개(165%) · 3초 감전(적 공격 -20%)' },
+  meteor:     { name: '메테오 폴', icon: '☄️', role: 'aoe',     cd: 13000, mul: 2.35, burnMs: 4000, burnMul: 0.42, color: '#ff6a3d', desc: '전장 운석 낙하(235%) · 4초 화상 도트' },
+  frostnova:  { name: '절대 영도', icon: '❄️', role: 'aoe',     cd: 10000, mul: 1.45, slowMs: 4500, slowAtkMul: 1.55, slowMoveMul: 0.45, color: '#9be7ff', desc: '전체 빙결 폭발(145%) · 4.5초 이동/공격 55% 둔화' },
+  aegis:      { name: '불굴의 방벽', icon: '🛡️', role: 'survive', cd: 14000, ratio: 0.34, dur: 8000, reduceAdd: 0.20, color: '#7cc4ff', desc: '8초간 최대 체력 34% 보호막 · 피해 감소 +20%' },
+  vampstrike: { name: '흡혈 검무', icon: '🩸', role: 'survive', cd: 9000,  mul: 1.85, targets: 3, lifesteal: 0.35, color: '#ff4d6a', desc: '전방 3마리 연속 베기(185%) · 피해 35% 즉시 흡혈' },
+  execute:    { name: '그림자 처형', icon: '🗡️', role: 'burst',  cd: 11000, mul: 3.1,  bossAdd: 0.45, lowHpMul: 1.5, critAdd: 0.30, color: '#c084fc', desc: '치명 +30% 암살 일격(310%) · 보스/빈사 적 추가 폭딜' },
 };
+export const SKILL_DECK_SIZE = 4;
+export const DEFAULT_SKILL_DECK = ['strike', 'whirl', 'berserk', 'heal'];
+export const SKILL_DECK_PRESETS = [
+  { id: 'classic', icon: '⚔️', name: '밸런스',   deck: ['strike', 'whirl', 'berserk', 'heal'] },
+  { id: 'hunt',    icon: '⚡', name: '광역 사냥', deck: ['whirl', 'thunder', 'meteor', 'berserk'] },
+  { id: 'boss',    icon: '👑', name: '보스 폭딜', deck: ['strike', 'execute', 'berserk', 'vampstrike'] },
+  { id: 'survive', icon: '🛡️', name: '생존 철벽', deck: ['frostnova', 'aegis', 'vampstrike', 'heal'] },
+];
 
 /* ────────────────────────────── v5.10.0 스킬 룬 각성 ──────────────────────────────
  * 각 기본 스킬이 Lv.3에 도달하면 2가지 룬 중 1개를 자유롭게 장착·전환할 수 있다.

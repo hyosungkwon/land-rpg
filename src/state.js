@@ -3,6 +3,7 @@
 // v3: 로그인/클라우드 없음. 골드 하나로 사냥 + 부동산을 함께 굴리는 통합 상태.
 import {
   ECON, EQUIP, EQUIP_MAX_LV, SKILLS, SKILL_UPGRADE_MAX, SKILL_RUNE_UNLOCK_LV, skillRuneDef, DEF,
+  SKILL_DECK_SIZE, DEFAULT_SKILL_DECK, SKILL_DECK_PRESETS,
   SAVE_KEY, SAVE_VERSION, enhanceCost, skillCost, skillPowerMul,
   RARITIES, RARITY_INDEX, RARITY_IDS, GACHA, gachaCost, rarityBonusLv,
   stageGoldBase, stageExpBase, monsterBaseHp, monsterBaseAtk,
@@ -63,12 +64,11 @@ export function defaultState(now = nowMs()) {
     gear: newGearState(),
     gacha: { pity: 0, total: 0, best: 'common', legend: 0, cur: 'gold' },
     soundOn: true,
-    skills: {
-      strike: { lv: 0, last: 0, rune: null },
-      whirl: { lv: 0, last: 0, rune: null },
-      berserk: { lv: 0, last: 0, rune: null },
-      heal: { lv: 0, last: 0, rune: null },
-    },
+    skills: Object.keys(SKILLS).reduce((m, k) => {
+      m[k] = { lv: 0, last: 0, rune: null };
+      return m;
+    }, {}),
+    skillDeck: [...DEFAULT_SKILL_DECK], // v8.4.0 나만의 4슬롯 액티브 스킬 덱
     stage: 1,
     killsInStage: 0,
     bossReady: false,
@@ -147,6 +147,7 @@ export function normalizeState(raw, now = nowMs()) {
     const rune = skillRuneDef(k, runeRaw) ? runeRaw : null;
     s.skills[k] = typeof v === 'object' && v ? { lv: num(v.lv, 0), last: num(v.last, 0), rune } : { lv: num(v, 0), last: 0, rune: null };
   }
+  s.skillDeck = normalizeSkillDeck(raw.skillDeck);
   s.gearRarity = { ...d.gearRarity };
   for (const k of Object.keys(d.gearRarity)) {
     const v = raw.gearRarity && raw.gearRarity[k];
@@ -840,14 +841,57 @@ export function skillCdOf(key, buffs, state = null) {
   return def.cd * (1 - cdr);
 }
 
+/** v8.4.0 나만의 4슬롯 스킬 덱 정규화(중복 제거 · 없는 키 보강 · 항상 4칸 유지) */
+export function normalizeSkillDeck(raw) {
+  const out = [];
+  if (Array.isArray(raw)) {
+    for (const k of raw) {
+      if (typeof k === 'string' && SKILLS[k] && !out.includes(k)) out.push(k);
+      if (out.length >= SKILL_DECK_SIZE) break;
+    }
+  }
+  for (const k of DEFAULT_SKILL_DECK) {
+    if (out.length >= SKILL_DECK_SIZE) break;
+    if (!out.includes(k)) out.push(k);
+  }
+  return out.slice(0, SKILL_DECK_SIZE);
+}
+
+/** v8.4.0 스킬 덱 특정 슬롯(0~3)에 스킬 장착(이미 다른 슬롯에 있으면 위치 교환) */
+export function setSkillDeckSlot(s, slotIdx, skillKey) {
+  if (!s || !SKILLS[skillKey]) return { ok: false, reason: '알 수 없는 스킬입니다' };
+  const idx = Math.floor(Number(slotIdx));
+  if (!(idx >= 0 && idx < SKILL_DECK_SIZE)) return { ok: false, reason: '잘못된 슬롯입니다' };
+  const deck = normalizeSkillDeck(s.skillDeck);
+  const exist = deck.indexOf(skillKey);
+  if (exist === idx) return { ok: true, deck, changed: false };
+  if (exist >= 0) {
+    const tmp = deck[idx];
+    deck[idx] = skillKey;
+    deck[exist] = tmp;
+  } else {
+    deck[idx] = skillKey;
+  }
+  s.skillDeck = deck;
+  return { ok: true, deck, changed: true, slot: idx, skill: SKILLS[skillKey] };
+}
+
+/** v8.4.0 추천 스킬 덱 프리셋 원탭 적용 */
+export function applySkillDeckPreset(s, presetId) {
+  const p = SKILL_DECK_PRESETS.find((x) => x.id === presetId);
+  if (!s || !p) return { ok: false, reason: '알 수 없는 프리셋입니다' };
+  s.skillDeck = normalizeSkillDeck(p.deck);
+  return { ok: true, preset: p, deck: s.skillDeck };
+}
+
 export function skillEffect(key, lv, state = null) {
   const def = SKILLS[key];
   const citMul = state ? 1 + (citadelEffects(state).skillPowerPct || 0) / 100 : 1;
   const p = skillPowerMul(lv) * citMul;
   if (!def) return 1;
-  if (key === 'strike' || key === 'whirl') return def.mul * p;
-  if (key === 'berserk') return def.bonus * p;
-  if (key === 'heal') return def.ratio * p;
+  if (def.mul) return def.mul * p;
+  if (def.bonus) return def.bonus * p;
+  if (def.ratio) return def.ratio * p;
   return p;
 }
 

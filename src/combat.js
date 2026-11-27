@@ -2,11 +2,11 @@
 // 자동 전투 시뮬레이션. DOM·Canvas 의존 없음 → 헤드리스 검증 가능.
 // 렌더러는 이 객체의 엔티티를 읽고, UI는 events 큐를 소비한다.
 import {
-  ECON, SKILLS, skillRuneOf, stageDef, monsterKo, monsterMotion, monsterAttack, THEMES, ultimateOf, ultLeftMs,
+  ECON, SKILLS, DEFAULT_SKILL_DECK, skillRuneOf, stageDef, monsterKo, monsterMotion, monsterAttack, THEMES, ultimateOf, ultLeftMs,
   ELITE_TRAITS, ELITE_CHANCE, TREASURE_GOBLIN, stageGoldBase, RARITIES,
 } from './data.js';
 import {
-  calcStats, currentHp, skillEffect, killReward, registerKill, clearStage, monsterStats, skillCdOf,
+  calcStats, currentHp, skillEffect, killReward, registerKill, clearStage, monsterStats, skillCdOf, normalizeSkillDeck,
 } from './state.js';
 import {
   DUNGEON, PET_ATTACK_MS, SUB_PET_ATTACK_MS, SUB_PET_RATE,
@@ -123,6 +123,8 @@ export class Battle {
     this.berserkRune = null; // v5.10 광폭 룬('fury' | 'iron' | null)
     this.blessUntil = 0;     // v5.10 축복의 빛(+22% 공격)
     this.blessAtk = 0;
+    this.aegisUntil = 0;     // v8.4.0 불굴의 방벽 피해 감소 지속 시각
+    this.aegisReduce = 0;
     // v4.7 상위 전직 궁극기 — 발동 뒤 한동안 공격력 버프 · 직전 타격 총 피해(이벤트 표시용)
     this.ultUntil = 0;
     this.ultBonus = 0;
@@ -568,13 +570,15 @@ export class Battle {
 
   damagePlayer(raw, from, now, info) {
     if (this.player.dead) return;
-    // v3.8: 방어(피해 감소) 스탯 — 갑옷·투구 강화 + 환생 '수호' 특성 + v5.10 불굴 룬
+    // v3.8: 방어(피해 감소) 스탯 — 갑옷·투구 강화 + 환생 '수호' 특성 + v5.10 불굴 룬 + v8.4.0 불굴의 방벽
     const ironAdd = this.berserkUntil > now && this.berserkRune === 'iron' ? 0.18 : 0;
+    const aegisAdd = this.aegisUntil > now ? (this.aegisReduce || 0.20) : 0;
     const rm = this.riftMods();
     const riftRed = rm ? rm.dmgRedPct / 100 : 0;
-    const reduce = Math.max(0, Math.min(0.95, (this.stats.dmgReduce || 0) + ironAdd + riftRed));
+    const reduce = Math.max(0, Math.min(0.95, (this.stats.dmgReduce || 0) + ironAdd + aegisAdd + riftRed));
     const grace = this.player.graceUntil && now < this.player.graceUntil ? ECON.reviveGraceReduce : 1;
-    let dmg = Math.max(1, Math.round(raw * (1 - reduce) * grace));
+    const shockMul = from && from.shockUntil > now ? (from.shockMul || 0.8) : 1;
+    let dmg = Math.max(1, Math.round(raw * shockMul * (1 - reduce) * grace));
     // v5.10 성광 보호막 우선 흡수
     if (this.player.shield > 0 && this.player.shieldUntil > now) {
       const absorbed = Math.min(this.player.shield, dmg);
@@ -1174,7 +1178,11 @@ export class Battle {
     });
   }
 
-  /* ───────────── 스킬 ───────────── */
+  /* ───────────── 스킬 (v8.4.0 10종 & 4슬롯 커스텀 덱 연동) ───────────── */
+  activeDeck() {
+    return normalizeSkillDeck(this.s && this.s.skillDeck ? this.s.skillDeck : DEFAULT_SKILL_DECK);
+  }
+
   autoSkills(now) {
     const sk = this.s.skills;
     const alive = this.targets();
@@ -1182,16 +1190,20 @@ export class Battle {
     const cd = (key) => skillCdOf(key, this.buffs());
     // v4.8.2: 스테이지 보스뿐 아니라 일일 보스·도전의 탑 보스 층도 보스전으로 판정
     const hasBoss = !!(this.boss || this.daily || alive.some((m) => m.isBoss));
-    // v4.7: 설정에서 '스킬 자동 시전'을 끄면 손으로 누를 때만 나간다
+    const inRange = alive.some((m) => m.x - this.player.x <= ECON.playerRange);
+    const hpRatio = this.player.hp / Math.max(1, this.stats.hpMax);
+    // v4.7: 설정에서 '스킬 자동 시전'을 끄면 손으로 누를 때만 나간다 · v8.4.0: 편성된 4슬롯 덱 기준
     if (this.s.autoSkill !== false) {
-      // 회복: 체력 65% 이하
-      if (now - sk.heal.last >= cd('heal') && this.player.hp / this.stats.hpMax < 0.65) this.castSkill('heal', now);
-      // 광폭: 보스전 또는 적 2마리 이상
-      if (now - sk.berserk.last >= cd('berserk') && (hasBoss || alive.length >= 2)) this.castSkill('berserk', now);
-      // 범위 베기: 적 2마리 이상
-      if (now - sk.whirl.last >= cd('whirl') && alive.length >= 2) this.castSkill('whirl', now);
-      // 강격: 적이 사거리 안에 있을 때
-      if (now - sk.strike.last >= cd('strike') && alive.some((m) => m.x - this.player.x <= ECON.playerRange)) this.castSkill('strike', now);
+      for (const key of this.activeDeck()) {
+        const st = sk && sk[key];
+        if (!st || now - st.last < cd(key)) continue;
+        if (key === 'heal' && hpRatio < 0.65) this.castSkill('heal', now);
+        else if (key === 'aegis' && (hpRatio < 0.80 || hasBoss || alive.length >= 3)) this.castSkill('aegis', now);
+        else if (key === 'berserk' && (hasBoss || alive.length >= 2)) this.castSkill('berserk', now);
+        else if ((key === 'whirl' || key === 'meteor' || key === 'frostnova' || key === 'thunder') && (alive.length >= 2 || hasBoss)) this.castSkill(key, now);
+        else if (key === 'vampstrike' && alive.length >= 1 && (hpRatio < 0.88 || alive.length >= 2 || hasBoss)) this.castSkill('vampstrike', now);
+        else if ((key === 'strike' || key === 'execute') && inRange) this.castSkill(key, now);
+      }
     }
     // v4.7 상위 전직 궁극기 — 보스전이거나 적이 여럿일 때 준비되면 자동 발동
     const u = ultimateOf(this.s);
@@ -1282,6 +1294,18 @@ export class Battle {
       this.emit({ t: 'skill', key, ko, rune: rune ? rune.id : null, color: col, dur: def.dur });
       return true;
     }
+    if (key === 'aegis') {
+      sk.last = now;
+      this.player.skillAt = now;
+      this.player.skillKey = key;
+      const sh = Math.round(this.stats.hpMax * skillEffect('aegis', sk.lv, this.s));
+      this.player.shield = Math.min(this.stats.hpMax * 1.2, (this.player.shieldUntil > now ? this.player.shield : 0) + sh);
+      this.player.shieldUntil = now + (def.dur || 8000);
+      this.aegisUntil = now + (def.dur || 8000);
+      this.aegisReduce = def.reduceAdd || 0.20;
+      this.emit({ t: 'skill', key, ko, shield: sh, color: col, dur: def.dur || 8000 });
+      return true;
+    }
     if (!alive.length) return false;
     if (key === 'whirl') {
       sk.last = now;
@@ -1330,6 +1354,83 @@ export class Battle {
         this.hit([target], power, 'strike', now);
       }
       this.emit({ t: 'skill', key, ko, rune: rune ? rune.id : null, color: col, x: target.x });
+      return true;
+    }
+    // ── v8.4.0 신규 공격 스킬 5종 (aegis 는 방어 버프로 상단에서 처리) ──
+    if (key === 'thunder') {
+      sk.last = now;
+      this.player.skillAt = now;
+      this.player.skillKey = key;
+      this.player.attackAt = now;
+      this.player.attackKind = 'strike';
+      const list = alive.slice(0, def.targets || 4);
+      this.hit(list, skillEffect('thunder', sk.lv, this.s), 'thunder', now);
+      for (const m of list) {
+        if (m.dead || m.dying) continue;
+        m.shockUntil = now + (def.shockMs || 3000);
+        m.shockMul = def.shockMul || 0.8;
+      }
+      this.emit({ t: 'skill', key, ko, color: col, x: list[0].x, xs: list.map((m) => m.x) });
+      return true;
+    }
+    if (key === 'meteor') {
+      sk.last = now;
+      this.player.skillAt = now;
+      this.player.skillKey = key;
+      this.player.attackAt = now;
+      this.player.attackKind = 'whirl';
+      const list = alive.slice();
+      this.hit(list, skillEffect('meteor', sk.lv, this.s), 'meteor', now);
+      for (const m of list) {
+        if (m.dead || m.dying) continue;
+        m.burnUntil = now + (def.burnMs || 4000);
+        m.burnDps = Math.max(1, Math.round(this.stats.atk * (def.burnMul || 0.42)));
+        m.burnTick = now;
+      }
+      this.emit({ t: 'skill', key, ko, color: col, x: list[0].x, xs: list.map((m) => m.x) });
+      return true;
+    }
+    if (key === 'frostnova') {
+      sk.last = now;
+      this.player.skillAt = now;
+      this.player.skillKey = key;
+      this.player.attackAt = now;
+      this.player.attackKind = 'whirl';
+      const list = alive.slice();
+      this.hit(list, skillEffect('frostnova', sk.lv, this.s), 'frostnova', now);
+      for (const m of list) {
+        if (m.dead || m.dying) continue;
+        m.slowUntil = now + (def.slowMs || 4500);
+        m.slowAtkMul = def.slowAtkMul || 1.55;
+        m.slowMoveMul = def.slowMoveMul || 0.45;
+      }
+      this.emit({ t: 'skill', key, ko, color: col, x: list[0].x });
+      return true;
+    }
+    if (key === 'vampstrike') {
+      sk.last = now;
+      this.player.skillAt = now;
+      this.player.skillKey = key;
+      this.player.attackAt = now;
+      this.player.attackKind = 'strike';
+      const list = alive.slice(0, def.targets || 3);
+      this.hit(list, skillEffect('vampstrike', sk.lv, this.s), 'vampstrike', now, { lifesteal: def.lifesteal || 0.35 });
+      this.emit({ t: 'skill', key, ko, color: col, x: list[0].x });
+      return true;
+    }
+    if (key === 'execute') {
+      const target = alive.find((m) => m.isBoss) || alive.find((m) => m.hp <= m.maxHp * 0.5) || alive[0];
+      sk.last = now;
+      this.player.skillAt = now;
+      this.player.skillKey = key;
+      this.player.attackAt = now;
+      this.player.attackKind = 'strike';
+      const lowBonus = target.hp <= target.maxHp * 0.5 ? (def.lowHpMul || 1.5) : 1;
+      this.hit([target], skillEffect('execute', sk.lv, this.s) * lowBonus, 'execute', now, {
+        critAdd: def.critAdd || 0.30,
+        bossAdd: def.bossAdd || 0.45,
+      });
+      this.emit({ t: 'skill', key, ko, color: col, x: target.x });
       return true;
     }
     return false;

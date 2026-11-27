@@ -3,11 +3,11 @@
 // v3: 게스트 전용 — 로그인/클라우드 UI 없이 [사냥/스킬 | 장비/강화 | 부동산 | 설정].
 import {
   APP_VERSION, ECON, EQUIP, EQUIP_SLOTS, EQUIP_MAX_LV, SKILLS, SKILL_UPGRADE_MAX, skillCost, enhanceCost,
-  SKILL_RUNES, SKILL_RUNE_UNLOCK_LV, skillRuneOf,
+  SKILL_RUNES, SKILL_RUNE_UNLOCK_LV, skillRuneOf, SKILL_DECK_SIZE, DEFAULT_SKILL_DECK, SKILL_DECK_PRESETS,
   RARITIES, RARITY_INDEX, GACHA, gachaCost, rarityBonusLv,
   ULTIMATES, ULT_MIN_TIER, ultimateOf, ultCdOf, ultLeftMs,
 } from './data.js';
-import { expNeed, skillEffect, shardPrice, enhanceMaxCount, maxShardsBuy, SHARD_BULK, skillCdOf } from './state.js';
+import { expNeed, skillEffect, shardPrice, enhanceMaxCount, maxShardsBuy, SHARD_BULK, skillCdOf, normalizeSkillDeck } from './state.js';
 import {
   CITIES, LAND, portfolioOf, computeBuffs, buffProgress, formatGold,
   CITY_BY_KEY, LANDMARK, landmarkLevel, landmarkQuote, landmarkSummary,
@@ -241,6 +241,16 @@ export class UI {
       case 'cast': actions.castSkill(v); break;
       case 'upgrade-skill': actions.upgradeSkill(v); break;
       case 'skill-rune': actions.setSkillRune(btn.dataset.skill, v); break;
+      case 'skill-deck-slot':
+        this.deckSlot = Math.max(0, Math.min(SKILL_DECK_SIZE - 1, Number(v) || 0));
+        this.render();
+        break;
+      case 'skill-deck-equip':
+        actions.equipSkillDeck(this.deckSlot || 0, v);
+        break;
+      case 'skill-deck-preset':
+        actions.applySkillDeckPreset(v);
+        break;
       case 'enhance': actions.enhance(btn.dataset.slot, 1); break;
       case 'enhance5': actions.enhance(btn.dataset.slot, 5); break;
       case 'enhance10': actions.enhance(btn.dataset.slot, 10); break;
@@ -582,11 +592,13 @@ export class UI {
     const remainKills = Math.max(0, ECON.normalKillsPerStage - s.killsInStage);
     setT(this.el.bossCount, b.boss ? '전투' : ready ? '도전' : String(remainKills));
 
-    // 퀵 스킬 쿨타임 (v4.7: 다섯 번째 = 상위 전직 궁극기)
+    // 퀵 스킬 쿨타임 (v8.4.0: 4슬롯 커스텀 스킬 덱 실시간 반영 · 다섯 번째 = 상위 전직 궁극기)
+    const deck = normalizeSkillDeck(s.skillDeck);
     const ultDef = ultimateOf(s);
-    [...this.el.quick.querySelectorAll('.q')].forEach((q) => {
-      const key = q.dataset.skill;
-      if (key === 'ultimate') {
+    const qBtns = [...this.el.quick.querySelectorAll('.q')];
+    let slotIdx = 0;
+    qBtns.forEach((q) => {
+      if (q.classList.contains('ult') || q.dataset.skill === 'ultimate') {
         q.classList.toggle('hidden', !ultDef);
         if (!ultDef) return;
         const ucd = ultCdOf(s, this.app.buffs);
@@ -598,8 +610,19 @@ export class UI {
         q.setAttribute('aria-label', `${ultDef.name} 시전`);
         return;
       }
-      const cd = skillCdOf(key, this.app.buffs) || SKILLS[key].cd;
-      const sk = s.skills[key];
+      const key = deck[slotIdx] || DEFAULT_SKILL_DECK[slotIdx] || q.dataset.skill;
+      slotIdx += 1;
+      const def = SKILLS[key];
+      if (!def) return;
+      if (q.dataset.skill !== key) q.dataset.skill = key;
+      const ar = skillRuneOf(s, key);
+      const wantIco = ar ? ar.icon : def.icon;
+      const ico = q.querySelector('.q-ico');
+      if (ico && ico.textContent !== wantIco) ico.textContent = wantIco;
+      const wantLbl = `${ar ? ar.name : def.name} 시전`;
+      if (q.getAttribute('aria-label') !== wantLbl) q.setAttribute('aria-label', wantLbl);
+      const cd = skillCdOf(key, this.app.buffs) || def.cd;
+      const sk = (s.skills && s.skills[key]) || { last: 0 };
       const left = Math.max(0, (sk.last + cd) - now);
       const ratio = left / cd;
       q.querySelector('.q-cd').style.height = `${ratio * 100}%`;
@@ -1660,32 +1683,62 @@ function battleInfoCard(ui) {
   </div>`;
 }
 
+function skillDetailText(key, def, power) {
+  if (key === 'berserk') return `공격력 +${Math.round(power * 100)}% · ${def.dur / 1000}초`;
+  if (key === 'heal') return `체력 ${Math.round(power * 100)}% 회복`;
+  if (key === 'aegis') return `보호막 ${Math.round(power * 100)}% · 피해감소 +20%`;
+  if (key === 'thunder') return `4마리 ${Math.round(power * 100)}% · 감전`;
+  if (key === 'meteor') return `전체 ${Math.round(power * 100)}% · 화상`;
+  if (key === 'frostnova') return `전체 ${Math.round(power * 100)}% · 55% 둔화`;
+  if (key === 'vampstrike') return `3마리 ${Math.round(power * 100)}% · 흡혈 35%`;
+  if (key === 'execute') return `처형 ${Math.round(power * 100)}% · 치명+30%`;
+  return `위력 ${Math.round(power * 100)}%`;
+}
+
 function huntSkillCard(ui) {
   const s = ui.s;
+  const deck = normalizeSkillDeck(s.skillDeck);
+  const selSlot = Math.max(0, Math.min(SKILL_DECK_SIZE - 1, Number(ui.deckSlot) || 0));
+
+  const deckSlotsHtml = deck.map((key, idx) => {
+    const def = SKILLS[key];
+    const ar = skillRuneOf(s, key);
+    const active = idx === selSlot;
+    return `<button class="sdk-slot${active ? ' sel' : ''}" type="button" data-action="skill-deck-slot" data-value="${idx}" style="--sc:${ar ? ar.color : def.color}">
+      <span class="sdk-num">#${idx + 1}</span>
+      <span class="sdk-ico">${ar ? ar.icon : def.icon}</span>
+      <b class="sdk-nm">${esc(ar ? ar.name : def.name)}</b>
+    </button>`;
+  }).join('');
+
+  const presetChips = SKILL_DECK_PRESETS.map((p) => {
+    const isMatch = p.deck.every((k, i) => deck[i] === k);
+    return `<button class="chip${isMatch ? ' on' : ''}" type="button" data-action="skill-deck-preset" data-value="${p.id}">${p.icon} ${esc(p.name)}</button>`;
+  }).join('');
+
   const cells = Object.entries(SKILLS)
     .map(([key, def]) => {
-      const sk = s.skills[key];
+      const sk = (s.skills && s.skills[key]) || { lv: 0, last: 0, rune: null };
       const power = skillEffect(key, sk.lv);
-      const detail =
-        key === 'strike' || key === 'whirl'
-          ? `위력 ${Math.round(power * 100)}%`
-          : key === 'berserk'
-            ? `공격력 +${Math.round(power * 100)}% · ${def.dur / 1000}초`
-            : `체력 ${Math.round(power * 100)}% 회복`;
+      const detail = skillDetailText(key, def, power);
       const cost = skillCost(sk.lv);
       const maxed = sk.lv >= SKILL_UPGRADE_MAX;
       const runes = SKILL_RUNES[key] || [];
       const activeRune = skillRuneOf(s, key);
       const runeUnlocked = (sk.lv || 0) >= SKILL_RUNE_UNLOCK_LV;
+      const inSlot = deck.indexOf(key);
+      const deckBtn = inSlot >= 0
+        ? `<span class="sdk-badge">덱 #${inSlot + 1}</span>`
+        : `<button class="mini up sdk-eq" type="button" data-action="skill-deck-equip" data-value="${key}" title="#${selSlot + 1} 슬롯에 장착">#${selSlot + 1} 장착</button>`;
       const runeRow = runes.length
         ? `<div class="sc-runes">${runes.map((r) => `<button class="rune-chip${activeRune && activeRune.id === r.id ? ' on' : ''}" style="--rc:${r.color}" type="button" data-action="skill-rune" data-skill="${key}" data-value="${r.id}" ${runeUnlocked ? '' : 'disabled'} title="${esc(r.short)}">${runeUnlocked ? `${r.icon} ${esc(r.name)}` : `🔒 Lv.${SKILL_RUNE_UNLOCK_LV}`}</button>`).join('')}</div>${activeRune ? `<div class="sc-rune-desc">${activeRune.icon} ${esc(activeRune.short)}</div>` : ''}`
         : '';
       return `
-      <div class="skill-cell">
+      <div class="skill-cell${inSlot >= 0 ? ' in-deck' : ''}">
         <button class="sc-cast" type="button" data-action="cast" data-value="${key}" aria-label="${def.name} 시전">
           <span class="s-ico" style="color:${activeRune ? activeRune.color : def.color}">${activeRune ? activeRune.icon : def.icon}</span>
           <span class="sc-mid">
-            <span class="sc-name">${activeRune ? esc(activeRune.name) : def.name}<span class="lv">Lv.${sk.lv}</span></span>
+            <span class="sc-name">${activeRune ? esc(activeRune.name) : def.name}<span class="lv">Lv.${sk.lv}</span>${deckBtn}</span>
             <span class="sc-effect">${detail} · ${def.cd / 1000}s</span>
           </span>
         </button>
@@ -1701,7 +1754,7 @@ function huntSkillCard(ui) {
   return `
   <div class="card skill-card">
     <div class="card-head">
-      <div class="card-title"><span class="t-ico">✨</span>스킬 <small>터치하면 즉시 · 자동 시전</small></div>
+      <div class="card-title"><span class="t-ico">✨</span>나만의 스킬 덱 <small>10종 중 4개 편성 · 자동 시전</small></div>
       <div class="row gap6">
         <span class="tiny dim">자동</span>
         <button class="switch sm ${s.autoSkill !== false ? 'on' : ''}" data-action="toggle-auto-skill" aria-label="스킬 자동 시전 전환"></button>
@@ -1709,6 +1762,9 @@ function huntSkillCard(ui) {
         <button class="mini log-btn" type="button" data-action="open-log" aria-label="전투 기록 열기">📜</button>
       </div>
     </div>
+    <div class="sdk-bar" id="skillDeckBar">${deckSlotsHtml}</div>
+    <div class="chips sdk-presets">${presetChips}</div>
+    <div class="tiny dim" style="margin:2px 0 6px">슬롯 <b>#${selSlot + 1}</b> 선택됨 · 아래 스킬의 <b>#${selSlot + 1} 장착</b>을 눌러 덱을 자유롭게 구성하세요</div>
     <div class="skill-grid">${cells}</div>
     ${ultPanel(ui)}
   </div>`;

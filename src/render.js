@@ -408,6 +408,40 @@ export class Renderer {
             });
           }
         }
+        // v8.4.0 신규 스킬 6종 캔버스 시각 연출
+        if (ev.key === 'thunder') {
+          this.shake = Math.max(this.shake, 3.6);
+          this.flash = Math.max(this.flash, 0.14);
+          let prev = ECON.playerX + 40;
+          for (const tx of ev.xs || [ev.x || 520]) {
+            this.spawnLightning(prev, tx, '#7ff6ff', now);
+            this.rings.push({ x: tx, life: 1, r: 14, color: '#7ff6ff', wide: 1.3 });
+            prev = tx;
+          }
+        } else if (ev.key === 'meteor') {
+          this.shake = Math.max(this.shake, 6.2);
+          this.flash = Math.max(this.flash, 0.22);
+          for (const tx of (ev.xs && ev.xs.length ? ev.xs.slice(0, 4) : [520])) {
+            this.fx.push({ key: 'meteor', x: tx, t0: now, dur: 640, color: '#ff6a3d' });
+            this.rings.push({ x: tx, life: 1, r: 22, color: '#ff8a3d', wide: 1.7 });
+          }
+        } else if (ev.key === 'frostnova') {
+          this.shake = Math.max(this.shake, 3.2);
+          this.rings.push({ x: ECON.playerX + 120, life: 1, r: 34, color: '#9be7ff', wide: 2.0 });
+          this.fx.push({ key: 'frostnova', x: ECON.playerX + 140, t0: now, dur: 680, color: '#9be7ff' });
+        } else if (ev.key === 'aegis') {
+          this.rings.push({ x: ECON.playerX, life: 1, r: 24, color: '#7cc4ff', wide: 1.6 });
+          this.fx.push({ key: 'aegis', x: ECON.playerX, t0: now, dur: 760, color: '#7cc4ff' });
+        } else if (ev.key === 'vampstrike') {
+          this.shake = Math.max(this.shake, 3.5);
+          this.fx.push({ key: 'vampstrike', x: ev.x || ECON.playerX + 260, t0: now, dur: 520, color: '#ff4d6a' });
+          this.rings.push({ x: ECON.playerX, life: 1, r: 16, color: '#ff4d6a', wide: 1.2 });
+        } else if (ev.key === 'execute') {
+          this.shake = Math.max(this.shake, 5.5);
+          this.flash = Math.max(this.flash, 0.16);
+          this.fx.push({ key: 'execute', x: ev.x || 520, t0: now, dur: 460, color: '#c084fc' });
+          this.rings.push({ x: ev.x || 520, life: 1, r: 18, color: '#c084fc', wide: 1.8 });
+        }
       } else if (ev.t === 'ultimate') {
         // 🐉 v4.7 상위 전직 궁극기 — 전장을 가로지르는 빛기둥 · 회전 문양 · 적마다 충격 고리
         this.fx.push({ key: 'ultimate', x: ECON.playerX, t0: now, dur: 980, color: ev.color, burst: ev.burst });
@@ -2961,6 +2995,85 @@ export class Renderer {
         grd.addColorStop(1, 'rgba(255,90,50,0)');
         ctx.fillStyle = grd;
         ctx.fillRect(cx - 140 * sc, gy - 190 * sc, 280 * sc, 200 * sc);
+      } else if (f.key === 'meteor') {
+        // ☄️ 메테오 폴: 하늘에서 대각선 낙하하는 화구 + 바닥 폭발 광휘
+        const mx = lerp(x + 95 * sc, x, Math.min(1, k * 1.9));
+        const my = lerp(gy - 210 * sc, gy - 14 * sc, Math.min(1, k * 1.9));
+        ctx.globalCompositeOperation = 'lighter';
+        if (k < 0.58) {
+          ctx.globalAlpha = 0.9;
+          ctx.strokeStyle = '#ff9a3d';
+          ctx.lineWidth = 7 * sc;
+          ctx.beginPath();
+          ctx.moveTo(mx + 34 * sc, my - 58 * sc);
+          ctx.lineTo(mx, my);
+          ctx.stroke();
+          ctx.fillStyle = '#fff3cf';
+          ctx.beginPath();
+          ctx.arc(mx, my, 12 * sc, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          const bk = (k - 0.58) / 0.42;
+          const grd = ctx.createRadialGradient(x, gy - 12 * sc, 4, x, gy - 12 * sc, (26 + bk * 86) * sc);
+          grd.addColorStop(0, `rgba(255,240,180,${0.8 * (1 - bk)})`);
+          grd.addColorStop(0.5, `rgba(255,95,40,${0.55 * (1 - bk)})`);
+          grd.addColorStop(1, 'rgba(255,60,20,0)');
+          ctx.fillStyle = grd;
+          ctx.beginPath();
+          ctx.arc(x, gy - 12 * sc, (26 + bk * 86) * sc, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalCompositeOperation = 'source-over';
+      } else if (f.key === 'frostnova') {
+        // ❄️ 절대 영도: 전장을 휩쓰는 빙결 파동 + 얼음 파편
+        ctx.globalAlpha = fade * 0.8;
+        ctx.strokeStyle = '#9be7ff';
+        ctx.lineWidth = 4 * sc;
+        ctx.beginPath();
+        ctx.ellipse(x, gy - 10 * sc, (30 + k * 240) * sc, (10 + k * 62) * sc, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = '#e0f7ff';
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2 + k * 1.4;
+          const rx = x + Math.cos(a) * (24 + k * 180) * sc;
+          const ry = gy - 26 * sc + Math.sin(a) * (10 + k * 42) * sc;
+          ctx.fillRect(rx - 2.5 * sc, ry - 2.5 * sc, 5 * sc, 5 * sc);
+        }
+      } else if (f.key === 'aegis') {
+        // 🛡️ 불굴의 방벽: 영웅을 감싸는 푸른 보호막 돔
+        const cx = this.worldX(ECON.playerX);
+        ctx.globalAlpha = fade * 0.78;
+        ctx.strokeStyle = '#7cc4ff';
+        ctx.lineWidth = 3 * sc;
+        ctx.fillStyle = `rgba(110, 195, 255, ${0.22 * fade})`;
+        ctx.beginPath();
+        ctx.arc(cx, gy - 46 * sc, (42 + k * 12) * sc, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else if (f.key === 'vampstrike') {
+        // 🩸 흡혈 검무: 진홍빛 2연속 초승달 참격
+        ctx.globalAlpha = fade * 0.9;
+        ctx.strokeStyle = '#ff4d6a';
+        ctx.lineWidth = 5 * sc;
+        for (let i = 0; i < 2; i++) {
+          ctx.beginPath();
+          ctx.arc(x - i * 18 * sc, gy - 48 * sc, (34 + k * 34) * sc, -1.1 + i * 0.4, 0.9 + i * 0.4);
+          ctx.stroke();
+        }
+      } else if (f.key === 'execute') {
+        // 🗡️ 그림자 처형: 보랏빛 X자 암살 참격
+        ctx.globalAlpha = fade * 0.95;
+        ctx.strokeStyle = '#e0b3ff';
+        ctx.shadowColor = '#9333ea';
+        ctx.shadowBlur = 12;
+        ctx.lineWidth = 5 * sc;
+        const r = (24 + k * 28) * sc;
+        ctx.beginPath();
+        ctx.moveTo(x - r, gy - 48 * sc - r);
+        ctx.lineTo(x + r, gy - 48 * sc + r);
+        ctx.moveTo(x + r, gy - 48 * sc - r);
+        ctx.lineTo(x - r, gy - 48 * sc + r);
+        ctx.stroke();
       }
       ctx.restore();
     }
