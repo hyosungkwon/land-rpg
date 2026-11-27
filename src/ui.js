@@ -2771,16 +2771,12 @@ function tplSettings(ui) {
   <div class="card">
     <div class="card-head"><div class="card-title"><span class="t-ico">⚙️</span>게임 설정</div><span class="tiny dim">v${APP_VERSION} · 이 기기에 자동 저장</span></div>
     <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)">
-      <span class="tiny">자동 보스 전환</span>
-      <button class="switch ${s.autoBoss ? 'on' : ''}" data-action="toggle-auto"></button>
-    </div>
-    <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)">
-      <span class="tiny">스킬 자동 시전 <span class="dim">4종 · 터치 시전은 항상</span></span>
-      <button class="switch ${s.autoSkill !== false ? 'on' : ''}" data-action="toggle-auto-skill" aria-label="스킬 자동 시전 전환"></button>
-    </div>
-    <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)">
-      <span class="tiny">궁극기 자동 발동 <span class="dim">🐉 상위 전직</span></span>
-      <button class="switch ${s.autoUlt !== false ? 'on' : ''}" data-action="toggle-auto-ult" aria-label="궁극기 자동 발동 전환"></button>
+      <span class="tiny">자동 진행</span>
+      <div class="sw-group">
+        <span class="sw-item"><small>보스</small><button class="switch sm ${s.autoBoss ? 'on' : ''}" data-action="toggle-auto" aria-label="자동 보스 전환"></button></span>
+        <span class="sw-item"><small>스킬</small><button class="switch sm ${s.autoSkill !== false ? 'on' : ''}" data-action="toggle-auto-skill" aria-label="스킬 자동 시전 전환"></button></span>
+        <span class="sw-item"><small>궁극</small><button class="switch sm ${s.autoUlt !== false ? 'on' : ''}" data-action="toggle-auto-ult" aria-label="궁극기 자동 발동 전환"></button></span>
+      </div>
     </div>
     <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)">
       <span class="tiny">화면 이펙트</span>
@@ -2808,7 +2804,7 @@ function tplSettings(ui) {
     <button class="btn small block" style="margin-top:8px;color:#ffb3b3;border-color:rgba(255,107,107,0.3)" data-action="reset">게임 초기화</button>
   </div>
 
-  ${installCard(ui)}
+  ${infoCard}
 
-  ${infoCard}`;
+  ${installCard(ui)}`;
 }

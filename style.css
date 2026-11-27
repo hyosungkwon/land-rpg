@@ -3102,6 +3102,10 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .dmg-chips .chip { font-size: 9.5px; padding: 3px 8px; }
 .install-link { margin-top: 10px; color: var(--sub); }
 .install-link small { color: var(--gold); font-weight: 800; margin-left: 2px; }
+/* 자동 진행 3종 — 설정 탭 세로 길이를 줄이는 한 줄 그룹 */
+.sw-group { display: flex; align-items: center; gap: 10px; }
+.sw-item { display: flex; align-items: center; gap: 4px; }
+.sw-item small { font-size: 9px; font-weight: 800; color: var(--dim); }
 .todo-flash { animation: todoFlash 1.6s ease-out; }
 @keyframes todoFlash {
   0% { box-shadow: 0 0 0 0 rgba(255, 207, 92, 0.75); }
