@@ -234,6 +234,8 @@ export class UI {
         break;
       }
       case 'toggle-sound': actions.toggleSound(); break;
+      case 'toggle-bgm': actions.toggleBgm(); break;
+      case 'toggle-sleep': actions.toggleSleep(); break;
       case 'gacha': actions.pullGacha(Number(v) || 1); break;
       case 'gacha-cur': actions.gachaCur(v); break;
       case 'cast': actions.castSkill(v); break;
@@ -2802,6 +2804,14 @@ function tplSettings(ui) {
     <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)">
       <span class="tiny">효과음 <span class="dim">타격·코인·보스·뽑기</span></span>
       <button class="switch ${s.soundOn !== false ? 'on' : ''}" data-action="toggle-sound" aria-label="효과음 전환"></button>
+    </div>
+    <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)">
+      <span class="tiny">배경음(BGM) <span class="dim">평원·보스·피버 신스</span></span>
+      <button class="switch ${s.bgmOn === true ? 'on' : ''}" data-action="toggle-bgm" aria-label="배경음 전환"></button>
+    </div>
+    <div class="row" style="padding:6px 0;border-bottom:1px solid var(--line)">
+      <span class="tiny">절전 방치 모드 <span class="dim">🌙 OLED 배터리 절약</span></span>
+      <button class="btn small ghost" type="button" data-action="toggle-sleep">🌙 켜기</button>
     </div>
     <button class="btn small block" style="margin-top:8px;color:#ffb3b3;border-color:rgba(255,107,107,0.3)" data-action="reset">게임 초기화</button>
   </div>

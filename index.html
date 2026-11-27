@@ -71,6 +71,7 @@
       <button class="install-btn hidden" id="installBtn" type="button" data-action="install" aria-label="홈 화면에 앱으로 설치">📲 <b>설치</b></button>
     </div>
     <div class="hud-r">
+      <button class="snd-btn" id="sleepBtn" type="button" data-action="toggle-sleep" aria-label="절전 방치 모드"><span>🌙</span></button>
       <button class="snd-btn" id="soundBtn" type="button" aria-label="효과음 끄기"><span id="soundIco">🔊</span></button>
       <span class="res"><span class="ico">💰</span><b id="goldVal">0</b></span>
       <span class="res"><span class="ico">💎</span><b id="shardVal">0</b></span>
@@ -139,6 +140,18 @@
 <div class="modal-root hidden" id="modalRoot">
   <div class="modal-backdrop" data-modal-close></div>
   <div class="modal-card" id="modalCard" role="dialog" aria-modal="true"></div>
+</div>
+
+<!-- v8.3.0 🌙 절전 방치 모드 (OLED 배터리 세이브) -->
+<div class="sleep-overlay hidden" id="sleepOverlay" role="dialog" aria-modal="true" aria-label="절전 방치 모드">
+  <div class="slp-box">
+    <div class="slp-ico">🌙</div>
+    <div class="slp-time" id="sleepTime">00:00</div>
+    <div class="slp-sub">절전 방치 모드 · 저전력 자동 사냥 중</div>
+    <div class="slp-stats" id="sleepStats">스테이지 1 · DPS 0</div>
+    <button class="btn ghost slp-wake" id="sleepWakeBtn" type="button">☀️ 절전 모드 해제</button>
+    <div class="slp-hint">OLED 화면·GPU 부하를 줄여 배터리를 아낍니다</div>
+  </div>
 </div>
 
 <div class="boot" id="boot">

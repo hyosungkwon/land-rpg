@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "8.2.0"
+EXPECTED_VER = "8.3.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui.js", "src/sound.js"]
 
@@ -6336,6 +6336,18 @@ def main():
     ok(all(x in css82 for x in [".land-dash {", ".dash-buffs", ".dash-next", ".dash-invest-btns", ".ret-hub", ".inv-busy"]), "style.css — 대시보드·복귀 허브·침공 사유 스타일", "")
     ok("landSynergyDashCard" in read("src/ui.js") and "landSynergyDashCard" in read("src/ui-land.js") and "landBuffTotals" in read("src/ui-land.js"), "ui.js·ui-land.js — 대시보드 배선 + 같은 landBuffTotals 숫자", "")
     ok("호재로 시세" in app82 and "this.buffs = computeBuffs(this.s, now);" in app82[app82.find("checkNews(now = Date.now())"):app82.find("ownedInNews(news)")], "checkNews — 호재로 시세가 바뀌면 전투 버프 재계산(카드마다 1%p 어깋나던 원인)", "")
+
+    # ── 50) v8.3.0 🌙 OLED 절전 방치 모드 · 🎵 Web Audio 적응형 신스 BGM ──
+    section("v8.3.0 OLED 절전 방치 모드 & 적응형 신스 BGM")
+    bg83 = js(ctx, """
+      const d = defaultState(0);
+      const on = normalizeState({ bgmOn: true }, 0);
+      const old = normalizeState({}, 0);
+      const bad = normalizeState({ bgmOn: 'yes' }, 0);
+      return { def: d.bgmOn, on: on.bgmOn, old: old.bgmOn, bad: bad.bgmOn };
+    """)
+    ok(bg83["def"] is False and bg83["on"] is True and bg83["old"] is False and bg83["bad"] is False, "bgmOn 기본값(false)·저장 유지·구버전 마이그레이션·손상 방어", json.dumps(bg83))
+    ok('id="sleepOverlay"' in read("index.html") and 'id="sleepBtn"' in read("index.html") and "toggleSleep(" in read("app.js") and "setBgmMood(" in read("src/sound.js") and "case 'toggle-bgm':" in read("src/ui.js"), "index.html · app.js · sound.js · ui.js — OLED 절전 방치 모드 및 적응형 신스 BGM 배선")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

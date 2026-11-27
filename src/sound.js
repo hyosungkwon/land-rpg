@@ -9,12 +9,85 @@ const NOTE = (n) => 440 * Math.pow(2, (n - 69) / 12); // MIDI → Hz
 export class GameSound {
   constructor(enabled = true) {
     this.enabled = enabled !== false;
+    this.bgmOn = false;
+    this.bgmMood = 'field';
+    this._bgmTimer = null;
+    this._bgmStep = 0;
     this.ctx = null;
     this.master = null;
     this.noise = null;
     this.unlocked = false;
     this._lastHit = 0;
     this._lastCoin = 0;
+  }
+
+  /** v8.3.0 Web Audio 적응형 신스 BGM (평원 · 보스/특수 · 피버) */
+  setBgm(v) {
+    this.bgmOn = !!v;
+    if (!this.bgmOn) {
+      this.stopBgm();
+      return;
+    }
+    this.unlock();
+    this.startBgm();
+  }
+
+  setBgmMood(mood = 'field') {
+    const next = mood === 'fever' || mood === 'boss' ? mood : 'field';
+    if (this.bgmMood === next) return;
+    this.bgmMood = next;
+    if (this.bgmOn && this._bgmTimer) {
+      this.stopBgm();
+      this.startBgm();
+    }
+  }
+
+  startBgm() {
+    if (!this.bgmOn || typeof setInterval !== 'function') return;
+    if (this._bgmTimer) return;
+    const stepMs = this.bgmMood === 'fever' ? 190 : this.bgmMood === 'boss' ? 215 : 270;
+    this._bgmTimer = setInterval(() => this._tickBgm(), stepMs);
+  }
+
+  stopBgm() {
+    if (this._bgmTimer) {
+      clearInterval(this._bgmTimer);
+      this._bgmTimer = null;
+    }
+  }
+
+  _tickBgm() {
+    if (!this.bgmOn) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
+    const ctx = this.ensure();
+    if (!ctx || ctx.state !== 'running') return;
+    const t = ctx.currentTime;
+    const step = this._bgmStep++ % 16;
+    const seqs = {
+      field: {
+        lead: [64, 67, 72, 71, 69, 67, 64, 62, 60, 64, 67, 72, 74, 72, 69, 67],
+        bass: [48, 0, 0, 0, 45, 0, 0, 0, 41, 0, 0, 0, 43, 0, 0, 0],
+        type: 'triangle',
+      },
+      boss: {
+        lead: [60, 63, 67, 63, 62, 65, 68, 65, 60, 63, 67, 72, 70, 67, 63, 62],
+        bass: [36, 0, 36, 0, 38, 0, 38, 0, 36, 0, 39, 0, 43, 0, 41, 0],
+        type: 'sawtooth',
+      },
+      fever: {
+        lead: [72, 76, 79, 84, 79, 76, 74, 79, 76, 79, 84, 88, 84, 79, 76, 74],
+        bass: [48, 0, 55, 0, 50, 0, 55, 0, 52, 0, 55, 0, 48, 0, 55, 0],
+        type: 'triangle',
+      },
+    };
+    const pat = seqs[this.bgmMood] || seqs.field;
+    const n = pat.lead[step];
+    const b = pat.bass[step];
+    if (this.master && this.master.gain.value < 0.05) {
+      try { this.master.gain.setTargetAtTime(0.42, t, 0.04); } catch (e) { /* ignore */ }
+    }
+    if (n) this.tone(t, { freq: NOTE(n), dur: 0.22, gain: this.bgmMood === 'boss' ? 0.024 : 0.032, type: pat.type });
+    if (b) this.tone(t, { freq: NOTE(b), dur: 0.34, gain: 0.036, type: 'sine' });
   }
 
   setEnabled(v) {
@@ -234,16 +307,24 @@ export class GameSound {
     this.tone(ctx.currentTime, { freq: 1200, dur: 0.035, gain: 0.035, type: 'square' });
   }
 
-  /** v7.0.0 화음 리마스터 — 일괄 수령 · 신화 초월 · 균열 축복 전용 화음 */
+  /** v7.0.0 화음 리마스터 — 일괄 수령 · 신화 초월 · 균열 축복 · 피버 전용 화음 */
   chord(kind = 'claimAll') {
     const ctx = this.ready();
     if (!ctx) return;
     const t = ctx.currentTime;
+    if (Array.isArray(kind)) {
+      kind.forEach((hz, i) => {
+        if (hz > 20) this.tone(t + i * 0.06, { freq: hz, dur: 0.26, gain: 0.08, type: 'triangle' });
+      });
+      return;
+    }
     const seq = kind === 'mythic'
       ? [64, 68, 71, 76, 80, 83]
-      : kind === 'rift'
-        ? [62, 69, 74, 78]
-        : [60, 67, 72, 76, 79];
+      : kind === 'fever'
+        ? [60, 64, 67, 72, 76]
+        : kind === 'rift'
+          ? [62, 69, 74, 78]
+          : [60, 67, 72, 76, 79];
     seq.forEach((n, i) => {
       this.tone(t + i * 0.065, { freq: NOTE(n), dur: 0.28, gain: 0.085, type: 'triangle' });
       this.tone(t + i * 0.065, { freq: NOTE(n + 12), dur: 0.22, gain: 0.03, type: 'sine' });

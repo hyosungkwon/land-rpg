@@ -80,6 +80,7 @@ export function defaultState(now = nowMs()) {
     screenShake: true, // v4.3 화면 흔들림(타격감) — 설정에서 끌 수 있다
     dmgNumbers: true, // v7.5.0 전투 데미지 숫자 표시 — 설정에서 끌 수 있다
     dmgStyle: 'simple', // v8.1.0 피해 숫자 밀도 — 'simple'(기본: K/M 축약 + 저밀도) | 'full'(모든 타격 표시)
+    bgmOn: false, // v8.3.0 Web Audio 적응형 신스 BGM (기본 꺼짐 · 설정에서 켜기)
     // v4.7 방치 편의 — 스킬 자동 시전 · 상위 전직 궁극기 자동 발동
     autoSkill: true,
     autoUlt: true,
@@ -165,6 +166,7 @@ export function normalizeState(raw, now = nowMs()) {
   s.dmgNumbers = s.dmgNumbers !== false; // v7.5.0 이전 저장본은 켜짐으로 시작
   // v8.1.0 피해 숫자 밀도 — 없는 저장본은 '간단'(simple)으로 시작(캐릭터를 숫자가 덮지 않게)
   if (s.dmgStyle !== 'full' && s.dmgStyle !== 'simple') s.dmgStyle = 'simple';
+  s.bgmOn = s.bgmOn === true; // v8.3.0 BGM — 이전 저장본은 꺼짐으로 안전 마이그레이션
   // v4.7: 편의 토글·궁극기 상태 — 없는 저장본은 켜짐/0 으로 안전하게 마이그레이션
   s.autoSkill = s.autoSkill !== false;
   s.autoUlt = s.autoUlt !== false;

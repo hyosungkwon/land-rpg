@@ -141,6 +141,10 @@ class App {
     this.renderer.dmgNumbersOn = this.s.dmgNumbers !== false; // v7.5.0 데미지 숫자 표시 설정
     this.renderer.dmgStyle = this.s.dmgStyle === 'full' ? 'full' : 'simple'; // v8.1.0 피해 숫자 '간단' 기본
     this.sound = new GameSound(this.s.soundOn !== false);
+    this.sound.bgmOn = this.s.bgmOn === true;
+    this.sleepMode = false;
+    this._sleepStart = null;
+    this._lastSleepFrame = 0;
     this.renderer.onLoot = (kind) => this.sound.coin(kind);
     this.ui = new UI(this);
     this.actions = this.makeActions();
@@ -203,6 +207,7 @@ class App {
     this.checkNews(now);
     this.bindAudioUnlock();
     this.bindCanvasTap();
+    this.bindSleepMode();
     // PWA 바로가기(?tab=land&sub=buff) — 부동산 서브 탭까지 바로 열기
     try {
       const qs = new URLSearchParams((typeof location !== 'undefined' && location.search) || '');
@@ -241,6 +246,66 @@ class App {
     });
   }
 
+  /** v8.3.0 🌙 절전 방치 모드(OLED 배터리 세이브) 바인딩 */
+  bindSleepMode() {
+    const btn = document.getElementById('sleepBtn');
+    const ov = document.getElementById('sleepOverlay');
+    const wake = document.getElementById('sleepWakeBtn');
+    if (btn && !btn._bound) {
+      btn._bound = true;
+      btn.addEventListener('click', () => this.toggleSleep(true));
+    }
+    if (wake && !wake._bound) {
+      wake._bound = true;
+      wake.addEventListener('click', () => this.toggleSleep(false));
+    }
+    if (ov && !ov._bound) {
+      ov._bound = true;
+      let lastTap = 0;
+      ov.addEventListener('click', (e) => {
+        if (e.target && e.target.id === 'sleepWakeBtn') return;
+        const now = Date.now();
+        if (now - lastTap < 360) this.toggleSleep(false);
+        lastTap = now;
+      });
+    }
+  }
+
+  toggleSleep(force) {
+    const next = typeof force === 'boolean' ? force : !this.sleepMode;
+    this.sleepMode = next;
+    const ov = document.getElementById('sleepOverlay');
+    if (ov) ov.classList.toggle('hidden', !next);
+    if (next) {
+      this._sleepStart = {
+        at: Date.now(),
+        gold: (this.s.records && this.s.records.totalGold) || 0,
+        kills: this.s.totalKills || 0,
+        stage: this.s.stage || 1,
+      };
+      this.refreshSleepOverlay(Date.now());
+    } else {
+      this._sleepStart = null;
+      this.renderer.resize();
+      this.ui.render();
+      this.ui.refreshLive(Date.now());
+    }
+  }
+
+  refreshSleepOverlay(now) {
+    if (!this.sleepMode) return;
+    const d = new Date(now);
+    const tEl = document.getElementById('sleepTime');
+    if (tEl) tEl.textContent = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const sEl = document.getElementById('sleepStats');
+    if (sEl && this._sleepStart) {
+      const gainedG = Math.max(0, ((this.s.records && this.s.records.totalGold) || 0) - this._sleepStart.gold);
+      const gainedK = Math.max(0, (this.s.totalKills || 0) - this._sleepStart.kills);
+      const dps = Math.round((this.battle && typeof this.battle.liveDps === 'function' ? this.battle.liveDps(now) : 0) || (this.battle && this.battle.stats ? this.battle.stats.dps : 0));
+      sEl.innerHTML = `<b>스테이지 S${this.s.stage}</b> · Lv.${this.s.level} · DPS ${formatGold(dps)}<br>절전 누적 처치 <b>+${gainedK.toLocaleString()}</b> · 골드 <b>+${formatGold(gainedG)}</b>`;
+    }
+  }
+
   stageMonsterNames(stage) {
     const d = stageDef(stage);
     return [...d.normals, d.boss];
@@ -273,17 +338,33 @@ class App {
       this.reportError('effects', e);
     }
     try {
-      this.renderer.frame(now);
-      this._lastFrameOk = now;
+      if (!this.sleepMode) {
+        this.renderer.frame(now);
+        this._lastFrameOk = now;
+      } else if (now - (this._lastSleepFrame || 0) >= 1000) {
+        this._lastSleepFrame = now;
+        this.refreshSleepOverlay(now);
+        this._lastFrameOk = now;
+      }
     } catch (e) {
       this.reportError('render', e);
       this.recoverRender(now);
     }
     try {
       if (events.length) this.handleEvents(events, now);
-      this.ui.refreshLive(now);
+      if (!this.sleepMode) this.ui.refreshLive(now);
     } catch (e) {
       this.reportError('ui', e);
+    }
+    if (this.sound && this.sound.bgmOn && now - (this._lastBgmSync || 0) >= 900) {
+      this._lastBgmSync = now;
+      const b = this.battle;
+      const mood = b && b.isFever && b.isFever(now)
+        ? 'fever'
+        : b && (b.boss || b.tower || b.rift || b.invasion || b.daily || b.dungeon)
+          ? 'boss'
+          : 'field';
+      this.sound.setBgmMood(mood);
     }
 
     try {
@@ -1351,6 +1432,15 @@ class App {
         this.ui.syncSound();
         this.ui.toast(this.s.soundOn ? '🔊 효과음 켜짐' : '🔇 효과음 꺼짐');
       },
+      // v8.3.0: Web Audio 적응형 신스 BGM · OLED 절전 방치 모드
+      toggleBgm: () => {
+        this.s.bgmOn = this.s.bgmOn !== true;
+        this.sound.setBgm(this.s.bgmOn);
+        this.save();
+        this.ui.render();
+        this.ui.toast(this.s.bgmOn ? '🎵 적응형 배경음(BGM) 켜짐' : '배경음(BGM) 꺼짐');
+      },
+      toggleSleep: () => this.toggleSleep(),
       gachaCur: (cur) => {
         this.s.gacha.cur = cur === 'shards' ? 'shards' : 'gold';
         this.save();
@@ -2987,7 +3077,10 @@ class App {
       this.renderer.dmgNumbersOn = this.s.dmgNumbers !== false;
       this.renderer.dmgStyle = this.s.dmgStyle === 'full' ? 'full' : 'simple';
     }
-    try { this.sound.setEnabled(this.s.soundOn !== false); } catch (e) { /* ignore */ }
+    try {
+      this.sound.setEnabled(this.s.soundOn !== false);
+      this.sound.setBgm(this.s.bgmOn === true);
+    } catch (e) { /* ignore */ }
     this._newsKey = undefined;
     this.lastSave = Date.now();
     this.lastRentTick = 0;
