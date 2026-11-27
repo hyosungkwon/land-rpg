@@ -1798,6 +1798,7 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .skill-cell {
   position: relative;
   display: flex;
+  flex-wrap: wrap; /* v8.0.0: 룬 칩이 시전 버튼을 찌그러뜨리지 않게 줄바꿈 */
   align-items: center;
   gap: 4px;
   padding: 5px 5px 7px;
@@ -1837,7 +1838,8 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   border: 1px solid rgba(105, 192, 255, 0.25);
 }
 .sc-effect { font-size: 8.5px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
-.skill-cell .sc-up { flex: 0 0 auto; min-height: 26px; padding: 0 4px; font-size: 9.5px; }
+.skill-cell .sc-up { flex: 0 0 auto; order: 2; min-height: 26px; padding: 0 4px; font-size: 9.5px; }
+.skill-cell .sc-run-desc { order: 4; flex: 1 0 100%; }
 .skill-cell .cd-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; margin: 0; border-radius: 0; background: rgba(0, 0, 0, 0.35); }
 
 /* 접이식 기록 모달 */
@@ -2771,6 +2773,8 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   display: flex; gap: 4px; margin-top: 5px; padding-top: 5px;
   border-top: 1px dashed rgba(255, 255, 255, 0.08);
   grid-column: 1 / -1;
+  order: 3;
+  flex: 1 0 100%;
 }
 .rune-chip {
   flex: 1 1 0; min-width: 0; padding: 3px 5px; border-radius: 6px;

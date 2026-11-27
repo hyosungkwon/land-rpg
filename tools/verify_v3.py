@@ -3965,7 +3965,7 @@ def main():
     ok("다음 매물 예고" in tpl46["gap"] and "다음 경매" in tpl46["gap"] and tpl46["gapBuy"] == 0, "준비 시간 — 다음 매물 예고·카운트다운(낙찰 버튼 없음)", "")
     ok("낙찰 완료" in tpl46["done"] and tpl46["doneBuy"] == 0, "낙찰 후 — 완료 표시·추가 낙찰 버튼 없음", "")
     ok("부동산 전투 시너지" in tpl46["buffTab"] and "권역 완성" in tpl46["buffTab"] and tpl46["synRows"] == 4, "영지 탭 — 시너지 카드(4개 지표·권역 완성)", json.dumps({"rows": tpl46["synRows"]}))
-    ok("부동산 버프" in tpl46["hunt"] and "치명타 피해" in tpl46["hunt"], "사냥 탭 전투 정보 — 부동산 전투 버프 합계 한 줄(v8)", "")
+    ok("부동산 버프" in tpl46["hunt"] and "공격 +" in tpl46["hunt"] and "외 " in tpl46["hunt"], "사냥 탭 전투 정보 — 부동산 전투 버프 합계 한 줄(3항목+외 N, v8)", "")
     ok(tpl46["bad"] is False, "v4.6 템플릿에 undefined/NaN 누출 없음")
 
     # ── 14) 배선·스타일 ──
@@ -6183,7 +6183,7 @@ def main():
     ok(v80["fmtComma"] == "1,234" and v80["fmtBig"] == "1,234,567", "Intl 비의존 천단위 구분(fmt) — QuickJS·구형 웹뷰 동일", json.dumps([v80["fmtComma"], v80["fmtBig"]]))
     ok(v80["compactGold"] == "1.84억" and v80["compactPyeong"] == "127만", "상단 HUD 축약 표기(1.84억 / 127만) — 잘림 없음", json.dumps([v80["compactGold"], v80["compactPyeong"]]))
     ok(v80["mapRegions"] >= 7 and v80["mapCounts"] == 7 and v80["mapSeoulCallout"] and v80["mapStar"], "한반도 지도 — 7권역 + 서울 콜아웃 + 전 권역 보유/전체·★ 표시", json.dumps({k: v80[k] for k in ["mapRegions", "mapCounts", "mapSeoulCallout"]}))
-    ok(v80["mapViewBox"] == ["0", "0", "340", "400"] or (len(v80["mapViewBox"]) == 2 and int(v80["mapViewBox"][1]) > int(v80["mapViewBox"][0])), "지도 viewBox 세로형(가로<세로) — 남한 실제 비율", json.dumps(v80["mapViewBox"]))
+    ok(len(v80["mapViewBox"]) == 2 and v80["mapViewBox"] == ["340", "340"], "지도 viewBox 340×340 — 남한 실제 비율(세로형) + 아래 빈 공간 제거", json.dumps(v80["mapViewBox"]))
     ok(v80["lashed"] and v80["buffOnce"] <= 1 and v80["chips"] is False, "카드 통폐합 — 부동산 버프 합계 1곳 · '현재 적용 수치' 중복 카드/섹션 칩 제거", json.dumps({"once": v80["buffOnce"], "chips": v80["chips"]}))
 
     css80 = read("style.css")

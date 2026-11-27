@@ -118,8 +118,8 @@ export function regionMapCard(ui) {
   const byId = {};
   for (const r of data) byId[r.id] = r;
 
-  const fillOf = (r) => (r.held > 0 ? (0.22 + Math.min(0.6, r.pct * 0.7)).toFixed(2) : '0.07');
-  const strokeOf = (r) => (r.hasNews ? '#ffcf5c' : r.complete ? r.color : r.held > 0 ? r.color : 'rgba(255,255,255,0.28)');
+  const fillOf = (r) => (r.held > 0 ? (0.24 + Math.min(0.58, r.pct * 0.7)).toFixed(2) : '0.12');
+  const strokeOf = (r) => (r.hasNews ? '#ffcf5c' : r.complete ? r.color : r.held > 0 ? r.color : 'rgba(255,255,255,0.34)');
   const widthOf = (r) => (r.hasNews ? '2.4' : r.complete ? '2' : '1.2');
 
   const polys = data
@@ -166,7 +166,7 @@ export function regionMapCard(ui) {
       <span class="tiny dim">권역 탭 → 바로 투자</span>
     </div>
     <div class="rmap-wrap">
-      <svg class="rmap-svg" viewBox="0 0 340 400" aria-label="대한민국 7권역 영지 지도">${polys}${seoul}</svg>
+      <svg class="rmap-svg" viewBox="0 0 340 340" aria-label="대한민국 7권역 영지 지도">${polys}${seoul}</svg>
     </div>
     ${(() => {
       const built = MEGA_PROJECTS.filter((p) => (ui.s && ui.s.mega && ui.s.mega[p.id] > 0));
