@@ -45,6 +45,7 @@ import {
   achievementStatus, claimedAchievementCount, dailyQuestStatus,
 } from './quests.js';
 import { passInfo } from './pass.js';
+import { riftStatus } from './rift.js';
 import { raidStatus } from './guild.js';
 import { collectTodoSummary } from './hub.js';
 import {
@@ -1501,7 +1502,7 @@ function questCard(ui) {
  * 접힘 상태는 세션 UI 상태(ui.collapsed)에만 둔다 — 저장 데이터·기존 기능 불변.
  */
 const DEFAULT_COLLAPSED = [
-  'battle-detail', 'presets', 'gems', 'shards', 'craft', 'gacha', 'inventory', 'gear-info', 'titles',
+  'battle-detail', 'skill-reserve', 'presets', 'gems', 'shards', 'craft', 'gacha', 'inventory', 'gear-info', 'titles',
   'invest-dash', 'region-set', 'landmark', 'synergy', 'buff-detail', 'expedition', 'trade-rec',
   'pass', 'codex', 'info', 'dq',
   'orders', 'citadel', 'mega',
@@ -1726,40 +1727,44 @@ function huntSkillCard(ui) {
     return `<button class="chip${isMatch ? ' on' : ''}" type="button" data-action="skill-deck-preset" data-value="${p.id}">${p.icon} ${esc(p.name)}</button>`;
   }).join('');
 
-  const cells = Object.entries(SKILLS)
-    .map(([key, def]) => {
-      const sk = (s.skills && s.skills[key]) || { lv: 0, last: 0, rune: null };
-      const power = skillEffect(key, sk.lv);
-      const detail = skillDetailText(key, def, power);
-      const cost = skillCost(sk.lv);
-      const maxed = sk.lv >= SKILL_UPGRADE_MAX;
-      const runes = SKILL_RUNES[key] || [];
-      const activeRune = skillRuneOf(s, key);
-      const runeUnlocked = (sk.lv || 0) >= SKILL_RUNE_UNLOCK_LV;
-      const inSlot = deck.indexOf(key);
-      const deckBtn = inSlot >= 0
-        ? `<span class="sdk-badge">덱 #${inSlot + 1}</span>`
-        : `<button class="mini up sdk-eq" type="button" data-action="skill-deck-equip" data-value="${key}" title="#${selSlot + 1} 슬롯에 장착">#${selSlot + 1} 장착</button>`;
-      const runeRow = runes.length
-        ? `<div class="sc-runes">${runes.map((r) => `<button class="rune-chip${activeRune && activeRune.id === r.id ? ' on' : ''}" style="--rc:${r.color}" type="button" data-action="skill-rune" data-skill="${key}" data-value="${r.id}" ${runeUnlocked ? '' : 'disabled'} title="${esc(r.short)}">${runeUnlocked ? `${r.icon} ${esc(r.name)}` : `🔒 Lv.${SKILL_RUNE_UNLOCK_LV}`}</button>`).join('')}</div>${activeRune ? `<div class="sc-rune-desc">${activeRune.icon} ${esc(activeRune.short)}</div>` : ''}`
-        : '';
-      return `
-      <div class="skill-cell${inSlot >= 0 ? ' in-deck' : ''}">
-        <button class="sc-cast" type="button" data-action="cast" data-value="${key}" aria-label="${def.name} 시전">
-          <span class="s-ico" style="color:${activeRune ? activeRune.color : def.color}">${skillArt(key, activeRune ? activeRune.icon : def.icon, def.name)}</span>
-          <span class="sc-mid">
-            <span class="sc-name">${activeRune ? esc(activeRune.name) : def.name}<span class="lv">Lv.${sk.lv}</span>${deckBtn}</span>
-            <span class="sc-effect">${detail} · ${def.cd / 1000}s</span>
-          </span>
-        </button>
-        <button class="btn small ${maxed ? 'ghost' : 'blue'} sc-up" data-action="upgrade-skill" data-value="${key}" aria-label="${def.name} 강화" ${maxed || s.shards < cost ? 'disabled' : ''}>
-          ${maxed ? 'MAX' : `💎${cost}`}
-        </button>
-        ${runeRow}
-        <i class="cd-bar"><i data-live="cd-${key}"></i></i>
-      </div>`;
-    })
-    .join('');
+  const renderSkillCell = ([key, def]) => {
+    const sk = (s.skills && s.skills[key]) || { lv: 0, last: 0, rune: null };
+    const power = skillEffect(key, sk.lv);
+    const detail = skillDetailText(key, def, power);
+    const cost = skillCost(sk.lv);
+    const maxed = sk.lv >= SKILL_UPGRADE_MAX;
+    const runes = SKILL_RUNES[key] || [];
+    const activeRune = skillRuneOf(s, key);
+    const runeUnlocked = (sk.lv || 0) >= SKILL_RUNE_UNLOCK_LV;
+    const inSlot = deck.indexOf(key);
+    const deckBtn = inSlot >= 0
+      ? `<span class="sdk-badge">덱 #${inSlot + 1}</span>`
+      : `<button class="mini up sdk-eq" type="button" data-action="skill-deck-equip" data-value="${key}" title="#${selSlot + 1} 슬롯에 장착">#${selSlot + 1} 장착</button>`;
+    const runeRow = runes.length
+      ? `<div class="sc-runes">${runes.map((r) => `<button class="rune-chip${activeRune && activeRune.id === r.id ? ' on' : ''}" style="--rc:${r.color}" type="button" data-action="skill-rune" data-skill="${key}" data-value="${r.id}" ${runeUnlocked ? '' : 'disabled'} title="${esc(r.short)}">${runeUnlocked ? `${r.icon} ${esc(r.name)}` : `🔒 Lv.${SKILL_RUNE_UNLOCK_LV}`}</button>`).join('')}</div>${activeRune ? `<div class="sc-rune-desc">${activeRune.icon} ${esc(activeRune.short)}</div>` : ''}`
+      : '';
+    return `
+    <div class="skill-cell${inSlot >= 0 ? ' in-deck' : ''}">
+      <button class="sc-cast" type="button" data-action="cast" data-value="${key}" aria-label="${def.name} 시전">
+        <span class="s-ico" style="color:${activeRune ? activeRune.color : def.color}">${skillArt(key, activeRune ? activeRune.icon : def.icon, def.name)}</span>
+        <span class="sc-mid">
+          <span class="sc-name">${activeRune ? esc(activeRune.name) : def.name}<span class="lv">Lv.${sk.lv}</span>${deckBtn}</span>
+          <span class="sc-effect">${detail} · ${def.cd / 1000}s</span>
+        </span>
+      </button>
+      <button class="btn small ${maxed ? 'ghost' : 'blue'} sc-up" data-action="upgrade-skill" data-value="${key}" aria-label="${def.name} 강화" ${maxed || s.shards < cost ? 'disabled' : ''}>
+        ${maxed ? 'MAX' : `💎${cost}`}
+      </button>
+      ${runeRow}
+      <i class="cd-bar"><i data-live="cd-${key}"></i></i>
+    </div>`;
+  };
+  // v8.13.0 모바일 UI 다이어트: 장착 덱 4종만 전면 노출, 나머지 6종은 접힘 보관함으로 분리
+  const activeEntries = deck.map((k) => [k, SKILLS[k]]).filter(([, d]) => !!d);
+  const reserveEntries = Object.entries(SKILLS).filter(([k]) => !deck.includes(k));
+  const activeCells = activeEntries.map(renderSkillCell).join('');
+  const reserveCells = reserveEntries.map(renderSkillCell).join('');
+  const reserveOpen = isCardOpen(ui, 'skill-reserve');
 
   return `
   <div class="card skill-card">
@@ -1774,8 +1779,12 @@ function huntSkillCard(ui) {
     </div>
     <div class="sdk-bar" id="skillDeckBar">${deckSlotsHtml}</div>
     <div class="chips sdk-presets">${presetChips}</div>
-    <div class="tiny dim" style="margin:2px 0 6px">슬롯 <b>#${selSlot + 1}</b> 선택됨 · 아래 스킬의 <b>#${selSlot + 1} 장착</b>을 눌러 덱을 자유롭게 구성하세요</div>
-    <div class="skill-grid">${cells}</div>
+    <div class="skill-grid">${activeCells}</div>
+    <button class="sdk-res-btn" type="button" data-action="toggle-fold" data-value="skill-reserve" aria-expanded="${reserveOpen}">
+      <span>📦 나머지 스킬 ${reserveEntries.length}종 · #${selSlot + 1} 슬롯 교체</span>
+      <span class="fold-ic">${reserveOpen ? '▾' : '▸'}</span>
+    </button>
+    <div class="skill-grid sdk-res-body${reserveOpen ? '' : ' hidden'}" id="fold-skill-reserve">${reserveCells}</div>
     ${ultPanel(ui)}
   </div>`;
 }
@@ -1886,9 +1895,33 @@ function petLine(ui) {
 
 /* ───────────── 🏺 유물 · 🌀 무한 균열 · 🛡️ 기사단/레이드 (v7.0.0: ui-hunt.js 분리) ───────────── */
 
-/** 🏆 도전 — 침공 방어전·던전·탑·일일 보스·무한 균열·주간 레이드 */
+/** v8.13.0 도전 탭 상단 — 지금 바로 입장 가능한 콘텐츠 1줄 빠른 요약 바 */
+function challengeQuickBar(ui) {
+  const s = ui.s;
+  const now = Date.now();
+  const inv = invasionStatus(s, now);
+  const dun = dungeonState(s, now);
+  const dai = dailyInfo(s, now);
+  const rft = riftStatus(s, now);
+  const rad = raidStatus(s, ui.battle && ui.battle.stats, now);
+  const items = [
+    { icon: '🚨', label: '침공', ready: !!inv.available },
+    { icon: '💰', label: '던전', ready: !!dun.free },
+    { icon: '🌟', label: `일일보스 ${dai.left || 0}`, ready: (dai.left || 0) > 0 },
+    { icon: '🌀', label: '균열', ready: !(rft.leftMs > 0) },
+    { icon: '🐉', label: `레이드 ${rad.leftTickets || 0}`, ready: (rad.leftTickets || 0) > 0 && !rad.defeated },
+  ];
+  const readyCnt = items.filter((x) => x.ready).length;
+  return `
+  <div class="ch-quick-bar" id="challengeQuickBar">
+    <span class="ch-q-ttl">⚡ 도전 현황 <b>${readyCnt}</b>/5</span>
+    <div class="ch-q-chips">${items.map((x) => `<span class="ch-qchip${x.ready ? ' ready' : ''}">${x.icon} ${x.label}</span>`).join('')}</div>
+  </div>`;
+}
+
+/** 🏆 도전 — 빠른 요약 바 + 침공 방어전·던전·탑·일일 보스·무한 균열·주간 레이드 */
 function tplHuntChallenge(ui) {
-  return `${invasionCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}${riftCard(ui)}${guildRaidCard(ui)}`;
+  return `${challengeQuickBar(ui)}${invasionCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}${riftCard(ui)}${guildRaidCard(ui)}`;
 }
 
 /* ───────────── 📅 일일 퀘스트 (v4.9.0 · KST 자정 리셋) ───────────── */
@@ -2261,7 +2294,15 @@ function tplGear(ui) {
   })();
 
   const bar = gearSubBar(ui);
-  if (sub === 'equip') return `${bar}${gearSlotCards(s)}${enhanceCard}${gemCard}${shardCard}${themeCraftCard}${gachaCard(ui)}${gearInventory(s)}${infoCard}`;
+  const totalEnh = EQUIP_SLOTS.reduce((a, k) => a + (s.equip[k] || 0), 0);
+  const sockCnt = gemEffects(s).socketCount || 0;
+  const gearSummaryBar = `
+  <div class="gear-sum-bar" id="gearQuickSummary">
+    <span>⚔️ 강화 합계 <b>+${totalEnh}</b></span>
+    <span>💠 보석 <b>${sockCnt}/5</b></span>
+    <span>💎 <b data-live="shards">${fmt(s.shards)}</b></span>
+  </div>`;
+  if (sub === 'equip') return `${bar}${gearSummaryBar}${gearSlotCards(s)}${enhanceCard}${gemCard}${shardCard}${themeCraftCard}${gachaCard(ui)}${gearInventory(s)}${infoCard}`;
   if (sub === 'job') return `${bar}${jobCard(ui)}${rebirthCard(ui)}`;
   if (sub === 'collect') return `${bar}${relicCard(ui)}${titleCard(ui)}${petCard(ui)}${landTipCard}`;
   return `${bar}${gachaCard(ui)}${themeCraftCard}${gearSlotCards(s)}${gearInventory(s)}${enhanceCard}${gemCard}${infoCard}${shardCard}${jobCard(ui)}${rebirthCard(ui)}${relicCard(ui)}${titleCard(ui)}${petCard(ui)}${landTipCard}`;
@@ -2593,12 +2634,13 @@ function tplLand(ui) {
 function tplLandHome(ui) {
   return `${landSynergyDashCard(ui)}
   ${regionMapCard(ui)}
+  ${expeditionCard(ui)}
+  <div class="land-sec-div" id="landDetailSection"><span>📊 영지 상세 분석</span><small class="dim">필요한 항목만 펼쳐서 확인</small></div>
   ${investDashboardCard(ui)}
   ${regionSetCard(ui)}
   ${landmarkCard(ui)}
   ${landSynergyCard(ui)}
-  ${landBuffDetailCard(ui)}
-  ${expeditionCard(ui)}`;
+  ${landBuffDetailCard(ui)}`;
 }
 
 /* ───────────── 🛒 매물 — 보유 매물 + 전국 시장 ───────────── */

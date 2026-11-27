@@ -3368,6 +3368,64 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 }
 .todo-row small { color: var(--sub); font-size: 10px; white-space: nowrap; }
 
+/* v8.13.0 모바일 UI 다이어트 (스킬 보관함 접힘 · 도전 빠른 바 · 장비/영지 요약 바) */
+.sdk-res-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin: 8px 0 4px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  border: 1px dashed rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--sub);
+  font-size: 11px;
+  font-weight: 800;
+}
+.sdk-res-btn:active { background: rgba(255, 255, 255, 0.07); }
+.sdk-res-body.hidden { display: none; }
+.ch-quick-bar, .gear-sum-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--sub);
+}
+.ch-quick-bar b, .gear-sum-bar b { color: var(--gold); font-weight: 900; }
+.ch-q-ttl { font-weight: 800; white-space: nowrap; }
+.ch-q-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.ch-qchip {
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--dim);
+}
+.ch-qchip.ready {
+  background: rgba(94, 225, 163, 0.16);
+  color: var(--green);
+  border: 1px solid rgba(94, 225, 163, 0.34);
+}
+.land-sec-div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 10px 2px 6px;
+  padding: 0 2px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--sub);
+}
+
 /* 좁은 화면(≤374px)에서도 평수·골드·강화석이 겹치지 않게 */
 @media (max-width: 374px) {
   .badge { font-size: 10px; padding: 4px 7px; gap: 4px; }
