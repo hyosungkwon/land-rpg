@@ -1,5 +1,5 @@
 // land-rpg / sw.js — 오프라인 캐시 (게스트 전용: 네트워크가 없어도 처음부터 끝까지 플레이)
-const VERSION = 'land-rpg-v8.6.0';
+const VERSION = 'land-rpg-v8.7.0';
 // 같은 릴리스 안에서 자산을 고친 경우 BUILD 를 올린다 → 열린 탭이 새 캐시로 넘어온다.
 const BUILD = 'r1';
 const CACHE = `${VERSION}-${BUILD}`;
@@ -60,9 +60,12 @@ const CORE = [
   './assets/bg/volcano.webp',
   './assets/bg/ice.webp',
   './assets/bg/abyss.webp',
-  // 플레이어 3프레임 (대기 / 공격 / 스킬)
+  // 플레이어 6프레임 (대기 / 베기 / 상단베기 / 점프강타 / 돌진 / 스킬)
   './assets/sprites/hero_idle.png',
   './assets/sprites/hero_attack.png',
+  './assets/sprites/hero_attack2.png',
+  './assets/sprites/hero_jump.png',
+  './assets/sprites/hero_dash.png',
   './assets/sprites/hero_skill.png',
   // 🐾 동료 펫 6종 (v3.2: 4종 · v5.8: 크리스탈 골렘 · 천둥 매 추가)
   './assets/sprites/pet/pet_wolf.png',

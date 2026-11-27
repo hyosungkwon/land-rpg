@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "8.6.0"
+EXPECTED_VER = "8.7.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui-settings.js", "src/ui.js", "src/sound.js"]
 
@@ -6426,6 +6426,47 @@ def main():
     miss86 = [f for f in art86 if not os.path.exists(os.path.join(ROOT, f)) or f"'./{f}'" not in sw86]
     ok(not miss86, "스킬 10종·궁극기 2종·기사단 4인·트로피 2종(18종) WebP 존재 및 sw.js 프리캐시 동기화", ", ".join(miss86[:5]))
     ok(os.path.exists(os.path.join(ROOT, "src/ui-settings.js")) and "'./src/ui-settings.js'" in sw86 and "assets/skills/" in read("src/ui.js") and "assets/knights/" in read("src/ui-hunt.js"), "ui-settings.js 분리·프리캐시 · 스킬/기사단/트로피 WebP UI 연결")
+
+    # ── 54) v8.7.0 🎬 영웅 4단 콤보 액션 스프라이트 & 몬스터 아키타입별 자유 모션 ──
+    section("v8.7.0 영웅 4단 콤보 액션 스프라이트 & 몬스터 자유 전투 모션")
+    sw87 = read("sw.js")
+    rnd87 = read("src/render.js")
+    cmb87 = read("src/combat.js")
+    app87 = read("app.js")
+    hero87 = ["hero_attack2", "hero_jump", "hero_dash"]
+    miss87 = [
+        f for f in hero87
+        if not os.path.exists(os.path.join(ROOT, f"assets/sprites/{f}.png"))
+        or f"'./assets/sprites/{f}.png'" not in sw87
+        or f"'{f}'" not in app87
+    ]
+    ok(not miss87, "영웅 추가 액션 프레임 3종(상단베기·점프강타·돌진) PNG 존재 · sw.js 프리캐시 · app.js 프리로드", ", ".join(miss87))
+    act87 = js(ctx, """
+      const now = 50000;
+      const s = defaultState(now);
+      const b = new Battle(s, () => ({}), () => 0.4, now);
+      if (!b.targets().length) b.spawnNormal(now);
+      b.targets()[0].x = ECON.playerX + 280;
+      b.targets()[0].hp = 999999;
+      const seq0 = b.player.attackSeq || 0;
+      b.player.lastAttack = 0;
+      b.attack(now + 2000, 1);
+      const seq1 = b.player.attackSeq || 0;
+      b.player.lastAttack = 0;
+      b.attack(now + 4000, 1);
+      const seq2 = b.player.attackSeq || 0;
+      const paths = ['hero_attack2', 'hero_jump', 'hero_dash'].map((n) => spriteSrc(n));
+      return {
+        seqOk: seq1 === seq0 + 1 && seq2 === seq0 + 2,
+        targetOk: Number.isFinite(b.player.targetX) && b.player.targetX === ECON.playerX + 280,
+        pathsOk: paths.join(',') === 'assets/sprites/hero_attack2.png,assets/sprites/hero_jump.png,assets/sprites/hero_dash.png',
+      };
+    """)
+    ok(act87["seqOk"] and act87["targetOk"] and act87["pathsOk"], "combat.js 콤보 시퀀스/타겟 추적 · data.js spriteSrc 영웅 6프레임 매핑", json.dumps(act87))
+    ok(
+        all(x in rnd87 for x in ["heroVisX", "heroVisY", "hero_attack2", "hero_jump", "hero_dash", "slashStyle = 'thrust'", "slashStyle = 'up'", "slashStyle = 'plunge'", "skKey === 'execute'", "dyWeave", "atkReach"]),
+        "render.js — 영웅 4단 콤보·스킬별 자유 이동(처형 백스탭/회오리/공중시전) & 몬스터 아키타입별 위빙·스웁·도약 모션",
+    )
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

@@ -134,6 +134,9 @@ export class Renderer {
     this.lightnings = []; // v7.4.0 번개 연쇄/강격 지그재그 전기선
     this.tapBolts = []; // v7.7.0 캔버스 탭 번개 일격
     this.killShards = []; // v7.4.0 몬스터 처치 파편 분산 연출
+    this.heroVisX = null; // v8.7.0 영웅 자유 이동 시각 X (스프링 보간)
+    this.heroVisY = 0; // v8.7.0 영웅 레인 추적/회피 시각 Y 오프셋
+    this._heroMotionSeq = -1; // v8.7.0 콤보 착지 먼지·돌진 잔상 1회 트리거 추적
     this.resize();
     this.initAmbient();
   }
@@ -1892,7 +1895,7 @@ export class Renderer {
     ctx.restore();
   }
 
-  /* ─────────── 플레이어 ─────────── */
+  /* ─────────── 플레이어 (v8.7.0 4단 콤보 액션 · 스킬별 자유 모션) ─────────── */
   drawPlayer(ctx, now, dt) {
     const b = this.battle;
     const p = b.player;
@@ -1904,32 +1907,209 @@ export class Renderer {
 
     const atkAge = now - (p.attackAt || 0);
     const skAge = now - (p.skillAt || 0);
-    const attacking = atkAge >= 0 && atkAge < 240;
-    const skilling = skAge >= 0 && skAge < 460;
-    const atkK = clamp(atkAge / 240, 0, 1);
+    const ATK_DUR = 300;
+    const SK_DUR = 520;
+    const attacking = atkAge >= 0 && atkAge < ATK_DUR;
+    const skilling = skAge >= 0 && skAge < SK_DUR;
+    const atkK = clamp(atkAge / ATK_DUR, 0, 1);
+    const skK = clamp(skAge / SK_DUR, 0, 1);
+    const dead = p.dead;
+    const hurtAge = now - (p.hurtAt || 0);
+    const hurt = hurtAge >= 0 && hurtAge < 150;
+    const recoilK = hurtAge >= 0 && hurtAge < 220 ? Math.sin(Math.PI * clamp(hurtAge / 220, 0, 1)) : 0;
 
-    // 공격 시 앞으로 파고드는 스텝(월드 x 는 그대로, 화면만)
-    const step = attacking ? Math.sin(Math.PI * Math.min(1, atkK * 1.15)) * 24 * sc : 0;
-    const px = baseX + step;
+    // 가장 가까운 생존 적(또는 기록된 타겟) 위치로 자유롭게 접근·추적
+    let near = null;
+    for (const m of b.monsters) if (!m.dead && !m.dying && (!near || m.x < near.x)) near = m;
+    const targetWorldX = Number.isFinite(p.targetX) ? p.targetX : near ? near.x : p.x + 260;
+    const targetScreenX = this.worldX(near ? near.x : targetWorldX);
+    const targetLane = near ? (near.lane || 0) : (p.targetLane || 0);
+    const gap = clamp(targetScreenX - baseX - 52 * sc, 28 * sc, Math.min(this.W * 0.44, 235 * sc));
+
     const marching = this.marchUntil > now;
     const marchBob = marching ? -Math.abs(Math.sin(now / 75)) * 7 * sc : 0;
-    const bob = (attacking || skilling ? 0 : Math.sin(now / 320) * 2.2 * sc) + marchBob;
-    const dead = p.dead;
-    const hurt = now - p.hurtAt < 150;
+    const combo = (p.attackSeq || 0) % 4;
+    const skKey = p.skillKey || '';
 
-    // 그림자
-    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    // 자유 전투 풋워크(대기 중 제자리 고정이 아니라 살아있는 풋워크·호흡)
+    let goalX = baseX + (dead ? 0 : Math.sin(now / 520) * 9 * sc + Math.cos(now / 890) * 4.5 * sc);
+    let goalY = dead ? 0 : Math.sin(now / 670) * 3.5 * sc;
+    let lift = 0;
+    let rot = 0;
+    let sx = 1;
+    let sy = 1;
+    let flipX = 1;
+    let frame = 'hero_idle';
+    let slashStyle = 'down';
+    let instantSnap = false;
+
+    if (!dead && skilling) {
+      const sArc = Math.sin(Math.PI * skK);
+      if (skKey === 'execute') {
+        // 그림자 처형: 적 등 뒤로 순간이동 후 역방향 베기 → 복귀
+        if (skK < 0.68) {
+          goalX = clamp(targetScreenX + 46 * sc, baseX + 64 * sc, this.W - 34 * sc);
+          goalY = targetLane * 18 * sc;
+          flipX = -1;
+          frame = skK < 0.42 ? 'hero_dash' : 'hero_attack2';
+          lift = Math.sin(Math.PI * (skK / 0.68)) * 18 * sc;
+          rot = -0.14 * sArc;
+          sx = 1 + 0.12 * sArc;
+          sy = 1 - 0.08 * sArc;
+          if (skK < 0.14) instantSnap = true;
+        } else {
+          frame = 'hero_dash';
+          lift = Math.sin(Math.PI * ((skK - 0.68) / 0.32)) * 22 * sc;
+        }
+        slashStyle = 'thrust';
+      } else if (skKey === 'whirl' || skKey === 'vampstrike') {
+        // 회오리/흡혈 검무: 전방 적진 한가운데로 회전 돌진
+        goalX = baseX + Math.sin(Math.PI * Math.pow(skK, 0.85)) * Math.min(gap * 0.96, 158 * sc);
+        goalY = Math.sin(skK * Math.PI * 2) * 14 * sc;
+        lift = sArc * 16 * sc;
+        rot = Math.sin(skK * Math.PI * 4) * 0.36;
+        flipX = Math.cos(skK * Math.PI * 4) >= 0 ? 1 : -1;
+        sx = 1 + 0.1 * sArc;
+        sy = 1 - 0.06 * sArc;
+        frame = skK < 0.5 ? 'hero_dash' : 'hero_skill';
+        slashStyle = 'whirl';
+      } else if (skKey === 'meteor' || skKey === 'frostnova' || skKey === 'thunder' || skKey === 'ultimate') {
+        // 마법/궁극기: 공중 도약 부유 시전 + 마력 해방
+        goalX = baseX + sArc * Math.min(gap * 0.35, 42 * sc);
+        lift = Math.sin(Math.PI * Math.pow(skK, 0.8)) * (skKey === 'ultimate' ? 54 : 40) * sc;
+        rot = -0.1 * Math.sin(skK * Math.PI * 2);
+        sx = 1 - 0.05 * sArc;
+        sy = 1 + 0.08 * sArc;
+        frame = skK < 0.32 ? 'hero_jump' : 'hero_skill';
+        slashStyle = 'up';
+      } else if (skKey === 'strike') {
+        // 강격: 공중 고도약 → 적 정면 강타
+        goalX = baseX + Math.sin(Math.PI * Math.min(1, skK * 1.08)) * Math.min(gap * 0.94, 152 * sc);
+        goalY = targetLane * 18 * sc * sArc;
+        lift = Math.sin(Math.PI * Math.min(1, skK * 1.15)) * 54 * sc;
+        rot = lerp(-0.22, 0.24, skK);
+        if (skK > 0.72) { sx = 1.15; sy = 0.85; }
+        frame = skK < 0.55 ? 'hero_jump' : 'hero_attack';
+        slashStyle = 'plunge';
+      } else {
+        // aegis / heal / berserk: 호쾌한 기합 부양 자세
+        lift = sArc * 18 * sc;
+        sx = 1 + 0.07 * sArc;
+        sy = 1 + 0.07 * sArc;
+        frame = 'hero_skill';
+      }
+    } else if (!dead && attacking) {
+      const aArc = Math.sin(Math.PI * atkK);
+      if (combo === 0) {
+        // 1타: 전방 대시 내려베기 (hero_attack)
+        goalX = baseX + Math.sin(Math.PI * Math.min(1, atkK * 1.12)) * Math.min(gap * 0.72, 98 * sc);
+        goalY = targetLane * 14 * sc * aArc;
+        lift = aArc * 7 * sc;
+        rot = 0.09 * aArc;
+        sx = 1 + 0.07 * aArc;
+        sy = 1 - 0.05 * aArc;
+        frame = 'hero_attack';
+        slashStyle = 'down';
+      } else if (combo === 1) {
+        // 2타: 도약 상단 베기 어퍼컷 (hero_attack2)
+        goalX = baseX + aArc * Math.min(gap * 0.64, 84 * sc);
+        goalY = targetLane * 12 * sc * aArc;
+        lift = Math.sin(Math.PI * Math.pow(atkK, 0.78)) * 30 * sc;
+        rot = -0.14 * aArc;
+        sx = 1 - 0.05 * aArc;
+        sy = 1 + 0.09 * aArc;
+        frame = 'hero_attack2';
+        slashStyle = 'up';
+      } else if (combo === 2) {
+        // 3타: 포물선 점프 강타 (hero_jump)
+        goalX = baseX + Math.sin(Math.PI * Math.min(1, atkK * 1.05)) * Math.min(gap * 0.92, 138 * sc);
+        goalY = targetLane * 16 * sc * aArc;
+        lift = Math.sin(Math.PI * Math.min(1, atkK * 1.15)) * 50 * sc;
+        rot = lerp(-0.2, 0.22, atkK);
+        if (atkK > 0.74) {
+          sx = 1.14;
+          sy = 0.86;
+          if (this._heroMotionSeq !== p.attackSeq) {
+            this._heroMotionSeq = p.attackSeq;
+            this.stepDust(this.heroVisX || goalX, gy + goalY, sc, 5, 'rgba(235,240,255,0.52)');
+          }
+        }
+        frame = 'hero_jump';
+        slashStyle = 'plunge';
+      } else {
+        // 4타: 고속 돌진 찌르기 + 잔상 (hero_dash)
+        goalX = baseX + Math.sin(Math.PI * Math.pow(atkK, 0.7)) * Math.min(gap * 1.02, 162 * sc);
+        goalY = targetLane * 16 * sc * aArc;
+        lift = aArc * 8 * sc;
+        rot = 0.06 * aArc;
+        sx = 1 + 0.14 * aArc;
+        sy = 1 - 0.09 * aArc;
+        frame = 'hero_dash';
+        slashStyle = 'thrust';
+        if (this.effects && atkK > 0.18 && this._heroMotionSeq !== p.attackSeq) {
+          this._heroMotionSeq = p.attackSeq;
+          this.stepDust(baseX + 8 * sc, gy, sc, 4, 'rgba(180,235,255,0.48)');
+          this.afterimages.push({
+            x: lerp(baseX, goalX, 0.45),
+            y: goalY * 0.5,
+            t0: now,
+            dur: 210,
+            color: '#7ff6ff',
+            frame: 'hero_dash',
+          });
+          this.afterimages.push({
+            x: lerp(baseX, goalX, 0.78),
+            y: goalY * 0.8,
+            t0: now + 24,
+            dur: 210,
+            color: '#ffd76a',
+            frame: 'hero_dash',
+          });
+        }
+      }
+    } else if (!dead) {
+      // 대기 호흡 신축 + 부드러운 스웨이
+      const breath = Math.sin(now / 280);
+      sy = 1 + 0.026 * breath;
+      sx = 1 - 0.018 * breath;
+      rot = Math.sin(now / 520) * 0.028;
+    }
+
+    // 피격 시 반동 백스텝(고정 벽처럼 맞지 않고 살짝 뒤로 물러남)
+    if (!dead && recoilK > 0 && !skilling) {
+      goalX -= recoilK * 16 * sc;
+      lift += recoilK * 7 * sc;
+      rot -= 0.15 * recoilK;
+    }
+
+    // 스프링 보간으로 자유로운 이동 궤적 구현
+    const safeDt = Math.max(1, Math.min(80, dt || 16));
+    const lerpRate = instantSnap ? 1 : 1 - Math.exp(-safeDt / 40);
+    if (this.heroVisX == null || !Number.isFinite(this.heroVisX)) this.heroVisX = baseX;
+    this.heroVisX += (goalX - this.heroVisX) * lerpRate;
+    this.heroVisY += (goalY - this.heroVisY) * lerpRate;
+
+    const px = clamp(this.heroVisX, w * 0.35, this.W - w * 0.35);
+    const pyOff = this.heroVisY;
+    const groundAtHero = gy + pyOff;
+    const bob = (attacking || skilling ? 0 : Math.sin(now / 320) * 2.2 * sc) + marchBob;
+    const shadowK = 1 - clamp(lift / (h * 1.45), 0, 1) * 0.48;
+
+    // 그림자 (점프 높이에 맞춰 축소·연해짐)
+    ctx.save();
+    ctx.fillStyle = `rgba(0,0,0,${(0.45 * shadowK).toFixed(3)})`;
     ctx.beginPath();
-    ctx.ellipse(px, gy + 2, w * 0.3, w * 0.085, 0, 0, Math.PI * 2);
+    ctx.ellipse(px, groundAtHero + 2, w * 0.3 * shadowK, w * 0.085 * shadowK, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
 
     // v4.4 전직 오라 (칭호 색) → v7.3 영웅 진화 외형(망토·날개·소드 비트) → 장비 등급 오라
-    if (this.effects && !dead) this.drawJobAura(ctx, px, gy, h, sc, now);
-    if (this.effects && !dead) this.drawHeroEvolution(ctx, px, gy, h, sc, now);
+    if (this.effects && !dead) this.drawJobAura(ctx, px, groundAtHero, h, sc, now);
+    if (this.effects && !dead) this.drawHeroEvolution(ctx, px, groundAtHero - lift * 0.65, h, sc, now);
     // 장비 등급 오라 (발밑·주변 색)
-    if (this.effects && !dead) this.drawAura(ctx, px, gy, h, sc, now);
-    // v4.3 부활 가호 — 빛 고리·보호막 + 머리 위 남은 초 (남은 시간은 상단 배너 drawGraceBanner)
-    if (!dead && p.graceUntil && now < p.graceUntil) this.drawGrace(ctx, px, gy, h, sc, now, p.graceUntil);
+    if (this.effects && !dead) this.drawAura(ctx, px, groundAtHero, h, sc, now);
+    // v4.3 부활 가호 — 빛 고리·보호막 + 머리 위 남은 초
+    if (!dead && p.graceUntil && now < p.graceUntil) this.drawGrace(ctx, px, groundAtHero - lift * 0.5, h, sc, now, p.graceUntil);
     // v5.10 성광 보호막 돔
     if (!dead && p.shield > 0 && p.shieldUntil && now < p.shieldUntil) {
       ctx.save();
@@ -1937,7 +2117,7 @@ export class Renderer {
       ctx.fillStyle = 'rgba(255, 227, 138, 0.10)';
       ctx.lineWidth = Math.max(1.5, 2 * sc);
       ctx.beginPath();
-      ctx.arc(px, gy - h * 0.45, h * 0.62, 0, Math.PI * 2);
+      ctx.arc(px, groundAtHero - lift - h * 0.45, h * 0.62, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
       ctx.restore();
@@ -1946,49 +2126,60 @@ export class Renderer {
     // 광폭 아우라
     if (b.berserkUntil > now) {
       const a = 0.2 + Math.sin(now / 90) * 0.08;
-      const grd = ctx.createRadialGradient(px, gy - h * 0.42, 4, px, gy - h * 0.42, h * 0.8);
+      const grd = ctx.createRadialGradient(px, groundAtHero - lift - h * 0.42, 4, px, groundAtHero - lift - h * 0.42, h * 0.8);
       grd.addColorStop(0, `rgba(255,110,70,${a})`);
       grd.addColorStop(1, 'rgba(255,110,70,0)');
       ctx.fillStyle = grd;
-      ctx.fillRect(px - h, gy - h * 1.2, h * 2, h * 1.3);
+      ctx.fillRect(px - h, groundAtHero - lift - h * 1.2, h * 2, h * 1.3);
     }
 
-    const frame = skilling ? 'hero_skill' : attacking ? 'hero_attack' : 'hero_idle';
-    const img = this.image(frame);
+    // 공중 시전 마법진 (메테오·절대영도·뇌전·궁극기)
+    if (this.effects && !dead && skilling && lift > 16 * sc && (skKey === 'meteor' || skKey === 'frostnova' || skKey === 'thunder' || skKey === 'ultimate')) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = skKey === 'frostnova' ? 'rgba(155,231,255,0.72)' : skKey === 'thunder' ? 'rgba(127,246,255,0.75)' : 'rgba(255,195,95,0.75)';
+      ctx.lineWidth = 2 * sc;
+      ctx.beginPath();
+      ctx.ellipse(px, groundAtHero - lift * 0.35, h * 0.44 * Math.sin(Math.PI * skK), h * 0.13 * Math.sin(Math.PI * skK), 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    const img = this.image(frame) || this.image(skilling ? 'hero_skill' : attacking ? 'hero_attack' : 'hero_idle');
 
     ctx.save();
-    ctx.translate(px, gy - h * 0.5 + bob - (attacking ? 4 * sc : 0));
+    ctx.translate(px, groundAtHero - lift + bob);
     if (dead) {
       ctx.globalAlpha = 0.35;
       ctx.rotate(0.5);
     } else if (hurt) {
-      ctx.globalAlpha = 0.82;
+      ctx.globalAlpha = 0.86;
     }
-    if (attacking) ctx.rotate(-0.04 * (1 - atkK));
+    ctx.rotate(rot);
+    ctx.scale(flipX * sx, sy);
     if (img) {
-      ctx.drawImage(img, -w / 2, -h / 2, w, h);
+      ctx.drawImage(img, -w / 2, -h, w, h);
       if (hurt) {
         const white = this.whiteOf(frame, img);
         if (white) {
           ctx.globalAlpha = 0.55;
-          ctx.drawImage(white, -w / 2, -h / 2, w, h);
+          ctx.drawImage(white, -w / 2, -h, w, h);
           ctx.globalAlpha = 0.9;
         }
       }
     } else {
       ctx.fillStyle = '#8ea2bb';
-      ctx.fillRect(-w / 2 + w * 0.2, -h / 2 + h * 0.15, w * 0.6, h * 0.8);
+      ctx.fillRect(-w / 2 + w * 0.2, -h * 0.85, w * 0.6, h * 0.8);
     }
     ctx.restore();
 
     // ── 검기 아크 ──
-    if (this.effects && attacking) {
-      let near = null;
-      for (const m of b.monsters) if (!m.dead && !m.dying && (!near || m.x < near.x)) near = m;
-      const reach = near ? Math.max(30 * sc, this.worldX(near.x) - px) : 62 * sc;
+    if (this.effects && (attacking || (skilling && (skKey === 'strike' || skKey === 'whirl' || skKey === 'execute' || skKey === 'vampstrike')))) {
+      const kEff = attacking ? atkK : skK;
+      const reach = near ? Math.max(30 * sc, Math.abs(this.worldX(near.x) - px)) : 62 * sc;
       const wIdx = this._rar.weapon;
       const pal = this._rar.pal || (RARITIES[wIdx] || RARITIES[0]).slash;
-      this.drawSlash(ctx, px, gy, h, sc, atkK, p.attackKind, Math.min(reach * 0.9, 176 * sc), pal, wIdx);
+      this.drawSlash(ctx, px, groundAtHero - lift * 0.65, h, sc, kEff, p.attackKind, Math.min(reach * 0.95, 176 * sc), pal, wIdx, slashStyle, flipX);
     }
   }
 
@@ -2054,49 +2245,100 @@ export class Renderer {
     ctx.restore();
   }
 
-  drawSlash(ctx, px, gy, h, sc, k, kind, rIn, pal, rarityIdx = 0) {
-    const cx = px + h * 0.1;
+  drawSlash(ctx, px, gy, h, sc, k, kind, rIn, pal, rarityIdx = 0, style = 'down', flipX = 1) {
+    const cx = px + h * 0.1 * flipX;
     const cy = gy - h * 0.56;
     const r = Math.max(26 * sc, rIn || h * 0.52);
     const fade = 1 - k;
-    const start = -1.25;
-    const sweep = lerp(0.25, 1.85, easeOut(k));
-    const alpha = fade * (kind === 'whirl' ? 0.75 : 0.95);
+    const alpha = fade * (kind === 'whirl' ? 0.78 : 0.95);
     const core = kind === 'strike' ? '#ffe9a8' : (pal && pal.core) || '#fff3cf';
     const mid = kind === 'strike' ? '#ffc94d' : (pal && pal.mid) || '#ffd76a';
     const glow = kind === 'strike' ? '#ffb347' : (pal && pal.glow) || '#ffb347';
     ctx.save();
     ctx.lineCap = 'round';
+    if (style === 'thrust') {
+      // 고속 돌진 찌르기: 관통 검기 + 전방 충격파
+      const len = lerp(r * 0.35, r * 1.45, easeOut(k)) * flipX;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = alpha * 0.45;
+      ctx.strokeStyle = glow;
+      ctx.lineWidth = 22 * sc * fade;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + len, cy);
+      ctx.stroke();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = mid;
+      ctx.lineWidth = 9 * sc * fade;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + len, cy);
+      ctx.stroke();
+      ctx.strokeStyle = core;
+      ctx.lineWidth = 3.5 * sc;
+      ctx.beginPath();
+      ctx.moveTo(cx + len * 0.15, cy);
+      ctx.lineTo(cx + len, cy);
+      ctx.stroke();
+      ctx.restore();
+      return;
+    }
+    if (style === 'whirl') {
+      // 회오리 검무: 360도 쌍검기 궤적
+      const rot0 = k * Math.PI * 3.2;
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 2; i++) {
+        const a0 = rot0 + i * Math.PI;
+        ctx.globalAlpha = alpha * 0.42;
+        ctx.strokeStyle = glow;
+        ctx.lineWidth = 18 * sc * fade;
+        ctx.beginPath();
+        ctx.ellipse(px, cy, r * 0.85, r * 0.34, 0, a0, a0 + 2.1);
+        ctx.stroke();
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = core;
+        ctx.lineWidth = 4 * sc;
+        ctx.beginPath();
+        ctx.ellipse(px, cy, r * 0.85, r * 0.34, 0, a0, a0 + 1.9);
+        ctx.stroke();
+      }
+      ctx.restore();
+      return;
+    }
+    const anticlock = style === 'up';
+    const start = style === 'up' ? 0.85 : style === 'plunge' ? -1.75 : -1.25;
+    const sweep = lerp(0.25, style === 'plunge' ? 2.25 : 1.85, easeOut(k)) * (anticlock ? -1 : 1);
+    const drawArc = () => {
+      ctx.save();
+      ctx.translate(cx, cy);
+      if (flipX < 0) ctx.scale(-1, 1);
+      ctx.beginPath();
+      ctx.arc(0, 0, r, start, start + sweep, anticlock);
+      ctx.stroke();
+      ctx.restore();
+    };
     // 전설: 불타는 외곽 광휘
     if (rarityIdx >= 4 && kind !== 'strike') {
       ctx.globalAlpha = alpha * 0.42;
       ctx.strokeStyle = '#ff3b2f';
       ctx.lineWidth = 26 * sc * fade;
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, start, start + sweep);
-      ctx.stroke();
+      drawArc();
     }
     // 바깥 글로우
     ctx.globalAlpha = alpha * (0.35 + rarityIdx * 0.05);
     ctx.strokeStyle = glow;
     ctx.lineWidth = 20 * sc * fade;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, start, start + sweep);
-    ctx.stroke();
+    drawArc();
     // 본체
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = mid;
     ctx.lineWidth = 9 * sc * fade;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, start, start + sweep);
-    ctx.stroke();
+    drawArc();
     // 코어
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = core;
     ctx.lineWidth = 3.5 * sc;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, start, start + sweep);
-    ctx.stroke();
+    drawArc();
     ctx.restore();
   }
 
@@ -2123,7 +2365,9 @@ export class Renderer {
       const knock = Number.isFinite(m.knock) ? m.knock : 0;
       const x = this.worldX(m.x + knock);
       const lungeAge = now - (m.lungeAt || 0);
-      const lunge = lungeAge >= 0 && lungeAge < 260 ? Math.sin(Math.PI * clamp(1 - lungeAge / 260, 0, 1)) : 0;
+      const LUNGE_DUR = m.isBoss ? 400 : 340;
+      const lk = lungeAge >= 0 && lungeAge < LUNGE_DUR ? clamp(lungeAge / LUNGE_DUR, 0, 1) : 0;
+      const lunge = lk > 0 && lk < 1 ? Math.sin(Math.PI * lk) : 0;
       const lane = m.isBoss ? 0 : (m.lane || 0);
       // v7.1.0 2.5D 원근 깊이: 뒤 레인(0.88x)·중간(1.0x)·앞 레인(1.10x) + 넓은 Y 분리
       const depthScale = lane < 0 ? 0.88 : lane > 0 ? 1.1 : 1;
@@ -2133,7 +2377,7 @@ export class Renderer {
       const w = h;
       const depth = (lane * 25 + ((m.id % 3) - 1) * 3) * sc;
       const hitAge = now - (m.hitAt || 0);
-      const hitK = hitAge >= 0 && hitAge < 130 ? 1 - hitAge / 130 : 0;
+      const hitK = hitAge >= 0 && hitAge < 150 ? 1 - hitAge / 150 : 0;
       const pop = 1 + hitK * 0.08;
 
       // 이동 상태(정지하면 걸음 모션이 부드럽게 멈춘다)
@@ -2142,9 +2386,13 @@ export class Renderer {
       const walk = Number.isFinite(m.walk) ? m.walk : 0;
       const tsec = now / 1000;
       const seed = m.animSeed || 0;
+      const mKind = m.moveKind || atkDef.move || 'claw';
+      const heroX = this.heroVisX != null ? this.heroVisX : this.worldX(b.player.x);
+      const atkReach = clamp((x - heroX) * 0.52, (m.isBoss ? 68 : 46) * sc, (m.isBoss ? 142 : 108) * sc);
 
       let lift = 0;         // 화면 위로 떠오르는 높이(px)
       let dx = 0;           // 좌우 오프셋(px)
+      let dyWeave = 0;      // v8.7.0 상하 레인 위빙 오프셋(px)
       let sx = 1;           // 가로 신축(스쿼시 & 스트레치)
       let sy = 1;           // 세로 신축
       let rot = 0;          // 발끝 기준 기울기
@@ -2158,58 +2406,65 @@ export class Renderer {
         if (moveK > 0.02) {
           const hop = Math.sin(Math.PI * ph);
           const land = Math.max(0, 1 - Math.min(ph, 1 - ph) / 0.16);
-          lift = hop * h * 0.32 * moveK;
+          lift = hop * h * 0.34 * moveK;
           sx *= 1 + (0.22 * land - 0.07 * hop) * moveK;
           sy *= 1 - (0.22 * land - 0.06 * hop) * moveK;
           shadowK *= 1 - hop * 0.45 * moveK;
           shadowA *= 1 - hop * 0.35 * moveK;
           if (this.effects && moveK > 0.4 && m.__ph != null && ph < m.__ph - 0.5) {
-            this.stepDust(x, gy, sc, 3, 'rgba(225,230,240,0.4)');
+            this.stepDust(x, gy + depth, sc, 3, 'rgba(225,230,240,0.4)');
           }
           m.__ph = ph;
         } else {
-          const j = Math.sin(tsec * 1.6 + seed); // 대기: 젤리처럼 출렁
-          sy *= 1 + 0.045 * j;
-          sx *= 1 - 0.038 * j;
+          // 대기 중에도 젤리 탄성 미니 홉 & 좌우 출렁임
+          const j = Math.sin(tsec * 2.1 + seed);
+          const miniHop = Math.max(0, Math.sin(tsec * 2.8 + seed) - 0.65) / 0.35;
+          lift += miniHop * h * 0.14;
+          dx += Math.sin(tsec * 1.45 + seed) * 7.5 * sc;
+          dyWeave += Math.cos(tsec * 1.15 + seed) * 3.5 * sc;
+          sy *= 1 + 0.065 * j + 0.08 * miniHop;
+          sx *= 1 - 0.055 * j - 0.06 * miniHop;
         }
       } else if (arch === 'flyer') {
-        // 공중 부유 + 날갯짓(빠른 신축) + 지면에서 뜬 그림자
-        const flap = Math.sin(tsec * 9.5 + seed);
-        lift = h * 0.15 + Math.sin(tsec * 2.4 + seed) * h * 0.04 + flap * h * 0.012;
-        sx *= 1 + 0.038 * flap;
-        sy *= 1 - 0.032 * flap;
-        rot += Math.sin(tsec * 2.1 + seed * 0.6) * 0.05 - moveK * 0.045;
-        dx += Math.sin(tsec * 1.7 + seed) * 2.4 * sc;
-        shadowK *= 0.62;
-        shadowA *= 0.62;
+        // 공중 8자 선회 비행(Lissajous) + 역동적 날갯짓 + 롤링 기울기
+        const flap = Math.sin(tsec * 10.2 + seed);
+        lift = h * 0.18 + Math.sin(tsec * 2.7 + seed) * h * 0.075 + flap * h * 0.018;
+        sx *= 1 + 0.045 * flap;
+        sy *= 1 - 0.036 * flap;
+        dx += Math.sin(tsec * 1.9 + seed) * 15 * sc;
+        dyWeave += Math.sin(tsec * 3.8 + seed) * 6.5 * sc;
+        rot += Math.cos(tsec * 1.9 + seed) * 0.11 - moveK * 0.06;
+        shadowK *= 0.6;
+        shadowA *= 0.58;
       } else {
-        // 보행 — 좌우 걸음 바운스 + 앞쪽 기울기 + 발걸음 먼지
+        // 보행 — 경쾌한 걸음 바운스 + 앞쪽 기울기 + 발걸음 먼지
         const STEP = 22;
         const ph = (walk / STEP) % 2;
         const step = Math.abs(Math.sin(Math.PI * ph));
-        lift = step * 4.4 * sc * moveK;
-        dx += Math.sin(Math.PI * ph) * 1.5 * sc * moveK;
-        rot += -0.05 * moveK + Math.sin(Math.PI * 2 * ph) * 0.014 * moveK;
-        sx *= 1 + 0.022 * step * moveK;
-        sy *= 1 - 0.02 * step * moveK;
+        lift = step * 5.2 * sc * moveK;
+        dx += Math.sin(Math.PI * ph) * 2.1 * sc * moveK;
+        rot += -0.065 * moveK + Math.sin(Math.PI * 2 * ph) * 0.02 * moveK;
+        sx *= 1 + 0.028 * step * moveK;
+        sy *= 1 - 0.024 * step * moveK;
         const half = Math.floor(ph);
         if (this.effects && moveK > 0.35 && m.__step != null && m.__step !== half) {
-          this.stepDust(x + (half ? 1 : -1) * 6 * sc, gy, sc, 2, 'rgba(215,220,232,0.36)');
+          this.stepDust(x + (half ? 1 : -1) * 6 * sc, gy + depth, sc, 2, 'rgba(215,220,232,0.36)');
         }
         m.__step = half;
       }
 
-      // 대기 중 호흡·살짝 흔들림(이동 중에는 약하게)
+      // v8.7.0 대기 중 자유로운 전투 풋워크(좌우·상하 유기적 위빙 — 판넬처럼 멈춰 있지 않음)
       const idle = 1 - moveK;
-      if (idle > 0.02) {
-        const breath = Math.sin(tsec * 1.8 + seed);
-        sy *= 1 + 0.022 * breath * idle;
-        sx *= 1 - 0.016 * breath * idle;
-        dx += Math.sin(tsec * 0.9 + seed) * 1.2 * sc * idle;
-        rot += Math.sin(tsec * 0.65 + seed) * 0.013 * idle;
+      if (idle > 0.02 && arch !== 'flyer' && arch !== 'slime') {
+        const breath = Math.sin(tsec * 2.2 + seed);
+        sy *= 1 + 0.032 * breath * idle;
+        sx *= 1 - 0.024 * breath * idle;
+        dx += Math.sin(tsec * 1.45 + seed) * (m.isBoss ? 11 : 8.5) * sc * idle;
+        dyWeave += Math.sin(tsec * 2.05 + seed * 1.3) * (m.isBoss ? 5.5 : 4.5) * sc * idle;
+        rot += Math.sin(tsec * 1.35 + seed) * 0.042 * idle;
       }
 
-      // 공격 전조 — 뒤로 젖히며(원거리) / 웅크리며(근거리) 몸을 모은다
+      // 공격 전조 — 아키타입별 준비 동작(비행 상승 · 슬램 도약 준비 · 원거리 부유 차지 · 근접 웅크림)
       const wuAge = now - (m.windupAt || 0);
       const wuDur = m.windupDur || 300;
       const winding = (m.windupAt || 0) > 0 && wuAge >= 0 && wuAge < wuDur;
@@ -2217,82 +2472,161 @@ export class Renderer {
       if (winding) {
         const e = easeOut(wk);
         if (m.atkKind === 'ranged') {
-          rot += 0.13 * e;
-          dx += 4 * sc * e;
-          sy *= 1 + 0.055 * e;
+          rot += 0.16 * e;
+          dx += 8 * sc * e;
+          sy *= 1 + 0.07 * e;
           sx *= 1 + 0.02 * e;
-          lift += 3 * sc * e + Math.sin(wuAge / 60) * 0.9 * sc * e;
+          lift += 10 * sc * e + Math.sin(wuAge / 55) * 1.5 * sc * e;
+        } else if (arch === 'flyer') {
+          // 비행 몬스터: 급강하 전 높게 솟구쳐 뒤로 당김
+          lift += 26 * sc * e;
+          dx += 18 * sc * e;
+          rot += 0.2 * e;
+          sy *= 1 + 0.06 * e;
+        } else if (mKind === 'slam' || m.isBoss) {
+          // 대형/보스: 뒤로 크게 젖히며 힘 모으기
+          dx += 18 * sc * e;
+          lift += 14 * sc * e;
+          sy *= 1 + 0.08 * e;
+          sx *= 1 - 0.05 * e;
+          rot += 0.18 * e;
         } else {
-          dx += 13 * sc * e;
-          sy *= 1 - 0.14 * e;
-          sx *= 1 + 0.11 * e;
-          rot += 0.11 * e;
+          // 맹수/근접: 낮게 웅크려 도약 태세
+          dx += 15 * sc * e;
+          sy *= 1 - 0.17 * e;
+          sx *= 1 + 0.14 * e;
+          rot += 0.14 * e;
         }
       }
 
-      // 돌진 — 플레이어 쪽으로 빠르게 파고들며 앞으로 기운다
+      // v8.7.0 아키타입별 자유 공격 모션 (단순 좌우 이동 탈피!)
       if (lunge > 0) {
-        dx -= (m.isBoss ? 54 : 38) * sc * lunge;
-        rot -= 0.13 * lunge;
-        sx *= 1 + 0.07 * lunge;
-        sy *= 1 - 0.05 * lunge;
-        lift += 2 * sc * lunge;
+        if (m.atkKind === 'ranged') {
+          // 원거리: 발사 순간 반동으로 뒤로 튕기며 떠오름
+          const recoil = Math.sin(Math.PI * Math.pow(lk, 0.65));
+          dx += 22 * sc * recoil;
+          rot += 0.22 * recoil;
+          lift += 9 * sc * recoil;
+          sx *= 1 - 0.07 * recoil;
+          sy *= 1 + 0.09 * recoil;
+        } else if (arch === 'flyer') {
+          // 비행 급강하 스웁(Swoop): 대각선 아래로 쇄도했다가 다시 치솟음
+          const swoop = Math.sin(Math.PI * Math.pow(lk, 0.8));
+          dx -= atkReach * 1.15 * swoop;
+          lift = Math.max(2 * sc, lift - swoop * 28 * sc);
+          dyWeave += Math.sin(Math.PI * lk) * 10 * sc;
+          rot -= 0.36 * swoop;
+          sx *= 1 + 0.14 * swoop;
+          sy *= 1 - 0.1 * swoop;
+        } else if (arch === 'slime' || mKind === 'bite') {
+          // 포물선 도약 덮치기(Pounce): 공중으로 뛰어올라 영웅을 덮침 + 착지 스쿼시
+          const pounce = Math.sin(Math.PI * Math.pow(lk, 0.85));
+          dx -= atkReach * pounce;
+          lift += Math.sin(Math.PI * lk) * (m.isBoss ? 48 : 36) * sc;
+          rot -= 0.28 * Math.sin(Math.PI * lk);
+          if (lk > 0.78) {
+            sx *= 1.18;
+            sy *= 0.82;
+            if (this.effects && m.__landSeq !== m.attackSeq) {
+              m.__landSeq = m.attackSeq;
+              this.stepDust(x + dx, gy + depth, sc, 4, 'rgba(225,230,245,0.48)');
+            }
+          } else {
+            sx *= 1 - 0.06 * pounce;
+            sy *= 1 + 0.1 * pounce;
+          }
+        } else if (mKind === 'slam' || m.isBoss) {
+          // 대지 강타 점프 슬램: 전반부 도약 → 후반부 내려찍기 스쿼시 + 먼지 링
+          const rush = Math.sin(Math.PI * Math.pow(lk, 0.78));
+          dx -= atkReach * rush;
+          if (lk < 0.48) {
+            const up = Math.sin((Math.PI * lk) / 0.48);
+            lift += up * (m.isBoss ? 40 : 28) * sc;
+            rot -= 0.18 * up;
+            sy *= 1 + 0.1 * up;
+          } else {
+            const impact = Math.max(0, 1 - (lk - 0.48) / 0.35);
+            rot -= 0.24 * impact;
+            sx *= 1 + 0.22 * impact;
+            sy *= 1 - 0.2 * impact;
+            if (this.effects && m.__landSeq !== m.attackSeq) {
+              m.__landSeq = m.attackSeq;
+              this.stepDust(x + dx, gy + depth, sc, m.isBoss ? 8 : 5, 'rgba(245,225,195,0.58)');
+            }
+          }
+        } else {
+          // 근접 돌진 베기 + 민첩한 백스텝 호프(Curve Rush + Rebound)
+          const rush = Math.sin(Math.PI * Math.pow(lk, 0.72));
+          dx -= atkReach * rush;
+          dyWeave += Math.sin(Math.PI * lk) * (m.id % 2 === 0 ? 12 : -12) * sc;
+          rot -= 0.24 * rush;
+          sx *= 1 + 0.11 * rush;
+          sy *= 1 - 0.08 * rush;
+          if (lk > 0.62) {
+            lift += Math.sin((Math.PI * (lk - 0.62)) / 0.38) * 14 * sc;
+          } else {
+            lift += 6 * sc * rush;
+          }
+        }
       }
 
-      // 피격 — 밀려나며 찌그러지고 타격 방향으로 기운다
+      // 피격 — 살짝 튕겨 오르며 밀려나고 타격 방향으로 기운다
       if (hitK > 0) {
-        dx += 8 * sc * hitK;
-        rot += 0.2 * hitK;
-        sx *= 1 + 0.12 * hitK;
-        sy *= 1 - 0.1 * hitK;
+        dx += (10 + (m.id % 3) * 3) * sc * hitK;
+        lift += Math.sin(Math.PI * hitK) * 10 * sc;
+        rot += (0.22 + (m.id % 2) * 0.08) * hitK;
+        sx *= 1 + 0.14 * hitK;
+        sy *= 1 - 0.12 * hitK;
       }
 
-      // 사망 — 뒤로 튕겨 오르며 회전·축소되고 연기로 흩어진다
+      // 사망 — 포물선으로 튕겨 오르며 회전·축소되고 연기로 흩어진다
       let alpha = 1;
       if (m.dying) {
         const k = clamp((now - m.dying) / 450, 0, 1);
         alpha = 1 - k;
-        dx += easeOut(k) * 72 * sc;
-        rot += k * 1.7;
-        lift += Math.sin(Math.PI * Math.min(1, k * 1.15)) * h * 0.14;
-        sx *= 1 - 0.22 * k;
-        sy *= 1 - 0.22 * k;
+        dx += easeOut(k) * 94 * sc;
+        rot += k * (2.5 + (m.id % 3) * 0.45);
+        lift += Math.sin(Math.PI * Math.min(1, k * 1.12)) * h * 0.4;
+        sx *= 1 - 0.24 * k;
+        sy *= 1 - 0.24 * k;
       }
 
-      const footY = gy - lift + depth;
+      const groundM = gy + depth + dyWeave;
+      const footY = groundM - lift;
       const kx = sx * pop * depthScale;
       const ky = sy * pop * depthScale;
-      const shadowScale = shadowK * (1 - clamp(lift / (h * 1.4), 0, 1) * 0.45);
+      const shadowScale = shadowK * (1 - clamp(lift / (h * 1.4), 0, 1) * 0.48);
 
-      // 1) 지면 그림자 (v7.1.0: depth 와 정확히 맞춰 발끝 접지감 개선)
+      // 1) 지면 그림자 (v7.1.0 depth + v8.7.0 자유 이동 X/Y 연동)
       ctx.save();
       ctx.globalAlpha = Math.max(0, alpha) * shadowA;
       ctx.fillStyle = '#000';
       ctx.beginPath();
-      ctx.ellipse(x, gy + 2 + depth, w * 0.28 * shadowScale, w * 0.085 * shadowScale, 0, 0, Math.PI * 2);
+      ctx.ellipse(x + dx, gy + 2 + depth + dyWeave, w * 0.28 * shadowScale, w * 0.085 * shadowScale, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
 
       ctx.save();
       ctx.globalAlpha = Math.max(0, alpha) * laneAlpha;
+      const mx = x + dx;
       const auraY = footY - h * 0.5;
       if (m.isBoss) {
-        const grd = ctx.createRadialGradient(x, auraY, 6, x, auraY, h * 0.8);
+        const grd = ctx.createRadialGradient(mx, auraY, 6, mx, auraY, h * 0.8);
         grd.addColorStop(0, 'rgba(255,70,50,0.22)');
         grd.addColorStop(1, 'rgba(255,70,50,0)');
         ctx.fillStyle = grd;
-        ctx.fillRect(x - h, auraY - h, h * 2, h * 2);
+        ctx.fillRect(mx - h, auraY - h, h * 2, h * 2);
       } else if (m.elite) {
-        const eg = ctx.createRadialGradient(x, auraY, 5, x, auraY, h * 0.78);
+        const eg = ctx.createRadialGradient(mx, auraY, 5, mx, auraY, h * 0.78);
         eg.addColorStop(0, hexA(m.elite.color || '#ffd76a', 0.34));
         eg.addColorStop(1, hexA(m.elite.color || '#ffd76a', 0));
         ctx.fillStyle = eg;
-        ctx.fillRect(x - h, auraY - h, h * 2, h * 2);
+        ctx.fillRect(mx - h, auraY - h, h * 2, h * 2);
         // v7.4.0 엘리트 바닥 컬러 강조 링
         ctx.strokeStyle = hexA(m.elite.color || '#ffd76a', 0.78);
         ctx.lineWidth = 2 * sc;
         ctx.beginPath();
-        ctx.ellipse(x, gy + 2 + depth, w * 0.36, w * 0.11, 0, 0, Math.PI * 2);
+        ctx.ellipse(mx, gy + 2 + depth + dyWeave, w * 0.36, w * 0.11, 0, 0, Math.PI * 2);
         ctx.stroke();
       }
       // v7.4.0 보물 고블린 금화 트레일 강조
@@ -2308,11 +2642,11 @@ export class Renderer {
       }
       // 황금 던전 몬스터: 금빛 광휘 + 잔불
       if (m.gold) {
-        const gg = ctx.createRadialGradient(x, auraY, 6, x, auraY, h * 0.78);
+        const gg = ctx.createRadialGradient(mx, auraY, 6, mx, auraY, h * 0.78);
         gg.addColorStop(0, 'rgba(255,205,80,0.3)');
         gg.addColorStop(1, 'rgba(255,180,60,0)');
         ctx.fillStyle = gg;
-        ctx.fillRect(x - h, auraY - h, h * 2, h * 2);
+        ctx.fillRect(mx - h, auraY - h, h * 2, h * 2);
         if (this.effects && this.embers.length < 150 && Math.random() < 0.3) {
           this.embers.push({
             x: m.x + (Math.random() - 0.5) * 30,
@@ -3591,7 +3925,6 @@ export class Renderer {
     const gy = this.groundY();
     const sc = this.scale();
     const h = Math.min(this.H * 0.4, 100 * sc);
-    const img = this.image('hero_skill') || this.image('hero_attack');
     const keep = [];
     for (const a of this.afterimages) {
       const age = now - a.t0;
@@ -3599,12 +3932,14 @@ export class Renderer {
       keep.push(a);
       if (age < 0) continue;
       const fade = 1 - age / a.dur;
+      const img = (a.frame && this.image(a.frame)) || this.image('hero_skill') || this.image('hero_attack');
+      const yOff = a.y || 0;
       ctx.save();
-      ctx.globalAlpha = 0.32 * fade;
-      if (img) ctx.drawImage(img, a.x - h / 2, gy - h, h, h);
+      ctx.globalAlpha = 0.34 * fade;
+      if (img) ctx.drawImage(img, a.x - h / 2, gy + yOff - h, h, h);
       else {
         ctx.fillStyle = a.color;
-        ctx.fillRect(a.x - h * 0.25, gy - h * 0.85, h * 0.5, h * 0.75);
+        ctx.fillRect(a.x - h * 0.25, gy + yOff - h * 0.85, h * 0.5, h * 0.75);
       }
       ctx.restore();
     }

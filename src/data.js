@@ -2,7 +2,7 @@
 // 밸런스·몬스터·장비·스킬 정의. DOM 의존 없음(헤드리스 테스트 가능).
 // v3: 게스트 전용 통합 경제 — 골드 하나로 사냥과 부동산을 함께 굴린다.
 
-export const APP_VERSION = '8.6.0';
+export const APP_VERSION = '8.7.0';
 export const SAVE_KEY = 'land_rpg_unified_v3';
 export const SAVE_VERSION = 3;
 
@@ -450,13 +450,12 @@ export function stageDef(stage) {
   };
 }
 
-/** 스프라이트 경로. 히어로 3프레임은 assets/sprites/ 루트, 몬스터/보스/펫/이펙트는 하위 폴더. */
+/** 스프라이트 경로. 히어로 액션 프레임(6종)은 assets/sprites/ 루트, 몬스터/보스/펫/이펙트는 하위 폴더. */
 export function spriteSrc(name) {
   if (typeof name === 'string' && name.indexOf('pet_') === 0) return `assets/sprites/pet/${name}.png`;
   if (typeof name === 'string' && name.indexOf('fx_') === 0) return `assets/sprites/fx/${name}.png`;
   if (name === 'warrior' || name === 'hero_idle') return 'assets/sprites/hero_idle.png';
-  if (name === 'hero_attack') return 'assets/sprites/hero_attack.png';
-  if (name === 'hero_skill') return 'assets/sprites/hero_skill.png';
+  if (typeof name === 'string' && name.indexOf('hero_') === 0) return `assets/sprites/${name}.png`;
   const m = MONSTERS[name];
   return m && m.boss ? `assets/sprites/boss/${name}.png` : `assets/sprites/monster/${name}.png`;
 }

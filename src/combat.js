@@ -110,6 +110,9 @@ export class Battle {
       attackAnim: 0,
       attackAt: 0,      // 마지막 공격 시작 시각(렌더러가 프레임 전환에 사용)
       attackKind: 'normal',
+      attackSeq: 0,     // v8.7.0 4단 콤보 액션 패턴 순환 카운터(시각 전용)
+      targetX: ECON.playerX + 260,
+      targetLane: 0,
       skillAt: 0,       // 마지막 스킬 발동 시각
       skillKey: '',
       hurtAt: 0,
@@ -676,6 +679,9 @@ export class Battle {
     this.player.attackAnim = 1;
     this.player.attackAt = now;
     this.player.attackKind = 'normal';
+    this.player.attackSeq = (this.player.attackSeq || 0) + 1;
+    this.player.targetX = target.x;
+    this.player.targetLane = target.lane || 0;
     this.hit([target], 1, 'normal', now);
   }
 
@@ -1313,6 +1319,8 @@ export class Battle {
       this.player.skillKey = key;
       this.player.attackAt = now;
       this.player.attackKind = 'whirl';
+      this.player.targetX = alive[0].x;
+      this.player.targetLane = alive[0].lane || 0;
       const inRange = alive.filter((m) => m.x - this.player.x <= ECON.playerRange * 1.6);
       const list = inRange.length ? inRange : alive;
       this.hit(list, skillEffect('whirl', sk.lv, this.s), 'whirl', now);
@@ -1341,6 +1349,8 @@ export class Battle {
       this.player.skillKey = key;
       this.player.attackAt = now;
       this.player.attackKind = 'strike';
+      this.player.targetX = target.x;
+      this.player.targetLane = target.lane || 0;
       const power = skillEffect('strike', sk.lv, this.s);
       if (rune && rune.id === 'lightning') {
         const per = power * (rune.hitMul || 0.62);
@@ -1364,6 +1374,8 @@ export class Battle {
       this.player.attackAt = now;
       this.player.attackKind = 'strike';
       const list = alive.slice(0, def.targets || 4);
+      this.player.targetX = list[0].x;
+      this.player.targetLane = list[0].lane || 0;
       this.hit(list, skillEffect('thunder', sk.lv, this.s), 'thunder', now);
       for (const m of list) {
         if (m.dead || m.dying) continue;
@@ -1380,6 +1392,8 @@ export class Battle {
       this.player.attackAt = now;
       this.player.attackKind = 'whirl';
       const list = alive.slice();
+      this.player.targetX = list[0].x;
+      this.player.targetLane = list[0].lane || 0;
       this.hit(list, skillEffect('meteor', sk.lv, this.s), 'meteor', now);
       for (const m of list) {
         if (m.dead || m.dying) continue;
@@ -1397,6 +1411,8 @@ export class Battle {
       this.player.attackAt = now;
       this.player.attackKind = 'whirl';
       const list = alive.slice();
+      this.player.targetX = list[0].x;
+      this.player.targetLane = list[0].lane || 0;
       this.hit(list, skillEffect('frostnova', sk.lv, this.s), 'frostnova', now);
       for (const m of list) {
         if (m.dead || m.dying) continue;
@@ -1414,6 +1430,8 @@ export class Battle {
       this.player.attackAt = now;
       this.player.attackKind = 'strike';
       const list = alive.slice(0, def.targets || 3);
+      this.player.targetX = list[0].x;
+      this.player.targetLane = list[0].lane || 0;
       this.hit(list, skillEffect('vampstrike', sk.lv, this.s), 'vampstrike', now, { lifesteal: def.lifesteal || 0.35 });
       this.emit({ t: 'skill', key, ko, color: col, x: list[0].x });
       return true;
@@ -1425,6 +1443,8 @@ export class Battle {
       this.player.skillKey = key;
       this.player.attackAt = now;
       this.player.attackKind = 'strike';
+      this.player.targetX = target.x;
+      this.player.targetLane = target.lane || 0;
       const lowBonus = target.hp <= target.maxHp * 0.5 ? (def.lowHpMul || 1.5) : 1;
       this.hit([target], skillEffect('execute', sk.lv, this.s) * lowBonus, 'execute', now, {
         critAdd: def.critAdd || 0.30,
