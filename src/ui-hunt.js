@@ -117,7 +117,7 @@ export function guildRaidCard(ui) {
     const can = !!(cost && (s.gold || 0) >= cost.gold && (s.shards || 0) >= cost.shards && medals >= cost.medals);
     return `
     <div class="kn-cell${lv > 0 ? ' on' : ''}" style="--kc:${k.color}">
-      <div class="r-head"><span>${k.icon} ${esc(k.name)}</span><span class="lv">${lv > 0 ? `Lv.${lv}` : '미영입'}</span></div>
+      <div class="r-head"><span class="kn-who"><img class="kn-img" src="assets/knights/${k.id}.webp" alt="${esc(k.name)}" loading="lazy" decoding="async" onerror="this.style.display='none'">${esc(k.name)}</span><span class="lv">${lv > 0 ? `Lv.${lv}` : '미영입'}</span></div>
       <div class="r-fx">${lv > 0 ? esc(k.effect(lv)) : esc(k.desc)}</div>
       ${cost
         ? `<button class="mini ${can ? 'up' : ''}" type="button" data-action="knight-up" data-value="${k.id}" ${can ? '' : 'disabled'}>${lv > 0 ? '강화' : '영입'} 💰${formatGold(cost.gold)} 💎${cost.shards}${cost.medals ? ` 🏅${cost.medals}` : ''}</button>`
@@ -258,7 +258,7 @@ export function seasonCard(ui) {
       <span class="sn-st">${it.claimed ? '완료✓' : it.claimable ? '🎁대기' : `${Math.round(it.pct * 100)}%`}</span>
     </div>`).join('');
   const trophyHtml = st.trophies.length
-    ? `<div class="sn-trophies">${st.trophies.map((t) => `<span class="tag">${t.icon} ${esc(t.month)} ${esc(t.name)}</span>`).join('')}</div>`
+    ? `<div class="sn-trophies">${st.trophies.map((t) => `<span class="tag tr-tag"><img class="tr-img" src="assets/trophies/${t.grade}.webp" alt="${esc(t.name)}" loading="lazy" decoding="async" onerror="this.style.display='none'">${esc(t.month)} ${esc(t.name)}</span>`).join('')}</div>`
     : '<div class="tiny dim" style="margin-top:6px">🏅 4개 달성 시 실버 트로피 · 8개 올클리어 시 그랜드 마스터 트로피 영구 진열</div>';
   return `
   <div class="card season-card${st.readyCount ? ' ready' : ''}" id="seasonCard" data-fold="season">

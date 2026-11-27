@@ -95,9 +95,9 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "8.5.0"
+EXPECTED_VER = "8.6.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui.js", "src/sound.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui-settings.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -362,7 +362,7 @@ def main():
         )
     }
     ctx2 = quickjs.Context()
-    ctx2.eval(bundle(FILES + ["src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui.js"], ui_extras))
+    ctx2.eval(bundle(FILES + ["src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui-settings.js", "src/ui.js"], ui_extras))
     tpl = js(ctx2, """
       const s = defaultState(0);
       s.gold = 90000; s.shards = 320; s.level = 12; s.stage = 7; s.maxStage = 7; s.killsInStage = 4;
@@ -548,7 +548,7 @@ def main():
     ok(all(k in ssrc for k in ["hit(crit", "coin(kind", "boss()", "gacha(rarity", "unlock()"]), "효과음 5종·unlock 구현")
     ok("soundBtn" in read("index.html"), "상단 스피커 아이콘")
     ok("bindAudioUnlock" in read("app.js") and "toggleSound" in read("app.js") and "pullGacha" in read("app.js"), "첫 터치 unlock·효과음 토글·뽑기 액션 연결")
-    ok("data-action=\"toggle-sound\"" in read("src/ui.js"), "설정 탭 효과음 스위치")
+    ok("data-action=\"toggle-sound\"" in read("src/ui.js") + read("src/ui-settings.js"), "설정 탭 효과음 스위치")
 
 
     section("[6] 🐾 펫 · 🔥 전직 · 황금 던전 (v3.2)")
@@ -830,7 +830,7 @@ def main():
     ok('id="installBtn"' in html and 'data-action="install"' in html, "상단 헤더 📲 설치 버튼")
     ok('class="install-btn hidden"' in html, "헤더 설치 버튼은 기본 숨김(상태에 따라 표시)")
     ok('case \'install\'' in uijs and "syncInstall()" in uijs and "showInstallGuide()" in uijs, "설치 버튼 핸들러·상태 반영·안내(ui.js)")
-    ok("📲 홈 화면에 앱으로 설치" in uijs and 'data-action="install"' in uijs, "설정 탭 상단 📲 설치 카드")
+    ok("📲 홈 화면에 앱으로 설치" in uijs + read("src/ui-settings.js") and 'data-action="install"' in uijs + read("src/ui-settings.js"), "설정 탭 상단 📲 설치 카드")
     ok(all(x in uijs for x in ["삼성 인터넷", "Chrome", "현재 페이지 추가", "홈 화면", "⋮"]), "프롬프트 없는 환경(인앱·이미 설치) 단계별 안내")
     ok(".install-btn" in css and ".install-card" in css and ".install-steps" in css, "설치 버튼·카드·안내 CSS")
     ok("display: none !important" in css and ".install-btn.prompt" in css, "설치 상태별 표시/숨김 스타일")
@@ -1737,7 +1737,7 @@ def main():
     ok(all(x in appsrc6 for x in ["encodeSave", "decodeSave", "summarizeSave", "copySaveCode", "previewSaveCode", "restoreSaveCode", "applySaveState", "openSaveUndo", "navigator.clipboard", "execCommand"]), "앱 — 내보내기(클립보드+폴백)·미리보기·복원·되돌리기 연결", "")
     ok("claimRentNow" in appsrc6 and "rentInfo" in appsrc6, "임대수익 원탭 일괄 수령 + 내역 모달", "")
     ok("[1, 10, 50, 100, 1000]" in appsrc6, "매수 모달 빠른 수량 버튼(+1·+10·+50·최대)", "")
-    ok(all(x in uisrc6 for x in ['data-action="save-export"', 'data-action="save-import"', 'data-action="save-undo"', 'data-action="enhance5"', 'data-action="enhancemax"', 'data-action="rent-info"', "case 'save-export'", "case 'enhancemax'"]), "UI 액션 연결(백업·강화·임대)", "")
+    ok(all(x in uisrc6 + read("src/ui-settings.js") for x in ['data-action="save-export"', 'data-action="save-import"', 'data-action="save-undo"', 'data-action="enhance5"', 'data-action="enhancemax"', 'data-action="rent-info"', "case 'save-export'", "case 'enhancemax'"]), "UI 액션 연결(백업·강화·임대)", "")
     ok(all(x in css6 for x in [".save-card", ".save-code", ".save-preview", ".g-acts", ".rent-meta"]), "v3.6 세이브·일괄 강화 CSS", "")
     ok("lang-rpg" not in css6, "CSS 깨짐 없음", "")
 
@@ -3101,7 +3101,7 @@ def main():
     stsrc43x = read("src/state.js")
     ok("screenShake" in stsrc43x and "effects: true" in stsrc43x, "설정 기본값(이펙트·흔들림)", "")
     ok("toggleShake" in asrc43 and "renderer.shakeOn" in asrc43 and "case 'toggle-shake'" in usrc43, "설정 토글 — 화면 흔들림만 끄기(app.js·ui.js)")
-    ok("화면 흔들림" in usrc43 and 'data-action="toggle-shake"' in usrc43, "설정 탭에 화면 흔들림 스위치", "")
+    ok("화면 흔들림" in usrc43 + read("src/ui-settings.js") and 'data-action="toggle-shake"' in usrc43 + read("src/ui-settings.js"), "설정 탭에 화면 흔들림 스위치", "")
 
     # ── 5) 접근성 — 캔버스 연출을 스크린리더에도 ──
     ok('id="srLive"' in idxsrc43 and "aria-live=\"assertive\"" in idxsrc43, "스크린리더 라이브 영역(index.html)")
@@ -6049,7 +6049,7 @@ def main():
     ok(st75["def"] is True and st75["keepOff"] is False and st75["migrateOld"] is True and st75["badVal"] is True, "dmgNumbers 기본값/저장 유지/구버전 마이그레이션/손상 방어", json.dumps(st75))
     rsrc75 = read("src/render.js")
     asrc75 = read("app.js")
-    usrc75 = read("src/ui.js")
+    usrc75 = read("src/ui.js") + read("src/ui-settings.js")
     ok(all(x in rsrc75 for x in ["function fmtDmg(", "this.dmgNumbersOn", "topBusy", "b.invasion || b.rift"]), "render.js — K/M/B 데미지 축약·dmgNumbersOn 토글·상단 안전 구역(콤보/가호 배너)")
     ok("toggleDmgNumbers" in asrc75 and "this.renderer.dmgNumbersOn" in asrc75 and 'data-action="toggle-dmg-numbers"' in usrc75 and "case 'toggle-dmg-numbers':" in usrc75, "app.js · ui.js — 설정 탭 데미지 숫자 표시 토글 배선")
 
@@ -6414,6 +6414,18 @@ def main():
     ok(sn85["divCan"] and sn85["scReady"] and sn85["hubHas"], "영지 배당 등급·월간 시즌 도전 달성·오늘의 할 일 허브 집계", json.dumps(sn85))
     ok(sn85["claimedOk"] and sn85["trophyKept"], "허브 원탭 수령(배당+시즌 도전)·트로피 영구 보관·월간 리셋 정상", json.dumps(sn85))
     ok("'./src/season.js'" in read("sw.js") and "seasonCard" in read("src/ui.js") and "estateDividendInfo" in read("src/ui-land.js"), "sw.js · ui.js · ui-land.js — season.js 프리캐시·대시보드 배당·시즌 카드 배선")
+
+    # ── 53) v8.6.0 🎨 스킬 10종·궁극기·기사단 4인·트로피 아트워크 · 🧱 ui-settings.js 분리 ──
+    section("v8.6.0 스킬·기사단·트로피 아트워크 & ui-settings.js 분리")
+    sw86 = read("sw.js")
+    art86 = (
+        [f"assets/skills/{k}.webp" for k in ["strike", "whirl", "berserk", "heal", "thunder", "meteor", "frostnova", "aegis", "vampstrike", "execute", "ult_dragon", "ult_god"]]
+        + [f"assets/knights/{k}.webp" for k in ["paladin", "archer", "mage", "merchant"]]
+        + [f"assets/trophies/{k}.webp" for k in ["silver", "grand"]]
+    )
+    miss86 = [f for f in art86 if not os.path.exists(os.path.join(ROOT, f)) or f"'./{f}'" not in sw86]
+    ok(not miss86, "스킬 10종·궁극기 2종·기사단 4인·트로피 2종(18종) WebP 존재 및 sw.js 프리캐시 동기화", ", ".join(miss86[:5]))
+    ok(os.path.exists(os.path.join(ROOT, "src/ui-settings.js")) and "'./src/ui-settings.js'" in sw86 and "assets/skills/" in read("src/ui.js") and "assets/knights/" in read("src/ui-hunt.js"), "ui-settings.js 분리·프리캐시 · 스킬/기사단/트로피 WebP UI 연결")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

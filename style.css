@@ -2097,6 +2097,32 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 .sn-st { font-size: 10px; font-weight: 900; color: var(--gold); flex: 0 0 auto; }
 .sn-trophies { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
 
+/* v8.6.0 🎨 스킬 10종·궁극기·기사단 4인·트로피 고퀄리티 WebP 아트워크 */
+.sk-img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  display: block;
+  border-radius: 6px;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.55));
+}
+.sk-fb { display: none; }
+.q-ico .sk-img { width: 28px; height: 28px; border-radius: 7px; }
+.sdk-ico .sk-img { width: 26px; height: 26px; }
+.ult-ico .sk-img { width: 30px; height: 30px; }
+.kn-who { display: inline-flex; align-items: center; gap: 6px; }
+.kn-img {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid color-mix(in srgb, var(--kc, #ffd76a) 60%, transparent);
+  background: rgba(10, 14, 24, 0.65);
+  flex: 0 0 auto;
+}
+.tr-tag { display: inline-flex; align-items: center; gap: 4px; }
+.tr-img { width: 16px; height: 16px; object-fit: contain; display: block; }
+
 /* ⚔️ 장착 5부위 슬롯 */
 .gear-slots { display: flex; flex-direction: column; gap: 6px; }
 .gslot {

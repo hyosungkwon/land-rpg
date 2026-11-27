@@ -1,5 +1,5 @@
 // land-rpg / sw.js — 오프라인 캐시 (게스트 전용: 네트워크가 없어도 처음부터 끝까지 플레이)
-const VERSION = 'land-rpg-v8.5.0';
+const VERSION = 'land-rpg-v8.6.0';
 // 같은 릴리스 안에서 자산을 고친 경우 BUILD 를 올린다 → 열린 탭이 새 캐시로 넘어온다.
 const BUILD = 'r1';
 const CACHE = `${VERSION}-${BUILD}`;
@@ -18,6 +18,7 @@ const CORE = [
   './src/ui-gear.js',
   './src/ui-land.js',
   './src/ui-hunt.js',
+  './src/ui-settings.js',
   './src/ui.js',
   './src/sound.js',
   './src/land.js',
@@ -160,7 +161,15 @@ const CORE = [
   './assets/items/m_wood.webp', './assets/items/m_silver.webp', './assets/items/m_clover.webp',
   './assets/items/m_crystal.webp', './assets/items/m_ember.webp', './assets/items/m_star.webp',
   './assets/items/m_grail.webp', './assets/items/m_stormrel.webp', './assets/items/m_guardrel.webp',
-  './assets/items/m_phoenix.webp', './assets/items/m_midas.webp'
+  './assets/items/m_phoenix.webp', './assets/items/m_midas.webp',
+  // v8.6.0 스킬 10종 · 궁극기 2종 · 기사단 4인 · 트로피 2종 일러스트 (WebP)
+  './assets/skills/strike.webp', './assets/skills/whirl.webp', './assets/skills/berserk.webp',
+  './assets/skills/heal.webp', './assets/skills/thunder.webp', './assets/skills/meteor.webp',
+  './assets/skills/frostnova.webp', './assets/skills/aegis.webp', './assets/skills/vampstrike.webp',
+  './assets/skills/execute.webp', './assets/skills/ult_dragon.webp', './assets/skills/ult_god.webp',
+  './assets/knights/paladin.webp', './assets/knights/archer.webp',
+  './assets/knights/mage.webp', './assets/knights/merchant.webp',
+  './assets/trophies/silver.webp', './assets/trophies/grand.webp'
 ];
 
 self.addEventListener('install', (event) => {
