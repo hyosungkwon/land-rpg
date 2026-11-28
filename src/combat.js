@@ -17,6 +17,7 @@ import { TOWER_RULES, TOWER_MAX_FLOOR, towerFloor, towerStageDef, towerHas, towe
 import { INVASION, invasionStatus, recordInvasionWin } from './invasion.js';
 import { RIFT, RIFT_MONSTERS, RIFT_BOSSES, RIFT_CARD_BY_ID, RIFT_EVENTS, RIFT_EVENT_BY_ID, riftStatus, rollRiftChoices, riftCardMods, settleRiftReward } from './rift.js';
 import { RAID_DURATION_MS, startRaidTicket, settleRaidBattle } from './guild.js';
+import { ARENA_DURATION_MS, consumeArenaTicket, settleArenaMatch } from './social.js';
 import { constellationEffects } from './rebirth.js';
 import { relicEffects } from './relics.js';
 import { DAILY, dailyBossFor, dailyInfo, consumeDailyAttempt, dailyReward, recordDailyRun, recordWeeklyBoss, dailyDpsCap } from './daily.js';
@@ -171,6 +172,7 @@ export class Battle {
     // v8.10.0 ⚡ 보스 강공격 타이밍 반격 카운터 가드
     this.counterGuardUntil = 0;
     this.raid = null; // v8.16.0 🐉 주간 거대 레이드 실시간 토벌전
+    this.arena = null; // v8.18.0 ⚔️ 비동기 영주 결투장 (아레나 1:1)
     this.pendingUltEcho = null; // v8.16.0 🌌 용신의 자리 궁극기 잔향
     this.bossRetryUsed = false; // v8.16.0 🌌 수호의 자리 보스 1회 부활
     this.bossRetryAtkUntil = 0;
@@ -221,6 +223,10 @@ export class Battle {
 
   inRaid() {
     return !!this.raid;
+  }
+
+  inArena() {
+    return !!this.arena;
   }
 
   /** v8.16.0 보스/도전 입장 시 자동 로드아웃 전환 */
@@ -460,6 +466,10 @@ export class Battle {
         this.hit(alive, echo.mul, 'ultimate', now);
         this.emit({ t: 'ultEcho', name: echo.name, color: echo.color, dmg: this.lastHitDealt || 0, xs: alive.map((m) => m.x) });
       }
+    }
+    if (this.arena) {
+      this.arenaTick(now);
+      return;
     }
     if (this.raid) {
       this.raidTick(now);
@@ -708,7 +718,8 @@ export class Battle {
       this.player.reviveAt = now + ECON.reviveMs;
       this.emit({ t: 'playerDeath' });
       if (this.boss) this.failBoss(now, 'dead');
-      if (this.raid) this.endRaid(now, 'dead');
+      if (this.arena) this.endArena(now, 'dead');
+      else if (this.raid) this.endRaid(now, 'dead');
       else if (this.daily) this.endDailyBoss(now, 'dead'); // 쓰러져도 그때까지의 피해로 보상
       else if (this.dungeon) this.endDungeon(now); // 쓰러지면 던전 종료(그때까지의 보상 지급)
       else if (this.tower) this.endTower(now, 'dead'); // 탑에서 쓰러지면 패배 — 잃는 것 없이 복귀
@@ -1054,6 +1065,15 @@ export class Battle {
     // 📖 도감: 처치 수 기록(던전 몹 포함) · v4.9 일일 퀘스트 처치 누적
     try { codexKill(this.s, m.name); } catch (e) { /* ignore */ }
     try { trackDailyQuest(this.s, 'kills', 1, now); } catch (e) { /* ignore */ }
+    // v8.18.0 ⚔️ 영주 결투장: 상대 영주 격파 시 즉시 승리
+    if (this.arena) {
+      this.emit({
+        t: 'monsterDeath', id: m.id, name: m.name, ko: m.ko, isBoss: true, x: m.x,
+        gold: 0, exp: 0, shards: 0, levelUps: 0, arena: true,
+      });
+      this.endArena(now, 'win');
+      return;
+    }
     // v8.16.0 🐉 실시간 거대 레이드: 주간 보스 완전 토벌 시 즉시 정산
     if (this.raid) {
       this.emit({
@@ -1371,7 +1391,7 @@ export class Battle {
     const feverCdrDiv = this.isFever(now) && stars.feverCdrPct > 0 ? 1 + stars.feverCdrPct / 100 : 1;
     const cd = (key) => Math.round(skillCdOf(key, this.buffs(), this.s) / feverCdrDiv);
     // v4.8.2: 스테이지 보스뿐 아니라 일일 보스·도전의 탑 보스 층·거대 레이드도 보스전으로 판정
-    const hasBoss = !!(this.boss || this.daily || this.raid || alive.some((m) => m.isBoss));
+    const hasBoss = !!(this.boss || this.daily || this.raid || this.arena || alive.some((m) => m.isBoss));
     const inRange = alive.some((m) => m.x - this.player.x <= ECON.playerRange);
     const hpRatio = this.player.hp / Math.max(1, this.stats.hpMax);
     // v4.7: 설정에서 '스킬 자동 시전'을 끄면 손으로 누를 때만 나간다 · v8.4.0: 편성된 4슬롯 덱 기준
@@ -1718,6 +1738,7 @@ export class Battle {
     if (this.dungeon) return false;
     if (this.invasion) return false;
     if (this.raid) return false;
+    if (this.arena) return false;
     this.maybeApplyBossLoadout(now);
     this.bossRetryUsed = false;
     const boss = this.makeMonster(this._def.boss, true, now);
@@ -2606,6 +2627,85 @@ export class Battle {
       leftTickets: res ? res.leftTickets : 0,
       breaks: r.breaks || 0,
     });
+    return res;
+  }
+
+  /* ───────────── v8.18.0 ⚔️ 비동기 영주 결투장 (아레나 1:1 실시간 대결) ───────────── */
+  startArena(opp, now = Date.now()) {
+    if (!opp || !opp.uid) return { ok: false, reason: '대전 상대를 찾을 수 없습니다.' };
+    if (this.arena) return { ok: false, reason: '이미 결투장 대전 중입니다.' };
+    if (this.raid || this.rift || this.invasion || this.tower || this.daily || this.dungeon || this.boss) {
+      return { ok: false, reason: '다른 전투가 끝난 뒤 결투장에 입장할 수 있습니다.' };
+    }
+    if (this.player.dead) return { ok: false, reason: '전투 불능 상태에서는 입장할 수 없습니다.' };
+    this.maybeApplyBossLoadout(now);
+    const ticket = consumeArenaTicket(this.s, now);
+    if (!ticket.ok) return ticket;
+
+    const base = stageDef(this.s.stage);
+    const theme = THEMES.find((t) => t.id === 'ruins') || base.theme;
+    const def = { ...base, theme, themeName: `결투장 · VS ${opp.name}`, boss: 'AbyssKnight', bossOnly: true, tier: 'arena', arena: true };
+    this.arena = {
+      t0: now,
+      ends: now + ARENA_DURATION_MS,
+      opp,
+      rival: null,
+      def,
+    };
+    this.monsters = [];
+    this.boss = null;
+    this.bossEnds = 0;
+    this.bossReadyAt = 0;
+    this._def = def;
+    this.player.hp = this.stats.hpMax;
+    try { trackDailyQuest(this.s, 'challenge', 1, now); } catch (e) { /* ignore */ }
+
+    const m = this.makeMonster('AbyssKnight', true, now);
+    m.ko = opp.name;
+    // 상대 전투력과 내 전투력 비율을 완만하게 반영해 긴장감 있는 1:1 승부
+    const myDps = Math.max(40, this.stats.dps || 100);
+    const oppDps = Math.max(30, opp.dps || myDps);
+    const relRatio = Math.max(0.55, Math.min(1.85, oppDps / myDps));
+    m.maxHp = Math.max(100, Math.round(myDps * 11 * relRatio));
+    m.hp = m.maxHp;
+    m.atk = Math.max(1, Math.round((this.stats.hpMax * 4.2 * relRatio) / 100));
+    m.baseAtk = m.atk;
+    m.attackGap = 1550;
+    m.scale = 1.28;
+    m.arena = true;
+    m.x = ECON.playerX + 260;
+    m.lastAttack = now;
+    this.monsters.push(m);
+    this.arena.rival = m;
+    this.emit({ t: 'arenaStart', opp, ends: this.arena.ends, left: ticket.left });
+    return { ok: true, opp, left: ticket.left };
+  }
+
+  arenaTick(now) {
+    const a = this.arena;
+    if (!a) return;
+    if (!a.rival || a.rival.dead || a.rival.hp <= 0) {
+      this.endArena(now, 'win');
+      return;
+    }
+    if (now >= a.ends) this.endArena(now, 'timeout');
+  }
+
+  endArena(now = Date.now(), how = 'timeout') {
+    const a = this.arena;
+    if (!a) return null;
+    this.arena = null;
+    const won = how === 'win';
+    const res = settleArenaMatch(this.s, a.opp, won, now);
+    for (const m of this.monsters) { m.dead = true; m.dying = 0; }
+    this.monsters = [];
+    this.boss = null;
+    this.bossEnds = 0;
+    this.bossReadyAt = 0;
+    this.syncStage();
+    this.spawnInitial(now);
+    this.refreshStats(now);
+    this.emit({ t: 'arenaEnd', how, ...(res || { won, opp: a.opp, gold: 0, shards: 0, points: 0, rating: 1000, ratingDelta: 0, left: 0 }) });
     return res;
   }
 

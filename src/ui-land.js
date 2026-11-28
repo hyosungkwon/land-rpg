@@ -16,6 +16,7 @@ import { CITADEL_FACILITIES, CITADEL_MAX_LV, citadelEffects, citadelUpgradeQuote
 import { BANK_PLANS, bankStatus, MEGA_PROJECTS, MEGA_MAX_LV, megaEffects, megaQuote } from './bank.js';
 import { petStageInfo } from './meta.js';
 import { estateDividendInfo } from './season.js';
+import { computeCityLords } from './social.js';
 import { esc, fmt, hhmmss, mmss } from './ui-fmt.js';
 
 export const paybackText = (hours) => {
@@ -615,6 +616,8 @@ export function buildMarketList(ui) {
   const PAGE = 20;
   const shown = rows.slice(0, page * PAGE);
   const gold = s.gold;
+  const rankRows = (ui.app && ui.app.cloud && ui.app.cloud.rank && (ui.app.cloud.rank.all || ui.app.cloud.rank.rows)) || [];
+  const lords = computeCityLords(rankRows, s, now).byCity;
 
   const html = shown.length
     ? shown
@@ -627,13 +630,15 @@ export function buildMarketList(ui) {
           const lmTag = lm > 0 ? `<span class="tag lm">${LANDMARK.levels[lm - 1].icon} Lv.${lm}</span>` : '';
           const lease = leasePctOf(s, c.key);
           const leaseTag = lease > 0 ? `<span class="tag lease">🏷️ 임대 +${lease}%</span>` : '';
+          const lord = lords[c.key];
+          const lordTag = lord ? `<span class="tag lord">${lord.isMe ? '👑 내 영지' : `👑 ${esc(lord.name)}`}</span>` : '';
           const mulTag = rentMul > 1.001 ? ` · <b class="up">임대 ×${rentMul.toFixed(2)}</b>` : '';
           const fav = favSet.has(c.key);
           const bandPct = Math.round((info.bandPos != null ? info.bandPos : 0.5) * 100);
           return `<div class="mkt${info.news ? ' hot' : ''}" data-action="land-sheet" data-value="${c.key}" role="button" tabindex="0" aria-label="${esc(c.name)} 매수·매도·예약 열기">
             <div class="m-ico">${c.emoji}</div>
             <div class="m-mid">
-              <div class="m-name"><button class="fav-btn${fav ? ' on' : ''}" type="button" data-action="land-fav" data-value="${c.key}" aria-label="관심 매물">${fav ? '★' : '☆'}</button>${esc(c.name)}<span class="m-region">${esc(c.region)}</span>${traitBadge(c.trait)}${seasonal}${newsTag}${lmTag}${leaseTag}</div>
+              <div class="m-name"><button class="fav-btn${fav ? ' on' : ''}" type="button" data-action="land-fav" data-value="${c.key}" aria-label="관심 매물">${fav ? '★' : '☆'}</button>${esc(c.name)}<span class="m-region">${esc(c.region)}</span>${lordTag}${traitBadge(c.trait)}${seasonal}${newsTag}${lmTag}${leaseTag}</div>
               <div class="m-line"><b>💰${fmt(info.price)}</b><span class="dim">/평</span> ${trendHtml(info.trend)} <span class="band-pill ${info.bandLabel === '저점' ? 'lo' : info.bandLabel === '고점' ? 'hi' : ''}">${esc(info.bandLabel || '보통')}</span><span class="band-bar"><i style="left:${bandPct}%"></i></span>${held > 0 ? ` <b class="own">보유 ${fmt(held)}평</b>` : ''}</div>
               <div class="m-line dim">평당 +💰${fmt(onePyeongIncome)}/h · 회수 ${paybackText(c.base / hourlyPerPyeong)} · 잔여 ${fmt(remain)}평${!affordable ? ' · <span style="color:var(--dim)">골드 부족</span>' : ''}${mulTag}</div>
             </div>

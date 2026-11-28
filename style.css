@@ -3468,3 +3468,20 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .seg-btn.on { background: rgba(255, 215, 106, 0.16); color: var(--gold); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); }
+
+/* v8.18.0 🌐 멀티플레이 소셜 컴팩트 UI */
+.seg-bar.seg-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.soc-sync {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  padding: 6px 10px; border-radius: 9px; background: rgba(110, 195, 255, 0.08);
+  border: 1px solid rgba(110, 195, 255, 0.24); font-size: 10.5px; color: var(--sub);
+}
+.soc-list { display: flex; flex-direction: column; gap: 5px; }
+.soc-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  padding: 6px 8px; border-radius: 8px; background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line); font-size: 11px;
+}
+.soc-row.me { border-color: rgba(255, 215, 106, 0.45); background: rgba(255, 215, 106, 0.08); }
+.soc-vote { margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--line); }
+.tag.lord { background: rgba(255, 215, 106, 0.16); border-color: rgba(255, 215, 106, 0.48); color: #ffe066; }

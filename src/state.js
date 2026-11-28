@@ -43,6 +43,7 @@ import { defaultSeason, normalizeSeason } from './season.js';
 import { defaultRift, normalizeRift } from './rift.js';
 import { defaultBank, normalizeBank, defaultMega, normalizeMega, megaEffects } from './bank.js';
 import { defaultGuild, normalizeGuild, guildEffects } from './guild.js';
+import { defaultSocial, normalizeSocial, socialCombatBonus } from './social.js';
 import { normalizeOrders } from './orders.js';
 
 const nowMs = () => Date.now();
@@ -110,6 +111,7 @@ export function defaultState(now = nowMs()) {
     bank: defaultBank(),
     mega: defaultMega(),
     guild: defaultGuild(now),
+    social: defaultSocial(now), // v8.18.0 🌐 멀티플레이 소셜(월드 레이드·동맹·용병·아레나)
     battleSpeed: 1, // v5.3.0 전투 배속(1 / 1.5 / 2, 환생 1회 해금)
     dungeonCooldown: 0,
     dungeon: { best: 0, runs: 0, last: null },
@@ -300,6 +302,7 @@ export function normalizeState(raw, now = nowMs()) {
   s.bank = normalizeBank(raw.bank);
   s.mega = normalizeMega(raw.mega);
   s.guild = normalizeGuild(raw.guild, now);
+  s.social = normalizeSocial(raw.social, now);
   s.rebirth = normalizeRebirth(raw.rebirth);
   s.peakStage = Math.max(
     1,
@@ -437,6 +440,7 @@ export function calcStats(s, buffs = NO_BUFF) {
   const tit = titleBonus(s);
   const meg = megaEffects(s);
   const gld = guildEffects(s);
+  const soc = socialCombatBonus(s);
   const synCritDmg = add(b.synCritDmgPct) / 100;
   const skillCdr = Math.min(0.4, Math.max(0, add(b.synCdrPct) + cit.skillCdrPct + (gem.cdrPct || 0) + (gld.cdrPct || 0)) / 100);
   const synBoss = (add(b.synBossDmgPct) + add(b.polBossPct)) / 100;
@@ -475,7 +479,7 @@ export function calcStats(s, buffs = NO_BUFF) {
   const rbHpMul = 1 + rb.hpPct / 100;
   const baseAtk = 12 + 2.6 * L + 0.035 * L * L;
   const equipAtk = EQUIP.weapon.per * eLv('weapon');
-  const atk = (baseAtk + equipAtk) * (1 + (b.atkPct + extraAtk + gm.atkPct + cit.atkPct + rel.atkPct + gem.atkPct + tit.atkPct + meg.atkPct + gld.atkPct) / 100) * jobAtkMul * petAtkMul * colAtkMul * rbAtkMul;
+  const atk = (baseAtk + equipAtk) * (1 + (b.atkPct + extraAtk + gm.atkPct + cit.atkPct + rel.atkPct + gem.atkPct + tit.atkPct + meg.atkPct + gld.atkPct + soc.atkPct) / 100) * jobAtkMul * petAtkMul * colAtkMul * rbAtkMul;
   const hpMax =
     (150 + 30 * L + EQUIP.armor.per * eLv('armor') + EQUIP.helmet.per * eLv('helmet'))
     * (1 + (b.hpPct + extraHp + gm.hpPct + rel.hpPct + gem.hpPct + tit.hpPct + meg.hpPct + gld.hpPct) / 100) * jobHpMul * rbHpMul;
@@ -489,7 +493,7 @@ export function calcStats(s, buffs = NO_BUFF) {
   const dmgReduce = Math.min(DEF.cap, (defFromGear + (rb.guardPct || 0) + gm.dmgRed + petDmgRedPct + gem.dmgRedPct + gld.dmgRedPct) / 100);
   const hpRegen = Math.min(0.1, DEF.regenBase + (rb.regenPct || 0) / 100 + (gm.regen + gem.regenPct) / 100);
   const goldMult =
-    1 + (EQUIP.amulet.per / 100) * eLv('amulet') + (b.goldPct + extraGold + rb.goldPct + gm.goldPct + rel.goldPct + gem.goldPct + tit.goldPct + meg.goldPct + gld.goldPct) / 100 + petGold / 100
+    1 + (EQUIP.amulet.per / 100) * eLv('amulet') + (b.goldPct + extraGold + rb.goldPct + gm.goldPct + rel.goldPct + gem.goldPct + tit.goldPct + meg.goldPct + gld.goldPct + soc.goldPct) / 100 + petGold / 100
     + (col.goldPct || 0) / 100;
   const dropMult = 1 + (b.dropPct + extraDrop + rb.shardPct + gm.dropPct + petDropPct + rel.dropPct + gem.dropPct + tit.dropPct + meg.dropPct + gld.dropPct) / 100;
   // v4.0/v8.8.0: 공격 속도 — 기본 레벨 보정 하한 300ms + 장비·펫·보석 공속 옵션 적용(최종 하한 200ms, Lv.160+ 공속 무효화 해결)

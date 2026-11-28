@@ -14,6 +14,7 @@
 // tools/verify_v3.py 에서 헤드리스로 검증한다.
 import { APP_VERSION } from './data.js';
 import { portfolioOf, formatGold } from './land.js';
+import { buildSocialPayload } from './social.js';
 
 /** 클라우드 설정 — 경로·시간 제한·표시 규칙을 한곳에 모은다 */
 export const CLOUD = {
@@ -254,6 +255,7 @@ export function rankEntryOf(state, opts = {}) {
   const uid = String(opts.uid || '');
   const now = int(opts.now, Date.now());
   const sum = cloudSummary(state, now);
+  const soc = buildSocialPayload(state, opts.stats || null, now);
   return {
     uid,
     name: sanitizeNick(opts.nick || sum.nick, uid),
@@ -267,6 +269,14 @@ export function rankEntryOf(state, opts = {}) {
     dailyBest: sum.dailyBest,
     dailyGrade: sum.dailyGrade,
     riftBest: sum.riftBest,
+    // v8.18.0 멀티플레이 소셜 공개 필드 (기존 rpg_rankings/{uid} 규칙 100% 호환)
+    raidWeek: soc.raidWeek,
+    raidDmg: soc.raidDmg,
+    topCities: soc.topCities,
+    allyCode: soc.allyCode,
+    voteWeek: soc.voteWeek,
+    voteRegion: soc.voteRegion,
+    snap: soc.snap,
     title: (() => {
       const id = state && state.titles && state.titles.equipped;
       return typeof id === 'string' ? id.slice(0, 20) : '';
@@ -296,6 +306,13 @@ export function normalizeRankRow(entry, uid) {
     dailyBest: int(e.dailyBest),
     dailyGrade: typeof e.dailyGrade === 'string' ? e.dailyGrade.slice(0, 2) : 'D',
     riftBest: int(e.riftBest),
+    raidWeek: typeof e.raidWeek === 'string' ? e.raidWeek.slice(0, 16) : '',
+    raidDmg: int(e.raidDmg),
+    topCities: e.topCities && typeof e.topCities === 'object' ? e.topCities : null,
+    allyCode: typeof e.allyCode === 'string' ? e.allyCode.slice(0, 8) : '',
+    voteWeek: typeof e.voteWeek === 'string' ? e.voteWeek.slice(0, 16) : '',
+    voteRegion: typeof e.voteRegion === 'string' ? e.voteRegion.slice(0, 16) : '',
+    snap: e.snap && typeof e.snap === 'object' ? e.snap : null,
     title: typeof e.title === 'string' ? e.title.slice(0, 20) : '',
     time: int(e.time, int(e.ts)),
     hasAsset,

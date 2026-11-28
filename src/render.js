@@ -1625,6 +1625,7 @@ export class Renderer {
         this.drawSwordTrail(ctx, t);
         this.drawAfterimages(ctx, t);
         this.drawKnightSupport(ctx, dt, t);
+        this.drawMercSupport(ctx, dt, t);
         this.drawLightnings(ctx, t);
         this.drawTapBolts(ctx, t);
         this.drawKillShards(ctx, dt);
@@ -1657,6 +1658,7 @@ export class Renderer {
       this.drawDungeonHud(ctx, W, t);
       this.drawDailyHud(ctx, W, t);
       this.drawRaidHud(ctx, W, t);
+      this.drawArenaHud(ctx, W, t);
       this.drawTowerHud(ctx, W, t);
       this.drawTowerBanner(ctx, W, t);
       this.drawPromoteBanner(ctx, W, t);
@@ -1897,6 +1899,14 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(0, 0, r * 0.64, 0, Math.PI * 2);
       ctx.stroke();
+    } else if (b.arena) {
+      // ⚔️ v8.18.0 비동기 영주 결투장(아레나) 청색-진홍 결투 분위기
+      const vg = ctx.createLinearGradient(0, 0, W, 0);
+      vg.addColorStop(0, `rgba(60,150,255,${0.18 + 0.06 * pulse})`);
+      vg.addColorStop(0.5, 'rgba(10,12,24,0.06)');
+      vg.addColorStop(1, `rgba(255,70,95,${0.20 + 0.06 * pulse})`);
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, W, H);
     } else if (b.raid) {
       // 🐉 v8.16.0 주간 거대 레이드: 심홍-보라 전장 비네트 + 결전 오라
       const vg = ctx.createRadialGradient(W * 0.7, gy * 0.45, 10, W * 0.7, gy * 0.45, W * 0.9);
@@ -4172,6 +4182,113 @@ export class Renderer {
     ctx.restore();
   }
 
+  /* ─────────── ⚔️ v8.18.0 비동기 영주 결투장 (아레나) HUD ─────────── */
+  drawArenaHud(ctx, W, now) {
+    const a = this.battle && this.battle.arena;
+    if (!a) return;
+    const left = Math.max(0, a.ends - now);
+    const total = Math.max(1, a.ends - a.t0);
+    const k = Math.max(0, Math.min(1, left / total));
+    const bw = Math.min(W * 0.9, 356);
+    const bx = (W - bw) / 2;
+    const by = 50;
+    const hgt = 52;
+    const sc = Math.min(1.2, Math.max(0.85, this.W / 390));
+    const m = a.rival;
+    const hpPct = m && m.maxHp ? Math.max(0, Math.min(1, m.hp / m.maxHp)) : 0;
+
+    ctx.save();
+    const g = ctx.createLinearGradient(bx, by, bx + bw, by);
+    g.addColorStop(0, 'rgba(18,38,76,0.94)');
+    g.addColorStop(1, 'rgba(72,18,32,0.94)');
+    ctx.fillStyle = g;
+    roundRect(ctx, bx, by, bw, hgt, 10);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(120,200,255,0.65)';
+    ctx.lineWidth = 1.8;
+    roundRect(ctx, bx + 1, by + 1, bw - 2, hgt - 2, 9);
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#bfe6ff';
+    ctx.font = `900 ${Math.round(12 * sc)}px ${FONT}`;
+    ctx.fillText(`⚔️ 결투장 · VS ${a.opp ? a.opp.name : '라이벌'}`, bx + 12, by + 18);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = left / 1000 <= 5 ? '#ff8a8a' : '#fff6d8';
+    ctx.font = `900 ${Math.round(14.5 * sc)}px ${FONT}`;
+    ctx.fillText(`${(left / 1000).toFixed(1)}s`, bx + bw - 12, by + 18);
+
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    roundRect(ctx, bx + 12, by + 25, bw - 24, 8, 4);
+    ctx.fill();
+    ctx.fillStyle = '#ff6b6b';
+    roundRect(ctx, bx + 12, by + 25, Math.max(2, (bw - 24) * hpPct), 8, 4);
+    ctx.fill();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(220,238,255,0.9)';
+    ctx.font = `700 ${Math.round(9.5 * sc)}px ${FONT}`;
+    ctx.fillText(`상대 체력 ${Math.round(hpPct * 100)}% · 레이팅 ${a.opp ? a.opp.rating : 1000}`, bx + 12, by + hgt - 4);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#ffd76a';
+    ctx.fillText(`남은 시간 ${Math.round(k * 100)}%`, bx + bw - 12, by + hgt - 4);
+    ctx.restore();
+  }
+
+  /* ─────────── 🤝 v8.18.0 동맹 객원 용병 캔버스 지원 출격 연출 ─────────── */
+  drawMercSupport(ctx, dt, now) {
+    const b = this.battle;
+    const soc = b && b.s && b.s.social;
+    if (!soc || !soc.mercUid || !soc.mercName) return;
+    if (!this._mercFx) this._mercFx = null;
+    if (!this._mercFx && now - (this._lastMercAt || 0) >= 3200) {
+      const target = b.monsters.find((m) => !m.dead && !m.dying);
+      if (target) {
+        this._lastMercAt = now;
+        const gy = this.groundY();
+        const sc = this.scale();
+        const heroX = this.heroVisX != null ? this.heroVisX : this.worldX(b.player.x);
+        const tx = this.worldX(target.x);
+        this._mercFx = { t0: now, dur: 650, sx: Math.max(16, heroX - 38 * sc), tx, y: gy - 34 * sc, name: soc.mercName };
+      }
+    }
+    const fx = this._mercFx;
+    if (!fx) return;
+    const age = now - fx.t0;
+    if (age > fx.dur) { this._mercFx = null; return; }
+    const k = clamp(age / fx.dur, 0, 1);
+    const sc = this.scale();
+    const x = lerp(fx.sx, fx.tx - 16 * sc, Math.min(1, k * 1.45));
+    const alpha = k < 0.7 ? 0.85 : Math.max(0, (1 - k) / 0.3);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    // 청록 환영 영웅 실루엣 + 황금 교차 검기
+    const sp = this.sprites && (this.sprites.hero_dash || this.sprites.hero_attack);
+    if (sp && sp.complete && sp.naturalWidth) {
+      const sz = 58 * sc;
+      ctx.shadowColor = '#69f0ff';
+      ctx.shadowBlur = 12;
+      ctx.drawImage(sp, x - sz * 0.5, fx.y - sz * 0.45, sz, sz);
+    }
+    if (k > 0.35) {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = '#7ff6ff';
+      ctx.lineWidth = 3 * sc;
+      ctx.beginPath();
+      ctx.moveTo(fx.tx - 24 * sc, fx.y - 20 * sc);
+      ctx.lineTo(fx.tx + 24 * sc, fx.y + 18 * sc);
+      ctx.moveTo(fx.tx - 20 * sc, fx.y + 16 * sc);
+      ctx.lineTo(fx.tx + 22 * sc, fx.y - 18 * sc);
+      ctx.stroke();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.font = `800 ${Math.round(9.5 * sc)}px ${FONT}`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#bff8ff';
+    ctx.fillText(`🤝 ${fx.name}`, x, fx.y - 34 * sc);
+    ctx.restore();
+  }
+
   /* ─────────── 🔥 황금 던전 HUD ─────────── */
   drawDungeonHud(ctx, W, now) {
     const d = this.battle && this.battle.dungeon;
@@ -4931,7 +5048,7 @@ export class Renderer {
     const hgt = 30;
     const x = (W - w) / 2;
     // 보스 바(62~106)·특수 모드 HUD(50~102)가 있으면 그 아래로, 없으면 상단 칩(스테이지) 바로 아래로
-    const busy = !!(b.boss || b.dungeon || b.tower || b.daily || b.invasion || b.rift || b.raid);
+    const busy = !!(b.boss || b.dungeon || b.tower || b.daily || b.invasion || b.rift || b.raid || b.arena);
     const y = busy ? 112 : 44;
     const pulse = 0.7 + 0.3 * Math.sin(now / 130);
     ctx.save();

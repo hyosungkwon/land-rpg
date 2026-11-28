@@ -76,6 +76,8 @@ import { computeCpBreakdown, recommendGrowth } from './guide.js';
 import {
   relicCard, riftCard, guildRaidCard, passCard, titleCard, cpGuideInner, seasonCard,
 } from './ui-hunt.js';
+import { socialHubView } from './ui-social.js';
+import { computeWorldRaid } from './social.js';
 import { tplSettings } from './ui-settings.js';
 
 /** v6.5.0 전투 캔버스 상단 실시간 버프 HUD 바 항목 생성 */
@@ -124,6 +126,7 @@ export class UI {
     this.collectSec = 'pet';      // 'pet' | 'relic' | 'title'
     this.landHomeSec = 'exp';     // 'exp' | 'sets' | 'stats'
     this.landEventSec = 'market'; // 'market' | 'infra' | 'orders'
+    this.socialSec = 'world';     // v8.18.0 'world' | 'lords' | 'ally' | 'arena'
     this.landHoldAll = false; // v4.3 부동산 탭 보유 매물 펼치기(기본은 6곳까지)
     // v8.0.0: 섹션 칩 필터 제거 — 카드 접힘 상태만 세션에 기억한다
     this.collapsed = new Set(DEFAULT_COLLAPSED);
@@ -401,6 +404,13 @@ export class UI {
       case 'knight-up': actions.upgradeKnight(v); break;
       case 'raid-attack': actions.attackRaid(); break;
       case 'raid-claim': actions.claimRaidPhase(Number(v)); break;
+      case 'social-sec': this.socialSec = v || 'world'; this.render(); break;
+      case 'social-refresh': actions.socialRefresh(false); break;
+      case 'world-raid-claim': actions.claimWorldRaid(Number(v)); break;
+      case 'region-vote': actions.voteRegion(v); break;
+      case 'ally-join': actions.joinAlliance(); break;
+      case 'merc-hire': actions.hireMerc(v); break;
+      case 'arena-fight': actions.enterArena(v); break;
       case 'open-todo': actions.openTodoHub(); break;
       case 'goto-todo': this.gotoTodoHub(); break;
       case 'todo-claim-all': actions.claimAllTodo(); break;
@@ -1584,6 +1594,7 @@ const HUNT_SUBS = [
   ['battle', '⚔️', '전투'],
   ['challenge', '🏆', '도전'],
   ['mission', '📋', '미션'],
+  ['social', '🌐', '함께'],
 ];
 
 /** 서브 탭 배지 — 지금 누르면 보상을 받거나 바로 성장할 수 있는 항목 수 */
@@ -1599,11 +1610,14 @@ function huntBadges(ui) {
   const attReady = att.canClaim && (s.totalKills > 0 || att.total > 0) ? 1 : 0;
   const passReady = passInfo(s).readyCount;
   const raidReady = raidStatus(s, ui.battle && ui.battle.stats).readyCount;
+  const rankRows = (ui.app && ui.app.cloud && ui.app.cloud.rank && (ui.app.cloud.rank.all || ui.app.cloud.rank.rows)) || [];
+  const socialReady = computeWorldRaid(rankRows, s).readyCount;
   // 던전 '무료 입장 가능'은 10분마다 계속 켜지므로 배지에서 뺀다(탭 안에서 바로 보임) — 상시 점등 방지
   return {
     battle: 0,
     challenge: weeklyReady + raidReady,
     mission: (questReady ? 1 : 0) + dqReady + achReady + attReady + passReady,
+    social: socialReady,
   };
 }
 
@@ -2132,7 +2146,7 @@ function tplHuntMission(ui) {
 /* ══════════════════════════ 사냥/스킬 (본문) ══════════════════════════ */
 function tplHunt(ui) {
   const sub = huntSubOf(ui);
-  const body = sub === 'challenge' ? tplHuntChallenge(ui) : sub === 'mission' ? tplHuntMission(ui) : tplHuntBattle(ui);
+  const body = sub === 'challenge' ? tplHuntChallenge(ui) : sub === 'mission' ? tplHuntMission(ui) : sub === 'social' ? socialHubView(ui) : tplHuntBattle(ui);
   return `${huntSubBar(ui)}${body}`;
 }
 

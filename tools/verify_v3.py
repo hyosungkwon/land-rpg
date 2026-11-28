@@ -95,9 +95,9 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "8.17.0"
-FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
-ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui-settings.js", "src/ui.js", "src/sound.js"]
+EXPECTED_VER = "8.18.0"
+FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/social.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
+ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/social.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui-social.js", "src/ui-settings.js", "src/ui.js", "src/sound.js"]
 
 passed = 0
 failed = 0
@@ -362,7 +362,7 @@ def main():
         )
     }
     ctx2 = quickjs.Context()
-    ctx2.eval(bundle(FILES + ["src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui-settings.js", "src/ui.js"], ui_extras))
+    ctx2.eval(bundle(FILES + ["src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui-social.js", "src/ui-settings.js", "src/ui.js"], ui_extras))
     tpl = js(ctx2, """
       const s = defaultState(0);
       s.gold = 90000; s.shards = 320; s.level = 12; s.stage = 7; s.maxStage = 7; s.killsInStage = 4;
@@ -6681,6 +6681,57 @@ def main():
     ok(v816["loadoutOk"], "통합 전투 로드아웃 저장·복원(스킬덱 포함)·보스 자동 전환 설정 정상", json.dumps(v816))
     ok(v816["rift2Ok"], "무한 균열 2.0 축복 시너지(폭풍 과부하)·이벤트 모디파이어·클라우드 랭킹 rift 지표 정상", json.dumps(v816))
     ok(v816["starOk"], "S70+ 초월 성좌 해금·효과 계산·세이브 정규화 마이그레이션 정상", json.dumps(v816))
+
+    # ── 64) v8.17.0 컴팩트 UI & v8.18.0 멀티플레이 소셜 통합 ──
+    section("v8.17.0 컴팩트 UI & v8.18.0 멀티플레이 소셜(월드레이드·영주·동맹·아레나)")
+    v818 = run_js("""
+      const now = 1_750_000_000_000;
+      const s = defaultState(now);
+      s.stage = 30; s.maxStage = 30; s.peakStage = 30; s.level = 50;
+      const gnKey = RCITY_KEY_BY_NAME['강남구'];
+      s.land.owned[gnKey] = 999;
+
+      // 1) 월드 레이드 합산 & 보상 수령
+      const wr = computeWorldRaid([], s, now);
+      const wrClaim = claimWorldRaidMilestone(s, 0, [], now);
+
+      // 2) 전국 명예 영주 & 주간 호재 투표
+      const cl = computeCityLords([], s, now);
+      const myLord = cl.byCity[gnKey];
+      const vt = voteRegionBoom(s, 'seoul', now);
+      const rv = computeRegionVotes([], s, now);
+
+      // 3) 동맹 가입 & 객원 용병 고용 + 스탯 반영
+      const al = setAllianceCode(s, 'korea');
+      const alInfo = computeAlliance([], s, now);
+      const mercs = availableMercenaries([], s, now);
+      const hm = hireMercenary(s, mercs[0], now);
+      const sb = socialCombatBonus(s);
+
+      // 4) 아레나 1:1 캔버스 대전 진입·승리 정산
+      const b = new Battle(s, () => computeBuffs(s, now), () => 0.4, now);
+      const arSt = arenaStatus(s, [], b.stats, now);
+      const arGo = b.startArena(arSt.opponents[0], now + 100);
+      const arEnd = b.endArena(now + 400, 'win');
+
+      // 5) 클라우드 공개 랭킹 페이로드 & 정규화
+      const entry = rankEntryOf(s, { uid: 'u99', stats: b.stats, now });
+      const norm = normalizeState(JSON.parse(JSON.stringify(s)), now);
+
+      return {
+        worldOk: wr.totalDmg > 1_000_000 && wrClaim.ok && wrClaim.shards === 40,
+        lordOk: !!(myLord && myLord.isMe && myLord.qty === 999 && vt.ok && rv.myVote === 'seoul'),
+        allyOk: al.ok && al.code === 'KOREA' && alInfo.count >= 2 && hm.ok && sb.atkPct >= 8,
+        arenaOk: !!(arGo.ok && arEnd && arEnd.won && s.social.arenaWins === 1 && s.social.arenaRating === 1025 && !b.arena),
+        cloudOk: entry.allyCode === 'KOREA' && entry.topCities[gnKey] === 999 && norm.social.allyCode === 'KOREA',
+      };
+    """)
+    ok(v818["worldOk"], "월드 레이드 전 서버 피해 합산 및 마일스톤 보상 수령 정상", json.dumps(v818))
+    ok(v818["lordOk"], "전국 명예 영주 등극(강남구 999평) 및 주간 호재 투표 정상", json.dumps(v818))
+    ok(v818["allyOk"], "동맹 코드 가입·멤버 묶임·객원 용병 고용 및 공격 보너스 반영 정상", json.dumps(v818))
+    ok(v818["arenaOk"], "비동기 영주 결투장(아레나) 캔버스 대전 진입·승리·레이팅 정산 정상", json.dumps(v818))
+    ok(v818["cloudOk"], "클라우드 rpg_rankings 소셜 페이로드 직렬화 및 세이브 정규화 정상", json.dumps(v818))
+    ok("'./src/social.js'" in read("sw.js") and "'./src/ui-social.js'" in read("sw.js"), "sw.js 프리캐시에 social.js · ui-social.js 포함")
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

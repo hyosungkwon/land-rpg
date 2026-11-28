@@ -50,6 +50,10 @@ import {
 import {
   upgradeKnight as upgradeKnightState, attackRaidBoss as attackRaidBossState, claimRaidPhase as claimRaidPhaseState,
 } from './src/guild.js';
+import {
+  claimWorldRaidMilestone as claimWorldRaidState, voteRegionBoom as voteRegionBoomState,
+  setAllianceCode as setAllianceCodeState, availableMercenaries, hireMercenary as hireMercenaryState, arenaStatus,
+} from './src/social.js';
 import { collectTodoSummary, claimAllReady } from './src/hub.js';
 import {
   summonRelic as summonRelicState, toggleEquipRelic as toggleEquipRelicState, upgradeRelic as upgradeRelicState,
@@ -365,7 +369,7 @@ class App {
       const b = this.battle;
       const mood = b && b.isFever && b.isFever(now)
         ? 'fever'
-        : b && (b.boss || b.tower || b.rift || b.invasion || b.daily || b.dungeon || b.raid)
+        : b && (b.boss || b.tower || b.rift || b.invasion || b.daily || b.dungeon || b.raid || b.arena)
           ? 'boss'
           : 'field';
       this.sound.setBgmMood(mood);
@@ -485,6 +489,7 @@ class App {
       this.battle.tower = null; // 탑 도전 중 예외가 나도 스테이지 사냥으로 복귀
       this.battle.daily = null; // 일일 보스 중 예외가 나도 스테이지 사냥으로 복귀
       this.battle.raid = null;  // 거대 레이드 중 예외가 나도 스테이지 사냥으로 복귀
+      this.battle.arena = null; // 영주 결투장 중 예외가 나도 스테이지 사냥으로 복귀
       this.battle.syncStage();
       this.battle.events = [];
       this.battle.refreshStats(Date.now());
@@ -638,6 +643,31 @@ class App {
         this.ui.addLog(`🛡️ <b>수호의 자리</b> 발동 — 보스전 1회 부활 재도전`);
       } else if (ev.t === 'loadoutSwitch') {
         this.ui.toast(`⚡ 보스 자동 로드아웃 전환: ${ev.name}`, 'gold');
+      } else if (ev.t === 'arenaStart') {
+        this.ui.addLog(`⚔️ <b>영주 결투장</b> VS ${esc(ev.opp.name)} (레이팅 ${ev.opp.rating}) 시작!`);
+        this.ui.toast(`⚔️ 결투장 시작! VS ${ev.opp.name} (남은 ${ev.left}회)`, 'gold');
+        this.sound.boss();
+        this.ui.renderIfNeeded();
+      } else if (ev.t === 'arenaEnd') {
+        this.battle.refreshStats();
+        addPassXp(this.s, ev.won ? 40 : 15, now);
+        this.save(true);
+        if (ev.won) this.sound.fanfare();
+        else this.sound.ui();
+        const deltaStr = ev.ratingDelta >= 0 ? `+${ev.ratingDelta}` : `${ev.ratingDelta}`;
+        this.ui.addLog(`⚔️ <b>결투장 ${ev.won ? '승리!' : '패배'}</b> VS ${esc(ev.opp ? ev.opp.name : '라이벌')} · 레이팅 ${ev.rating}(${deltaStr}) · 💰+${formatGold(ev.gold)} 💎+${ev.shards}`);
+        this.ui.modal({
+          title: `⚔️ 영주 결투장 ${ev.won ? '승리!' : '패배'}`,
+          sub: `VS ${ev.opp ? ev.opp.name : '라이벌'} · 레이팅 ${ev.rating} (${deltaStr})`,
+          body: `<div class="modal-rewards">
+                   <div class="rw"><div class="e">💰</div><div class="v">+${formatGold(ev.gold)}</div><div class="k">골드</div></div>
+                   <div class="rw"><div class="e">💎</div><div class="v">+${ev.shards}</div><div class="k">강화석</div></div>
+                   <div class="rw"><div class="e">✨</div><div class="v">+${ev.points || 0}P</div><div class="k">초월석</div></div>
+                 </div>
+                 <div class="note" style="margin-top:8px">오늘 남은 결투장 도전 <b>${ev.left}회</b> · 원래 사냥으로 복귀했습니다.</div>`,
+          actions: [{ label: '확인', style: 'primary', onClick: () => {} }],
+        });
+        this.ui.renderIfNeeded();
       } else if (ev.t === 'raidStart') {
         this.ui.addLog(`🐉 <b>거대 레이드 ${esc(ev.boss.name)}</b> 실시간 합동 토벌 시작! (30초 · 합동 ×${(ev.raidBonusMul || 1).toFixed(2)})`);
         this.ui.toast(`🐉 ${ev.boss.name} 실시간 토벌 시작! (남은 ${ev.leftTickets}회)`, 'gold');
@@ -2248,6 +2278,76 @@ class App {
         ].filter(Boolean).join(' · ');
         this.ui.toast(`🎁 레이드 ${r.phase.label} 보상: ${gains}`, 'gold');
         this.ui.addLog(`🎁 레이드 <b>${esc(r.phase.label)}</b> 수령 (${gains})`);
+        this.ui.render();
+      },
+
+      /** 🌐 v8.18.0 멀티플레이 소셜 (월드 레이드 · 명예 영주 투표 · 동맹/용병 · 아레나) */
+      socialRefresh: (silent = false) => {
+        if (!this.cloud || typeof this.cloud.loadRank !== 'function') return;
+        this.cloud.loadRank(this.cloud.rank && this.cloud.rank.key ? this.cloud.rank.key : 'stage', true)
+          .then(() => {
+            if (!silent) this.ui.toast('🌐 서버 영주 정보를 갱신했습니다', 'green');
+            this.ui.renderIfNeeded();
+          })
+          .catch(() => {
+            if (!silent) this.ui.toast('오프라인/게스트 모드로 동작 중입니다');
+          });
+      },
+      claimWorldRaid: (idx) => {
+        this.sound.unlock();
+        const rows = (this.cloud && this.cloud.rank && (this.cloud.rank.all || this.cloud.rank.rows)) || [];
+        const r = claimWorldRaidState(this.s, idx, rows, Date.now());
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        this.save(true);
+        this.sound.fanfare();
+        this.ui.toast(`🐉 월드 레이드 ${r.milestone.label} 보상! 💰+${formatGold(r.gold)} 💎+${r.shards} ✨+${r.points}P`, 'gold');
+        this.ui.addLog(`🐉 월드 레이드 <b>${esc(r.milestone.label)}</b> 보상 수령`);
+        this.ui.render();
+      },
+      voteRegion: (setId) => {
+        this.sound.unlock();
+        const r = voteRegionBoomState(this.s, setId, Date.now());
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        this.save(true);
+        this.sound.ui();
+        this.ui.toast(`🗳️ ${r.set.icon} ${r.set.name}에 주간 특별 호재 투표 완료!`, 'gold');
+        this.ui.render();
+      },
+      joinAlliance: () => {
+        this.sound.unlock();
+        const el = document.getElementById('allyCodeIn');
+        const raw = el ? el.value : '';
+        const r = setAllianceCodeState(this.s, raw, Date.now());
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.levelUp();
+        this.ui.toast(r.code ? `🛡️ 동맹 [${r.code}] 합류! (공격·골드 보너스 적용)` : '🛡️ 동맹에서 탈퇴했습니다', 'gold');
+        this.ui.render();
+      },
+      hireMerc: (uid) => {
+        this.sound.unlock();
+        const rows = (this.cloud && this.cloud.rank && (this.cloud.rank.all || this.cloud.rank.rows)) || [];
+        const list = availableMercenaries(rows, this.s, Date.now());
+        const pick = list.find((m) => m.uid === uid) || (this.s.social && this.s.social.mercUid === uid ? { uid, name: this.s.social.mercName, atkPct: this.s.social.mercAtkPct } : null);
+        if (!pick) { this.ui.toast('용병을 찾을 수 없습니다', 'red'); return; }
+        const r = hireMercenaryState(this.s, pick, Date.now());
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.ui();
+        this.ui.toast(r.dismissed ? '🤝 객원 용병 지원을 해제했습니다' : `🤝 ${r.name} 객원 용병 지원 출격! (공격 +${r.atkPct}%)`, 'gold');
+        this.ui.render();
+      },
+      enterArena: (uid) => {
+        this.sound.unlock();
+        const rows = (this.cloud && this.cloud.rank && (this.cloud.rank.all || this.cloud.rank.rows)) || [];
+        const ar = arenaStatus(this.s, rows, this.battle && this.battle.stats, Date.now());
+        const opp = ar.opponents.find((o) => o.uid === uid) || ar.opponents[0];
+        if (!opp) { this.ui.toast('대전 상대를 찾을 수 없습니다', 'red'); return; }
+        const r = this.battle.startArena(opp, Date.now());
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        this.save(true);
         this.ui.render();
       },
 
