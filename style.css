@@ -3437,3 +3437,34 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
 /* v8.16.0 영지 정책 & 균열 시너지 힌트 */
 .dash-policy { margin-top: 7px; padding: 6px 8px; border-radius: 9px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line); }
 .rift-syn-hint { display: inline-block; margin-left: 4px; padding: 1px 5px; border-radius: 6px; font-size: 9px; font-weight: 800; color: #ffe066; background: rgba(255, 215, 106, 0.16); border: 1px solid rgba(255, 215, 106, 0.4); vertical-align: middle; }
+
+/* v8.17.0 컴팩트 UI — 도전 2×3 타일 런처 & 세그먼트 바 */
+.ch-q-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.ch-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; }
+.ch-tile {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  padding: 7px 4px; border-radius: 9px; border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03); color: var(--txt); cursor: pointer; font: inherit;
+  transition: border-color .15s ease, background .15s ease, transform .1s ease;
+}
+.ch-tile:active { transform: scale(0.97); }
+.ch-tile.ready { border-color: rgba(255, 215, 106, 0.48); background: rgba(255, 215, 106, 0.08); }
+.ch-tile.live { border-color: rgba(255, 107, 107, 0.72); background: rgba(255, 90, 90, 0.14); }
+.ch-tile.sel { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; background: rgba(255, 215, 106, 0.14); }
+.ct-ico { font-size: 16px; line-height: 1.1; }
+.ct-name { font-size: 10.5px; font-weight: 800; line-height: 1.1; }
+.ct-sub { font-size: 9px; font-weight: 700; color: var(--sub); line-height: 1.1; }
+.ch-tile.ready .ct-sub { color: var(--gold); }
+.ch-tile.live .ct-sub { color: #ff9a9a; }
+
+.seg-bar {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px;
+  padding: 3px; margin: 8px 0 6px; border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line);
+}
+.seg-btn {
+  padding: 6px 4px; border-radius: 7px; border: 0; background: transparent;
+  color: var(--sub); font: inherit; font-size: 10.5px; font-weight: 800; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.seg-btn.on { background: rgba(255, 215, 106, 0.16); color: var(--gold); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); }

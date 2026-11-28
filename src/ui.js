@@ -117,6 +117,13 @@ export class UI {
     this.huntSub = 'battle'; // 사냥 탭 서브 탭 (전투/도전/미션 · 세션 유지)
     this.growthFilter = 'all'; // v5.5 전직·환생 탭 영역 필터('all' | 'challenge' | 'growth')
     this.gearSub = 'equip'; // v8.0.0 성장 탭 서브 탭('equip' | 'job' | 'collect')
+    // v8.17.0 컴팩트 UI 세그먼트 포커스 (세션 전용 · 저장 스키마 불변)
+    this.challengeFocus = 'auto'; // 'auto' | 'invasion' | 'dungeon' | 'tower' | 'daily' | 'rift' | 'raid'
+    this.missionSec = 'daily';    // 'daily' | 'pass' | 'quest'
+    this.gearSec = 'main';        // 'main' | 'workshop' | 'inv'
+    this.collectSec = 'pet';      // 'pet' | 'relic' | 'title'
+    this.landHomeSec = 'exp';     // 'exp' | 'sets' | 'stats'
+    this.landEventSec = 'market'; // 'market' | 'infra' | 'orders'
     this.landHoldAll = false; // v4.3 부동산 탭 보유 매물 펼치기(기본은 6곳까지)
     // v8.0.0: 섹션 칩 필터 제거 — 카드 접힘 상태만 세션에 기억한다
     this.collapsed = new Set(DEFAULT_COLLAPSED);
@@ -266,6 +273,46 @@ export class UI {
       case 'hunt-sub': this.setHuntSub(v); break;
       case 'growth-filter': this.setGrowthFilter(v); break;
       case 'gear-sub': this.setGearSub(v); break;
+      case 'challenge-focus': this.challengeFocus = v || 'auto'; this.render(); break;
+      case 'mission-sec':
+        this.missionSec = v || 'daily';
+        if (this.collapsed) {
+          if (v === 'daily') this.collapsed.delete('dq');
+          if (v === 'pass') { this.collapsed.delete('pass'); this.collapsed.delete('season'); }
+          if (v === 'quest') this.collapsed.delete('codex');
+        }
+        this.render();
+        break;
+      case 'gear-sec':
+        this.gearSec = v || 'main';
+        if (this.collapsed) {
+          if (v === 'workshop') { this.collapsed.delete('gacha'); this.collapsed.delete('gems'); this.collapsed.delete('craft'); this.collapsed.delete('shards'); }
+          if (v === 'inv') this.collapsed.delete('inventory');
+        }
+        this.render();
+        break;
+      case 'collect-sec':
+        this.collectSec = v || 'pet';
+        if (this.collapsed && v === 'title') this.collapsed.delete('titles');
+        this.render();
+        break;
+      case 'land-home-sec':
+        this.landHomeSec = v || 'exp';
+        if (this.collapsed) {
+          if (v === 'exp') this.collapsed.delete('expedition');
+          if (v === 'sets') { this.collapsed.delete('region-set'); this.collapsed.delete('landmark'); }
+          if (v === 'stats') { this.collapsed.delete('invest-dash'); this.collapsed.delete('synergy'); this.collapsed.delete('buff-detail'); }
+        }
+        this.render();
+        break;
+      case 'land-event-sec':
+        this.landEventSec = v || 'market';
+        if (this.collapsed) {
+          if (v === 'infra') { this.collapsed.delete('citadel'); this.collapsed.delete('mega'); }
+          if (v === 'orders') { this.collapsed.delete('orders'); this.collapsed.delete('trade-rec'); }
+        }
+        this.render();
+        break;
       case 'gear-filter': this.setGearFilter(v); break;
       case 'gear-set-filter': this.setGearSetFilter(v); break;
       case 'gear-item': actions.openGearItem(Number(v)); break;
@@ -1903,33 +1950,69 @@ function petLine(ui) {
 
 /* ───────────── 🏺 유물 · 🌀 무한 균열 · 🛡️ 기사단/레이드 (v7.0.0: ui-hunt.js 분리) ───────────── */
 
-/** v8.13.0 도전 탭 상단 — 지금 바로 입장 가능한 콘텐츠 1줄 빠른 요약 바 */
-function challengeQuickBar(ui) {
+/** v8.13.0/v8.17.0 도전 탭 — 2×3 컴팩트 타일 런처 (6장 스크롤 → 1타일 그리드 + 선택 1카드) */
+function challengeQuickBar(ui, activeKey = null) {
   const s = ui.s;
+  const b = ui.battle;
   const now = Date.now();
   const inv = invasionStatus(s, now);
   const dun = dungeonState(s, now);
+  const tw = towerProgress(s);
   const dai = dailyInfo(s, now);
   const rft = riftStatus(s, now);
-  const rad = raidStatus(s, ui.battle && ui.battle.stats, now);
+  const rad = raidStatus(s, b && b.stats, now);
   const items = [
-    { icon: '🚨', label: '침공', ready: !!inv.available },
-    { icon: '💰', label: '던전', ready: !!dun.free },
-    { icon: '🌟', label: `일일보스 ${dai.left || 0}`, ready: (dai.left || 0) > 0 },
-    { icon: '🌀', label: '균열', ready: !(rft.leftMs > 0) },
-    { icon: '🐉', label: `레이드 ${rad.leftTickets || 0}`, ready: (rad.leftTickets || 0) > 0 && !rad.defeated },
+    { key: 'invasion', icon: '🚨', name: '침공',     live: !!(b && b.invasion), ready: !!inv.available,                       sub: (b && b.invasion) ? '방어중' : inv.available ? '경보!' : inv.hasLand ? mmss(inv.nextMs) : '매물필요' },
+    { key: 'dungeon',  icon: '🔥', name: '황금던전', live: !!(b && b.dungeon),  ready: !!dun.free,                            sub: (b && b.dungeon) ? '진행중' : dun.free ? '무료입장' : mmss(dun.leftMs) },
+    { key: 'tower',    icon: '🗼', name: '도전의탑', live: !!(b && b.tower),    ready: !!towerSweepInfo(s, now).available,    sub: (b && b.tower) ? `${b.tower.n}층` : `최고 ${tw.best}층` },
+    { key: 'daily',    icon: '🌟', name: '일일보스', live: !!(b && b.daily),    ready: (dai.left || 0) > 0,                   sub: (b && b.daily) ? '도전중' : `남은 ${dai.left || 0}회` },
+    { key: 'rift',     icon: '🌀', name: '무한균열', live: !!(b && b.rift),     ready: !(rft.leftMs > 0),                     sub: (b && b.rift) ? `W${b.rift.wave}` : rft.leftMs > 0 ? mmss(rft.leftMs) : `W${rft.bestWave}` },
+    { key: 'raid',     icon: '🐉', name: '거대레이드', live: !!(b && b.raid),   ready: (rad.leftTickets || 0) > 0 && !rad.defeated, sub: (b && b.raid) ? '토벌중' : rad.defeated ? '토벌완료' : `남은 ${rad.leftTickets}회` },
   ];
-  const readyCnt = items.filter((x) => x.ready).length;
+  const readyCnt = items.filter((x) => x.ready || x.live).length;
   return `
   <div class="ch-quick-bar" id="challengeQuickBar">
-    <span class="ch-q-ttl">⚡ 도전 현황 <b>${readyCnt}</b>/5</span>
-    <div class="ch-q-chips">${items.map((x) => `<span class="ch-qchip${x.ready ? ' ready' : ''}">${x.icon} ${x.label}</span>`).join('')}</div>
+    <div class="ch-q-head"><span class="ch-q-ttl">⚡ 도전 런처 <b>${readyCnt}</b>/6 가능</span><span class="tiny dim">타일 탭 → 상세·출격</span></div>
+    <div class="ch-grid">${items.map((x) => `
+      <button class="ch-tile${x.live ? ' live' : x.ready ? ' ready' : ''}${activeKey === x.key ? ' sel' : ''}" type="button" data-action="challenge-focus" data-value="${x.key}">
+        <span class="ct-ico">${x.icon}</span>
+        <span class="ct-name">${x.name}</span>
+        <span class="ct-sub">${x.sub}</span>
+      </button>`).join('')}</div>
   </div>`;
 }
 
-/** 🏆 도전 — 빠른 요약 바 + 침공 방어전·던전·탑·일일 보스·무한 균열·주간 레이드 */
+/** 🏆 도전 — v8.17.0 컴팩트 2×3 런처 + 선택 카드 1장 (헤드리스 레거시 호환 유지) */
 function tplHuntChallenge(ui) {
-  return `${challengeQuickBar(ui)}${invasionCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}${riftCard(ui)}${guildRaidCard(ui)}`;
+  if (!ui || ui.challengeFocus === undefined) {
+    return `${challengeQuickBar(ui)}${invasionCard(ui)}${dungeonCard(ui)}${towerCard(ui)}${dailyBossCard(ui)}${riftCard(ui)}${guildRaidCard(ui)}`;
+  }
+  const s = ui.s;
+  const b = ui.battle;
+  const now = Date.now();
+  let focus = ui.challengeFocus;
+  const valid = ['invasion', 'dungeon', 'tower', 'daily', 'rift', 'raid'];
+  if (!valid.includes(focus)) {
+    if (b && b.raid) focus = 'raid';
+    else if (b && b.rift) focus = 'rift';
+    else if (b && b.invasion) focus = 'invasion';
+    else if (b && b.tower) focus = 'tower';
+    else if (b && b.daily) focus = 'daily';
+    else if (b && b.dungeon) focus = 'dungeon';
+    else if (invasionStatus(s, now).available) focus = 'invasion';
+    else if (raidStatus(s, b && b.stats, now).leftTickets > 0 && !raidStatus(s, b && b.stats, now).defeated) focus = 'raid';
+    else if (dailyInfo(s, now).left > 0) focus = 'daily';
+    else if (!(riftStatus(s, now).leftMs > 0)) focus = 'rift';
+    else if (dungeonState(s, now).free) focus = 'dungeon';
+    else focus = 'tower';
+  }
+  const card = focus === 'invasion' ? invasionCard(ui)
+    : focus === 'dungeon' ? dungeonCard(ui)
+    : focus === 'tower' ? towerCard(ui)
+    : focus === 'daily' ? dailyBossCard(ui)
+    : focus === 'rift' ? riftCard(ui)
+    : guildRaidCard(ui);
+  return `${challengeQuickBar(ui, focus)}${card}`;
 }
 
 /* ───────────── 📅 일일 퀘스트 (v4.9.0 · KST 자정 리셋) ───────────── */
@@ -2031,7 +2114,19 @@ function attendanceCard(ui) {
 /* ───────────── 🎖️ 패스 · 🏷️ 칭호 (v7.0.0: ui-hunt.js 분리) ───────────── */
 
 function tplHuntMission(ui) {
-  return `${todoHubCard(ui)}${attendanceCard(ui)}${passCard(ui)}${seasonCard(ui)}${questCard(ui)}${dailyQuestCard(ui)}${codexCard(ui)}`;
+  if (!ui || ui.missionSec === undefined) {
+    return `${todoHubCard(ui)}${attendanceCard(ui)}${passCard(ui)}${seasonCard(ui)}${questCard(ui)}${dailyQuestCard(ui)}${codexCard(ui)}`;
+  }
+  const sec = ['daily', 'pass', 'quest'].includes(ui.missionSec) ? ui.missionSec : 'daily';
+  const seg = `<div class="seg-bar" role="tablist">
+    <button class="seg-btn${sec === 'daily' ? ' on' : ''}" type="button" data-action="mission-sec" data-value="daily">🗓️ 출석·일퀘</button>
+    <button class="seg-btn${sec === 'pass' ? ' on' : ''}" type="button" data-action="mission-sec" data-value="pass">🎖️ 패스·시즌</button>
+    <button class="seg-btn${sec === 'quest' ? ' on' : ''}" type="button" data-action="mission-sec" data-value="quest">🎯 미션·도감</button>
+  </div>`;
+  const body = sec === 'pass' ? `${passCard(ui)}${seasonCard(ui)}`
+    : sec === 'quest' ? `${questCard(ui)}${codexCard(ui)}`
+    : `${attendanceCard(ui)}${dailyQuestCard(ui)}`;
+  return `${todoHubCard(ui)}${seg}${body}`;
 }
 
 /* ══════════════════════════ 사냥/스킬 (본문) ══════════════════════════ */
@@ -2310,9 +2405,35 @@ function tplGear(ui) {
     <span>💠 보석 <b>${sockCnt}/5</b></span>
     <span>💎 <b data-live="shards">${fmt(s.shards)}</b></span>
   </div>`;
-  if (sub === 'equip') return `${bar}${gearSummaryBar}${gearSlotCards(s)}${enhanceCard}${gemCard}${shardCard}${themeCraftCard}${gachaCard(ui)}${gearInventory(s)}${infoCard}`;
+  if (sub === 'equip') {
+    if (!ui || ui.gearSec === undefined) {
+      return `${bar}${gearSummaryBar}${gearSlotCards(s)}${enhanceCard}${gemCard}${shardCard}${themeCraftCard}${gachaCard(ui)}${gearInventory(s)}${infoCard}`;
+    }
+    const sec = ['main', 'workshop', 'inv'].includes(ui.gearSec) ? ui.gearSec : 'main';
+    const seg = `<div class="seg-bar" role="tablist">
+      <button class="seg-btn${sec === 'main' ? ' on' : ''}" type="button" data-action="gear-sec" data-value="main">⚔️ 장착·강화</button>
+      <button class="seg-btn${sec === 'workshop' ? ' on' : ''}" type="button" data-action="gear-sec" data-value="workshop">🎁 뽑기·공방</button>
+      <button class="seg-btn${sec === 'inv' ? ' on' : ''}" type="button" data-action="gear-sec" data-value="inv">🎒 인벤토리</button>
+    </div>`;
+    const body = sec === 'workshop' ? `${gachaCard(ui)}${gemCard}${themeCraftCard}${shardCard}`
+      : sec === 'inv' ? `${gearInventory(s)}${infoCard}`
+      : `${gearSlotCards(s)}${enhanceCard}`;
+    return `${bar}${gearSummaryBar}${seg}${body}`;
+  }
   if (sub === 'job') return `${bar}${jobCard(ui)}${rebirthCard(ui)}`;
-  if (sub === 'collect') return `${bar}${relicCard(ui)}${titleCard(ui)}${petCard(ui)}${landTipCard}`;
+  if (sub === 'collect') {
+    if (!ui || ui.collectSec === undefined) {
+      return `${bar}${relicCard(ui)}${titleCard(ui)}${petCard(ui)}${landTipCard}`;
+    }
+    const sec = ['pet', 'relic', 'title'].includes(ui.collectSec) ? ui.collectSec : 'pet';
+    const seg = `<div class="seg-bar" role="tablist">
+      <button class="seg-btn${sec === 'pet' ? ' on' : ''}" type="button" data-action="collect-sec" data-value="pet">🐾 동료 펫</button>
+      <button class="seg-btn${sec === 'relic' ? ' on' : ''}" type="button" data-action="collect-sec" data-value="relic">🏺 고대 유물</button>
+      <button class="seg-btn${sec === 'title' ? ' on' : ''}" type="button" data-action="collect-sec" data-value="title">🏷️ 칭호</button>
+    </div>`;
+    const body = sec === 'relic' ? relicCard(ui) : sec === 'title' ? titleCard(ui) : `${petCard(ui)}${landTipCard}`;
+    return `${bar}${seg}${body}`;
+  }
   return `${bar}${gachaCard(ui)}${themeCraftCard}${gearSlotCards(s)}${gearInventory(s)}${enhanceCard}${gemCard}${infoCard}${shardCard}${jobCard(ui)}${rebirthCard(ui)}${relicCard(ui)}${titleCard(ui)}${petCard(ui)}${landTipCard}`;
 }
 
@@ -2640,7 +2761,8 @@ function tplLand(ui) {
  * 지도 + 접힘 카드 5장으로 정리했다. 보유 매물 목록은 '매물' 탭으로 옮겨 영지 첫 화면을 2~3화면으로 줄인다.
  */
 function tplLandHome(ui) {
-  return `${landSynergyDashCard(ui)}
+  if (!ui || ui.landHomeSec === undefined) {
+    return `${landSynergyDashCard(ui)}
   ${regionMapCard(ui)}
   ${expeditionCard(ui)}
   <div class="land-sec-div" id="landDetailSection"><span>📊 영지 상세 분석</span><small class="dim">필요한 항목만 펼쳐서 확인</small></div>
@@ -2649,6 +2771,17 @@ function tplLandHome(ui) {
   ${landmarkCard(ui)}
   ${landSynergyCard(ui)}
   ${landBuffDetailCard(ui)}`;
+  }
+  const sec = ['exp', 'sets', 'stats'].includes(ui.landHomeSec) ? ui.landHomeSec : 'exp';
+  const seg = `<div class="seg-bar" id="landDetailSection" role="tablist">
+    <button class="seg-btn${sec === 'exp' ? ' on' : ''}" type="button" data-action="land-home-sec" data-value="exp">🧭 펫 파견</button>
+    <button class="seg-btn${sec === 'sets' ? ' on' : ''}" type="button" data-action="land-home-sec" data-value="sets">🗺️ 세트·랜드마크</button>
+    <button class="seg-btn${sec === 'stats' ? ' on' : ''}" type="button" data-action="land-home-sec" data-value="stats">📊 투자·시너지</button>
+  </div>`;
+  const body = sec === 'sets' ? `${regionSetCard(ui)}${landmarkCard(ui)}`
+    : sec === 'stats' ? `${investDashboardCard(ui)}${landSynergyCard(ui)}${landBuffDetailCard(ui)}`
+    : expeditionCard(ui);
+  return `${landSynergyDashCard(ui)}${regionMapCard(ui)}${seg}${body}`;
 }
 
 /* ───────────── 🛒 매물 — 보유 매물 + 전국 시장 ───────────── */
@@ -2658,7 +2791,19 @@ function tplLandMarketTab(ui) {
 
 /* ───────────── 🎪 이벤트 — 경매·은행·영지 인프라(성채+메가)·거래 기록·(고급)지정가 ───────────── */
 function tplLandEvent(ui) {
-  return `${auctionCard(ui)}${bankCard(ui)}${estateInfraCard(ui)}${tradeRecordCard(ui)}${limitOrdersCard(ui)}`;
+  if (!ui || ui.landEventSec === undefined) {
+    return `${auctionCard(ui)}${bankCard(ui)}${estateInfraCard(ui)}${tradeRecordCard(ui)}${limitOrdersCard(ui)}`;
+  }
+  const sec = ['market', 'infra', 'orders'].includes(ui.landEventSec) ? ui.landEventSec : 'market';
+  const seg = `<div class="seg-bar" role="tablist">
+    <button class="seg-btn${sec === 'market' ? ' on' : ''}" type="button" data-action="land-event-sec" data-value="market">🔨 경매·은행</button>
+    <button class="seg-btn${sec === 'infra' ? ' on' : ''}" type="button" data-action="land-event-sec" data-value="infra">🏛️ 성채·메가</button>
+    <button class="seg-btn${sec === 'orders' ? ' on' : ''}" type="button" data-action="land-event-sec" data-value="orders">🎯 예약·기록</button>
+  </div>`;
+  const body = sec === 'infra' ? estateInfraCard(ui)
+    : sec === 'orders' ? `${limitOrdersCard(ui)}${tradeRecordCard(ui)}`
+    : `${auctionCard(ui)}${bankCard(ui)}`;
+  return `${seg}${body}`;
 }
 
 function holdingsCard(ui) {
