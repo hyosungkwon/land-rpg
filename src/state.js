@@ -2,7 +2,7 @@
 // 게임 상태 · 저장 · 성장 계산. DOM 의존 없음.
 // v3: 로그인/클라우드 없음. 골드 하나로 사냥 + 부동산을 함께 굴리는 통합 상태.
 import {
-  ECON, EQUIP, EQUIP_MAX_LV, SKILLS, SKILL_UPGRADE_MAX, SKILL_RUNE_UNLOCK_LV, skillRuneDef, DEF,
+  ECON, EQUIP, EQUIP_SLOTS, EQUIP_MAX_LV, SKILLS, SKILL_UPGRADE_MAX, SKILL_RUNE_UNLOCK_LV, skillRuneDef, DEF,
   SKILL_DECK_SIZE, DEFAULT_SKILL_DECK, SKILL_DECK_PRESETS,
   SAVE_KEY, SAVE_VERSION, enhanceCost, skillCost, skillPowerMul,
   RARITIES, RARITY_INDEX, RARITY_IDS, GACHA, gachaCost, rarityBonusLv,
@@ -14,13 +14,13 @@ import {
 import {
   newGearState, normalizeGear, syncGearRarity, gearMods, acquireGear, equippedRarity,
   shouldAutoEquip, randomItemOfRarity, gearItem, GEAR_BY_RARITY, awakenLevel, GEAR_AWAKEN_BONUS_LV,
-  isMythicSlot, MYTHIC_BONUS_LV,
+  isMythicSlot, MYTHIC_BONUS_LV, saveGearPreset, applyGearPreset,
 } from './gear.js';
-import { defaultLand, CITY_BY_KEY, LAND_FAV_MAX } from './land.js';
+import { defaultLand, CITY_BY_KEY, LAND_FAV_MAX, ESTATE_POLICY_BY_ID } from './land.js';
 import { normalizeAuctionState } from './auction.js';
 import {
   PET_IDS, PET_MAX_LV, PET_EVO_MAX, JOB_MAX, jobOf, equippedPet, petLevel, petAtkPct, petEvo, petGoldPct, petPassive, petStageInfo,
-  SUB_PET_RATE, subPet, normalizeBattleSpeed,
+  SUB_PET_RATE, subPet, subPetUnlocked, normalizeBattleSpeed,
 } from './meta.js';
 import {
   collectionBonus, normalizeQuestState, normalizeAchievements, normalizeCodex, equipLevelSum,
@@ -33,10 +33,10 @@ import {
   defaultWeeklyBoss, normalizeWeeklyBoss,
 } from './daily.js';
 import { SETS_BY_ID } from './region.js';
-import { defaultExpeditions, normalizeExpeditions } from './expedition.js';
+import { defaultExpeditions, normalizeExpeditions, isPetDispatched } from './expedition.js';
 import { defaultInvasion, normalizeInvasion } from './invasion.js';
 import { defaultCitadel, normalizeCitadel, citadelEffects } from './citadel.js';
-import { defaultRelics, normalizeRelics, relicEffects } from './relics.js';
+import { defaultRelics, normalizeRelics, relicEffects, RELIC_BY_ID, RELIC_SLOTS } from './relics.js';
 import { defaultGems, normalizeGems, gemEffects } from './gems.js';
 import { defaultPass, normalizePass, defaultTitles, normalizeTitles, titleBonus } from './pass.js';
 import { defaultSeason, normalizeSeason } from './season.js';
@@ -70,6 +70,7 @@ export function defaultState(now = nowMs()) {
       return m;
     }, {}),
     skillDeck: [...DEFAULT_SKILL_DECK], // v8.4.0 나만의 4슬롯 액티브 스킬 덱
+    loadouts: { slots: [null, null, null], active: -1, autoBoss: -1 }, // v8.16.0 통합 전투 로드아웃 3슬롯
     stage: 1,
     killsInStage: 0,
     bossReady: false,
@@ -150,6 +151,7 @@ export function normalizeState(raw, now = nowMs()) {
     s.skills[k] = typeof v === 'object' && v ? { lv: num(v.lv, 0), last: num(v.last, 0), rune } : { lv: num(v, 0), last: 0, rune: null };
   }
   s.skillDeck = normalizeSkillDeck(raw.skillDeck);
+  s.loadouts = normalizeLoadouts(raw.loadouts);
   s.gearRarity = { ...d.gearRarity };
   for (const k of Object.keys(d.gearRarity)) {
     const v = raw.gearRarity && raw.gearRarity[k];
@@ -213,6 +215,8 @@ export function normalizeState(raw, now = nowMs()) {
   const normOrd = normalizeOrders(raw.land && raw.land.orders, raw.land && raw.land.orderLog);
   s.land.orders = normOrd.orders;
   s.land.orderLog = normOrd.orderLog;
+  // v8.16.0: 영지 정책 정규화
+  s.land.policy = typeof s.land.policy === 'string' && ESTATE_POLICY_BY_ID[s.land.policy] ? s.land.policy : 'balanced';
   s.records = { ...d.records, ...(raw.records || {}) };
   // v4.8: 클라우드 설정 정규화 — 없는 저장본은 게스트(꺼짐)로 시작한다
   const rawCloud = raw.cloud && typeof raw.cloud === 'object' ? raw.cloud : {};
@@ -420,12 +424,12 @@ export const NO_BUFF = { atkPct: 0, goldPct: 0, hpPct: 0, dropPct: 0, critPct: 0
 export function calcStats(s, buffs = NO_BUFF) {
   const b = { ...NO_BUFF, ...(buffs || {}) };
   const add = (v) => (typeof v === 'number' && isFinite(v) ? v : 0);
-  // v3.4.0: 권역 세트 · 랜드마크 보너스 · v8.9.0 대지주 스케일 보너스
-  const extraAtk = add(b.setAtkPct) + add(b.landmarkAtkPct) + add(b.synAtkPct) + add(b.tycoonAtkPct);
-  const extraGold = add(b.setGoldPct) + add(b.landmarkGoldPct) + add(b.synGoldPct) + add(b.tycoonGoldPct);
+  // v3.4.0: 권역 세트 · 랜드마크 보너스 · v8.9.0 대지주 스케일 보너스 · v8.16.0 호재 전투 연동 · 영지 정책
+  const extraAtk = add(b.setAtkPct) + add(b.landmarkAtkPct) + add(b.synAtkPct) + add(b.tycoonAtkPct) + add(b.newsAtkPct) + add(b.polAtkPct);
+  const extraGold = add(b.setGoldPct) + add(b.landmarkGoldPct) + add(b.synGoldPct) + add(b.tycoonGoldPct) + add(b.newsGoldPct) + add(b.polGoldPct);
   const extraHp = add(b.setHpPct);
-  const extraCrit = add(b.setCritPct);
-  const extraDrop = add(b.setDropPct) + add(b.synDropPct);
+  const extraCrit = add(b.setCritPct) + add(b.newsCritPct);
+  const extraDrop = add(b.setDropPct) + add(b.synDropPct) + add(b.newsDropPct) + add(b.polDropPct);
   // v4.6 부동산 전투 시너지 + v5.12 영지 성채 + v6.1 고대 유물 + v6.2 보석 소켓 + v6.4 칭호
   const cit = citadelEffects(s);
   const rel = relicEffects(s);
@@ -435,8 +439,8 @@ export function calcStats(s, buffs = NO_BUFF) {
   const gld = guildEffects(s);
   const synCritDmg = add(b.synCritDmgPct) / 100;
   const skillCdr = Math.min(0.4, Math.max(0, add(b.synCdrPct) + cit.skillCdrPct + (gem.cdrPct || 0) + (gld.cdrPct || 0)) / 100);
-  const synBoss = add(b.synBossDmgPct) / 100;
-  const expMult = 1 + (add(b.synExpPct) + (rel.expPct || 0)) / 100;
+  const synBoss = (add(b.synBossDmgPct) + add(b.polBossPct)) / 100;
+  const expMult = 1 + (add(b.synExpPct) + (rel.expPct || 0) + add(b.newsExpPct)) / 100;
   const L = s.level;
   const e = s.equip;
   const gr = s.gearRarity || {};
@@ -1031,4 +1035,159 @@ export function setSkillRune(s, key, runeId) {
   if (!def) return { ok: false, reason: '알 수 없는 룬입니다.' };
   sk.rune = def.id;
   return { ok: true, key, rune: def, cleared: false };
+}
+
+/* ────────────────────── v8.16.0 🎒 통합 전투 로드아웃 3슬롯 ────────────────────── */
+export const LOADOUT_NAMES = [
+  { id: 0, icon: '🔥', name: '파밍' },
+  { id: 1, icon: '👑', name: '보스' },
+  { id: 2, icon: '🌀', name: '도전' },
+];
+
+export function normalizeLoadouts(raw) {
+  const out = { slots: [null, null, null], active: -1, autoBoss: -1 };
+  if (!raw || typeof raw !== 'object') return out;
+  if (Array.isArray(raw.slots)) {
+    for (let i = 0; i < 3; i++) {
+      const sl = raw.slots[i];
+      if (!sl || typeof sl !== 'object') continue;
+      const gear = {};
+      if (sl.gear && typeof sl.gear === 'object') {
+        for (const k of EQUIP_SLOTS) {
+          const v = Number(sl.gear[k]);
+          if (Number.isFinite(v) && v > 0) gear[k] = Math.floor(v);
+        }
+      }
+      const skillDeck = Array.isArray(sl.skillDeck) ? normalizeSkillDeck(sl.skillDeck) : null;
+      const pet = sl.pet && typeof sl.pet === 'object'
+        ? {
+            equipped: typeof sl.pet.equipped === 'string' && PET_IDS.includes(sl.pet.equipped) ? sl.pet.equipped : null,
+            sub: typeof sl.pet.sub === 'string' && PET_IDS.includes(sl.pet.sub) ? sl.pet.sub : null,
+          }
+        : null;
+      const relics = Array.isArray(sl.relics)
+        ? [...new Set(sl.relics.filter((id) => typeof id === 'string' && RELIC_BY_ID[id]))].slice(0, RELIC_SLOTS)
+        : null;
+      out.slots[i] = { gear, skillDeck, pet, relics };
+    }
+  }
+  const act = Math.floor(num(raw.active, -1));
+  out.active = act >= 0 && act < 3 ? act : -1;
+  const ab = Math.floor(num(raw.autoBoss, -1));
+  out.autoBoss = ab >= 0 && ab < 3 ? ab : -1;
+  return out;
+}
+
+/** 현재 장착 중인 장비·스킬덱·펫·유물을 통합 로드아웃 슬롯(0~2)에 저장 */
+export function saveLoadout(s, idx) {
+  const i = Math.floor(num(idx, -1));
+  if (!s || i < 0 || i > 2) return { ok: false, reason: '잘못된 로드아웃 슬롯입니다.' };
+  if (!s.loadouts || !Array.isArray(s.loadouts.slots)) s.loadouts = normalizeLoadouts(s.loadouts);
+  const eq = (s.gear && s.gear.equipped) || {};
+  const gear = {};
+  for (const k of EQUIP_SLOTS) if (eq[k]) gear[k] = Number(eq[k]);
+  const skillDeck = normalizeSkillDeck(s.skillDeck);
+  const pet = {
+    equipped: (s.pet && s.pet.equipped) || null,
+    sub: (s.pet && s.pet.sub) || null,
+  };
+  const relics = Array.isArray(s.relics && s.relics.equipped) ? s.relics.equipped.slice(0, RELIC_SLOTS) : [];
+  s.loadouts.slots[i] = { gear, skillDeck, pet, relics };
+  s.loadouts.active = i;
+  // 기존 장비 프리셋과도 동기화 유지
+  try { saveGearPreset(s, i); } catch (e) { /* ignore */ }
+  return { ok: true, idx: i, def: LOADOUT_NAMES[i], slot: s.loadouts.slots[i] };
+}
+
+/** 통합 로드아웃 슬롯(0~2) 일괄 적용 (장비 + 스킬덱 + 펫 + 유물) */
+export function applyLoadout(s, idx) {
+  const i = Math.floor(num(idx, -1));
+  if (!s || i < 0 || i > 2) return { ok: false, reason: '잘못된 로드아웃 슬롯입니다.' };
+  if (!s.loadouts || !Array.isArray(s.loadouts.slots)) s.loadouts = normalizeLoadouts(s.loadouts);
+  const sl = s.loadouts.slots[i];
+  if (!sl) {
+    // 구버전 장비 프리셋만 저장되어 있다면 폴백 적용
+    const gr = applyGearPreset(s, i);
+    if (gr && gr.ok) {
+      s.loadouts.active = i;
+      return { ok: true, idx: i, def: LOADOUT_NAMES[i], changed: gr.changed || 0, fallbackGear: true };
+    }
+    return { ok: false, reason: '저장된 로드아웃이 없습니다. 먼저 💾 저장해 주세요.' };
+  }
+  let changed = 0;
+  // 1) 장비 적용 (보유 중인 uid만)
+  if (sl.gear && s.gear && Array.isArray(s.gear.items)) {
+    const byUid = new Map(s.gear.items.map((r) => [r.uid, r]));
+    for (const k of EQUIP_SLOTS) {
+      const uid = sl.gear[k];
+      if (!uid) continue;
+      const row = byUid.get(uid);
+      if (row && row.slot === k && s.gear.equipped[k] !== uid) {
+        s.gear.equipped[k] = uid;
+        changed += 1;
+      }
+    }
+    syncGearRarity(s);
+  }
+  // 2) 스킬 덱 적용
+  if (Array.isArray(sl.skillDeck) && sl.skillDeck.length === SKILL_DECK_SIZE) {
+    const nextDeck = normalizeSkillDeck(sl.skillDeck);
+    if (JSON.stringify(nextDeck) !== JSON.stringify(s.skillDeck)) {
+      s.skillDeck = nextDeck;
+      changed += 1;
+    }
+  }
+  // 3) 주·보조 펫 적용 (해금 & 미파견 펫만)
+  if (sl.pet && s.pet && Array.isArray(s.pet.unlocked)) {
+    const unl = s.pet.unlocked;
+    if (sl.pet.equipped && unl.includes(sl.pet.equipped) && !isPetDispatched(s, sl.pet.equipped) && s.pet.equipped !== sl.pet.equipped) {
+      if (s.pet.sub === sl.pet.equipped) s.pet.sub = null;
+      s.pet.equipped = sl.pet.equipped;
+      s.pet.chosen = true;
+      changed += 1;
+    }
+    if (subPetUnlocked(s)) {
+      const wantSub = sl.pet.sub && sl.pet.sub !== s.pet.equipped && unl.includes(sl.pet.sub) && !isPetDispatched(s, sl.pet.sub) ? sl.pet.sub : null;
+      if (wantSub !== s.pet.sub) {
+        s.pet.sub = wantSub;
+        changed += 1;
+      }
+    }
+  }
+  // 4) 고대 유물 적용 (보유 유물만)
+  if (Array.isArray(sl.relics) && s.relics && s.relics.owned) {
+    const valid = sl.relics.filter((id) => (s.relics.owned[id] || 0) >= 1).slice(0, RELIC_SLOTS);
+    if (JSON.stringify(valid) !== JSON.stringify(s.relics.equipped || [])) {
+      s.relics.equipped = valid;
+      changed += 1;
+    }
+  }
+  s.loadouts.active = i;
+  return { ok: true, idx: i, def: LOADOUT_NAMES[i], changed };
+}
+
+/** 보스/도전 입장 시 자동 전환할 로드아웃 슬롯 지정 (-1이면 끔) */
+export function setLoadoutAutoBoss(s, idx) {
+  if (!s) return { ok: false };
+  if (!s.loadouts || !Array.isArray(s.loadouts.slots)) s.loadouts = normalizeLoadouts(s.loadouts);
+  const i = Math.floor(num(idx, -1));
+  if (i < 0 || i > 2) {
+    s.loadouts.autoBoss = -1;
+    return { ok: true, autoBoss: -1 };
+  }
+  s.loadouts.autoBoss = i;
+  return { ok: true, autoBoss: i, def: LOADOUT_NAMES[i] };
+}
+
+export function loadoutSummary(s, idx) {
+  const i = Math.floor(num(idx, -1));
+  const lo = s && s.loadouts ? s.loadouts : { slots: [null, null, null], active: -1, autoBoss: -1 };
+  const sl = i >= 0 && i < 3 ? lo.slots[i] : null;
+  const legacyGear = s && s.gear && Array.isArray(s.gear.presets) && s.gear.presets[i] ? s.gear.presets[i] : null;
+  const saved = !!(sl || (legacyGear && Object.keys(legacyGear).length > 0));
+  const active = lo.active === i;
+  const isAuto = lo.autoBoss === i;
+  const gearN = sl && sl.gear ? Object.keys(sl.gear).length : legacyGear ? Object.keys(legacyGear).length : 0;
+  const relicN = sl && Array.isArray(sl.relics) ? sl.relics.length : 0;
+  return { idx: i, def: LOADOUT_NAMES[i] || LOADOUT_NAMES[0], saved, active, isAuto, gearN, relicN, full: !!sl };
 }

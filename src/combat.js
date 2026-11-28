@@ -6,7 +6,7 @@ import {
   ELITE_TRAITS, ELITE_CHANCE, TREASURE_GOBLIN, stageGoldBase, RARITIES,
 } from './data.js';
 import {
-  calcStats, currentHp, skillEffect, killReward, registerKill, clearStage, monsterStats, skillCdOf, normalizeSkillDeck,
+  calcStats, currentHp, skillEffect, killReward, registerKill, clearStage, monsterStats, skillCdOf, normalizeSkillDeck, applyLoadout,
 } from './state.js';
 import {
   DUNGEON, PET_ATTACK_MS, SUB_PET_ATTACK_MS, SUB_PET_RATE,
@@ -15,7 +15,9 @@ import {
 } from './meta.js';
 import { TOWER_RULES, TOWER_MAX_FLOOR, towerFloor, towerStageDef, towerHas, towerReward, towerCleared, towerState, towerUnlocked, towerLockReason } from './tower.js';
 import { INVASION, invasionStatus, recordInvasionWin } from './invasion.js';
-import { RIFT, RIFT_MONSTERS, RIFT_BOSSES, RIFT_CARD_BY_ID, riftStatus, rollRiftChoices, riftCardMods, settleRiftReward } from './rift.js';
+import { RIFT, RIFT_MONSTERS, RIFT_BOSSES, RIFT_CARD_BY_ID, RIFT_EVENTS, RIFT_EVENT_BY_ID, riftStatus, rollRiftChoices, riftCardMods, settleRiftReward } from './rift.js';
+import { RAID_DURATION_MS, startRaidTicket, settleRaidBattle } from './guild.js';
+import { constellationEffects } from './rebirth.js';
 import { relicEffects } from './relics.js';
 import { DAILY, dailyBossFor, dailyInfo, consumeDailyAttempt, dailyReward, recordDailyRun, recordWeeklyBoss, dailyDpsCap } from './daily.js';
 import { codexMeet, codexKill, trackDailyQuest } from './quests.js';
@@ -168,6 +170,11 @@ export class Battle {
     this.lastTapAt = 0;
     // v8.10.0 ⚡ 보스 강공격 타이밍 반격 카운터 가드
     this.counterGuardUntil = 0;
+    this.raid = null; // v8.16.0 🐉 주간 거대 레이드 실시간 토벌전
+    this.pendingUltEcho = null; // v8.16.0 🌌 용신의 자리 궁극기 잔향
+    this.bossRetryUsed = false; // v8.16.0 🌌 수호의 자리 보스 1회 부활
+    this.bossRetryAtkUntil = 0;
+    this.bossRetryAtkPct = 0;
     this.syncStage();
     this.spawnInitial(startAt);
   }
@@ -210,6 +217,45 @@ export class Battle {
 
   inRift() {
     return !!this.rift;
+  }
+
+  inRaid() {
+    return !!this.raid;
+  }
+
+  /** v8.16.0 보스/도전 입장 시 자동 로드아웃 전환 */
+  maybeApplyBossLoadout(now = Date.now()) {
+    const lo = this.s && this.s.loadouts;
+    if (!lo || lo.autoBoss < 0 || lo.autoBoss > 2 || lo.active === lo.autoBoss) return false;
+    const r = applyLoadout(this.s, lo.autoBoss);
+    if (r && r.ok) {
+      this.refreshStats(now);
+      this.emit({ t: 'loadoutSwitch', idx: lo.autoBoss, name: r.def ? r.def.name : '' });
+      return true;
+    }
+    return false;
+  }
+
+  /** v8.16.0 🛡️ 보스 브레이크(그로기) 게이지 차감 및 파괴 판정 */
+  applyBossBreak(m, amount, now) {
+    if (!m || !m.isBoss || m.dead || m.dying || !(amount > 0)) return false;
+    if (!m.breakMax) { m.breakMax = 100; m.breakVal = 100; }
+    if (m.brokenUntil && now < m.brokenUntil) return false;
+    m.breakVal = Math.max(0, (m.breakVal != null ? m.breakVal : m.breakMax) - amount);
+    if (m.breakVal <= 0) {
+      const stars = constellationEffects(this.s);
+      const dur = 4000 + (stars.breakDurAddMs || 0);
+      m.breakVal = 0;
+      m.brokenUntil = now + dur;
+      m.breakCount = (m.breakCount || 0) + 1;
+      m.windupAt = 0;
+      m.windupHeavy = false;
+      m.heavy = false;
+      if (this.raid) this.raid.breaks = (this.raid.breaks || 0) + 1;
+      this.emit({ t: 'bossBreak', id: m.id, ko: m.ko, x: m.x, dur });
+      return true;
+    }
+    return false;
   }
 
   riftMods() {
@@ -308,6 +354,11 @@ export class Battle {
       moveKind: atkDef.move,
       projKind: atkDef.proj || null,
       atkColor: atkDef.color,
+      // v8.16.0 🛡️ 보스 브레이크(그로기) 게이지
+      breakMax: isBoss ? 100 : 0,
+      breakVal: isBoss ? 100 : 0,
+      brokenUntil: 0,
+      breakCount: 0,
       walk: 0,          // 이동 누적 거리(월드) — 걸음/도약 위상
       moving: false,
       windupAt: 0,      // 전조 시작 시각
@@ -329,13 +380,14 @@ export class Battle {
     if (this.boss) return;
     if (this.monsters.filter((m) => !m.dead && !m.dying).length >= ECON.maxMonsters) return;
     // v5.7: 일반 사냥 중 확률적으로 💰 보물 고블린 또는 엘리트 변종 등장 (+ v6.1 황금 자석 유물)
-    const inField = allowSpecial && !this.tower && !this.daily && !this.dungeon && !this.invasion && !this.rift && this.s.totalKills > 0;
+    const inField = allowSpecial && !this.tower && !this.daily && !this.dungeon && !this.invasion && !this.rift && !this.raid && this.s.totalKills > 0;
     const rel = relicEffects(this.s);
+    const newsGob = (this.buffs() && this.buffs().newsGoblinMul) || 1;
     if (
       inField
       && this.s.stage >= TREASURE_GOBLIN.minStage
       && !this.monsters.some((x) => x.treasure && !x.dead && !x.dying)
-      && this.rng() < TREASURE_GOBLIN.chance * (rel.goblinChanceMul || 1)
+      && this.rng() < TREASURE_GOBLIN.chance * (rel.goblinChanceMul || 1) * newsGob
     ) {
       const tg = this.makeMonster(TREASURE_GOBLIN.name, false, now);
       tg.treasure = true;
@@ -399,6 +451,20 @@ export class Battle {
     this.petAttack(now, spd);
     this.subPetAttack(now, spd);
     this.petSkillTick(now);
+    // v8.16.0 🌌 용신의 자리 궁극기 잔향 폭발 처리
+    if (this.pendingUltEcho && now >= this.pendingUltEcho.at) {
+      const echo = this.pendingUltEcho;
+      this.pendingUltEcho = null;
+      const alive = this.targets();
+      if (alive.length) {
+        this.hit(alive, echo.mul, 'ultimate', now);
+        this.emit({ t: 'ultEcho', name: echo.name, color: echo.color, dmg: this.lastHitDealt || 0, xs: alive.map((m) => m.x) });
+      }
+    }
+    if (this.raid) {
+      this.raidTick(now);
+      return;
+    }
     if (this.daily) {
       this.dailyTick(now);
       return;
@@ -473,6 +539,16 @@ export class Battle {
       }
       if (m.elite && m.elite.regenPct > 0 && m.hp > 0 && m.hp < m.maxHp) {
         m.hp = Math.min(m.maxHp, m.hp + (m.maxHp * m.elite.regenPct * dt) / 1000);
+      }
+      // v8.16.0 🛡️ 보스 브레이크(그로기) 중 행동 불능 · 종료 시 게이지 회복
+      if (m.isBoss && m.brokenUntil > 0) {
+        if (now < m.brokenUntil) {
+          m.windupAt = 0;
+          m.moving = false;
+          continue;
+        }
+        m.brokenUntil = 0;
+        m.breakVal = m.breakMax || 100;
       }
       // v5.10 화염 회오리 화상 도트 (0.5초마다 적용)
       if (m.burnUntil && now < m.burnUntil && m.burnDps > 0 && now - (m.burnTick || 0) >= 500) {
@@ -615,12 +691,25 @@ export class Battle {
         this.emit({ t: 'phoenixRevive', hp: this.player.hp });
         return;
       }
+      // v8.16.0 🌌 수호의 자리 성좌 — 스테이지 보스전 1회 부활 재도전 + 반격 버프
+      const stars = constellationEffects(this.s);
+      if (this.boss && !this.bossRetryUsed && stars.bossRetry) {
+        this.bossRetryUsed = true;
+        this.player.hp = Math.max(1, Math.round(this.stats.hpMax * 0.6));
+        this.player.shield = Math.round(this.stats.hpMax * 0.25);
+        this.player.shieldUntil = now + 4000;
+        this.bossRetryAtkUntil = now + 8000;
+        this.bossRetryAtkPct = (stars.bossRetryAtkPct || 10) / 100;
+        this.emit({ t: 'bossRetryRevive', hp: this.player.hp, atkPct: stars.bossRetryAtkPct || 10 });
+        return;
+      }
       this.player.hp = 0;
       this.player.dead = true;
       this.player.reviveAt = now + ECON.reviveMs;
       this.emit({ t: 'playerDeath' });
       if (this.boss) this.failBoss(now, 'dead');
-      if (this.daily) this.endDailyBoss(now, 'dead'); // 쓰러져도 그때까지의 피해로 보상
+      if (this.raid) this.endRaid(now, 'dead');
+      else if (this.daily) this.endDailyBoss(now, 'dead'); // 쓰러져도 그때까지의 피해로 보상
       else if (this.dungeon) this.endDungeon(now); // 쓰러지면 던전 종료(그때까지의 보상 지급)
       else if (this.tower) this.endTower(now, 'dead'); // 탑에서 쓰러지면 패배 — 잃는 것 없이 복귀
       else if (this.invasion) this.endInvasion(now, 'dead'); // 침공 방어 실패 — 부동산 피해 없이 복귀
@@ -682,6 +771,12 @@ export class Battle {
       this.counterGuardUntil = now + 2200;
       this.hit([heavyBoss], 2.2, 'tap', now, { critAdd: 0.99 });
       this.addFever(18, now);
+      // v8.16.0 반격 카운터 → 보스 브레이크 대폭 파괴 + 번개의 자리 성좌(궁극기 쿨 단축)
+      const stars = constellationEffects(this.s);
+      this.applyBossBreak(heavyBoss, 45 + (stars.counterBreakAdd || 0), now);
+      if (stars.counterUltTrimMs > 0 && this.s && this.s.ult && this.s.ult.last > 0) {
+        this.s.ult.last = Math.max(0, this.s.ult.last - stars.counterUltTrimMs);
+      }
       this.emit({ t: 'tapCounter', id: heavyBoss.id, ko: heavyBoss.ko, x: heavyBoss.x, dmg: this.lastHitDealt });
       return { ok: true, counter: true, id: heavyBoss.id, x: heavyBoss.x, dmg: this.lastHitDealt, fever: this.fever, feverActive: this.isFever(now) };
     }
@@ -717,8 +812,9 @@ export class Battle {
     if (this.berserkUntil > now) dmg *= 1 + skillEffect('berserk', this.s.skills.berserk.lv);
     if (this.blessUntil > now && this.blessAtk > 0) dmg *= 1 + this.blessAtk;
     if (this.thornsUntil > now && this.thornsAtk > 0) dmg *= 1 + this.thornsAtk;
-    // v4.7 궁극기 발동 직후의 공격력 버프
+    // v4.7 궁극기 발동 직후의 공격력 버프 · v8.16.0 수호의 자리 반격 버프
     if (this.ultUntil > now) dmg *= 1 + (this.ultBonus || 0);
+    if (this.bossRetryAtkUntil > now && this.bossRetryAtkPct > 0) dmg *= 1 + this.bossRetryAtkPct;
     let crit = false;
     const feverCrit = this.isFever(now) ? FEVER.critAdd : 0;
     const critChance = Math.min(0.95, this.stats.crit + feverCrit + (extra && extra.critAdd ? extra.critAdd : 0));
@@ -755,9 +851,24 @@ export class Battle {
       // v4.2 도전의 탑 '철벽 진형' — 주는 피해가 45% 깎인다 · v5.7 철갑 엘리트 25% 경감
       if (this.tower && towerHas(this.tower.floor, 'guard')) dmg = Math.max(1, Math.round(dmg * (1 - TOWER_RULES.guardReduce)));
       if (m.elite && m.elite.dmgReduce) dmg = Math.max(1, Math.round(dmg * (1 - m.elite.dmgReduce)));
+      // v8.16.0 보스 그로기(브레이크) 중 받는 피해 1.5배 (+ 파쇄의 자리 성좌)
+      if (m.isBoss && m.brokenUntil && now < m.brokenUntil) {
+        const bmAdd = (constellationEffects(this.s).breakDmgAddPct || 0) / 100;
+        dmg = Math.round(dmg * (1.5 + bmAdd));
+      }
+      // v8.16.0 실시간 거대 레이드: 기사단 합동 배율 실시간 적용
+      if (this.raid && m.raid) {
+        dmg = Math.max(1, Math.round(dmg * (this.raid.raidBonusMul || 1)));
+      }
       m.hp -= dmg;
       m.hitAt = now;
       m.knock = Math.min(30, (m.knock || 0) + (crit ? 18 : 10));
+      // v8.16.0 보스 브레이크 게이지 누적 감소
+      if (m.isBoss && m.hp > 0) {
+        const isActiveSk = kind && kind !== 'normal' && kind !== 'pet' && kind !== 'dot' && kind !== 'chain' && kind !== 'tap';
+        const brAmt = kind === 'ultimate' ? 28 : isActiveSk ? 12 : (crit ? 4 : 2);
+        this.applyBossBreak(m, brAmt, now);
+      }
       // v8.10.0 보스 HP 50% 이하 → 광폭화 페이즈 돌입 연출
       if (m.isBoss && !m.enraged && m.hp > 0 && m.hp <= m.maxHp * 0.5) {
         m.enraged = true;
@@ -767,6 +878,7 @@ export class Battle {
       if (this.dungeon) this.dungeon.dmg += dmg;
       if (this.tower) this.tower.dmg += dmg;
       if (this.daily) { this.daily.dmg += dmg; this.daily.hits = (this.daily.hits || 0) + 1; }
+      if (this.raid && m.raid) { this.raid.dmg += dmg; }
       dealt += dmg;
       mainDealt += dmg;
       if (crit) critHits++;
@@ -942,6 +1054,15 @@ export class Battle {
     // 📖 도감: 처치 수 기록(던전 몹 포함) · v4.9 일일 퀘스트 처치 누적
     try { codexKill(this.s, m.name); } catch (e) { /* ignore */ }
     try { trackDailyQuest(this.s, 'kills', 1, now); } catch (e) { /* ignore */ }
+    // v8.16.0 🐉 실시간 거대 레이드: 주간 보스 완전 토벌 시 즉시 정산
+    if (this.raid) {
+      this.emit({
+        t: 'monsterDeath', id: m.id, name: m.name, ko: m.ko, isBoss: m.isBoss, x: m.x,
+        gold: 0, exp: 0, shards: 0, levelUps: 0, raid: true,
+      });
+      this.endRaid(now, 'kill');
+      return;
+    }
     // v4.5 🌟 일일 보스: 보스가 쓰러지면(이론상) 그 자리에서 종료 — 남은 시간은 버린다.
     if (this.daily) {
       this.emit({
@@ -1000,8 +1121,15 @@ export class Battle {
         if (cleared % RIFT.blessEvery === 0) {
           const choices = rollRiftChoices(this.rng);
           this.rift.picking = choices;
+          this.rift.pickType = 'card';
           this.rift.pauseAt = now;
-          this.emit({ t: 'riftPick', wave: cleared, choices });
+          this.emit({ t: 'riftPick', wave: cleared, choices, isEvent: false });
+        } else if (cleared % 5 === 0) {
+          const choices = RIFT_EVENTS.slice();
+          this.rift.picking = choices;
+          this.rift.pickType = 'event';
+          this.rift.pauseAt = now;
+          this.emit({ t: 'riftPick', wave: cleared, choices, isEvent: true });
         } else {
           this.startRiftWave(this.rift.wave + 1, now);
         }
@@ -1009,6 +1137,21 @@ export class Battle {
       return;
     }
     const reward = killReward(this.s, this.s.stage, m.isBoss, this.buffs(), this.rng);
+    // v8.16.0 🌌 황금의 자리 성좌 — 피버/호재 활성 중 처치 골드·강화석 추가 증폭
+    const flPct = constellationEffects(this.s).feverLootPct || 0;
+    if (flPct > 0 && (this.isFever(now) || (this.buffs() && this.buffs().newsBattle))) {
+      const bonusG = Math.round(reward.gold * (flPct / 100));
+      const bonusS = reward.shards > 0 ? Math.max(1, Math.round(reward.shards * (flPct / 100))) : 0;
+      if (bonusG > 0) {
+        this.s.gold += bonusG;
+        if (this.s.records) this.s.records.totalGold = (this.s.records.totalGold || 0) + bonusG;
+        reward.gold += bonusG;
+      }
+      if (bonusS > 0) {
+        this.s.shards += bonusS;
+        reward.shards += bonusS;
+      }
+    }
     // v5.7 보물 고블린 / 엘리트 추가 보상
     if (m.treasure) {
       const bGold = Math.round(stageGoldBase(this.s.stage) * TREASURE_GOBLIN.goldMul * (this.stats.goldMult || 1));
@@ -1223,10 +1366,12 @@ export class Battle {
   autoSkills(now) {
     const sk = this.s.skills;
     const alive = this.targets();
-    // v4.6/v8.8.0 부동산 시너지 + 마법탑 + 사파이어 + 기사단 멀린 쿨감
-    const cd = (key) => skillCdOf(key, this.buffs(), this.s);
-    // v4.8.2: 스테이지 보스뿐 아니라 일일 보스·도전의 탑 보스 층도 보스전으로 판정
-    const hasBoss = !!(this.boss || this.daily || alive.some((m) => m.isBoss));
+    // v4.6/v8.8.0 부동산 시너지 + 마법탑 + 사파이어 + 기사단 멀린 쿨감 (+ v8.16.0 태양의 자리 피버 가속)
+    const stars = constellationEffects(this.s);
+    const feverCdrDiv = this.isFever(now) && stars.feverCdrPct > 0 ? 1 + stars.feverCdrPct / 100 : 1;
+    const cd = (key) => Math.round(skillCdOf(key, this.buffs(), this.s) / feverCdrDiv);
+    // v4.8.2: 스테이지 보스뿐 아니라 일일 보스·도전의 탑 보스 층·거대 레이드도 보스전으로 판정
+    const hasBoss = !!(this.boss || this.daily || this.raid || alive.some((m) => m.isBoss));
     const inRange = alive.some((m) => m.x - this.player.x <= ECON.playerRange);
     const hpRatio = this.player.hp / Math.max(1, this.stats.hpMax);
     // v4.7: 설정에서 '스킬 자동 시전'을 끄면 손으로 누를 때만 나간다 · v8.4.0: 편성된 4슬롯 덱 기준
@@ -1280,6 +1425,11 @@ export class Battle {
     const list = alive.slice();
     this.hit(list, def.mul, 'ultimate', now);
     const dmg = this.lastHitDealt || 0;
+    // v8.16.0 🌌 용신의 자리 성좌 — 1.2초 뒤 잔향 폭발 예약
+    const echoMul = constellationEffects(this.s).ultEchoMul || 0;
+    if (echoMul > 0) {
+      this.pendingUltEcho = { at: now + 1200, mul: def.mul * echoMul, name: def.name, color: def.color };
+    }
     this.emit({
       t: 'ultimate', key: 'ultimate', name: def.name, ko: def.name, icon: def.icon,
       tier: def.tier, color: def.color, burst: def.burst, dmg, hits: list.length,
@@ -1292,7 +1442,9 @@ export class Battle {
     const def = SKILLS[key];
     const sk = this.s.skills[key];
     if (!def || !sk) return false;
-    if (now - sk.last < skillCdOf(key, this.buffs(), this.s)) return false;
+    const fCdr = this.isFever(now) ? (constellationEffects(this.s).feverCdrPct || 0) : 0;
+    const effCd = Math.round(skillCdOf(key, this.buffs(), this.s) / (1 + fCdr / 100));
+    if (now - sk.last < effCd) return false;
     if (this.player.dead) return false;
     const rune = skillRuneOf(this.s, key);
     const col = rune ? rune.color : def.color;
@@ -1565,6 +1717,9 @@ export class Battle {
     if (this.daily) return false; // 일일 보스 중에도 마찬가지
     if (this.dungeon) return false;
     if (this.invasion) return false;
+    if (this.raid) return false;
+    this.maybeApplyBossLoadout(now);
+    this.bossRetryUsed = false;
     const boss = this.makeMonster(this._def.boss, true, now);
     // v3.8: 보스전은 1:1 결투 — 잡몹 무리는 물러나 보스와 정면으로 붙는다
     this.monsters = this.monsters.filter((m) => m.dying);
@@ -1618,6 +1773,7 @@ export class Battle {
     if (this.tower) return { ok: false, reason: '도전의 탑 진행 중에는 입장할 수 없습니다.' };
     if (this.daily) return { ok: false, reason: '일일 보스 진행 중에는 입장할 수 없습니다.' };
     if (this.invasion) return { ok: false, reason: '영지 방어전 진행 중에는 입장할 수 없습니다.' };
+    if (this.raid) return { ok: false, reason: '거대 레이드 진행 중에는 입장할 수 없습니다.' };
     if (this.player.dead) return { ok: false, reason: '전투 불능 상태에서는 입장할 수 없습니다.' };
     if (this.boss) return { ok: false, reason: '스테이지 보스 전투 중에는 입장할 수 없습니다.' };
     this.dungeon = {
@@ -1725,6 +1881,7 @@ export class Battle {
    */
   startTower(floor, now = Date.now()) {
     if (this.tower) return { ok: false, reason: '이미 도전의 탑에 입장해 있습니다.' };
+    if (this.raid) return { ok: false, reason: '거대 레이드 진행 중에는 입장할 수 없습니다.' };
     if (this.daily) return { ok: false, reason: '일일 보스 진행 중에는 입장할 수 없습니다.' };
     if (this.invasion) return { ok: false, reason: '영지 방어전 진행 중에는 입장할 수 없습니다.' };
     if (this.dungeon) return { ok: false, reason: '황금 던전 진행 중에는 입장할 수 없습니다.' };
@@ -1940,6 +2097,7 @@ export class Battle {
    */
   startDailyBoss(now = Date.now()) {
     if (this.daily) return { ok: false, reason: '이미 일일 보스에 도전 중입니다.' };
+    if (this.raid) return { ok: false, reason: '거대 레이드 진행 중에는 입장할 수 없습니다.' };
     if (this.invasion) return { ok: false, reason: '영지 방어전 진행 중에는 입장할 수 없습니다.' };
     if (this.dungeon) return { ok: false, reason: '황금 던전 진행 중에는 입장할 수 없습니다.' };
     if (this.tower) return { ok: false, reason: '도전의 탑 진행 중에는 입장할 수 없습니다.' };
@@ -1947,6 +2105,7 @@ export class Battle {
     if (this.player.dead) return { ok: false, reason: '전투 불능 상태에서는 입장할 수 없습니다.' };
     const used = consumeDailyAttempt(this.s, now);
     if (!used.ok) return used;
+    this.maybeApplyBossLoadout(now);
     const bd = dailyBossFor(now);
     const base = stageDef(this.s.stage);
     const theme = THEMES.find((t) => t.id === bd.theme) || base.theme;
@@ -2061,6 +2220,7 @@ export class Battle {
   /* ───────────── 🚨 영지 침공 방어전 (v5.11.0) ───────────── */
   startInvasion(now = Date.now()) {
     if (this.invasion) return { ok: false, reason: '이미 영지 방어전이 진행 중입니다.' };
+    if (this.raid) return { ok: false, reason: '거대 레이드 진행 중에는 입장할 수 없습니다.' };
     if (this.tower) return { ok: false, reason: '도전의 탑 진행 중에는 입장할 수 없습니다.' };
     if (this.daily) return { ok: false, reason: '일일 보스 진행 중에는 입장할 수 없습니다.' };
     if (this.dungeon) return { ok: false, reason: '황금 던전 진행 중에는 입장할 수 없습니다.' };
@@ -2181,6 +2341,7 @@ export class Battle {
   /* ───────────── 🌀 무한 균열 로그라이크 웨이브 (v6.7.0) ───────────── */
   startRift(now = Date.now()) {
     if (this.rift) return { ok: false, reason: '이미 무한 균열이 진행 중입니다.' };
+    if (this.raid) return { ok: false, reason: '거대 레이드 진행 중에는 입장할 수 없습니다.' };
     if (this.invasion) return { ok: false, reason: '영지 방어전 진행 중에는 입장할 수 없습니다.' };
     if (this.tower) return { ok: false, reason: '도전의 탑 진행 중에는 입장할 수 없습니다.' };
     if (this.daily) return { ok: false, reason: '일일 보스 진행 중에는 입장할 수 없습니다.' };
@@ -2247,7 +2408,8 @@ export class Battle {
     const scale = 0.85 + r.wave * 0.34;
     m.maxHp = Math.max(20, Math.round(dps * scale * (isBoss ? 3.2 : 1.0) * (0.92 + this.rng() * 0.16)));
     m.hp = m.maxHp;
-    const atkPct = (1.1 + r.wave * 0.24) * (isBoss ? 1.55 : 1);
+    const rm = this.riftMods();
+    const atkPct = (1.1 + r.wave * 0.24) * (isBoss ? 1.55 : 1) * (1 + ((rm && rm.enemyAtkPct) || 0) / 100);
     m.atk = Math.max(1, Math.round((this.stats.hpMax * atkPct) / 100));
     m.rift = true;
     m.x = ECON.spawnX + this.rng() * 60;
@@ -2259,11 +2421,16 @@ export class Battle {
   pickRiftCard(cardId, now = Date.now()) {
     const r = this.rift;
     if (!r || !r.picking) return { ok: false, reason: '선택 대기 중인 축복 카드가 없습니다.' };
-    const card = r.picking.find((c) => c.id === cardId) || RIFT_CARD_BY_ID[cardId];
+    const card = r.picking.find((c) => c.id === cardId) || RIFT_CARD_BY_ID[cardId] || RIFT_EVENT_BY_ID[cardId];
     if (!card) return { ok: false, reason: '알 수 없는 축복 카드입니다.' };
     r.cards.push(card.id);
     r.picking = null;
+    r.pickType = null;
     if (card.fx) {
+      if (card.fx.hpCostPct) {
+        const loss = Math.round(this.player.hp * (card.fx.hpCostPct / 100));
+        this.player.hp = Math.max(1, this.player.hp - loss);
+      }
       if (card.fx.healNowPct) {
         this.player.hp = Math.min(this.stats.hpMax, this.player.hp + Math.round(this.stats.hpMax * (card.fx.healNowPct / 100)));
       }
@@ -2272,7 +2439,7 @@ export class Battle {
         this.player.shieldUntil = now + 25000;
       }
       if (card.fx.resetCd && this.s && this.s.skills) {
-        for (const k of ['strike', 'whirl', 'berserk', 'heal']) {
+        for (const k of this.activeDeck()) {
           if (this.s.skills[k]) this.s.skills[k].last = 0;
         }
       }
@@ -2330,6 +2497,114 @@ export class Battle {
       isBest: res ? res.isBest : false,
       bestWave: res ? res.bestWave : 0,
       cards: r.cards.slice(),
+    });
+    return res;
+  }
+
+  /* ───────────── v8.16.0 🐉 주간 거대 레이드 실시간 캔버스 토벌전 ───────────── */
+  startRaid(now = Date.now()) {
+    if (this.raid) return { ok: false, reason: '이미 거대 레이드가 진행 중입니다.' };
+    if (this.rift) return { ok: false, reason: '무한 균열 진행 중에는 입장할 수 없습니다.' };
+    if (this.invasion) return { ok: false, reason: '영지 방어전 진행 중에는 입장할 수 없습니다.' };
+    if (this.tower) return { ok: false, reason: '도전의 탑 진행 중에는 입장할 수 없습니다.' };
+    if (this.daily) return { ok: false, reason: '일일 보스 진행 중에는 입장할 수 없습니다.' };
+    if (this.dungeon) return { ok: false, reason: '황금 던전 진행 중에는 입장할 수 없습니다.' };
+    if (this.boss) return { ok: false, reason: '스테이지 보스 전투 중에는 입장할 수 없습니다.' };
+    if (this.player.dead) return { ok: false, reason: '전투 불능 상태에서는 입장할 수 없습니다.' };
+    this.maybeApplyBossLoadout(now);
+    const ticket = startRaidTicket(this.s, this.stats, now);
+    if (!ticket.ok) return ticket;
+
+    const base = stageDef(this.s.stage);
+    const theme = THEMES.find((t) => t.id === ticket.boss.theme) || base.theme;
+    const def = {
+      ...base,
+      theme,
+      themeName: `거대 레이드 · ${ticket.boss.title}`,
+      boss: ticket.boss.sprite || 'RedDragon',
+      bossOnly: true,
+      tier: 'raid',
+      raid: true,
+    };
+    this.raid = {
+      t0: now,
+      ends: now + RAID_DURATION_MS,
+      boss: ticket.boss,
+      maxHp: ticket.maxHp,
+      damageBefore: ticket.damageBefore,
+      hpLeft: ticket.hpLeft,
+      raidBonusMul: ticket.raidBonusMul || 1,
+      dmg: 0,
+      breaks: 0,
+      monster: null,
+      def,
+    };
+    this.monsters = [];
+    this.boss = null;
+    this.bossEnds = 0;
+    this.bossReadyAt = 0;
+    this._def = def;
+    this.player.hp = this.stats.hpMax;
+    try { trackDailyQuest(this.s, 'challenge', 1, now); } catch (e) { /* ignore */ }
+
+    const m = this.makeMonster(ticket.boss.sprite || 'RedDragon', true, now);
+    m.ko = ticket.boss.name;
+    m.maxHp = Math.max(1, ticket.hpLeft);
+    m.hp = m.maxHp;
+    m.atk = Math.max(1, Math.round((this.stats.hpMax * 1.8) / 100));
+    m.baseAtk = m.atk;
+    m.attackGap = 2100;
+    m.scale = 1.68;
+    m.raid = true;
+    m.x = ECON.playerX + 270;
+    m.lastAttack = now;
+    this.monsters.push(m);
+    this.raid.monster = m;
+    this.emit({
+      t: 'raidStart', boss: ticket.boss, ends: this.raid.ends, duration: RAID_DURATION_MS,
+      leftTickets: ticket.leftTickets, raidBonusMul: this.raid.raidBonusMul,
+    });
+    return { ok: true, boss: ticket.boss, leftTickets: ticket.leftTickets };
+  }
+
+  raidTick(now) {
+    const r = this.raid;
+    if (!r) return;
+    if (!r.monster || r.monster.dead || r.monster.hp <= 0) {
+      this.endRaid(now, 'kill');
+      return;
+    }
+    if (now >= r.ends) this.endRaid(now, 'timeout');
+  }
+
+  endRaid(now = Date.now(), how = 'timeout') {
+    const r = this.raid;
+    if (!r) return null;
+    this.raid = null;
+    const res = settleRaidBattle(this.s, r.dmg, now);
+    for (const m of this.monsters) {
+      m.dead = true;
+      m.dying = 0;
+    }
+    this.monsters = [];
+    this.boss = null;
+    this.bossEnds = 0;
+    this.bossReadyAt = 0;
+    this.syncStage();
+    this.spawnInitial(now);
+    this.refreshStats(now);
+    this.emit({
+      t: 'raidEnd',
+      how,
+      boss: r.boss,
+      dmg: res ? res.dmg : Math.round(r.dmg),
+      gold: res ? res.gold : 0,
+      shards: res ? res.shards : 0,
+      pct: res ? res.pct : 0,
+      defeated: res ? res.defeated : false,
+      defeatedNow: res ? res.defeatedNow : false,
+      leftTickets: res ? res.leftTickets : 0,
+      breaks: r.breaks || 0,
     });
     return res;
   }

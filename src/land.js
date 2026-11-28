@@ -12,7 +12,7 @@
 import { LAND_TIERS, LAND_TRAITS, TIER_INCOME_MULTS } from './land-data.js';
 import { PROP_BUFFS } from './data.js';
 import {
-  activeNews, newsForCity, citySetId, regionSetBuffs, regionSetStatus, buffText,
+  activeNews, newsForCity, newsBattleBuff, citySetId, regionSetBuffs, regionSetStatus, buffText,
 } from './region.js';
 import { landSynergy } from './synergy.js';
 
@@ -336,6 +336,28 @@ export function landmarkSummary(state) {
   };
 }
 
+/* ─────────────── v8.16.0 🏛️ 영지 정책 3택1 (+ 균형 기본) ─────────────── */
+export const ESTATE_POLICIES = [
+  { id: 'balanced', icon: '⚖️', name: '균형',   desc: '기본 상태 (페널티 없음)',             atkPct: 0,  bossPct: 0,  rentPct: 0,   feeReducePct: 0,  goldPct: 0,  dropPct: 0,  expTimePct: 0 },
+  { id: 'war',      icon: '⚔️', name: '전시',   desc: '공격 +10% · 보스 +10% · 임대 -15%',  atkPct: 10, bossPct: 10, rentPct: -15, feeReducePct: 0,  goldPct: 0,  dropPct: 0,  expTimePct: 0 },
+  { id: 'rent',     icon: '🏢', name: '임대',   desc: '임대 +25% · 거래세 -25% · 공격 -5%', atkPct: -5, bossPct: 0,  rentPct: 25,  feeReducePct: 25, goldPct: 0,  dropPct: 0,  expTimePct: 0 },
+  { id: 'farm',     icon: '💎', name: '파밍',   desc: '드롭 +15% · 골드 +10% · 파견 -15%',  atkPct: 0,  bossPct: 0,  rentPct: -10, feeReducePct: 0,  goldPct: 10, dropPct: 15, expTimePct: 15 },
+];
+export const ESTATE_POLICY_BY_ID = ESTATE_POLICIES.reduce((m, p) => { m[p.id] = p; return m; }, {});
+
+export function estatePolicyOf(state) {
+  const id = state && state.land && typeof state.land.policy === 'string' ? state.land.policy : 'balanced';
+  return ESTATE_POLICY_BY_ID[id] || ESTATE_POLICIES[0];
+}
+
+export function setEstatePolicy(state, id) {
+  const def = ESTATE_POLICY_BY_ID[id];
+  if (!state || !def) return { ok: false, reason: '알 수 없는 영지 정책입니다.' };
+  if (!state.land || typeof state.land !== 'object') state.land = defaultLand();
+  state.land.policy = def.id;
+  return { ok: true, policy: def };
+}
+
 /* ─────────────── 통합 상태의 land 부분 기본값 ─────────────── */
 export const LAND_FAV_MAX = 20;
 export const LAND_MANAGER = { minCities: 10, everyMs: 5 * 60 * 1000 };
@@ -356,6 +378,8 @@ export function defaultLand(now = Date.now()) {
     // v6.0: 지정가 예약 매매 주문·체결 로그
     orders: [],
     orderLog: [],
+    // v8.16.0: 영지 정책 ('balanced' | 'war' | 'rent' | 'farm')
+    policy: 'balanced',
     accruedRent: 0, // 미수령 임대수익(골드)
     rentAt: now, // 마지막 임대 적립 시각
     bestAsset: 0, // 최고 부동산 평가액
@@ -450,8 +474,10 @@ export function portfolioOf(state, now = Date.now()) {
     const newsBoost = 1 + (scrollLv > 0 ? (20 + 10 * scrollLv) / 100 : 0) + (dcLv * 15) / 100;
     const ledgerMul = ledgerLv > 0 ? 1 + (6 + 4 * ledgerLv) / 100 : 1;
     const ktxMul = 1 + (ktxLv * 6) / 100;
+    const pol = estatePolicyOf(s);
+    const polRentMul = Math.max(0.5, 1 + (pol.rentPct || 0) / 100);
     const rentMul = (1 + setRentPct / 100) * landmarkRentMul(lm)
-      * (news ? 1 + ((news.rentPct || 0) * newsBoost) / 100 : 1) * (1 + leasePct / 100) * (1 + boomPct / 100) * (1 + exLv * 0.02) * ledgerMul * ktxMul;
+      * (news ? 1 + ((news.rentPct || 0) * newsBoost) / 100 : 1) * (1 + leasePct / 100) * (1 + boomPct / 100) * (1 + exLv * 0.02) * ledgerMul * ktxMul * polRentMul;
     const income = incomePerMinOf(city, qty, qty, now, rentMul);
     const v = qty * info.price;
     const cost = num(totalCost[key]);
@@ -542,6 +568,9 @@ export function computeBuffs(state, now = Date.now()) {
   const setDropPct = sets.dropPct || 0;
   const setHpPct = sets.hpPct || 0;
   const setCritPct = sets.critPct || 0;
+  // v8.16.0: 호재 뉴스 실시간 전투 연동 + 영지 정책
+  const newsBattle = newsBattleBuff(state, now);
+  const policy = estatePolicyOf(state);
   return {
     atkPct,
     hpPct,
@@ -589,6 +618,19 @@ export function computeBuffs(state, now = Date.now()) {
     tycoonAtkPct: tycoon.atkPct,
     tycoonGoldPct: tycoon.goldPct,
     tycoonBossPct: tycoon.bossPct,
+    // v8.16.0 호재 실시간 전투 버프 & 영지 정책
+    newsBattle,
+    newsAtkPct: newsBattle ? newsBattle.atkPct : 0,
+    newsCritPct: newsBattle ? newsBattle.critPct : 0,
+    newsGoldPct: newsBattle ? newsBattle.goldPct : 0,
+    newsDropPct: newsBattle ? newsBattle.dropPct : 0,
+    newsExpPct: newsBattle ? newsBattle.expPct : 0,
+    newsGoblinMul: newsBattle ? newsBattle.goblinMul : 1,
+    policy,
+    polAtkPct: policy.atkPct || 0,
+    polBossPct: policy.bossPct || 0,
+    polGoldPct: policy.goldPct || 0,
+    polDropPct: policy.dropPct || 0,
     synText: syn.text,
     synLandmarkLevels: syn.landmark.levels,
     synMega: syn.landmark.mega,
@@ -648,7 +690,8 @@ export function quoteTrade(key, side, qty, state, now = Date.now()) {
   const total = info.price * q;
   const exLv = Math.max(0, Math.min(10, Math.floor(Number(s && s.citadel && s.citadel.levels && s.citadel.levels.exchange) || 0)));
   const portLv = Math.max(0, Math.min(3, Math.floor(Number(s && s.mega && s.mega.tradeport) || 0)));
-  const feeRate = LAND.feeRate * (1 - Math.min(0.95, exLv * 0.08 + portLv * 0.15));
+  const polFee = (estatePolicyOf(s).feeReducePct || 0) / 100;
+  const feeRate = LAND.feeRate * (1 - Math.min(0.95, exLv * 0.08 + portLv * 0.15 + polFee));
   const fee = Math.floor(total * feeRate);
 
   if (side === 'buy') {

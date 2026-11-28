@@ -117,6 +117,7 @@ export function rankCard(ui) {
       <button class="chip${key === 'asset' ? ' on' : ''}" type="button" data-action="cloud-rank" data-value="asset">💰 총자산</button>
       <button class="chip${key === 'tower' ? ' on' : ''}" type="button" data-action="cloud-rank" data-value="tower">🗼 도전의 탑</button>
       <button class="chip${key === 'daily' ? ' on' : ''}" type="button" data-action="cloud-rank" data-value="daily">🌟 일일 보스</button>
+      <button class="chip${key === 'rift' ? ' on' : ''}" type="button" data-action="cloud-rank" data-value="rift">🌀 무한 균열</button>
     </div>
     ${body}
     ${signed && enabled ? `<div class="cloud-nick">

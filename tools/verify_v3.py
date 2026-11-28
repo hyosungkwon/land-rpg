@@ -95,7 +95,7 @@ except ImportError:
         Context = _NodeContext
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-EXPECTED_VER = "8.15.0"
+EXPECTED_VER = "8.16.0"
 FILES = ["src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js"]
 ALL_JS = ["app.js", "sw.js", "src/data.js", "src/gear.js", "src/gems.js", "src/land-data.js", "src/region.js", "src/synergy.js", "src/land.js", "src/auction.js", "src/orders.js", "src/portfolio-ops.js", "src/rebirth.js", "src/meta.js", "src/expedition.js", "src/invasion.js", "src/citadel.js", "src/relics.js", "src/daily.js", "src/tower.js", "src/quests.js", "src/pass.js", "src/rift.js", "src/bank.js", "src/guild.js", "src/season.js", "src/hub.js", "src/state.js", "src/guide.js", "src/combat.js", "src/savecode.js", "src/cloud.js", "src/render.js", "src/ui-fmt.js", "src/ui-cloud.js", "src/ui-gear.js", "src/ui-land.js", "src/ui-hunt.js", "src/ui-settings.js", "src/ui.js", "src/sound.js"]
 
@@ -4813,7 +4813,7 @@ def main():
         labels: [rankMetricLabel('tower'), rankMetricLabel('daily')],
       };
     """)
-    ok(r50["keys"] == ["stage", "asset", "tower", "daily"] and r50["entryFields"] == [64, 1250000, "S"], "랭킹 4종 키 · 탑 최고 층/일일 보스 피해 등록 항목", json.dumps(r50["entryFields"]))
+    ok(r50["keys"] == ["stage", "asset", "tower", "daily", "rift"] and r50["entryFields"] == [64, 1250000, "S"], "랭킹 5종 키 · 탑 최고 층/일일 보스 피해 등록 항목", json.dumps(r50["entryFields"]))
     ok(r50["towerTop"][0][0] == "u2" and r50["towerTop"][0][2] == "🗼120층" and r50["towerTop"][2][2] == "—", "도전의 탑 랭킹 정렬 · 옛 기록 '—' 처리", json.dumps(r50["towerTop"], ensure_ascii=False))
     ok(r50["dailyTop"][0][0] == "u1" and r50["dailyTop"][0][2].startswith("🌟") and r50["dailyTop"][2][2] == "—", "일일 보스 랭킹 정렬 · 옛 기록 '—' 처리", json.dumps(r50["dailyTop"], ensure_ascii=False))
     ok(r50["labels"] == ["도전의 탑", "일일 보스"], "랭킹 지표 한글 라벨(도전의 탑 · 일일 보스)")
@@ -6616,6 +6616,71 @@ def main():
         all(x in rnd815 for x in ["drawEstateSkyline(", "mega.skytower", "mega.datacenter", "mega.tradeport", "mega.ktx", "trainX"]),
         "render.js — 보유 도시·성채·스카이타워·AI데이터센터·무역항·KTX 열차 원경 스카이라인 구현",
     )
+
+    # ── 63) v8.16.0 거대 레이드 실시간 전투·보스 브레이크·호재/정책·통합 로드아웃·균열 2.0·초월 성좌 ──
+    section("v8.16.0 거대 레이드 실시간화·브레이크·호재/정책·통합 로드아웃·균열 2.0·초월 성좌")
+    v816 = run_js("""
+      const now = 1_750_000_000_000;
+      const s = defaultState(now);
+      s.stage = 25; s.maxStage = 25; s.peakStage = 25; s.level = 40;
+      s.gold = 500000; s.shards = 500;
+      s.rebirth.count = 2; s.rebirth.points = 300; s.rebirth.totalPoints = 300;
+
+      // 1) 보스 브레이크(그로기) + 실시간 거대 레이드 토벌전
+      const b = new Battle(s, () => computeBuffs(s, now), () => 0.4, now);
+      const rStart = b.startRaid(now + 100);
+      const raidBoss = b.raid && b.raid.monster;
+      let broke = false;
+      if (raidBoss) {
+        b.applyBossBreak(raidBoss, 100, now + 200);
+        broke = !!(raidBoss.brokenUntil > now + 200);
+        b.hit([raidBoss], 3, 'normal', now + 300);
+      }
+      const rEnd = b.endRaid(now + 500, 'timeout');
+      const raidOk = !!(rStart.ok && raidBoss && broke && rEnd && rEnd.dmg > 0 && s.guild.raid.damage > 0 && !b.raid);
+
+      // 2) 영지 정책 3택1 + 호재 뉴스 실시간 전투 연동
+      const polRes = setEstatePolicy(s, 'war');
+      const polBuff = computeBuffs(s, now);
+      const polOk = polRes.ok && polBuff.polAtkPct === 10 && polBuff.polBossPct === 10;
+      const curNews = activeNews(now);
+      // 호재가 덮는 도시 1곳 찾아 보유 처리
+      const coveredCity = CITIES.find((c) => newsCovers(curNews, c.key));
+      if (coveredCity) s.land.owned[coveredCity.key] = 5;
+      const nb = newsBattleBuff(s, now);
+      const newsBuffOk = !!(coveredCity && nb && nb.hits >= 1 && (nb.atkPct > 0 || nb.goldPct > 0 || nb.dropPct > 0));
+
+      // 3) 통합 전투 로드아웃 3슬롯 저장·전환·보스 자동 전환
+      s.skillDeck = ['strike', 'meteor', 'thunder', 'heal'];
+      const svLo = saveLoadout(s, 1);
+      s.skillDeck = ['strike', 'whirl', 'berserk', 'heal'];
+      const apLo = applyLoadout(s, 1);
+      const abLo = setLoadoutAutoBoss(s, 1);
+      const loadoutOk = !!(svLo.ok && apLo.ok && s.skillDeck[1] === 'meteor' && abLo.autoBoss === 1);
+
+      // 4) 무한 균열 2.0 시너지 + 5W 이벤트 + 랭킹 rift 지표
+      const syns = activeRiftSynergies(['chain', 'spd']);
+      const mods = riftCardMods(['chain', 'spd', 'ev_altar']);
+      const hint = riftCardSynergyHint(['chain'], 'spd');
+      s.rift.bestWave = 12;
+      const rEntry = rankEntryOf(s, { uid: 'u1', now });
+      const rSorted = rankRows({ u1: rEntry }, 'rift');
+      const rift2Ok = syns.length === 1 && syns[0].id === 'storm' && mods.chainPct === 65 && mods.rewardPct === 35 && hint && hint.id === 'storm' && rSorted.rows[0].riftBest === 12 && rankValueText('rift', rSorted.rows[0]) === '🌀W12';
+
+      // 5) S70+ 초월 성좌 해금·정규화·효과
+      const stUp1 = upgradeConstellation(s, 'counterUlt');
+      const stUp2 = upgradeConstellation(s, 'breakMaster');
+      const ce = constellationEffects(s);
+      const norm = normalizeState(JSON.parse(JSON.stringify(s)), now);
+      const starOk = stUp1.ok && stUp2.ok && ce.counterUltTrimMs === 4000 && ce.breakDurAddMs === 1000 && norm.rebirth.stars.counterUlt === 1 && norm.land.policy === 'war' && norm.loadouts.autoBoss === 1;
+
+      return { raidOk, polOk, newsBuffOk, loadoutOk, rift2Ok, starOk };
+    """)
+    ok(v816["raidOk"], "거대 레이드 실시간 캔버스 진입·보스 브레이크 파괴·종료 정산 정상 동작", json.dumps(v816))
+    ok(v816["polOk"] and v816["newsBuffOk"], "영지 정책 3택1('전시') 및 보유 지역 호재 실시간 전투 버프 반영", json.dumps(v816))
+    ok(v816["loadoutOk"], "통합 전투 로드아웃 저장·복원(스킬덱 포함)·보스 자동 전환 설정 정상", json.dumps(v816))
+    ok(v816["rift2Ok"], "무한 균열 2.0 축복 시너지(폭풍 과부하)·이벤트 모디파이어·클라우드 랭킹 rift 지표 정상", json.dumps(v816))
+    ok(v816["starOk"], "S70+ 초월 성좌 해금·효과 계산·세이브 정규화 마이그레이션 정상", json.dumps(v816))
 
     print(f"\n통과 {passed} / 실패 {failed}")
     if failures:

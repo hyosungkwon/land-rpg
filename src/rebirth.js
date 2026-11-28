@@ -353,7 +353,7 @@ export function upgradeTrait(state, id) {
 
 /** 저장 정규화 — 손상/구버전 저장 방어 */
 export function normalizeRebirth(raw) {
-  const d = { count: 0, points: 0, totalPoints: 0, traits: {}, bestStage: 1, at: 0 };
+  const d = { count: 0, points: 0, totalPoints: 0, traits: {}, stars: {}, bestStage: 1, at: 0 };
   if (!raw || typeof raw !== 'object') return d;
   const traits = {};
   const rawTraits = raw.traits && typeof raw.traits === 'object' ? raw.traits : {};
@@ -361,15 +361,108 @@ export function normalizeRebirth(raw) {
     const lv = clamp(Math.floor(num(rawTraits[def.id], 0)), 0, def.maxLv);
     if (lv > 0) traits[def.id] = lv;
   }
+  const stars = {};
+  const rawStars = raw.stars && typeof raw.stars === 'object' ? raw.stars : {};
+  for (const def of CONSTELLATIONS) {
+    const lv = clamp(Math.floor(num(rawStars[def.id], 0)), 0, def.maxLv);
+    if (lv > 0) stars[def.id] = lv;
+  }
   const count = Math.max(0, Math.floor(num(raw.count, 0)));
   return {
     count,
     points: Math.max(0, Math.floor(num(raw.points, 0))),
     totalPoints: Math.max(0, Math.floor(num(raw.totalPoints, 0))),
     traits,
+    stars,
     bestStage: Math.max(1, Math.floor(num(raw.bestStage, 1))),
     at: Math.max(0, num(raw.at, 0)),
   };
+}
+
+/* ────────────────────── v8.16.0 🌌 초월 성좌 (규칙 변형 패시브 6종) ────────────────────── */
+export const STAR_COSTS = [25, 60, 120];
+export const CONSTELLATIONS = [
+  {
+    id: 'counterUlt', name: '번개의 자리', icon: '⚡', maxLv: 3, color: '#ffe066',
+    desc: '보스 반격 카운터 성공 시 궁극기 쿨 단축 + 브레이크 추가 파괴',
+    effect: (lv) => `궁극기 쿨 -${[0, 4, 7, 10][lv]}초 · 브레이크 추가 -${[0, 15, 25, 35][lv]}`,
+  },
+  {
+    id: 'feverCdr', name: '태양의 자리', icon: '🔥', maxLv: 3, color: '#ff8a5c',
+    desc: '피버 타임 중 모든 액티브 스킬 쿨타임 가속',
+    effect: (lv) => `피버 중 스킬 쿨 가속 +${[0, 25, 45, 65][lv]}%`,
+  },
+  {
+    id: 'bossRetry', name: '수호의 자리', icon: '🛡️', maxLv: 3, color: '#69c0ff',
+    desc: '스테이지 보스전 사망 시 1회 HP 60% 즉시 부활 재도전 + 반격 버프',
+    effect: (lv) => `보스전 1회 부활 · 공격 +${[0, 10, 20, 30][lv]}% (8초)`,
+  },
+  {
+    id: 'breakMaster', name: '파쇄의 자리', icon: '💥', maxLv: 3, color: '#7ff6ff',
+    desc: '보스 브레이크(그로기) 지속시간 연장 및 그로기 추가 피해 증폭',
+    effect: (lv) => `그로기 +${lv}초 · 그로기 피해 +${lv * 15}%`,
+  },
+  {
+    id: 'feverLoot', name: '황금의 자리', icon: '💰', maxLv: 3, color: '#ffd76a',
+    desc: '피버 타임 또는 호재 버프 중 처치 골드·강화석 획득 증폭',
+    effect: (lv) => `피버/호재 골드·강화석 +${lv * 15}%`,
+  },
+  {
+    id: 'ultEcho', name: '용신의 자리', icon: '🐉', maxLv: 3, color: '#c084fc',
+    desc: '궁극기 시전 후 1.2초 뒤 전장에 잔향 폭발 추가 발동',
+    effect: (lv) => `궁극기 잔향 폭발 ${[0, 35, 60, 85][lv]}% 위력`,
+  },
+];
+export const CONSTELLATION_BY_ID = Object.fromEntries(CONSTELLATIONS.map((c) => [c.id, c]));
+
+export function starLevel(state, id) {
+  const rb = birthState(state);
+  const def = CONSTELLATION_BY_ID[id];
+  if (!def || !rb.stars || typeof rb.stars !== 'object') return 0;
+  return clamp(Math.floor(num(rb.stars[id], 0)), 0, def.maxLv);
+}
+
+export function starCost(lv) {
+  const cur = clamp(Math.floor(num(lv, 0)), 0, STAR_COSTS.length);
+  return cur < STAR_COSTS.length ? STAR_COSTS[cur] : 0;
+}
+
+/** 초월 성좌 효과 합계 (모두 Lv.0이면 0 → 기존 밸런스 불변) */
+export function constellationEffects(state) {
+  const cu = starLevel(state, 'counterUlt');
+  const fc = starLevel(state, 'feverCdr');
+  const br = starLevel(state, 'bossRetry');
+  const bm = starLevel(state, 'breakMaster');
+  const fl = starLevel(state, 'feverLoot');
+  const ue = starLevel(state, 'ultEcho');
+  return {
+    counterUltTrimMs: [0, 4000, 7000, 10000][cu],
+    counterBreakAdd: [0, 15, 25, 35][cu],
+    feverCdrPct: [0, 25, 45, 65][fc],
+    bossRetry: br > 0,
+    bossRetryAtkPct: [0, 10, 20, 30][br],
+    breakDurAddMs: bm * 1000,
+    breakDmgAddPct: bm * 15,
+    feverLootPct: fl * 15,
+    ultEchoMul: [0, 0.35, 0.60, 0.85][ue],
+    totalLv: cu + fc + br + bm + fl + ue,
+    maxTotalLv: CONSTELLATIONS.length * 3,
+  };
+}
+
+export function upgradeConstellation(state, id) {
+  const def = CONSTELLATION_BY_ID[id];
+  if (!def) return { ok: false, reason: '알 수 없는 성좌입니다.' };
+  const rb = birthState(state);
+  if (!rb.stars || typeof rb.stars !== 'object') rb.stars = {};
+  const lv = starLevel(state, id);
+  if (lv >= def.maxLv) return { ok: false, reason: '최대 레벨입니다.', max: true };
+  const cost = starCost(lv);
+  const have = Math.max(0, Math.floor(num(rb.points, 0)));
+  if (have < cost) return { ok: false, reason: `초월석이 부족합니다. (필요 ${cost}P)`, need: cost };
+  rb.points = have - cost;
+  rb.stars[id] = lv + 1;
+  return { ok: true, id, name: def.name, icon: def.icon, level: lv + 1, cost, points: rb.points, max: lv + 1 >= def.maxLv };
 }
 
 /** 특성 한 줄 요약(UI) */

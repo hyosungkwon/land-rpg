@@ -102,6 +102,11 @@ export function activeBuffPills(b, now = Date.now()) {
   if (b.player && b.player.graceUntil > now) {
     pills.push({ id: 'grace', icon: '🛡️', label: `가호 ${((b.player.graceUntil - now) / 1000).toFixed(1)}s`, cls: 'def' });
   }
+  // v8.16.0 📰 호재 실시간 전투 버프 pill
+  const nb = typeof b.buffs === 'function' ? b.buffs().newsBattle : null;
+  if (nb) {
+    pills.push({ id: 'newsBattle', icon: nb.icon, label: nb.label, cls: 'gold' });
+  }
   return pills;
 }
 
@@ -271,6 +276,8 @@ export class UI {
       case 'gear-auto': actions.setGearAuto(v); break;
       case 'gear-preset-apply': actions.applyGearPreset(Number(v)); break;
       case 'gear-preset-save': actions.saveGearPreset(Number(v)); break;
+      case 'loadout-auto-boss': actions.cycleLoadoutAutoBoss(); break;
+      case 'estate-policy': actions.setEstatePolicy(v); break;
       case 'gear-recommend': actions.applyRecommendedGear(v); break;
       case 'gear-awaken': actions.awakenGear(btn.dataset.slot || v); break;
       case 'gem-slot': this.gemSlot = EQUIP_SLOTS.includes(v) ? v : 'weapon'; this.render(); break;
@@ -323,8 +330,9 @@ export class UI {
       case 'promote': actions.promoteJob(); break;
       case 'rebirth': actions.rebirth(); break;
       case 'rebirth-start': actions.pickRebirthStart(v); break;
-      case 'rebirth-traits': actions.openRebirthTraits(); break;
+      case 'rebirth-traits': actions.openRebirthTraits(v || 'traits'); break;
       case 'rebirth-trait': actions.upgradeRebirthTrait(v); break;
+      case 'rebirth-star': actions.upgradeConstellation(v); break;
       case 'relic-summon': actions.summonRelic(v); break;
       case 'relic-equip': actions.equipRelic(v); break;
       case 'relic-upgrade': actions.upgradeRelic(v); break;

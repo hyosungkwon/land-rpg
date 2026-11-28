@@ -8,6 +8,7 @@ import {
   GEAR_PRESET_NAMES, GEAR_AWAKEN_BONUS_LV, awakenLevel, gearPresetSummary, GEAR_BUILD_MODES,
   GEAR_SETS, GEAR_SET_FILTERS, gearSetOf, gearSetStatus, gearSetBonusText, gearAffixInfo,
 } from './gear.js';
+import { LOADOUT_NAMES, loadoutSummary } from './state.js';
 import { esc, fmt } from './ui-fmt.js';
 
 export const rarityBadge = (id) => {
@@ -38,15 +39,18 @@ export const optChips = (item, max = 3) => {
   return list.slice(0, max).map((o) => `<span class="opt">${esc(o.text)}</span>`).join('');
 };
 
-/** ⚔️ 현재 장착 중인 5부위 슬롯 카드 + v4.10 원탭 프리셋 3슬롯 */
+/** ⚔️ 현재 장착 중인 5부위 슬롯 카드 + v8.16.0 통합 전투 로드아웃 3슬롯 (장비·스킬덱·펫·유물) */
 export function gearSlotCards(s) {
-  const presets = GEAR_PRESET_NAMES.map((m) => {
-    const ps = gearPresetSummary(s, m.id);
-    return `<div class="gp-slot${ps.active ? ' on' : ''}">
-      <button class="gp-apply" type="button" data-action="gear-preset-apply" data-value="${m.id}" ${ps.saved ? '' : 'disabled'}>${m.icon} ${m.name}<small>${ps.saved ? `${ps.owned}/${ps.saved}` : '비어있음'}</small></button>
-      <button class="gp-save" type="button" data-action="gear-preset-save" data-value="${m.id}" title="현재 장착을 ${m.name} 프리셋에 저장">💾</button>
+  const autoIdx = s.loadouts && typeof s.loadouts.autoBoss === 'number' ? s.loadouts.autoBoss : -1;
+  const presets = LOADOUT_NAMES.map((m) => {
+    const ls = loadoutSummary(s, m.id);
+    const subTxt = ls.saved ? (ls.full ? `통합${ls.isAuto ? '·자동' : ''}` : `${ls.gearN}부위`) : '비어있음';
+    return `<div class="gp-slot${ls.active ? ' on' : ''}">
+      <button class="gp-apply" type="button" data-action="gear-preset-apply" data-value="${m.id}" ${ls.saved ? '' : 'disabled'}>${m.icon} ${m.name}<small>${subTxt}</small></button>
+      <button class="gp-save" type="button" data-action="gear-preset-save" data-value="${m.id}" title="현재 장비·스킬덱·펫·유물을 ${m.name} 로드아웃에 저장">💾</button>
     </div>`;
   }).join('');
+  const autoLabel = autoIdx >= 0 && LOADOUT_NAMES[autoIdx] ? `${LOADOUT_NAMES[autoIdx].icon}${LOADOUT_NAMES[autoIdx].name}` : '끔';
 
   const rows = EQUIP_SLOTS.map((slot) => {
     const def = EQUIP[slot];
@@ -92,8 +96,8 @@ export function gearSlotCards(s) {
   return `
   <div class="card" data-fold="presets">
     <div class="card-head">
-      <div class="card-title"><span class="t-ico">⚔️</span>장착 중 <small>5부위</small></div>
-      <span class="tiny dim">프리셋 1탭 전환 · 장비 눌러 비교</span>
+      <div class="card-title"><span class="t-ico">⚔️</span>장착 중 <small>5부위 · 통합 로드아웃</small></div>
+      <button class="mini ${autoIdx >= 0 ? 'on' : 'ghost'}" type="button" data-action="loadout-auto-boss" title="보스·탑·일일보스·레이드 입장 시 자동 전환">⚡보스자동: ${autoLabel}</button>
     </div>
     <div class="gear-presets">${presets}</div>
     <div class="chips rec-row">${recBtns}</div>

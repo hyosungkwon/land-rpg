@@ -5,6 +5,7 @@ import { APP_VERSION, ECON, EQUIP, EQUIP_MAX_LV, SKILLS, SAVE_KEY, stageDef, RAR
 import {
   loadState, saveState, offlineSummary, applyOffline, tryEnhance, tryUpgradeSkill, setSkillRune as setSkillRuneState,
   setSkillDeckSlot, applySkillDeckPreset as applySkillDeckPresetState,
+  saveLoadout as saveLoadoutState, applyLoadout as applyLoadoutState, setLoadoutAutoBoss as setLoadoutAutoBossState, LOADOUT_NAMES,
   exchangeShards, pullGear, recordNews, enhanceMaxCount, normalizeState, compareGear, skillCdOf,
 } from './src/state.js';
 import {
@@ -27,8 +28,9 @@ import { Battle } from './src/combat.js';
 import {
   computeBuffs, portfolioOf, accrueRent, claimRent, applyTrade, quoteTrade, maxBuyQty, priceInfo,
   CITY_BY_KEY, formatGold, LAND, LANDMARK, landmarkQuote, buildLandmark as buildLandmarkState,
-  LAND_MANAGER, toggleFavoriteCity, landManagerUnlocked,
+  LAND_MANAGER, toggleFavoriteCity, landManagerUnlocked, setEstatePolicy as setEstatePolicyState,
 } from './src/land.js';
+import { riftCardSynergyHint, activeRiftSynergies } from './src/rift.js';
 import {
   LIMIT_ORDER_MAX, addLimitOrder as addLimitOrderState, cancelLimitOrder as cancelLimitOrderState,
   processLimitOrders, recordAssetSnapshot,
@@ -89,6 +91,7 @@ import {
   doRebirth as doRebirthState, upgradeTrait as upgradeRebirthTraitState,
   traitLevel, traitCost, traitSummary,
   rebirthStartOptions, rebirthJumpCap, rebirthPrevBest, rebirthJumpBonus, rebirthJumpStage,
+  CONSTELLATIONS, starLevel, starCost, constellationEffects, upgradeConstellation as upgradeConstellationState,
 } from './src/rebirth.js';
 
 // 구형 Safari / 삼성 인터넷 대비 CanvasRenderingContext2D.roundRect 폴리필
@@ -362,7 +365,7 @@ class App {
       const b = this.battle;
       const mood = b && b.isFever && b.isFever(now)
         ? 'fever'
-        : b && (b.boss || b.tower || b.rift || b.invasion || b.daily || b.dungeon)
+        : b && (b.boss || b.tower || b.rift || b.invasion || b.daily || b.dungeon || b.raid)
           ? 'boss'
           : 'field';
       this.sound.setBgmMood(mood);
@@ -481,6 +484,7 @@ class App {
       this.battle.dungeon = null; // 던전 중 예외가 나도 스테이지 사냥으로 복귀
       this.battle.tower = null; // 탑 도전 중 예외가 나도 스테이지 사냥으로 복귀
       this.battle.daily = null; // 일일 보스 중 예외가 나도 스테이지 사냥으로 복귀
+      this.battle.raid = null;  // 거대 레이드 중 예외가 나도 스테이지 사냥으로 복귀
       this.battle.syncStage();
       this.battle.events = [];
       this.battle.refreshStats(Date.now());
@@ -625,6 +629,39 @@ class App {
         this.ui.renderIfNeeded();
       } else if (ev.t === 'towerFrenzy') {
         this.ui.addLog(`🔥 ${ev.n}층 보스 광폭 — 공격력 상승(${ev.step}회)`);
+      } else if (ev.t === 'bossBreak') {
+        this.sound.gacha('rare');
+        this.ui.addLog(`💥 <b>${esc(ev.ko)}</b> 브레이크! ${(ev.dur / 1000).toFixed(1)}초간 그로기 (피해 ×1.5)`);
+      } else if (ev.t === 'bossRetryRevive') {
+        this.sound.fanfare();
+        this.ui.toast(`🛡️ 수호 성좌 발동! 보스전 부활 + 공격 +${ev.atkPct}%`, 'gold');
+        this.ui.addLog(`🛡️ <b>수호의 자리</b> 발동 — 보스전 1회 부활 재도전`);
+      } else if (ev.t === 'loadoutSwitch') {
+        this.ui.toast(`⚡ 보스 자동 로드아웃 전환: ${ev.name}`, 'gold');
+      } else if (ev.t === 'raidStart') {
+        this.ui.addLog(`🐉 <b>거대 레이드 ${esc(ev.boss.name)}</b> 실시간 합동 토벌 시작! (30초 · 합동 ×${(ev.raidBonusMul || 1).toFixed(2)})`);
+        this.ui.toast(`🐉 ${ev.boss.name} 실시간 토벌 시작! (남은 ${ev.leftTickets}회)`, 'gold');
+        this.sound.boss();
+        this.ui.renderIfNeeded();
+      } else if (ev.t === 'raidEnd') {
+        this.battle.refreshStats();
+        addPassXp(this.s, ev.defeatedNow ? 80 : 35, now);
+        this.save(true);
+        if (ev.defeatedNow || ev.how === 'kill') this.sound.fanfare();
+        else this.sound.gacha('hero');
+        this.ui.addLog(`🐉 <b>${esc(ev.boss.name)}</b> 토벌 정산 · 피해 ${ev.dmg.toLocaleString()} (${ev.pct.toFixed(1)}%) · 💰+${formatGold(ev.gold)} 💎+${ev.shards}`);
+        this.ui.modal({
+          title: `🐉 거대 레이드 정산${ev.defeatedNow ? ' — 완전 토벌!' : ''}`,
+          sub: `${ev.boss.name} · 주간 격파 ${ev.pct.toFixed(1)}%${ev.breaks ? ` · 💥브레이크 ${ev.breaks}회` : ''}`,
+          body: `<div class="modal-rewards">
+                   <div class="rw"><div class="e">⚔️</div><div class="v">${formatGold(ev.dmg)}</div><div class="k">누적 피해</div></div>
+                   <div class="rw"><div class="e">💰</div><div class="v">+${formatGold(ev.gold)}</div><div class="k">골드</div></div>
+                   <div class="rw"><div class="e">💎</div><div class="v">+${ev.shards}</div><div class="k">강화석</div></div>
+                 </div>
+                 <div class="note" style="margin-top:8px">오늘 남은 출격 <b>${ev.leftTickets}회</b> · 페이즈 상자는 📋 오늘의 할 일 허브에서 수령할 수 있습니다.</div>`,
+          actions: [{ label: '확인', style: 'primary', onClick: () => {} }],
+        });
+        this.ui.renderIfNeeded();
       } else if (ev.t === 'dailyStart') {
         this.ui.addLog(`🌟 <b>일일 보스 ${esc(ev.ko)}</b> ${esc(ev.title)} — 30초 누적 피해 도전`);
         this.ui.toast(`🌟 일일 보스 ${ev.ko} — 30초 타임어택! (남은 ${ev.left}회)`, 'gold');
@@ -1593,31 +1630,54 @@ class App {
         this.ui.render();
       },
 
-      /* ── 🗂️🔥 v4.10 장비 프리셋 · 부위 각성 ── */
+      /* ── 🗂️🔥 v4.10/v8.16.0 통합 전투 로드아웃 3슬롯 · 부위 각성 ── */
       saveGearPreset: (idx) => {
         this.sound.unlock();
-        const r = saveGearPresetState(this.s, idx);
+        const r = saveLoadoutState(this.s, idx);
         if (!r.ok) {
-          this.ui.toast(r.reason || '프리셋을 저장할 수 없습니다', 'red');
+          this.ui.toast(r.reason || '로드아웃을 저장할 수 없습니다', 'red');
           return;
         }
         this.save(true);
         this.sound.ui();
-        this.ui.toast(`💾 ${r.meta.icon} ${r.meta.name} 프리셋 저장 (${r.count}부위)`, 'green');
+        this.ui.toast(`💾 ${r.def.icon} ${r.def.name} 통합 로드아웃 저장 (장비·스킬·펫·유물)`, 'green');
         this.ui.render();
       },
       applyGearPreset: (idx) => {
         this.sound.unlock();
-        const r = applyGearPresetState(this.s, idx);
+        const r = applyLoadoutState(this.s, idx);
         if (!r.ok) {
-          this.ui.toast(r.reason || '프리셋을 적용할 수 없습니다', 'red');
+          this.ui.toast(r.reason || '로드아웃을 적용할 수 없습니다', 'red');
           return;
         }
         this.battle.refreshStats();
         this.save(true);
         this.sound.ui();
-        const miss = r.missing ? ` (미보유 ${r.missing}부위 제외)` : '';
-        this.ui.toast(`🗂️ ${r.meta.icon} ${r.meta.name} 프리셋 장착! (${r.applied}부위${miss})`, 'gold');
+        this.ui.toast(`⚡ ${r.def.icon} ${r.def.name} 통합 로드아웃 전환 완료!`, 'gold');
+        this.ui.render();
+      },
+      cycleLoadoutAutoBoss: () => {
+        this.sound.unlock();
+        const cur = this.s.loadouts && typeof this.s.loadouts.autoBoss === 'number' ? this.s.loadouts.autoBoss : -1;
+        const next = cur >= 2 ? -1 : cur + 1;
+        const r = setLoadoutAutoBossState(this.s, next);
+        this.save(true);
+        this.sound.ui();
+        const label = r.autoBoss >= 0 && LOADOUT_NAMES[r.autoBoss]
+          ? `${LOADOUT_NAMES[r.autoBoss].icon} ${LOADOUT_NAMES[r.autoBoss].name} (보스/도전 입장 시 자동)`
+          : '끔';
+        this.ui.toast(`⚡ 보스 자동 로드아웃: ${label}`, r.autoBoss >= 0 ? 'gold' : undefined);
+        this.ui.render();
+      },
+      setEstatePolicy: (id) => {
+        this.sound.unlock();
+        const r = setEstatePolicyState(this.s, id);
+        if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
+        this.buffs = computeBuffs(this.s, Date.now());
+        this.battle.refreshStats();
+        this.save(true);
+        this.sound.ui();
+        this.ui.toast(`🏛️ 영지 정책 변경: ${r.policy.icon} ${r.policy.name} (${r.policy.desc})`, 'gold');
         this.ui.render();
       },
       applyRecommendedGear: (mode) => {
@@ -2167,15 +2227,9 @@ class App {
       attackRaid: () => {
         this.sound.unlock();
         const now = Date.now();
-        const r = attackRaidBossState(this.s, this.battle.stats, now);
+        const r = this.battle.startRaid(now);
         if (!r.ok) { this.ui.toast(r.reason, 'red'); return; }
-        addPassXp(this.s, r.defeated ? 80 : 35, now);
-        try { trackDailyQuest(this.s, 'challenge', 1, now); } catch (e) { /* ignore */ }
         this.save(true);
-        if (r.defeated) this.sound.fanfare();
-        else this.sound.hit(r.crit);
-        this.ui.toast(`🐉 합동 공격! ${r.crit ? '💥치명 ' : ''}${r.dmg.toLocaleString()} 피해 (${r.pct.toFixed(1)}%) · 💰+${formatGold(r.gold)} 💎+${r.shards}`, 'gold');
-        this.ui.addLog(`🐉 <b>${esc(r.boss.name)}</b> 레이드 피해 ${r.dmg.toLocaleString()} (${r.pct.toFixed(1)}%)`);
         this.ui.render();
       },
       claimRaidPhase: (idx) => {
@@ -2283,8 +2337,9 @@ class App {
       /* ── v3.5: ♾️ 환생(초월) · 영구 특성 ── */
       rebirth: () => this.openRebirthConfirm(),
       pickRebirthStart: (v) => this.pickRebirthStart(v),
-      openRebirthTraits: () => this.showRebirthTraits(),
+      openRebirthTraits: (tab = 'traits') => this.showRebirthTraits(tab),
       upgradeRebirthTrait: (id) => this.doUpgradeRebirthTrait(id),
+      upgradeConstellation: (id) => this.doUpgradeConstellation(id),
 
       /* ── v6.1.0: 🏺 고대 유물(아티팩트) ── */
       summonRelic: (mode) => {
@@ -3253,39 +3308,89 @@ class App {
     this.ui.render();
   }
 
-  showRebirthTraits() {
+  showRebirthTraits(tab = 'traits') {
     const s = this.s;
     const st = rebirthStatus(s);
     const b = rebirthBonus(s);
-    const rows = REBIRTH_TRAITS.map((def) => {
-      const lv = traitLevel(s, def.id);
-      const maxed = lv >= def.maxLv;
-      const cost = traitCost(lv);
-      const can = !maxed && st.points >= cost;
-      return `<div class="trait-row ${maxed ? 'max' : ''}">
-        <div class="tr-ico">${def.icon}</div>
-        <div class="tr-mid">
-          <div class="tr-name">${esc(def.name)}<span class="lv">Lv.${lv}/${def.maxLv}</span></div>
-          <div class="tr-desc">${esc(def.desc)}</div>
-          <div class="prog tiny-prog"><i style="width:${(lv / def.maxLv) * 100}%"></i></div>
-          <div class="tr-now">${lv > 0 ? esc(def.effect(lv)) : '효과 없음'}${maxed ? '' : ` → ${esc(def.effect(lv + 1))}`}</div>
-        </div>
-        <div class="tr-act">${
-          maxed
-            ? '<span class="tiny" style="color:var(--gold)">MAX</span>'
-            : `<button class="btn small ${can ? 'primary' : 'ghost'}" type="button" data-action="rebirth-trait" data-value="${def.id}" ${can ? '' : 'disabled'}>✨${cost}P</button>`
-        }</div>
-      </div>`;
-    }).join('');
-    this.ui.modal({
-      title: '✨ 초월 특성',
-      sub: `초월석 ${st.points.toLocaleString()}P · 환생 ${st.count}회 · 특성 ${b.totalLv}레벨`,
-      body: `<div class="trait-list">${rows}</div>
-        <div class="note gold-note" style="margin-top:10px">특성은 <b>환생해도 유지</b>되는 영구 배율입니다.
+    const ce = constellationEffects(s);
+    const cur = tab === 'stars' ? 'stars' : 'traits';
+    const tabBar = `<div class="subtabs codex-tabs" style="margin-bottom:8px">
+      <button class="subtab ${cur === 'traits' ? 'active' : ''}" type="button" data-action="rebirth-traits" data-value="traits">✨ 기본 특성 (${b.totalLv})</button>
+      <button class="subtab ${cur === 'stars' ? 'active' : ''}" type="button" data-action="rebirth-traits" data-value="stars">🌌 초월 성좌 (${ce.totalLv}/${ce.maxTotalLv})</button>
+    </div>`;
+
+    let listHtml;
+    let noteHtml;
+    if (cur === 'stars') {
+      listHtml = CONSTELLATIONS.map((def) => {
+        const lv = starLevel(s, def.id);
+        const maxed = lv >= def.maxLv;
+        const cost = starCost(lv);
+        const can = !maxed && st.points >= cost;
+        return `<div class="trait-row ${maxed ? 'max' : ''}">
+          <div class="tr-ico" style="color:${def.color}">${def.icon}</div>
+          <div class="tr-mid">
+            <div class="tr-name">${esc(def.name)}<span class="lv">Lv.${lv}/${def.maxLv}</span></div>
+            <div class="tr-desc">${esc(def.desc)}</div>
+            <div class="prog tiny-prog"><i style="width:${(lv / def.maxLv) * 100}%;background:${def.color}"></i></div>
+            <div class="tr-now">${lv > 0 ? esc(def.effect(lv)) : '미해금'}${maxed ? '' : ` → ${esc(def.effect(lv + 1))}`}</div>
+          </div>
+          <div class="tr-act">${
+            maxed
+              ? '<span class="tiny" style="color:var(--gold)">MAX</span>'
+              : `<button class="btn small ${can ? 'primary' : 'ghost'}" type="button" data-action="rebirth-star" data-value="${def.id}" ${can ? '' : 'disabled'}>✨${cost}P</button>`
+          }</div>
+        </div>`;
+      }).join('');
+      noteHtml = `<div class="note gold-note" style="margin-top:10px">🌌 <b>초월 성좌</b>는 단순 스탯 대신 <b>전투 규칙을 바꾸는 후반 영구 패시브</b>입니다. 환생해도 영구 유지됩니다.</div>`;
+    } else {
+      listHtml = REBIRTH_TRAITS.map((def) => {
+        const lv = traitLevel(s, def.id);
+        const maxed = lv >= def.maxLv;
+        const cost = traitCost(lv);
+        const can = !maxed && st.points >= cost;
+        return `<div class="trait-row ${maxed ? 'max' : ''}">
+          <div class="tr-ico">${def.icon}</div>
+          <div class="tr-mid">
+            <div class="tr-name">${esc(def.name)}<span class="lv">Lv.${lv}/${def.maxLv}</span></div>
+            <div class="tr-desc">${esc(def.desc)}</div>
+            <div class="prog tiny-prog"><i style="width:${(lv / def.maxLv) * 100}%"></i></div>
+            <div class="tr-now">${lv > 0 ? esc(def.effect(lv)) : '효과 없음'}${maxed ? '' : ` → ${esc(def.effect(lv + 1))}`}</div>
+          </div>
+          <div class="tr-act">${
+            maxed
+              ? '<span class="tiny" style="color:var(--gold)">MAX</span>'
+              : `<button class="btn small ${can ? 'primary' : 'ghost'}" type="button" data-action="rebirth-trait" data-value="${def.id}" ${can ? '' : 'disabled'}>✨${cost}P</button>`
+          }</div>
+        </div>`;
+      }).join('');
+      noteHtml = `<div class="note gold-note" style="margin-top:10px">특성은 <b>환생해도 유지</b>되는 영구 배율입니다.
         초월석은 환생할 때 도달 스테이지에 따라 <b>S20 +${rebirthPointsFor(20)}P · S30 +${rebirthPointsFor(30)}P · S50 +${rebirthPointsFor(50)}P</b>처럼 계단식으로 늘어납니다.
-        ${st.can ? '' : `<br><b>${esc(st.reason)}</b>`}</div>`,
+        ${st.can ? '' : `<br><b>${esc(st.reason)}</b>`}</div>`;
+    }
+
+    this.ui.modal({
+      title: cur === 'stars' ? '🌌 초월 성좌' : '✨ 초월 특성',
+      sub: `초월석 ${st.points.toLocaleString()}P · 환생 ${st.count}회 · 성좌 ${ce.totalLv}/${ce.maxTotalLv}`,
+      body: `${tabBar}<div class="trait-list">${listHtml}</div>${noteHtml}`,
       actions: [{ label: '닫기', style: 'primary', onClick: () => {} }],
     });
+  }
+
+  doUpgradeConstellation(id) {
+    this.sound.unlock();
+    const r = upgradeConstellationState(this.s, id);
+    if (!r.ok) {
+      this.ui.toast(r.reason || '성좌를 해금할 수 없습니다', 'red');
+      return;
+    }
+    this.battle.refreshStats();
+    this.save(true);
+    this.sound.fanfare();
+    this.ui.toast(`🌌 ${r.icon} ${r.name} Lv.${r.level} 각성! (초월석 -${r.cost}P)`, 'gold');
+    this.ui.addLog(`🌌 성좌 <b>${esc(r.name)}</b> Lv.${r.level} 각성 · 초월석 -${r.cost}P`);
+    this.ui.render();
+    if (!this.ui.el.modalRoot.classList.contains('hidden')) this.showRebirthTraits('stars');
   }
 
   doUpgradeRebirthTrait(id) {
@@ -3617,14 +3722,21 @@ class App {
   openRiftPickModal() {
     const r = this.battle && this.battle.rift;
     if (!r || !Array.isArray(r.picking) || !r.picking.length) return;
-    const body = `<div class="rift-picks">${r.picking.map((c) => `
-      <button class="rift-pick-btn" style="--rc:${c.color}" type="button" data-action="rift-pick" data-value="${c.id}">
+    const isEv = r.pickType === 'event';
+    const curSyns = activeRiftSynergies(r.cards);
+    const synLine = curSyns.length
+      ? `<div class="tiny" style="margin-bottom:6px;color:var(--gold)">✨ 활성 시너지: ${curSyns.map((x) => `${x.icon}${esc(x.name)}`).join(' · ')}</div>`
+      : '';
+    const body = `${synLine}<div class="rift-picks">${r.picking.map((c) => {
+      const hint = !isEv ? riftCardSynergyHint(r.cards, c.id) : null;
+      return `<button class="rift-pick-btn" style="--rc:${c.color}" type="button" data-action="rift-pick" data-value="${c.id}">
         <span class="rp-ico">${c.icon}</span>
-        <span><b>${esc(c.name)}</b><small>${esc(c.desc)}</small></span>
-      </button>`).join('')}</div>`;
+        <span><b>${esc(c.name)}${hint ? ` <span class="rift-syn-hint">✨시너지: ${esc(hint.name)}</span>` : ''}</b><small>${esc(c.desc)}</small></span>
+      </button>`;
+    }).join('')}</div>`;
     this.ui.modal({
-      title: `🃏 균열 축복 선택 (W${r.wavesCleared} 돌파!)`,
-      sub: '3장의 축복 카드 중 1장을 고르면 다음 웨이브가 시작됩니다.',
+      title: isEv ? `⚡ 균열 특수 이벤트 (W${r.wavesCleared})` : `🃏 균열 축복 선택 (W${r.wavesCleared} 돌파!)`,
+      sub: isEv ? '하이리스크·하이리턴 선택지 중 1개를 고르세요.' : '3장의 축복 카드 중 1장을 고르면 다음 웨이브가 시작됩니다.',
       body,
       actions: [{ label: '나중에 고르기 (일시정지)', style: 'ghost', onClick: () => {} }],
     });

@@ -3,7 +3,7 @@
 // v8.2.0: 영지 화면 맨 위 부동산→사냥 시너지 대시보드(landSynergyDashCard) + 원탭 분산투자 + 침공 출격 대기 사유
 import {
   CITIES, LAND, priceInfo, LANDMARK, landmarkLevel, landmarkRentMul, leasePctOf, formatGold,
-  portfolioOf, computeBuffs,
+  portfolioOf, computeBuffs, ESTATE_POLICIES, estatePolicyOf,
 } from './land.js';
 import { LIMIT_ORDER_MAX, investmentReport } from './orders.js';
 import { citySetId, regionSetBuffs, regionSetStatus, SETS_BY_ID } from './region.js';
@@ -119,6 +119,14 @@ export function landSynergyDashCard(ui) {
     ? `<div class="dash-div ready"><span>👑 <b>대지주 자산 보너스 T${ty.tier}</b> · 공격 +${ty.atkPct}% · 골드 +${ty.goldPct}% · 보스 +${ty.bossPct}%</span>${ty.nextVal ? `<span class="tiny dim">다음 💰${formatGold(ty.nextVal)}</span>` : '<span class="tiny dim">MAX</span>'}</div>`
     : `<div class="dash-div"><span>👑 <b>대지주 스케일 보너스</b> · 부동산 평가액 💰50만+ 달성 시 공격·골드·보스 추가 증폭</span></div>`;
 
+  // v8.16.0 🏛️ 영지 정책 3택1 (+ 균형) · 📰 호재 실시간 전투 버프
+  const curPol = estatePolicyOf(s);
+  const polChips = ESTATE_POLICIES.map((pl) => `<button class="chip${curPol.id === pl.id ? ' on' : ''}" type="button" data-action="estate-policy" data-value="${pl.id}" title="${esc(pl.desc)}">${pl.icon} ${pl.name}</button>`).join('');
+  const nb = buffs.newsBattle;
+  const newsBattleLine = nb
+    ? `<div class="dash-div ready"><span>${nb.icon} <b>${esc(nb.label)} 발동 중!</b> (${nb.hits}곳) · ${esc(nb.desc)}</span></div>`
+    : '';
+
   return `
   <div class="card land-dash" id="landSynergyDash">
     <div class="card-head">
@@ -130,7 +138,12 @@ export function landSynergyDashCard(ui) {
       <b class="dash-rent-v" data-live="income">+💰${formatGold(p.incomePerHour)}/h</b>
       <span class="dash-rent-acc">회수 <b>${paybackText(p.incomePerHour > 0 ? p.landValue / p.incomePerHour : 0)}</b></span>
     </div>
+    ${newsBattleLine}
     ${buffBlock}
+    <div class="dash-policy">
+      <div class="row" style="margin-bottom:4px"><span class="tiny"><b>🏛️ 영지 정책</b> <span class="dim">${esc(curPol.desc)}</span></span></div>
+      <div class="chips" style="margin:0">${polChips}</div>
+    </div>
     ${tyLine}
     ${divLine}
     ${nextBlock}

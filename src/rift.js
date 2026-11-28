@@ -40,6 +40,38 @@ export const RIFT_CARDS = [
 ];
 export const RIFT_CARD_BY_ID = RIFT_CARDS.reduce((m, c) => { m[c.id] = c; return m; }, {});
 
+/* ── v8.16.0 무한 균열 2.0: 축복 시너지 조합 5종 & 5W 이벤트 선택지 ── */
+export const RIFT_SYNERGIES = [
+  { id: 'storm',    icon: '🌩️', name: '폭풍 과부하',   need: ['chain', 'spd'],     color: '#7fd3ff', desc: '번개 연쇄 +30% · 공속 +15%',     fx: { chainPct: 30, spdPct: 15 } },
+  { id: 'fortress', icon: '🛡️', name: '불멸의 요새',   need: ['leech', 'shield'],  color: '#5ee1a3', desc: '피해 감소 +15% · 흡혈 +4%',       fx: { dmgRedPct: 15, leechPct: 4 } },
+  { id: 'assassin', icon: '💀', name: '암살자의 일격', need: ['crit', 'execute'],  color: '#ff9068', desc: '치명 피해 +60% · 처형 피해 +35%', fx: { critDmgPct: 60, execPct: 35 } },
+  { id: 'beast',    icon: '🐾', name: '광란의 사역마', need: ['atk', 'pet'],       color: '#ffcf5c', desc: '공격력 +30% · 펫 피해 +60%',      fx: { atkPct: 30, petPct: 60 } },
+  { id: 'chronos',  icon: '⏳', name: '탐욕의 시간',   need: ['cdr', 'greed'],     color: '#b98bff', desc: '쿨감 +15% · 균열 보상 +35%',      fx: { cdrPct: 15, rewardPct: 35 } },
+];
+
+export const RIFT_EVENTS = [
+  { id: 'ev_altar', icon: '💰', name: '황금 제단', color: '#ffd76a', desc: '균열 보상 +35% · 이번 균열 적 공격력 +15%', fx: { rewardPct: 35, enemyAtkPct: 15 }, isEvent: true },
+  { id: 'ev_blood', icon: '🩸', name: '피의 계약', color: '#ff5e8a', desc: '현재 HP 30% 소모 · 균열 공격력 +45%',      fx: { atkPct: 45, hpCostPct: 30 },      isEvent: true },
+  { id: 'ev_fount', icon: '✨', name: '안식의 샘', color: '#5ee1a3', desc: '체력 100% 완충 + 최대 체력 50% 보호막',    fx: { healNowPct: 100, shieldNowPct: 50 }, isEvent: true },
+];
+export const RIFT_EVENT_BY_ID = RIFT_EVENTS.reduce((m, e) => { m[e.id] = e; return m; }, {});
+
+/** 현재 보유 카드로 완성된 시너지 목록 */
+export function activeRiftSynergies(pickedIds) {
+  if (!Array.isArray(pickedIds) || !pickedIds.length) return [];
+  const set = new Set(pickedIds);
+  return RIFT_SYNERGIES.filter((sy) => sy.need.every((id) => set.has(id)));
+}
+
+/** 특정 카드를 고르면 새로 완성되는 시너지(있으면 반환) */
+export function riftCardSynergyHint(pickedIds, candidateId) {
+  if (!candidateId || !Array.isArray(pickedIds) || !pickedIds.length) return null;
+  const set = new Set(pickedIds);
+  if (set.has(candidateId)) return null;
+  set.add(candidateId);
+  return RIFT_SYNERGIES.find((sy) => sy.need.includes(candidateId) && sy.need.every((id) => set.has(id))) || null;
+}
+
 export function defaultRift() {
   return {
     bestWave: 0,
@@ -86,15 +118,22 @@ export function rollRiftChoices(rng = Math.random) {
   return out;
 }
 
-/** 누적 선택된 축복 카드 합산 효과 */
+/** 누적 선택된 축복 카드 + 완성 시너지 + 이벤트 합산 효과 */
 export function riftCardMods(pickedIds) {
-  const out = { atkPct: 0, spdPct: 0, critPct: 0, critDmgPct: 0, leechPct: 0, dmgRedPct: 0, chainPct: 0, petPct: 0, cdrPct: 0, execPct: 0, rewardPct: 0 };
+  const out = { atkPct: 0, spdPct: 0, critPct: 0, critDmgPct: 0, leechPct: 0, dmgRedPct: 0, chainPct: 0, petPct: 0, cdrPct: 0, execPct: 0, rewardPct: 0, enemyAtkPct: 0 };
   if (!Array.isArray(pickedIds)) return out;
   for (const id of pickedIds) {
-    const def = RIFT_CARD_BY_ID[id];
+    const def = RIFT_CARD_BY_ID[id] || RIFT_EVENT_BY_ID[id];
     if (!def || !def.fx) continue;
     for (const k of Object.keys(out)) {
       if (def.fx[k]) out[k] += def.fx[k];
+    }
+  }
+  const syns = activeRiftSynergies(pickedIds);
+  for (const sy of syns) {
+    if (!sy.fx) continue;
+    for (const k of Object.keys(out)) {
+      if (sy.fx[k]) out[k] += sy.fx[k];
     }
   }
   return out;

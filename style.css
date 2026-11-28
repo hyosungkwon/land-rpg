@@ -3433,3 +3433,7 @@ input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-app
   .res { font-size: 11.5px; padding: 4px 6px; }
   .hud-r { gap: 4px; }
 }
+
+/* v8.16.0 영지 정책 & 균열 시너지 힌트 */
+.dash-policy { margin-top: 7px; padding: 6px 8px; border-radius: 9px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line); }
+.rift-syn-hint { display: inline-block; margin-left: 4px; padding: 1px 5px; border-radius: 6px; font-size: 9px; font-weight: 800; color: #ffe066; background: rgba(255, 215, 106, 0.16); border: 1px solid rgba(255, 215, 106, 0.4); vertical-align: middle; }

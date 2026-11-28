@@ -363,3 +363,27 @@ export function newsTimer(now = Date.now()) {
   const span = Math.max(1, n.endsAt - n.startsAt);
   return { leftMs: Math.max(0, n.endsAt - now), pct: Math.min(1, Math.max(0, (now - n.startsAt) / span)) };
 }
+
+/** v8.16.0 📰 호재 뉴스 실시간 전투 연동 버프
+ *  내 보유 지역 중 현재 호재에 해당하는 곳이 1곳 이상이면 3분간 전투 보너스 발동.
+ *  보유 지역이 0곳이거나 미적용이면 null (초반/기본 밸런스 불변). */
+export function newsBattleBuff(state, now = Date.now()) {
+  const n = activeNews(now);
+  if (!n || !state || !state.land || !state.land.owned) return null;
+  const owned = state.land.owned;
+  let hits = 0;
+  for (const [k, q] of Object.entries(owned)) {
+    if (Math.floor(Number(q) || 0) > 0 && newsCovers(n, k)) hits += 1;
+  }
+  if (hits <= 0) return null;
+  const id = n.targetId;
+  let fx;
+  if (id === 'seoul' || id === 'chungcheong' || id === 'jeju' || (n.scope === 'tier' && id === 2) || (n.scope === 'city' && ['서울특별시', '제주'].some((x) => (n.targetLabel || '').includes(x)))) {
+    fx = { kind: 'gold', icon: '💰', label: '호재 황금러시', desc: '골드 +15% · 보물 고블린 ×2', goldPct: 15, goblinMul: 2.0, atkPct: 0, critPct: 0, dropPct: 0, expPct: 0, color: '#ffd76a' };
+  } else if (id === 'gyeonggi' || id === 'gyeongsang' || (n.scope === 'tier' && id === 1)) {
+    fx = { kind: 'atk', icon: '⚔️', label: '호재 산업가속', desc: '공격 +10% · 치명 +5%', goldPct: 0, goblinMul: 1.0, atkPct: 10, critPct: 5, dropPct: 0, expPct: 0, color: '#ff8a5c' };
+  } else {
+    fx = { kind: 'farm', icon: '💎', label: '호재 풍년축제', desc: '드롭 +20% · 경험치 +15%', goldPct: 0, goblinMul: 1.0, atkPct: 0, critPct: 0, dropPct: 20, expPct: 15, color: '#5ee1a3' };
+  }
+  return { ...fx, hits, newsId: n.id, newsTitle: n.title, endsAt: n.endsAt };
+}

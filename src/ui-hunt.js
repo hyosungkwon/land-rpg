@@ -3,7 +3,7 @@
 import { formatGold } from './land.js';
 import { RELICS, RELIC_BY_ID, RELIC_SLOTS, RELIC_MAX_LV, RELIC_SUMMON_COST, relicLevel } from './relics.js';
 import { passInfo, titleStatus } from './pass.js';
-import { riftStatus, RIFT_CARD_BY_ID } from './rift.js';
+import { riftStatus, RIFT_CARD_BY_ID, RIFT_EVENT_BY_ID, activeRiftSynergies } from './rift.js';
 import { KNIGHTS, knightLevel, knightCost, guildEffects, raidStatus } from './guild.js';
 import { computeCpBreakdown, recommendGrowth } from './guide.js';
 import { seasonChallengeStatus } from './season.js';
@@ -67,10 +67,11 @@ export function riftCard(ui) {
   const now = Date.now();
   const st = riftStatus(s, now);
   const live = b && b.rift;
-  const busy = !!(b && (b.rift || b.invasion || b.tower || b.dungeon || b.daily || b.boss));
+  const busy = !!(b && (b.rift || b.raid || b.invasion || b.tower || b.dungeon || b.daily || b.boss));
+  const syns = live && live.cards ? activeRiftSynergies(live.cards) : [];
   const pickedTags = live && live.cards && live.cards.length
-    ? `<div class="rift-tags">${live.cards.map((id) => {
-      const c = RIFT_CARD_BY_ID[id];
+    ? `<div class="rift-tags">${syns.map((sy) => `<span class="tag" style="border-color:${sy.color};color:${sy.color};background:${sy.color}22">✨${sy.icon} ${esc(sy.name)}</span>`).join('')}${live.cards.map((id) => {
+      const c = RIFT_CARD_BY_ID[id] || RIFT_EVENT_BY_ID[id];
       return c ? `<span class="tag" style="border-color:${c.color}66;color:${c.color}">${c.icon} ${esc(c.name)}</span>` : '';
     }).join('')}</div>`
     : '';
@@ -101,8 +102,11 @@ export function riftCard(ui) {
 /* ───────────── 🛡️ 영지 기사단 · 🐉 주간 거대 레이드 토벌전 (v6.9.0) ───────────── */
 export function guildRaidCard(ui) {
   const s = ui.s;
+  const b = ui.battle;
   const eff = guildEffects(s);
-  const st = raidStatus(s, ui.battle && ui.battle.stats, Date.now());
+  const st = raidStatus(s, b && b.stats, Date.now());
+  const live = !!(b && b.raid);
+  const busy = !!(b && (b.raid || b.rift || b.invasion || b.tower || b.dungeon || b.daily || b.boss));
   const medals = Math.max(0, Math.floor(Number(s.invasion && s.invasion.medals) || 0));
 
   const phaseBtns = st.phases.map((ph) => `
@@ -141,8 +145,8 @@ export function guildRaidCard(ui) {
         <span>누적 피해 ${fmt(st.damage)} / ${fmt(st.maxHp)}</span>
         <span>오늘 출격 <b>${st.leftTickets}/${st.maxTickets}</b></span>
       </div>
-      <button class="btn small ${!st.defeated && st.leftTickets > 0 ? 'primary' : 'ghost'} block" style="margin-top:7px" type="button" data-action="raid-attack" ${st.defeated || st.leftTickets <= 0 ? 'disabled' : ''}>
-        ${st.defeated ? '🏆 이번 주 거대 보스 완전 토벌!' : st.leftTickets > 0 ? `⚔️ 기사단 합동 일제 공격! (남은 ${st.leftTickets}회)` : '⏱ 오늘 출격 완료 · 내일 자정 충전'}
+      <button class="btn small ${!st.defeated && st.leftTickets > 0 && !busy ? 'primary' : 'ghost'} block" style="margin-top:7px" type="button" data-action="raid-attack" ${st.defeated || st.leftTickets <= 0 || busy ? 'disabled' : ''}>
+        ${live ? '🔥 실시간 거대 레이드 전투 중!' : st.defeated ? '🏆 이번 주 거대 보스 완전 토벌!' : st.leftTickets > 0 ? `⚔️ 실시간 기사단 합동 토벌! (30초 · 남은 ${st.leftTickets}회)` : '⏱ 오늘 출격 완료 · 내일 자정 충전'}
       </button>
       <div class="raid-phases">${phaseBtns}</div>
       ${st.readyCount > 0 ? `<div class="claim-note ready"><span>🎁 레이드 ${st.readyCount}개 상자 수령 대기</span><button class="mini ghost js-todo" type="button" data-action="goto-todo">📋 할 일</button></div>` : ''}

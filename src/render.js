@@ -393,6 +393,27 @@ export class Renderer {
         this.addFloater(ev.x, '🔥 광폭화!', true, 'skill', '#ff6b57', 1.32, now);
         this.flash = Math.max(this.flash, 0.22);
         this.shake = Math.max(this.shake, 6.8);
+      } else if (ev.t === 'bossBreak') {
+        // v8.16.0 🛡️ 보스 브레이크(그로기) 파괴 연출
+        this.rings.push({ x: ev.x, life: 1, r: 36, color: '#7ff6ff', wide: 2.8 });
+        this.rings.push({ x: ev.x, life: 1, r: 22, color: '#ffe066', wide: 2.0 });
+        this.addFloater(ev.x, '💥 BREAK! 피해 ×1.5', true, 'skill', '#7ff6ff', 1.36, now);
+        this.flash = Math.max(this.flash, 0.28);
+        this.shake = Math.max(this.shake, 8.2);
+        this.hitstopUntil = Math.max(this.hitstopUntil || 0, now + 54);
+      } else if (ev.t === 'ultEcho') {
+        // v8.16.0 🌌 용신의 자리 궁극기 잔향 폭발 연출
+        for (const ex of (ev.xs || [ECON.playerX + 260])) {
+          this.rings.push({ x: ex, life: 1, r: 28, color: ev.color || '#c084fc', wide: 2.4 });
+        }
+        this.addFloater(ECON.playerX + 120, '🌌 용신 잔향!', true, 'skill', ev.color || '#c084fc', 1.24, now);
+        this.flash = Math.max(this.flash, 0.2);
+        this.shake = Math.max(this.shake, 5.5);
+      } else if (ev.t === 'bossRetryRevive') {
+        // v8.16.0 🌌 수호의 자리 보스 1회 부활 연출
+        this.rings.push({ x: ECON.playerX, life: 1, r: 30, color: '#69c0ff', wide: 2.6 });
+        this.addFloater(ECON.playerX, '🛡️ 수호 성좌 부활!', true, 'skill', '#69c0ff', 1.28, now);
+        this.flash = Math.max(this.flash, 0.26);
       } else if (ev.t === 'feverStart') {
         this.flash = Math.max(this.flash, 0.26);
         this.shake = Math.max(this.shake, 4.4);
@@ -1275,6 +1296,30 @@ export class Renderer {
       ctx.fill();
     }
 
+    // v8.16.0 🎆 내 지역 호재 발동 중 스카이라인 축하 불꽃놀이 & 황금 야경
+    const nb = this.battle && typeof this.battle.buffs === 'function' ? this.battle.buffs().newsBattle : null;
+    if (nb) {
+      const fCol = nb.color || '#ffd76a';
+      ctx.globalAlpha = 0.65;
+      for (let i = 0; i < 3; i++) {
+        const phase = ((now / 1400) + i * 0.37) % 1;
+        const fx = W * (0.24 + i * 0.26);
+        const fy = hy - (44 + i * 11) * sc;
+        const rad = phase * 18 * sc;
+        const a = Math.max(0, 1 - phase);
+        ctx.strokeStyle = fCol;
+        ctx.globalAlpha = a * 0.72;
+        ctx.lineWidth = 1.4 * sc;
+        for (let k = 0; k < 6; k++) {
+          const ang = (k / 6) * Math.PI * 2 + i * 0.4;
+          ctx.beginPath();
+          ctx.moveTo(fx + Math.cos(ang) * rad * 0.45, fy + Math.sin(ang) * rad * 0.45);
+          ctx.lineTo(fx + Math.cos(ang) * rad, fy + Math.sin(ang) * rad);
+          ctx.stroke();
+        }
+      }
+    }
+
     // 4) 🌐 AI 데이터센터 (네온 돔 + 빛기둥)
     if ((mega.datacenter || 0) > 0) {
       const dx = W * 0.53;
@@ -1611,6 +1656,7 @@ export class Renderer {
       this.drawBossBar(ctx, W, t);
       this.drawDungeonHud(ctx, W, t);
       this.drawDailyHud(ctx, W, t);
+      this.drawRaidHud(ctx, W, t);
       this.drawTowerHud(ctx, W, t);
       this.drawTowerBanner(ctx, W, t);
       this.drawPromoteBanner(ctx, W, t);
@@ -1851,6 +1897,14 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(0, 0, r * 0.64, 0, Math.PI * 2);
       ctx.stroke();
+    } else if (b.raid) {
+      // 🐉 v8.16.0 주간 거대 레이드: 심홍-보라 전장 비네트 + 결전 오라
+      const vg = ctx.createRadialGradient(W * 0.7, gy * 0.45, 10, W * 0.7, gy * 0.45, W * 0.9);
+      vg.addColorStop(0, `rgba(255,75,90,${0.22 + 0.08 * pulse})`);
+      vg.addColorStop(0.5, 'rgba(95,25,110,0.14)');
+      vg.addColorStop(1, 'rgba(12,6,22,0.36)');
+      ctx.fillStyle = vg;
+      ctx.fillRect(0, 0, W, H);
     } else if (b.invasion) {
       // 🚨 영지 침공 방어전: 붉은 경보 비네트 + 좌측 성채 성벽 실루엣
       const vg = ctx.createLinearGradient(0, 0, 0, H);
@@ -4048,6 +4102,76 @@ export class Renderer {
     ctx.restore();
   }
 
+  /* ─────────── 🐉 v8.16.0 주간 거대 레이드 실시간 HUD ─────────── */
+  drawRaidHud(ctx, W, now) {
+    const r = this.battle && this.battle.raid;
+    if (!r) return;
+    const left = Math.max(0, r.ends - now);
+    const total = Math.max(1, r.ends - r.t0);
+    const k = Math.max(0, Math.min(1, left / total));
+    const bw = Math.min(W * 0.9, 356);
+    const bx = (W - bw) / 2;
+    const by = 50;
+    const hgt = 56;
+    const sc = Math.min(1.2, Math.max(0.85, this.W / 390));
+    const pulse = 0.7 + 0.3 * Math.sin(now / 150);
+    const dealtTotal = Math.min(r.maxHp, (r.damageBefore || 0) + (r.dmg || 0));
+    const pctDone = Math.min(100, (dealtTotal / Math.max(1, r.maxHp)) * 100);
+    const m = r.monster;
+    const broken = !!(m && m.brokenUntil && now < m.brokenUntil);
+    const brPct = m && m.breakMax ? Math.max(0, Math.min(1, (m.breakVal || 0) / m.breakMax)) : 1;
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,90,95,0.75)';
+    ctx.shadowBlur = 14 * pulse;
+    const g = ctx.createLinearGradient(bx, by, bx, by + hgt);
+    g.addColorStop(0, 'rgba(66,14,28,0.95)');
+    g.addColorStop(1, 'rgba(26,10,36,0.95)');
+    ctx.fillStyle = g;
+    roundRect(ctx, bx, by, bw, hgt, 10);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = broken ? 'rgba(127,246,255,0.9)' : `rgba(255,115,120,${0.55 + 0.3 * pulse})`;
+    ctx.lineWidth = 2;
+    roundRect(ctx, bx + 1, by + 1, bw - 2, hgt - 2, 9);
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#ffd1d1';
+    ctx.font = `900 ${Math.round(12 * sc)}px ${FONT}`;
+    ctx.fillText(`${r.boss.icon} ${r.boss.name} · ×${(r.raidBonusMul || 1).toFixed(2)}`, bx + 12, by + 17);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = left / 1000 <= 5 ? '#ff8a8a' : '#fff2d8';
+    ctx.font = `900 ${Math.round(14.5 * sc)}px ${FONT}`;
+    ctx.fillText(`${(left / 1000).toFixed(1)}s`, bx + bw - 12, by + 17);
+
+    // 남은 시간 바
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    roundRect(ctx, bx + 12, by + 23, bw - 24, 6, 3);
+    ctx.fill();
+    ctx.fillStyle = k < 0.25 ? '#ff6b6b' : '#ff9a5c';
+    roundRect(ctx, bx + 12, by + 23, Math.max(2, (bw - 24) * k), 6, 3);
+    ctx.fill();
+
+    // 브레이크 게이지
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    roundRect(ctx, bx + 12, by + 32, bw - 24, 5, 3);
+    ctx.fill();
+    ctx.fillStyle = broken ? '#ffe066' : '#69d2ff';
+    roundRect(ctx, bx + 12, by + 32, Math.max(2, (bw - 24) * (broken ? Math.max(0, (m.brokenUntil - now) / 4000) : brPct)), 5, 3);
+    ctx.fill();
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = broken ? '#7ff6ff' : 'rgba(255,225,225,0.92)';
+    ctx.font = `800 ${Math.round(9.5 * sc)}px ${FONT}`;
+    ctx.fillText(broken ? `💥 그로기! 피해 ×1.5 (${((m.brokenUntil - now) / 1000).toFixed(1)}s)` : `이번 피해 ${Math.round(r.dmg || 0).toLocaleString()}`, bx + 12, by + hgt - 4);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#ffd76a';
+    ctx.font = `900 ${Math.round(10 * sc)}px ${FONT}`;
+    ctx.fillText(`주간 격파 ${pctDone.toFixed(1)}%`, bx + bw - 12, by + hgt - 4);
+    ctx.restore();
+  }
+
   /* ─────────── 🔥 황금 던전 HUD ─────────── */
   drawDungeonHud(ctx, W, now) {
     const d = this.battle && this.battle.dungeon;
@@ -4394,7 +4518,8 @@ export class Renderer {
     const hasArc = (kn.archer || 0) > 0;
     const hasMag = (kn.mage || 0) > 0;
     const hasMer = (kn.merchant || 0) > 0;
-    if ((hasPal || hasArc || hasMag || hasMer) && now - (this.lastKnightShot || 0) >= 1800) {
+    const shotGap = b && b.raid ? 800 : 1800;
+    if ((hasPal || hasArc || hasMag || hasMer) && now - (this.lastKnightShot || 0) >= shotGap) {
       const target = b.monsters.find((m) => !m.dead && !m.dying);
       if (target) {
         this.lastKnightShot = now;
@@ -4806,7 +4931,7 @@ export class Renderer {
     const hgt = 30;
     const x = (W - w) / 2;
     // 보스 바(62~106)·특수 모드 HUD(50~102)가 있으면 그 아래로, 없으면 상단 칩(스테이지) 바로 아래로
-    const busy = !!(b.boss || b.dungeon || b.tower || b.daily || b.invasion || b.rift);
+    const busy = !!(b.boss || b.dungeon || b.tower || b.daily || b.invasion || b.rift || b.raid);
     const y = busy ? 112 : 44;
     const pulse = 0.7 + 0.3 * Math.sin(now / 130);
     ctx.save();
@@ -4845,14 +4970,17 @@ export class Renderer {
     const bx = (W - bw) / 2;
     const by = 62; // 상단 DOM 칩(스테이지/보스 버튼) 아래로
     const pctv = Math.max(0, m.hp / m.maxHp);
-    const remain = Math.max(0, b.bossEnds - (typeof now === 'number' ? now : Date.now()));
-    ctx.fillStyle = 'rgba(8,10,16,0.72)';
-    roundRect(ctx, bx - 6, by - 8, bw + 12, 44, 8);
+    const tNow = typeof now === 'number' ? now : Date.now();
+    const remain = Math.max(0, b.bossEnds - tNow);
+    const broken = !!(m.brokenUntil && tNow < m.brokenUntil);
+    const brPct = m.breakMax ? Math.max(0, Math.min(1, (m.breakVal || 0) / m.breakMax)) : 1;
+    ctx.fillStyle = 'rgba(8,10,16,0.75)';
+    roundRect(ctx, bx - 6, by - 8, bw + 12, 54, 8);
     ctx.fill();
     ctx.font = `800 12px ${FONT}`;
     ctx.textAlign = 'left';
-    ctx.fillStyle = m.enraged ? '#ff6b57' : '#ffb4a2';
-    ctx.fillText(`👑 ${m.ko}${m.enraged ? ' 🔥광폭' : ''}`, bx + 2, by + 6);
+    ctx.fillStyle = broken ? '#7ff6ff' : m.enraged ? '#ff6b57' : '#ffb4a2';
+    ctx.fillText(`👑 ${m.ko}${broken ? ' 💥그로기!' : m.enraged ? ' 🔥광폭' : ''}`, bx + 2, by + 6);
     ctx.textAlign = 'right';
     ctx.fillStyle = 'rgba(255,255,255,0.65)';
     ctx.fillText(`${(remain / 1000).toFixed(0)}s`, bx + bw - 2, by + 6);
@@ -4867,7 +4995,18 @@ export class Renderer {
     ctx.fill();
     ctx.font = `700 10px ${FONT}`;
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
     ctx.fillText(`${Math.ceil(m.hp).toLocaleString()} / ${m.maxHp.toLocaleString()}`, bx + bw / 2, by + 21);
+    // v8.16.0 🛡️ 보스 브레이크(그로기) 게이지 바
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    roundRect(ctx, bx, by + 26, bw, 6, 3);
+    ctx.fill();
+    ctx.fillStyle = broken ? '#ffe066' : '#69d2ff';
+    const brFill = broken ? Math.max(0, Math.min(1, (m.brokenUntil - tNow) / 4000)) : brPct;
+    roundRect(ctx, bx, by + 26, Math.max(2, bw * brFill), 6, 3);
+    ctx.fill();
+    ctx.font = `800 9px ${FONT}`;
+    ctx.fillStyle = broken ? '#ffe066' : 'rgba(168,230,255,0.85)';
+    ctx.fillText(broken ? `💥 BREAK 그로기 (${((m.brokenUntil - tNow) / 1000).toFixed(1)}s · 피해 ×1.5)` : `🛡️ BREAK ${Math.round(brPct * 100)}%`, bx + bw / 2, by + 41);
   }
 }

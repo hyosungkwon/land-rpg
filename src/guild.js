@@ -66,11 +66,12 @@ export function knightCost(lv) {
 
 /* ────────────────────────────── 🐉 주간 거대 레이드 토벌전 ────────────────────────────── */
 export const RAID_DAILY_TICKETS = 3;
+export const RAID_DURATION_MS = 30000; // v8.16.0 실시간 30초 합동 레이드전
 export const RAID_BOSSES = [
-  { id: 'bahamut', icon: '🐉', name: '심연의 고룡 바하무트', color: '#ff6b6b', title: '고대 용왕' },
-  { id: 'surtur',  icon: '🔥', name: '화산 군주 수르트',     color: '#ff9248', title: '화염 거인' },
-  { id: 'freya',   icon: '❄️', name: '빙결의 여제 프레이야', color: '#69c0ff', title: '만년설 지배자' },
-  { id: 'lich',    icon: '💀', name: '망자의 황제 리치로드', color: '#b98bff', title: '불사의 군주' },
+  { id: 'bahamut', icon: '🐉', name: '심연의 고룡 바하무트', color: '#ff6b6b', title: '고대 용왕', sprite: 'RedDragon', theme: 'abyss' },
+  { id: 'surtur',  icon: '🔥', name: '화산 군주 수르트',     color: '#ff9248', title: '화염 거인', sprite: 'Ifrit', theme: 'volcano' },
+  { id: 'freya',   icon: '❄️', name: '빙결의 여제 프레이야', color: '#69c0ff', title: '만년설 지배자', sprite: 'IceGiant', theme: 'ice' },
+  { id: 'lich',    icon: '💀', name: '망자의 황제 리치로드', color: '#b98bff', title: '불사의 군주', sprite: 'LichKing', theme: 'ruins' },
 ];
 
 export const RAID_PHASES = [
@@ -241,6 +242,60 @@ export function attackRaidBoss(state, stats, now = Date.now(), rng = Math.random
     shards,
     pct: Math.min(100, Math.round((state.guild.raid.damage / Math.max(1, state.guild.raid.maxHp)) * 1000) / 10),
     defeated: defeatedNow,
+    leftTickets: Math.max(0, RAID_DAILY_TICKETS - state.guild.raid.usedToday),
+  };
+}
+
+/** v8.16.0 🐉 실시간 캔버스 레이드 입장 — 티켓 1회 차감 및 주간 보스 HP 확정 */
+export function startRaidTicket(state, stats, now = Date.now()) {
+  if (!state) return { ok: false, reason: '상태 정보가 없습니다.' };
+  state.guild = normalizeGuild(state.guild, now);
+  const st = raidStatus(state, stats, now);
+  if (st.defeated) return { ok: false, reason: '이번 주 거대 레이드 보스를 이미 완전 토벌했습니다!' };
+  if (st.leftTickets <= 0) return { ok: false, reason: '오늘 레이드 출격 횟수(3회)를 모두 사용했습니다.' };
+  if (state.guild.raid.maxHp <= 0) state.guild.raid.maxHp = st.maxHp;
+  state.guild.raid.usedToday += 1;
+  state.guild.raid.attacks += 1;
+  return {
+    ok: true,
+    boss: st.boss,
+    maxHp: state.guild.raid.maxHp,
+    damageBefore: state.guild.raid.damage,
+    hpLeft: Math.max(1, state.guild.raid.maxHp - state.guild.raid.damage),
+    leftTickets: Math.max(0, RAID_DAILY_TICKETS - state.guild.raid.usedToday),
+    raidBonusMul: guildEffects(state).raidBonusMul,
+  };
+}
+
+/** v8.16.0 🐉 실시간 캔버스 레이드 종료 정산 — 실측 피해 반영 + 참여 보상 지급 */
+export function settleRaidBattle(state, dealtDmg, now = Date.now()) {
+  if (!state) return null;
+  state.guild = normalizeGuild(state.guild, now);
+  const st = raidStatus(state, null, now);
+  const eff = guildEffects(state);
+  const maxHp = Math.max(1, state.guild.raid.maxHp || st.maxHp);
+  const dmg = Math.max(0, Math.round(num(dealtDmg, 0)));
+  const wasDefeated = state.guild.raid.damage >= maxHp;
+  state.guild.raid.damage = Math.min(maxHp, state.guild.raid.damage + dmg);
+  const defeatedNow = !wasDefeated && state.guild.raid.damage >= maxHp;
+  if (defeatedNow) state.guild.raid.clears += 1;
+
+  const refStage = Math.max(1, Math.floor(num(state.peakStage || state.maxStage || state.stage, 1)));
+  const gold = Math.max(500, Math.round(stageGoldBase(refStage) * 28));
+  const shards = 20 + eff.recruited * 6;
+  state.gold = Math.max(0, Math.floor(num(state.gold, 0))) + gold;
+  state.shards = Math.max(0, Math.floor(num(state.shards, 0))) + shards;
+  if (state.records) state.records.totalGold = (state.records.totalGold || 0) + gold;
+
+  return {
+    ok: true,
+    boss: st.boss,
+    dmg,
+    gold,
+    shards,
+    pct: Math.min(100, Math.round((state.guild.raid.damage / maxHp) * 1000) / 10),
+    defeated: state.guild.raid.damage >= maxHp,
+    defeatedNow,
     leftTickets: Math.max(0, RAID_DAILY_TICKETS - state.guild.raid.usedToday),
   };
 }
